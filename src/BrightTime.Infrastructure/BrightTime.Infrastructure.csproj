@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Localization" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
+    <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="Isopoh.Cryptography.Argon2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+    <ProjectReference Include="../BrightTime.Abstractions/BrightTime.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

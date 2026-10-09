@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Imported before the root props so that test-only settings are in scope for
+    the SDK's own defaults. They cannot live in the root file conditioned on
+    $(IsTestProject): that property is set in the project body, which MSBuild
+    evaluates *after* Directory.Build.props, so the condition would always be
+    false and OutputType would stay Library — which xunit v3 rejects.
+  -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- xunit v3 test projects are executables hosting Microsoft.Testing.Platform. -->
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseVSTest>false</UseVSTest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Shouldly" />
+  </ItemGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+</Project>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+    <ProjectReference Include="../BrightTime.Ui.Design/BrightTime.Ui.Design.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Opportunities.Contracts/BrightTime.Modules.Opportunities.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+</Project>

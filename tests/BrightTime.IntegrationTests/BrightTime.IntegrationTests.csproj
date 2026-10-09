@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Api/BrightTime.Api.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+  </ItemGroup>
+
+</Project>

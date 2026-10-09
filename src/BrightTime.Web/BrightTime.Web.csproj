@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>brighttime-web</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <ProjectReference Include="../BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Abstractions/BrightTime.Abstractions.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Opportunities.Contracts/BrightTime.Modules.Opportunities.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

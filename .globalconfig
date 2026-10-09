@@ -1,0 +1,5 @@
+is_global = true
+
+# EF Core query translation is not statically provable; raw SQL in this
+# solution is parameterised through NpgsqlParameter without exception, and
+# CA2100 stays an error so that an interpolated command string fails the build.

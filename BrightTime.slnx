@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BrightTime.Abstractions/BrightTime.Abstractions.csproj" />
+    <Project Path="src/BrightTime.Api/BrightTime.Api.csproj" />
+    <Project Path="src/BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <Project Path="src/BrightTime.Jobs/BrightTime.Jobs.csproj" />
+    <Project Path="src/BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
+    <Project Path="src/BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <Project Path="src/BrightTime.Modules.Opportunities.Contracts/BrightTime.Modules.Opportunities.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+    <Project Path="src/BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <Project Path="src/BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+    <Project Path="src/BrightTime.Ui.Design/BrightTime.Ui.Design.csproj" />
+    <Project Path="src/BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
+    <Project Path="src/BrightTime.Web/BrightTime.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BrightTime.Architecture.Tests/BrightTime.Architecture.Tests.csproj" />
+    <Project Path="tests/BrightTime.Infrastructure.Tests/BrightTime.Infrastructure.Tests.csproj" />
+    <Project Path="tests/BrightTime.IntegrationTests/BrightTime.IntegrationTests.csproj" />
+    <Project Path="tests/BrightTime.Modules.Platform.Tests/BrightTime.Modules.Platform.Tests.csproj" />
+    <Project Path="tests/BrightTime.SharedKernel.Tests/BrightTime.SharedKernel.Tests.csproj" />
+  </Folder>
+</Solution>

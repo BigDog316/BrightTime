@@ -1,0 +1,90 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,csproj,props,targets,razor,html,css,js}]
+indent_size = 2
+
+[*.{sql,md}]
+indent_size = 2
+trim_trailing_whitespace = false
+
+[*.cs]
+indent_size = 4
+csharp_using_directive_placement = outside_namespace:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_prefer_braces = when_multiline:suggestion
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Order matters: the first matching rule wins. Constants and private static
+# readonly fields are named constants and take PascalCase; private instance
+# fields take _camelCase.
+dotnet_naming_rule.const_pascal.severity = warning
+dotnet_naming_rule.const_pascal.symbols = const_fields
+dotnet_naming_rule.const_pascal.style = pascal
+dotnet_naming_symbols.const_fields.applicable_kinds = field
+dotnet_naming_symbols.const_fields.applicable_accessibilities = *
+dotnet_naming_symbols.const_fields.required_modifiers = const
+
+dotnet_naming_rule.private_static_readonly_pascal.severity = warning
+dotnet_naming_rule.private_static_readonly_pascal.symbols = private_static_readonly_fields
+dotnet_naming_rule.private_static_readonly_pascal.style = pascal
+dotnet_naming_symbols.private_static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_readonly_fields.applicable_accessibilities = private, internal
+dotnet_naming_symbols.private_static_readonly_fields.required_modifiers = static, readonly
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Async methods must be suffixed Async.
+dotnet_diagnostic.VSTHRD200.severity = none
+
+# These are the ones we genuinely want to fail a build on.
+dotnet_diagnostic.CA2100.severity = error   # SQL injection review
+dotnet_diagnostic.CA3001.severity = error   # SQL injection
+dotnet_diagnostic.CA3003.severity = error   # file path injection
+dotnet_diagnostic.CA5350.severity = error   # weak crypto
+dotnet_diagnostic.CA5351.severity = error   # broken crypto
+dotnet_diagnostic.CA5359.severity = error   # cert validation disabled
+dotnet_diagnostic.CA5364.severity = error   # deprecated TLS
+dotnet_diagnostic.CA5386.severity = error   # hardcoded SecurityProtocolType
+dotnet_diagnostic.CA5394.severity = error   # insecure randomness
+dotnet_diagnostic.CA5397.severity = error   # deprecated SslProtocols
+
+# Lowercase canonicalisation is mandatory, not a style choice: the schema uses
+# citext and lower() for hosts, slugs, emails and the blind-index HMAC input.
+# Upper-casing in C# would disagree with the database and the lookups would miss.
+dotnet_diagnostic.CA1308.severity = none
+
+# Noise in a codebase this shape.
+dotnet_diagnostic.CA1000.severity = none    # static members on generic types: Result<T>.Success / Page<T>.Empty are the point
+dotnet_diagnostic.CA2225.severity = none    # op_Implicit alternates: named factories already exist (Result.Failure, PageSize.Value)
+dotnet_diagnostic.CA1515.severity = none    # could be internal (hosts need public)
+dotnet_diagnostic.CA1716.severity = none    # identifier matches a VB keyword
+dotnet_diagnostic.CA1724.severity = none    # type name conflicts with namespace
+dotnet_diagnostic.CA1812.severity = none    # uninstantiated internal (DI)
+dotnet_diagnostic.CA1819.severity = none    # properties returning arrays (DTOs)
+dotnet_diagnostic.IDE0160.severity = none   # block-scoped namespace
+
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none    # Method_names_with_underscores
+dotnet_diagnostic.CA1861.severity = none    # constant arrays as arguments
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.CS1591.severity = none

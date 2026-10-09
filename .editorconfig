@@ -73,6 +73,18 @@ dotnet_diagnostic.CA5397.severity = error   # deprecated SslProtocols
 # Upper-casing in C# would disagree with the database and the lookups would miss.
 dotnet_diagnostic.CA1308.severity = none
 
+# Nested static classes are how the permission and claim vocabularies are
+# namespaced (Permissions.Listings.Publish). CA1034 targets nested types that
+# form part of an API surface, not constant grouping.
+dotnet_diagnostic.CA1034.severity = none
+
+# URL-bearing properties on persistence entities mirror `text` columns and must
+# round-trip exactly what a provider typed; the schema validates them with a
+# CHECK (~* '^https?://'). System.Uri would normalise the value, so the stored
+# string would stop matching what was submitted.
+dotnet_diagnostic.CA1054.severity = none
+dotnet_diagnostic.CA1056.severity = none
+
 # Noise in a codebase this shape.
 dotnet_diagnostic.CA1000.severity = none    # static members on generic types: Result<T>.Success / Page<T>.Empty are the point
 dotnet_diagnostic.CA2225.severity = none    # op_Implicit alternates: named factories already exist (Result.Failure, PageSize.Value)

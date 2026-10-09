@@ -1,0 +1,264 @@
+# 07 — Threat model: youth safety and data privacy
+
+Scope: the platform as designed in this plan. Framing is abuse-case-first
+rather than STRIDE-first, because the dominant risks here are not an attacker
+breaking in — they are an authorised adult doing something harmful, and
+ordinary data doing harm by existing.
+
+Each threat has a control, and each control names where it is *enforced*.
+"Enforced in the schema" means a constraint or trigger; "enforced in policy"
+means an authorisation requirement; "verified by" names the test.
+
+## Assets, ranked by harm if exposed
+
+| # | Asset | Why it ranks here |
+|---|---|---|
+| A1 | Adult↔youth communication channel | A messaging channel is the grooming vector. Not data at rest — a capability. |
+| A2 | `attendance_record` | Says a named child was at a named place at a named hour. Weaponisable by a stalker or a non-custodial parent. |
+| A3 | `family_member_support_need` | Health, disability, IEP/504. Highest sensitivity per record. |
+| A4 | Youth identity + DOB + guardian contacts | Identity theft, and the key to impersonating a guardian. |
+| A5 | Youth home location | Which is why **no column for it exists** anywhere in the schema. |
+| A6 | Youth-authored content and photos | Deanonymisation, bullying, sexualisation. |
+| A7 | `field_observation` by youth collectors | Reveals where trained youth were working, on a schedule. |
+| A8 | District-sourced records | FERPA / Ed Law 2-d exposure, plus contractual breach. |
+| A9 | Aggregate dashboards | Small cells re-identify in a county of 18 neighbourhoods. |
+| A10 | Staff clearance status | Employment harm. (The report itself is out of scope by design.) |
+
+## Threats and controls
+
+### T1 — Grooming through platform messaging
+**Scenario:** a mentor or staff member opens a private channel with one minor
+and moves the relationship off-platform.
+
+**Controls**
+- There is no data shape for it. `community.conversation` has no pair form;
+  `ck_conversation_minor_safety` requires `is_org_visible AND
+  adult_participant_count >= 2` whenever `includes_minor`, and
+  `enforce_safe_conversation()` recomputes those columns on every participant
+  change and raises if the invariant breaks. *Enforced in the schema.*
+- A space containing minors requires ≥2 non-minor members. *Enforced in policy,
+  indexed by `ix_space_member_adults`.*
+- Org admins are implicit readers of every thread with a minor
+  (`is_implicit_reader`), and the UI says so on the thread.
+- `messages.send_to_youth_1to1` is a permanent `never` in the permission
+  matrix with no grantable row.
+- Automated screening flags contact-exchange patterns (phone, handle, "text
+  me", external platform names) in adult→youth text before delivery.
+- **Verified by** an integration test that attempts every route to a 1:1
+  adult-minor channel — direct insert, participant removal to leave a pair,
+  guardian removal, mentor added to a two-person space — and asserts each
+  fails at the database.
+
+**Residual:** a determined adult can exchange contact details in person. The
+platform reduces, cannot eliminate. Mitigation is the mandated-reporter
+escalation path on `grooming_concern` reports.
+
+### T2 — Adult poses as a youth
+**Controls:** youth self-registration yields `youth_capability` with posting,
+uploads and messaging off until an organisation verifies the account via
+enrollment or roster. Community participation requires space membership,
+which only staff can grant. *Enforced in schema + policy.*
+
+### T3 — Youth or unvetted adult poses as a mentor
+**Controls:** `mentor_profile.is_searchable` requires `status='active'`;
+`gig_assignment` cannot be `active` without both
+`clearance_verified_at` and `training_verified_at`
+(`ck_gig_assignment_gates`); `ClearanceCurrentRequirement` re-checks expiry on
+every youth-facing action, not only at assignment. `ck_gig_min_age >= 16`,
+with 18 the default for youth-facing roles.
+
+### T4 — Attendance data leak reveals a child's location in time
+**Controls**
+- `youth_access_grant` time-boxes provider access with a basis and an end
+  date; after the grace window a provider sees only suppressed aggregates.
+- Every read writes an `audit_event` with `subject_ids` — enforced by the
+  startup test that fails boot if a youth-data endpoint lacks `[YouthRecord]`.
+- `note_enc` is application-encrypted; free-text staff notes are the field
+  most likely to contain health or behaviour detail.
+- Retention default: 400 days, then aggregate-and-delete, configurable per
+  tenant with a legal basis recorded.
+- Export requires `PA` scope and is itself audited and rate-limited.
+- RESTRICTIVE RLS policy means an unauthenticated request cannot reach the
+  table at all.
+
+### T5 — Deanonymisation through the public showcase or portfolio
+**Controls:** display name is distinct from legal name and validated as such;
+EXIF (including GPS) stripped at upload, with
+`ck_media_exif_before_public` making camera-origin media unpublishable until
+`exif_stripped_at` is set; public items carry no school and no neighbourhood;
+under-13 work needs a recorded `showcase_publication` consent
+(`ck_showcase_minor_consent`); staff approval is required
+(`ck_project_public_needs_approval`); faces in asset photos are a rejection
+reason in field review.
+
+### T6 — Scraping the public finder to find where children gather
+**Controls:** the public API's scopes are constrained by
+`ck_api_client_scopes` to listing/org/taxonomy/geography data — there is no
+youth-data scope to grant. Rate limits per client and per IP, stricter for
+anonymous. Aggregates suppressed below the tenant threshold with
+complementary suppression. Sites may set `is_address_public = false` and
+serve only a neighbourhood. No endpoint ever returns a count of youth at a
+site on a date.
+
+### T7 — Cross-tenant data access
+**Controls:** RLS tenant policy on every table (layer 1), parent-derived
+policy on child tables (layer 2), `FORCE ROW LEVEL SECURITY` so the owner is
+bound, app role without `BYPASSRLS`, tenant set with `set_config(...,
+is_local => true)` inside the request transaction so a pooled connection
+cannot carry context forward. The 99-file ends with a migration-time assertion
+that **fails deployment** if any module table lacks RLS.
+**Verified by** the cross-tenant matrix test: for each module × role, a
+request in tenant A reads exactly zero tenant-B rows, both through the API and
+through a hand-forged `DbContext` query.
+
+### T8 — Provider over-reach: browsing youth they never served
+**Controls:** `youth_record.read` is `◐ grant` only.
+`YouthRecordRequirement` resolves `youth_access_grant` for (org, youth) and
+denies with a reason if absent — a 403 with an audit entry, not an empty list,
+because a silent empty result hides the probe.
+
+### T9 — Non-custodial parent or unsafe adult gains access
+**Controls:** `guardian_link` requires an explicit verification method and
+records it; `restricted_contact` blocks visibility and communication in both
+directions and is honoured by `NoRestrictedContactRequirement`; a 13+ youth
+can see every guardian link on their account and request review; revocation is
+immediate and cascades to `youth_capability`.
+
+**Residual:** the platform cannot adjudicate custody. It can make access
+legible and revocable, and give an organiser a lever.
+
+### T10 — Insider abuse by platform staff
+**Controls:** `PX` has **no** youth-record read permission. Break-glass is a
+separate time-boxed grant requiring a second approver and a mandatory
+`reason` (`ck_audit_reason_required`), which notifies the tenant's organiser.
+Audit is append-only by both grant revocation and trigger. Production
+database access is via a bastion with session recording; `brighttime_app`
+credentials are short-lived.
+
+### T11 — Prompt injection / content injection via listing or post text
+**Scenario:** an imported HSDS listing or a youth post contains text crafted
+to steer the screening model or a future LLM-assisted summariser.
+
+**Controls:** all provider- and user-supplied text is treated as data, never
+as instruction. The screening service receives content in a
+clearly-delimited data channel with a fixed system prompt, and its output is
+constrained to an enum decision plus label scores — a free-text model response
+can never become an action. Translation and summarisation outputs are marked
+`translation_source = 'machine'` and are never auto-published without review
+when the target is youth-facing. Stored HTML is sanitised to an allowlist on
+write *and* on render.
+
+### T12 — Offline data on staff and youth devices
+**Controls:** SQLCipher with the key in Keychain / Android Keystore; roster
+packs carry the minimum fields; TTL purge; `kiosk_device.wipe_requested_at`
+triggers a purge on next contact and the client refuses to open after 72h
+offline; sync is idempotent via `client_record_id` so a stolen device
+replaying its queue changes nothing.
+
+### T13 — SMS and email as a leak channel
+**Controls:** `ck_template_sms_length` and
+`ck_template_sms_no_youth_name` make a youth-identifying SMS template a
+constraint violation. SMS and push carry a prompt and a deep link, never
+detail. Destination addresses are stored only as hashes
+(`delivery.address_hash`); suppression and bounce handling work on hashes.
+Phone numbers are verified before any send
+(`notify.phone_verification`), and under-13 accounts cannot receive SMS at all
+(`ck_youth_capability_under13`).
+
+### T14 — Shared-device session leakage
+**Controls:** youth sessions get a 30-minute idle timeout and no default
+"remember me"; `DELETE /me/sessions` revokes everywhere; refresh tokens are
+rotating and family-chained, so a replayed token kills the family
+(`identity.refresh_token.family_id`).
+
+### T15 — Youth field collectors put at risk
+**Controls:** `field_assignment` cannot leave `assigned` without a
+supervisor; `min_collector_age` per campaign; only the *asset* location is
+recorded, never the collector's track or idle position; photos are reviewed
+before visibility; assignment areas are published to the supervising
+organisation, not publicly.
+
+### T16 — Discriminatory or opaque recommendations
+**Controls:** the ranking feature set is a closed list (text match, chosen
+distance, time to start, declared interests, popularity). The feature
+extractor is a single class with a unit test that asserts it rejects a
+sensitive-attribute input, and `application_answer.is_sensitive` marks the
+fields that may never enter reporting, export or ranking. Every recommendation
+ships its `why` payload and the UI renders it. "Less like this" edits declared
+interests rather than feeding a hidden profile.
+
+### T17 — Small-cell re-identification in dashboards
+**Controls:** `analytics.suppress()` on every aggregate, threshold per tenant
+(≥5 floor, default 10), complementary suppression on, zero published but
+1..n−1 suppressed. Civic and research roles are granted **views only** at the
+database level — `brighttime_readonly` has no grant on any fact table.
+Research exports require a named approver, a DUA reference, a purpose of at
+least 40 characters and k ≥ 5, enforced by `ck_research_approval`,
+`ck_research_purpose` and `ck_research_k`.
+
+### T18 — District integration over-collection
+**Controls:** connections are created disabled and
+`ck_district_enabled_needs_dpa` makes enabling without a DPA reference, signed
+date, purpose and non-empty field allowlist a constraint violation.
+`ck_district_data_elements` caps what may even be requested. The sync job
+drops any payload field not in the allowlist and records it in
+`roster_sync_run.fields_dropped`, so a district widening its feed cannot
+widen our collection. District identifiers are stored only as keyed hashes
+(`external_identity_map.external_id_hash`).
+
+### T19 — Media as a malware or CSAM vector
+**Controls:** uploads are quarantined until `scan_state='clean'`; nothing
+unscanned is servable; content-type sniffed server-side, not trusted from the
+client; images re-encoded (which also destroys embedded payloads); SVG upload
+disallowed; CSAM detection and the legal reporting path are an M5 requirement
+with a named responsible person at the tenant, not a technical control we can
+claim to have solved.
+
+### T20 — Payment data scope creep
+**Controls:** no cardholder data anywhere. `payment_intent` holds amount,
+status and a provider reference; the card is collected by the provider's
+hosted element. Webhooks are signature-verified and idempotent. This keeps the
+application out of PCI DSS scope beyond SAQ-A.
+
+### T21 — Account takeover
+**Controls:** passkeys first-class and preferred for youth; Argon2id password
+hashing; breached-password check at set time; lockout; step-up authentication
+for consent grants, guardian-link verification and youth-record export; rate
+limiting on every auth route; no account enumeration in any response or
+timing difference.
+
+### T22 — Availability as a safety issue
+Enrollment deadlines and summer registration windows mean an outage has real
+consequences for families. Controls: the public finder is static-SSR and
+cacheable, so it survives a backend degradation; health checks gate
+deployment; load test the finder at 50× expected concurrent search in M8;
+registration windows get a queue-based admission control rather than
+collapsing.
+
+## Compliance mapping
+
+| Requirement | Where it lives |
+|---|---|
+| COPPA verifiable parental consent | `identity.parental_consent` with `method`, `consent_text_hash`, evidence; `enforce_child_consent()` blocks an active child account without it |
+| COPPA data minimisation | No home address column; DOB encrypted with only `birth_month` in clear; under-13 capability floor in `ck_youth_capability_under13` |
+| COPPA parental access, deletion, revocation | `platform.subject_request`, consent centre, immediate cascade on revoke |
+| FERPA | District data isolated behind `integration.district_connection`; field allowlist; purpose recorded; no re-disclosure path |
+| **NY Education Law 2-d / Part 121** | `tenant.student_privacy_pack = 'ny-ed-law-2d'` selects: parents' bill of rights surfaced at every consent point, encryption in transit (TLS 1.3) and at rest (volume + field-level), 7-day breach notification workflow, DPA required before any district connection, annual data-security training recorded in `workforce.course_enrollment`, and the prohibition on commercial use — which is why there is no advertising, no third-party tracker and no analytics vendor anywhere in the stack |
+| Finder usable with no account | Every public route is anonymous and SSR; `search_event` is pseudonymous with a daily-rotating session hash |
+| Audit of every youth-record read and write | `platform.audit_event`, one row per operation with `subject_ids`; append-only by grant and trigger; partitioned monthly |
+| Configurable retention with automated deletion | `platform.retention_policy` per data class, enforced by a nightly job |
+| Self-service export and deletion | `platform.subject_request` + `/api/v1/me/export`, `/api/v1/me/delete` |
+| No advertising, trackers, data sale | First-party analytics only; tile and geocode requests proxied so the client never contacts a third party; CSP with no third-party script origins |
+
+## What I am not claiming
+
+- **Right to be forgotten vs. the audit log.** These conflict. The design
+  deletes the record and keeps the audit entry with the subject id
+  pseudonymised, because an audit log you can erase is not an audit log. That
+  is a defensible reading, not a settled one — see open question Q5.
+- **CSAM detection** is a vendor and a legal process, not a schema.
+- **Background-check adjudication** is deliberately out of scope. We hold
+  status and expiry; who decides "conditional" is the organisation's
+  responsibility and liability.
+- **Penetration testing and a third-party privacy review** are M8 line items.
+  Nothing here substitutes for them.

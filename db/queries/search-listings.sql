@@ -5,6 +5,9 @@
 -- "parameter is null" escape. It exists so that EXPLAIN baselines are
 -- reproducible and so the shape is reviewable in one place.
 --
+-- Kept in step with SearchQueryBuilder (src/BrightTime.Modules.Opportunities/Search).
+-- If the two disagree, the builder is the one under test; fix this file to match.
+--
 -- PRODUCTION DOES NOT SEND THIS STATEMENT.
 -- The finder composes SQL from only the filters the caller actually
 -- supplied (ListingSearchQueryBuilder). Reason: the "(:p is null or ...)"
@@ -144,10 +147,14 @@ where case $13::text
         else                 ($14 is null
                               or (s.score, s.listing_id) < ($14::numeric, $15::uuid))
       end
+-- The id direction follows the sort direction. A single trailing
+-- "s.listing_id" would be ascending for every sort, but the keyset comparison
+-- is '<' for descending sorts: tied rows would be skipped or repeated.
 order by
   case $13::text when 'soonest' then s.next_start_at end asc  nulls last,
   case $13::text when 'nearest' then s.distance_m    end asc  nulls last,
   case $13::text when 'newest'  then s.published_at  end desc nulls last,
   case when $13::text not in ('soonest','nearest','newest') then s.score end desc nulls last,
-  s.listing_id
+  case when $13::text in ('soonest','nearest') then s.listing_id end asc  nulls last,
+  case when $13::text not in ('soonest','nearest') then s.listing_id end desc nulls last
 limit $16::int;

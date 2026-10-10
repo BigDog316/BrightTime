@@ -23,6 +23,7 @@
     <Project Path="tests/BrightTime.IntegrationTests/BrightTime.IntegrationTests.csproj" />
     <Project Path="tests/BrightTime.Modules.Directory.Tests/BrightTime.Modules.Directory.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Identity.Tests/BrightTime.Modules.Identity.Tests.csproj" />
+    <Project Path="tests/BrightTime.Modules.Opportunities.Tests/BrightTime.Modules.Opportunities.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Platform.Tests/BrightTime.Modules.Platform.Tests.csproj" />
     <Project Path="tests/BrightTime.SharedKernel.Tests/BrightTime.SharedKernel.Tests.csproj" />
   </Folder>

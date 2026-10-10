@@ -45,6 +45,10 @@
     <PackageVersion Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Scheduling">
+    <PackageVersion Include="Ical.Net" Version="5.2.3" />
+  </ItemGroup>
+
   <ItemGroup Label="Reporting">
     <PackageVersion Include="QuestPDF" Version="2026.9.1" />
     <PackageVersion Include="ClosedXML" Version="0.105.1" />

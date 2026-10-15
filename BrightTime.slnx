@@ -26,5 +26,6 @@
     <Project Path="tests/BrightTime.Modules.Opportunities.Tests/BrightTime.Modules.Opportunities.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Platform.Tests/BrightTime.Modules.Platform.Tests.csproj" />
     <Project Path="tests/BrightTime.SharedKernel.Tests/BrightTime.SharedKernel.Tests.csproj" />
+    <Project Path="tests/BrightTime.Web.Tests/BrightTime.Web.Tests.csproj" />
   </Folder>
 </Solution>

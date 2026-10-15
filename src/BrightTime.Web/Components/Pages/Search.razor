@@ -1,0 +1,327 @@
+@page "/search"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Search
+@using BrightTime.SharedKernel.Primitives
+@using Microsoft.AspNetCore.WebUtilities
+@inject IListingFinder Finder
+@inject ITenantContext Tenant
+
+<PageTitle>Find something to do · BrightTime</PageTitle>
+
+<h1>Find something to do</h1>
+
+@* The form is a plain GET: it works with JavaScript off, and every filter lives in the URL. *@
+<form method="get" action="/search" role="search" class="finder-form" aria-labelledby="filters-heading">
+    <h2 id="filters-heading" class="visually-hidden">Filters</h2>
+
+    @if (Lang is not null)
+    {
+        <input type="hidden" name="lang" value="@Lang" />
+    }
+
+    <div class="field">
+        <label for="q">What are you looking for?</label>
+        <input id="q" name="q" type="search" maxlength="200" value="@Q"
+               aria-invalid="@InvalidMarker("q")" aria-describedby="@DescribedBy("q")" />
+        @FieldError("q")
+    </div>
+
+    <fieldset class="field">
+        <legend>Kind of listing</legend>
+        @foreach (var (value, label) in KindOptions)
+        {
+            <label class="check">
+                <input type="checkbox" name="kind" value="@value" checked="@IsKindChecked(value)" />
+                @label
+            </label>
+        }
+    </fieldset>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="age">Age</label>
+            <input id="age" name="age" type="number" min="0" max="30" inputmode="numeric" value="@Age"
+                   aria-invalid="@InvalidMarker("age")" aria-describedby="@DescribedBy("age")" />
+            @FieldError("age")
+        </div>
+
+        <div class="field">
+            <label for="maxDollars">Highest price (dollars)</label>
+            <input id="maxDollars" name="maxDollars" type="number" min="0" max="100000" inputmode="numeric" value="@MaxDollars"
+                   aria-invalid="@InvalidMarker("maxDollars")" aria-describedby="@DescribedBy("maxDollars")" />
+            @FieldError("maxDollars")
+        </div>
+    </div>
+
+    <label class="check">
+        <input type="checkbox" name="free" value="1" checked="@IsFreeChecked" />
+        Free only
+    </label>
+
+    <div class="field">
+        <label for="sort">Sort by</label>
+        <select id="sort" name="sort" aria-invalid="@InvalidMarker("sort")" aria-describedby="@DescribedBy("sort")">
+            @foreach (var (value, label) in SortOptions)
+            {
+                <option value="@value" selected="@(Sort == value)">@label</option>
+            }
+        </select>
+        @FieldError("sort")
+    </div>
+
+    <div class="actions">
+        <button type="submit">Search</button>
+        <a href="@ClearHref" class="secondary">Clear filters</a>
+    </div>
+</form>
+
+@if (Parse is { FieldErrors.Count: > 0 } errored)
+{
+    <section class="error-summary" aria-labelledby="error-summary-heading">
+        <h2 id="error-summary-heading">Check these fields</h2>
+        <ul>
+            @foreach (var (field, message) in errored.FieldErrors)
+            {
+                <li><a href="#@field">@message</a></li>
+            }
+        </ul>
+    </section>
+}
+
+@if (Parse is { Notices.Count: > 0 } notices)
+{
+    <ul class="notices">
+        @foreach (string notice in notices.Notices)
+        {
+            <li>@notice</li>
+        }
+    </ul>
+}
+
+@if (Parse is { IsValid: true })
+{
+    <section aria-labelledby="results-heading" class="results">
+        <h2 id="results-heading">@ResultsHeading</h2>
+
+        @if (_page.Items.Count == 0)
+        {
+            <p class="empty">No listings match these filters. Try removing one.</p>
+        }
+        else
+        {
+            <ol class="listing-list">
+                @foreach (FinderItem item in _page.Items)
+                {
+                    <li class="listing">
+                        <article>
+                            <h3>@item.Title</h3>
+                            <p class="meta">
+                                <span>@KindLabel(item.Kind)</span>
+                                <span aria-hidden="true">·</span>
+                                <span>@PriceLabel(item)</span>
+                                @if (item.NextStartAt is { } start)
+                                {
+                                    <span aria-hidden="true">·</span>
+                                    <time datetime="@start.ToString("O")">Next: @LocalStart(start)</time>
+                                }
+                            </p>
+                            <p>@item.Summary</p>
+                            @if (item.Reasons.Count > 0)
+                            {
+                                <ul class="reasons" aria-label="Why this was shown">
+                                    @foreach (string reason in item.Reasons)
+                                    {
+                                        <li>@reason</li>
+                                    }
+                                </ul>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+
+            @if (_page.NextCursor is { } cursor)
+            {
+                <nav class="pager" aria-label="Pages">
+                    <a rel="next" href="@NextHref(cursor)">Show more results</a>
+                </nav>
+            }
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    [SupplyParameterFromQuery(Name = "kind")] public string[]? Kind { get; set; }
+
+    [SupplyParameterFromQuery(Name = "age")] public string? Age { get; set; }
+
+    [SupplyParameterFromQuery(Name = "free")] public string? Free { get; set; }
+
+    [SupplyParameterFromQuery(Name = "maxDollars")] public string? MaxDollars { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+
+    [SupplyParameterFromQuery(Name = "after")] public string? After { get; set; }
+
+    [SupplyParameterFromQuery(Name = "lang")] public string? Lang { get; set; }
+
+    private FinderRequestParse? Parse { get; set; }
+
+    private FinderPage _page = FinderPage.Empty;
+
+    private static readonly (string Value, string Label)[] KindOptions =
+    [
+        ("program", "Programs"),
+        ("event", "Events"),
+        ("job", "Jobs and internships"),
+        ("resource", "Drop-in resources"),
+    ];
+
+    private static readonly (string Value, string Label)[] SortOptions =
+    [
+        ("relevance", "Best match"),
+        ("soonest", "Starts soonest"),
+        ("nearest", "Nearest"),
+        ("newest", "Newest"),
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Dictionary<string, string[]> raw = RawValues(includeAfter: true);
+
+        Parse = FinderRequestParser.Parse(raw, Tenant.TenantId.Value, Tenant.Locale);
+
+        if (Parse.IsValid)
+        {
+            _page = await Finder.SearchAsync(Parse.Query!);
+        }
+        else
+        {
+            _page = FinderPage.Empty;
+        }
+    }
+
+    private Dictionary<string, string[]> RawValues(bool includeAfter)
+    {
+        Dictionary<string, string[]> values = new(StringComparer.Ordinal);
+
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                values[key] = [value];
+            }
+        }
+
+        Add("q", Q);
+        Add("age", Age);
+        Add("free", Free);
+        Add("maxDollars", MaxDollars);
+        Add("sort", Sort);
+        Add("lang", Lang);
+
+        if (Kind is { Length: > 0 } kinds)
+        {
+            values["kind"] = kinds;
+        }
+
+        if (includeAfter)
+        {
+            Add("after", After);
+        }
+
+        return values;
+    }
+
+    private string ClearHref => Lang is null ? "/search" : $"/search?lang={Uri.EscapeDataString(Lang)}";
+
+    private string NextHref(string cursor)
+    {
+        Dictionary<string, string?> query = [];
+
+        foreach ((string key, string[] values) in RawValues(includeAfter: false))
+        {
+            // Repeated keys (kind) are carried as repeated pairs.
+            query[key] = values[0];
+        }
+
+        query["after"] = cursor;
+
+        string baseUrl = "/search";
+        string url = QueryHelpers.AddQueryString(baseUrl, query);
+
+        // Repeat kind values, which the dictionary above collapses to the first.
+        if (Kind is { Length: > 1 } kinds)
+        {
+            string extra = string.Concat(kinds.Skip(1).Select(k => "&kind=" + Uri.EscapeDataString(k)));
+            url += extra;
+        }
+
+        return url;
+    }
+
+    private bool IsKindChecked(string value) =>
+        Kind?.Any(k => string.Equals(k, value, StringComparison.OrdinalIgnoreCase)) == true;
+
+    private bool IsFreeChecked => Free is "1" or "true" or "on";
+
+    private bool HasError(string field) => Parse?.FieldErrors.ContainsKey(field) == true;
+
+    /// <summary>ARIA takes lowercase "true"; an absent attribute means not invalid, so "false" is never written.</summary>
+    private string? InvalidMarker(string field) => HasError(field) ? "true" : null;
+
+    private string? DescribedBy(string field) => HasError(field) ? $"err-{field}" : null;
+
+    private RenderFragment? FieldError(string field) => HasError(field)
+        ? (RenderFragment)(builder =>
+        {
+            builder.OpenElement(0, "p");
+            builder.AddAttribute(1, "class", "field-error");
+            builder.AddAttribute(2, "id", $"err-{field}");
+            builder.AddContent(3, Parse!.FieldErrors[field]);
+            builder.CloseElement();
+        })
+        : null;
+
+    private string ResultsHeading
+    {
+        get
+        {
+            int count = _page.Items.Count;
+            string noun = count == 1 ? "listing" : "listings";
+            // "Showing" only when the results are a later page of a longer list. A stale
+            // cursor restarts at page one, so the heading must describe what is shown.
+            bool isLaterPage = Parse?.Query?.After is not null;
+            return _page.NextCursor is null && !isLaterPage
+                ? $"{count} {noun}"
+                : $"Showing {count} {noun}";
+        }
+    }
+
+    private string LocalStart(DateTimeOffset start)
+    {
+        TimeZoneInfo zone = ZoneFor(Tenant);
+        DateTimeOffset local = TimeZoneInfo.ConvertTime(start, zone);
+        return local.ToString("ddd, MMM d · h:mm tt", Tenant.Locale.ToCulture());
+    }
+
+    private static TimeZoneInfo ZoneFor(ITenantContext tenant) => tenant.TimeZone;
+
+    private string PriceLabel(FinderItem item) =>
+        item.IsFree
+            ? "Free"
+            : item.CostCents > 0
+                ? $"From {new BrightTime.SharedKernel.Primitives.Money(item.CostCents).Format(Tenant.Locale)}"
+                : "Price varies, see details";
+
+    private static string KindLabel(ListingKind kind) => kind switch
+    {
+        ListingKind.Program => "Program",
+        ListingKind.Event => "Event",
+        ListingKind.Job => "Job",
+        _ => "Drop-in resource",
+    };
+}

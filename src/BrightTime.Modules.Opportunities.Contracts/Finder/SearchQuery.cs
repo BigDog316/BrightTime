@@ -1,7 +1,7 @@
 using BrightTime.SharedKernel.Geo;
 using BrightTime.SharedKernel.Paging;
 
-namespace BrightTime.Modules.Opportunities.Search;
+namespace BrightTime.Modules.Opportunities.Contracts;
 
 public enum SearchSort
 {

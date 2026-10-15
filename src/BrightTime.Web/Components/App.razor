@@ -1,5 +1,7 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+@using BrightTime.Infrastructure.Tenancy
+@inject ITenantContext Tenant
+<!DOCTYPE html>
+<html lang="@Tenant.Locale.Code" dir="@Tenant.Locale.Direction">
 
 <head>
     <meta charset="utf-8" />

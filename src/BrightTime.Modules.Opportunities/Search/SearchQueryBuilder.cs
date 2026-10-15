@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Paging;
 
 namespace BrightTime.Modules.Opportunities.Search;
@@ -82,7 +83,8 @@ public static class SearchQueryBuilder
         sql.Append("select s.listing_id, s.site_id, s.title, s.summary, s.org_id, s.kind,\n");
         sql.Append("       s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,\n");
         sql.Append("       s.next_start_at, s.next_deadline_at, s.published_at,\n");
-        sql.Append("       round(s.distance_m)::int as distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity\n");
+        sql.Append("       s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,\n");
+        sql.Append("       extract(epoch from (s.next_start_at - now())) / 86400.0 as days_until_start\n");
         sql.Append("from scored s\n");
 
         if (query.After is { } cursor)

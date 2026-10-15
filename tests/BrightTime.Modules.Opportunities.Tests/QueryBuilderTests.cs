@@ -1,3 +1,4 @@
+using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Search;
 using BrightTime.SharedKernel.Geo;
 using BrightTime.SharedKernel.Paging;

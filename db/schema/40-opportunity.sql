@@ -420,6 +420,8 @@ create table listing_search (
   listing_id      uuid not null references listing(id) on delete cascade,
   site_id         uuid,
   org_id          uuid not null,
+  -- Copied from listing.slug so a result card links to its page without a lookup.
+  slug            citext not null,
   kind            text not null,
   is_published    boolean not null,
 

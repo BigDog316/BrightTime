@@ -132,6 +132,7 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
 
         return new FinderItem(
             new ListingId(listingId),
+            reader.GetString(reader.GetOrdinal("slug")),
             new OrganisationId(orgId),
             ParseKind(kindText),
             reader.GetString(reader.GetOrdinal("title")),

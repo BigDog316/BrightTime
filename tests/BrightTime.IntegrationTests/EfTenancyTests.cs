@@ -137,6 +137,7 @@ public sealed class EfTenancyTests(DatabaseFixture database)
                 PublishedAt = DateTimeOffset.UtcNow,
                 Facets = new FacetInput { Kind = ListingKind.Program, OrganisationId = org, AgeMin = 12, AgeMax = 16 },
                 Title = record.Title,
+                Slug = record.Slug,
                 Summary = record.Summary,
                 Sites = [new SiteSource(UuidV7.NewId(), null, new Coordinate(41.03, -73.76))],
                 OccurrenceStarts = [DateTimeOffset.UtcNow.AddDays(3)],
@@ -188,6 +189,7 @@ public sealed class EfTenancyTests(DatabaseFixture database)
             IsPublished = true,
             Facets = new FacetInput { Kind = ListingKind.Program, OrganisationId = org },
             Title = "Two sites",
+            Slug = "two-sites-" + listing.ToString("N"),
             Summary = "Then one.",
             Sites =
             [

@@ -79,6 +79,17 @@ create policy tenant_domain_write on platform.tenant_domain
   using (tenant_id = platform.current_tenant_id())
   with check (tenant_id = platform.current_tenant_id());
 
+-- The job worker serves every tenant, so it must see every job to claim one. This
+-- permissive policy is OR-ed with tenant_isolation for brighttime_jobs only; the
+-- application role stays tenant-scoped, so a request can enqueue only for its own
+-- tenant. The job table holds identifiers, never personal data (see 10-platform.sql).
+alter table platform.job enable row level security;
+create policy job_worker_claims on platform.job
+  as permissive for all
+  to brighttime_jobs
+  using (true)
+  with check (true);
+
 -- platform.blind_index_key holds no tenant data and no key material.
 alter table platform.blind_index_key enable row level security;
 create policy blind_index_key_read on platform.blind_index_key

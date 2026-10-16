@@ -26,6 +26,16 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<ListingSearchRecord> ListingSearch => Set<ListingSearchRecord>();
 
+    public DbSet<ListingSiteRecord> ListingSites => Set<ListingSiteRecord>();
+
+    public DbSet<ListingTermRecord> ListingTerms => Set<ListingTermRecord>();
+
+    public DbSet<ListingLanguageRecord> ListingLanguages => Set<ListingLanguageRecord>();
+
+    public DbSet<ListingAccommodationRecord> ListingAccommodations => Set<ListingAccommodationRecord>();
+
+    public DbSet<ListingDeadlineRecord> ListingDeadlines => Set<ListingDeadlineRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -72,6 +82,7 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
             b.HasKey(r => r.Id);
             b.Property(r => r.Id).ValueGeneratedNever();
             b.Property(r => r.Facets).HasColumnType("text[]");
+            b.Property(r => r.Slug).HasColumnType("citext");
             b.Property(r => r.Location).HasColumnType("geography (Point, 4326)");
             b.Property(r => r.Popularity).HasColumnType("real");
 
@@ -80,6 +91,37 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
                 .IsRequired()
                 .ValueGeneratedOnAdd()
                 .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+        });
+
+        modelBuilder.Entity<ListingSiteRecord>(b =>
+        {
+            b.ToTable("listing_site");
+            b.HasKey(x => new { x.ListingId, x.SiteId });
+        });
+
+        modelBuilder.Entity<ListingTermRecord>(b =>
+        {
+            b.ToTable("listing_term");
+            b.HasKey(x => new { x.ListingId, x.TermId });
+        });
+
+        modelBuilder.Entity<ListingLanguageRecord>(b =>
+        {
+            b.ToTable("listing_language");
+            b.HasKey(x => new { x.ListingId, x.LanguageCode });
+        });
+
+        modelBuilder.Entity<ListingAccommodationRecord>(b =>
+        {
+            b.ToTable("listing_accommodation");
+            b.HasKey(x => new { x.ListingId, x.TermId });
+        });
+
+        modelBuilder.Entity<ListingDeadlineRecord>(b =>
+        {
+            b.ToTable("listing_deadline");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
         });
 
         modelBuilder.ApplySnakeCaseNames();

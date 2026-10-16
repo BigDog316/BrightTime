@@ -32,4 +32,5 @@ public sealed record ListingSearchRow(
     string Summary,
     string FuzzyText,
     DateTimeOffset? PublishedAt,
-    double Popularity);
+    double Popularity,
+    string Slug);

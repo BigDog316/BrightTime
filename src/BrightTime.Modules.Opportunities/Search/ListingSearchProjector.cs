@@ -20,6 +20,9 @@ public sealed record ProjectionSource
 
     public required string Title { get; init; }
 
+    /// <summary>The listing's URL slug, unique per tenant. Copied so a result card can link without a lookup.</summary>
+    public required string Slug { get; init; }
+
     public required string Summary { get; init; }
 
     /// <summary>Category display names, folded into the fuzzy text so "robotics" finds a "STEM" listing.</summary>
@@ -101,6 +104,7 @@ public static class ListingSearchProjector
             Summary: source.Summary,
             FuzzyText: fuzzy,
             PublishedAt: source.PublishedAt,
-            Popularity: source.Popularity))];
+            Popularity: source.Popularity,
+            Slug: source.Slug))];
     }
 }

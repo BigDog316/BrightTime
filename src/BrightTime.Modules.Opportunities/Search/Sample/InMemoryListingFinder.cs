@@ -203,6 +203,7 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
 
         return new FinderItem(
             new ListingId(x.Row.ListingId),
+            x.Row.Slug,
             new OrganisationId(x.Row.OrganisationId),
             ParseKind(x.Row.Kind),
             x.Row.Title,

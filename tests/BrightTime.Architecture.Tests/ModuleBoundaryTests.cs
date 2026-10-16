@@ -36,21 +36,24 @@ public sealed class ModuleBoundaryTests
     [Fact]
     public void A_module_never_references_another_modules_implementation()
     {
+        // Checked at the assembly level, which is where the rule actually lives. A namespace
+        // prefix check (the first version of this test) treats Directory.Contracts as part of
+        // Directory and fails the moment a module uses another module's contracts correctly.
         foreach (string module in AllowedDependencies.Keys)
         {
-            string[] forbidden = AllowedDependencies.Keys
-                .Where(other => other != module)
-                .Select(other => $"BrightTime.Modules.{other}")
-                .ToArray();
+            string[] references = [.. LoadModule(module).GetReferencedAssemblies().Select(a => a.Name ?? string.Empty)];
 
-            TestResult result = Types.InAssembly(LoadModule(module))
-                .ShouldNot()
-                .HaveDependencyOnAny(forbidden)
-                .GetResult();
+            string[] offending =
+            [
+                .. AllowedDependencies.Keys
+                    .Where(other => other != module)
+                    .Select(other => $"BrightTime.Modules.{other}")
+                    .Where(implementation => references.Contains(implementation, StringComparer.Ordinal)),
+            ];
 
-            result.IsSuccessful.ShouldBeTrue(
-                $"BrightTime.Modules.{module} reaches into another module's implementation. " +
-                $"Offending types: {Describe(result)}. Talk to it through its .Contracts assembly " +
+            offending.ShouldBeEmpty(
+                $"BrightTime.Modules.{module} references another module's implementation: " +
+                $"{string.Join(", ", offending)}. Talk to it through its .Contracts assembly " +
                 "or publish a message through the outbox.");
         }
     }

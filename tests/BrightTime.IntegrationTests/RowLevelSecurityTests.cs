@@ -174,9 +174,9 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database)
         await Sql.ExecAsync(connection, null,
             """
             insert into opportunity.listing_search
-              (id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets, cost_cents, is_free,
+              (id, tenant_id, listing_id, site_id, org_id, slug, kind, is_published, facets, cost_cents, is_free,
                modality, title, summary, fuzzy_text, search_vector)
-            values (@row, @tenant, @listing, null, @org, 'program', true, array['kind:program','free'], 0, true,
+            values (@row, @tenant, @listing, null, @org, 'l-' || replace(@listing::text, '-', ''), 'program', true, array['kind:program','free'], 0, true,
                     'in_person', @title, 'A test listing.', @title,
                     to_tsvector('platform.ts_en'::regconfig, @title))
             """,

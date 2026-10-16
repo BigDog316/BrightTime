@@ -317,6 +317,8 @@ create index ix_outbox_pending on outbox_message (occurred_at)
 -- ---------------------------------------------------------------------
 -- Background jobs. Postgres-backed, claimed with FOR UPDATE SKIP LOCKED.
 -- ---------------------------------------------------------------------
+-- Payloads carry identifiers (a listing id), never personal data: the worker reads
+-- jobs across tenants, and a payload is not field-encrypted.
 create table job (
   id            uuid primary key,
   tenant_id     uuid,                       -- null for platform-wide jobs
@@ -343,9 +345,12 @@ create table job (
 create index ix_job_claim on job (queue, priority, run_after)
   where state = 'ready';
 create index ix_job_reaper on job (lock_expires_at) where state = 'running';
--- Debounce / singleton jobs (e.g. "reproject listing X") collapse on unique_key.
+-- Debounce: a second "reproject listing X" collapses into one that has not started.
+-- Deliberately 'ready' only. A job that is already running may have read the old
+-- state, so an edit arriving while it runs must queue a fresh job; collapsing it
+-- into the running one would lose that edit.
 create unique index ux_job_unique_key on job (unique_key)
-  where unique_key is not null and state in ('ready','running');
+  where unique_key is not null and state = 'ready';
 
 create table job_schedule (
   id         uuid primary key,

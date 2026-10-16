@@ -1,15 +1,17 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using BrightTime.Jobs;
 
-// The background worker host. It shares every module with the API host but
-// exposes no HTTP surface, so a job cannot be triggered from outside.
-//
-// Job registration, the FOR UPDATE SKIP LOCKED claim loop and the outbox
-// dispatcher land here next; for now the host starts and reports healthy so
-// the compose stack is complete and the CI pipeline has something to run.
+// The background worker host. It shares every module with the API host but exposes no HTTP
+// surface, so a job cannot be triggered from outside.
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddHostedService<BrightTime.Jobs.JobHostLifetime>();
+builder.Services.AddBrightTimeWorker(builder.Configuration);
+
+// Fail at startup, not on the first job, if a handler's dependencies are not registered.
+builder.Services.Configure<ServiceProviderOptions>(o =>
+{
+    o.ValidateOnBuild = true;
+    o.ValidateScopes = true;
+});
 
 IHost host = builder.Build();
 await host.RunAsync().ConfigureAwait(false);

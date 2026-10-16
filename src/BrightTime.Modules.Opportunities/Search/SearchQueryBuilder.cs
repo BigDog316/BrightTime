@@ -55,7 +55,7 @@ public static class SearchQueryBuilder
 
         var sql = new StringBuilder();
         sql.Append("with matched as (\n");
-        sql.Append("  select ls.listing_id, ls.site_id, ls.title, ls.summary, ls.org_id, ls.kind,\n");
+        sql.Append("  select ls.listing_id, ls.site_id, ls.slug, ls.title, ls.summary, ls.org_id, ls.kind,\n");
         sql.Append("         ls.cost_cents, ls.is_free, ls.modality, ls.neighbourhood_id,\n");
         sql.Append("         ls.next_start_at, ls.next_deadline_at, ls.popularity, ls.published_at, ls.is_drop_in,\n");
         sql.Append(hasOrigin
@@ -80,7 +80,7 @@ public static class SearchQueryBuilder
         sql.Append("  select bs.*, ").Append(ScoreExpression(hasOrigin)).Append(" as score\n");
         sql.Append("  from best_site bs\n");
         sql.Append(")\n");
-        sql.Append("select s.listing_id, s.site_id, s.title, s.summary, s.org_id, s.kind,\n");
+        sql.Append("select s.listing_id, s.site_id, s.slug, s.title, s.summary, s.org_id, s.kind,\n");
         sql.Append("       s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,\n");
         sql.Append("       s.next_start_at, s.next_deadline_at, s.published_at,\n");
         sql.Append("       s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,\n");

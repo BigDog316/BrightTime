@@ -34,6 +34,12 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     public DbSet<JobRecord> Jobs => Set<JobRecord>();
 
+    public DbSet<TaxonomyTerm> TaxonomyTerms => Set<TaxonomyTerm>();
+
+    public DbSet<TaxonomyTermName> TaxonomyTermNames => Set<TaxonomyTermName>();
+
+    public DbSet<NeighbourhoodName> NeighbourhoodNames => Set<NeighbourhoodName>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -87,6 +93,26 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             b.HasKey(j => j.Id);
             b.Property(j => j.Id).ValueGeneratedNever();
             b.Property(j => j.Payload).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<TaxonomyTerm>(b =>
+        {
+            b.ToTable("taxonomy_term");
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Id).ValueGeneratedNever();
+            b.Property(t => t.Code).HasColumnType("citext");
+        });
+
+        modelBuilder.Entity<TaxonomyTermName>(b =>
+        {
+            b.ToTable("taxonomy_term_name");
+            b.HasKey(n => new { n.TermId, n.Locale });
+        });
+
+        modelBuilder.Entity<NeighbourhoodName>(b =>
+        {
+            b.ToTable("neighbourhood_name");
+            b.HasKey(n => new { n.NeighbourhoodId, n.Locale });
         });
 
         modelBuilder.ApplySnakeCaseNames();

@@ -6,6 +6,7 @@ namespace BrightTime.Modules.Opportunities.Contracts;
 /// <summary>One result card. Everything a family needs to decide, and the reasons the ranking chose it.</summary>
 public sealed record FinderItem(
     ListingId ListingId,
+    string Slug,
     OrganisationId OrganisationId,
     ListingKind Kind,
     string Title,

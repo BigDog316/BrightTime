@@ -15,10 +15,31 @@ namespace BrightTime.Modules.Identity.Persistence;
 /// Every method here is on an authorisation path, so they are all
 /// <c>AsNoTracking</c> projections rather than entity loads: nothing should be
 /// paying change-tracking cost to answer "is this person a verified guardian".
+/// Each public method wraps its implementation in a transaction.
 /// </remarks>
 public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdentityQueries
 {
-    public async Task<YouthCapabilities> GetCapabilitiesAsync(
+    // Public surface: every read runs inside a transaction, where the tenant and actor are
+    // set. Outside one the context refuses, rather than letting RLS return nothing.
+    public Task<YouthCapabilities> GetCapabilitiesAsync(UserId userId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => GetCapabilitiesCoreAsync(userId, ct), cancellationToken);
+
+    public Task<IReadOnlyList<GuardianRelationship>> GetChildrenAsync(UserId guardianUserId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => GetChildrenCoreAsync(guardianUserId, ct), cancellationToken);
+
+    public Task<bool> IsVerifiedGuardianOfAsync(UserId guardianUserId, UserId childUserId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => IsVerifiedGuardianOfCoreAsync(guardianUserId, childUserId, ct), cancellationToken);
+
+    public Task<YouthAccessGrantSummary?> GetYouthAccessAsync(OrganisationId organisationId, UserId youthUserId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => GetYouthAccessCoreAsync(organisationId, youthUserId, ct), cancellationToken);
+
+    public Task<bool> IsContactRestrictedAsync(UserId first, UserId second, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => IsContactRestrictedCoreAsync(first, second, ct), cancellationToken);
+
+    public Task<bool> IsMinorAsync(UserId userId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => IsMinorCoreAsync(userId, ct), cancellationToken);
+
+    private async Task<YouthCapabilities> GetCapabilitiesCoreAsync(
         UserId userId,
         CancellationToken cancellationToken = default)
     {
@@ -48,7 +69,7 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
             : YouthCapabilities.Denied(userId);
     }
 
-    public async Task<IReadOnlyList<GuardianRelationship>> GetChildrenAsync(
+    private async Task<IReadOnlyList<GuardianRelationship>> GetChildrenCoreAsync(
         UserId guardianUserId,
         CancellationToken cancellationToken = default)
     {
@@ -68,7 +89,7 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
         return children;
     }
 
-    public Task<bool> IsVerifiedGuardianOfAsync(
+    private Task<bool> IsVerifiedGuardianOfCoreAsync(
         UserId guardianUserId,
         UserId childUserId,
         CancellationToken cancellationToken = default) =>
@@ -81,7 +102,7 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
                      && l.RevokedAt == null,
                 cancellationToken);
 
-    public async Task<YouthAccessGrantSummary?> GetYouthAccessAsync(
+    private async Task<YouthAccessGrantSummary?> GetYouthAccessCoreAsync(
         OrganisationId organisationId,
         UserId youthUserId,
         CancellationToken cancellationToken = default)
@@ -118,7 +139,7 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
             : null;
     }
 
-    public Task<bool> IsContactRestrictedAsync(
+    private Task<bool> IsContactRestrictedCoreAsync(
         UserId first,
         UserId second,
         CancellationToken cancellationToken = default)
@@ -136,7 +157,7 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
                 cancellationToken);
     }
 
-    public async Task<bool> IsMinorAsync(UserId userId, CancellationToken cancellationToken = default)
+    private async Task<bool> IsMinorCoreAsync(UserId userId, CancellationToken cancellationToken = default)
     {
         string? kind = await db.Users
             .AsNoTracking()

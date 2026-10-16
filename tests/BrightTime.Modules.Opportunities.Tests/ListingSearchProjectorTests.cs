@@ -28,6 +28,7 @@ public sealed class ListingSearchProjectorTests
             Categories = ["stem"],
         },
         Title = "Robotics club",
+        Slug = "robotics-club",
         Summary = "Build robots every Friday.",
         CategoryNames = ["STEM"],
         Sites = sites,

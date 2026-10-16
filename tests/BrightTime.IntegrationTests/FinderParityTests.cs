@@ -152,9 +152,9 @@ public sealed class FinderParityTests(DatabaseFixture database)
             await Sql.ExecAsync(connection, null,
                 """
                 insert into opportunity.listing_search
-                  (id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets, cost_cents, is_free,
+                  (id, tenant_id, listing_id, site_id, org_id, slug, kind, is_published, facets, cost_cents, is_free,
                    modality, title, summary, fuzzy_text, search_vector)
-                values (@row, @tenant, @listing, null, @org, 'program', false, array['kind:program'], 0, true,
+                values (@row, @tenant, @listing, null, @org, 'draft-slug', 'program', false, array['kind:program'], 0, true,
                         'in_person', 'Unpublished draft', 'Not for families yet.', 'Unpublished draft',
                         to_tsvector('platform.ts_en'::regconfig, 'Unpublished draft'))
                 """,
@@ -271,7 +271,7 @@ public sealed class FinderParityTests(DatabaseFixture database)
             """,
             [
                 ("id", row.ListingId), ("tenant", tenant), ("org", row.OrganisationId), ("kind", row.Kind),
-                ("slug", "l-" + row.ListingId.ToString("N")), ("title", row.Title), ("summary", row.Summary),
+                ("slug", row.Slug), ("title", row.Title), ("summary", row.Summary),
                 ("published", row.PublishedAt), ("mode", resource ? "none" : "external"),
                 ("url", resource ? null : "https://example.org/" + row.ListingId.ToString("N")),
                 ("cost", costModel), ("costmin", costMin), ("modality", row.Modality), ("dropin", row.IsDropIn),
@@ -284,12 +284,12 @@ public sealed class FinderParityTests(DatabaseFixture database)
         await Sql.ExecAsync(connection, null,
             """
             insert into opportunity.listing_search
-              (id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets,
+              (id, tenant_id, listing_id, site_id, org_id, slug, kind, is_published, facets,
                age_range, cost_cents, is_free, modality, neighbourhood_id, location,
                session_window, next_start_at, next_deadline_at, popularity, published_at,
                is_drop_in, title, summary, fuzzy_text, search_vector)
             values
-              (@row, @tenant, @listing, @site, @org, @kind, @published, @facets,
+              (@row, @tenant, @listing, @site, @org, @slug, @kind, @published, @facets,
                case when @amin::int is null then null else int4range(@amin::int, @amax::int, '[]') end,
                @cost, @free, @modality, @hood,
                case when @lon::float8 is null then null
@@ -301,7 +301,7 @@ public sealed class FinderParityTests(DatabaseFixture database)
             """,
             [
                 ("row", Guid.CreateVersion7()), ("tenant", tenant), ("listing", row.ListingId), ("site", row.SiteId),
-                ("org", row.OrganisationId), ("kind", row.Kind), ("published", row.IsPublished),
+                ("org", row.OrganisationId), ("slug", row.Slug), ("kind", row.Kind), ("published", row.IsPublished),
                 ("facets", row.Facets.ToArray()),
                 ("amin", row.AgeMin), ("amax", row.AgeMax), ("cost", row.CostCents), ("free", row.IsFree),
                 ("modality", row.Modality), ("hood", row.NeighbourhoodId),

@@ -57,10 +57,10 @@ select listing_id, '0196c3e8-0000-7000-8000-00000000e001', org_id, kind,
 from syn;
 
 insert into opportunity.listing_search
-  (id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets,
+  (id, tenant_id, listing_id, site_id, org_id, slug, kind, is_published, facets,
    age_range, cost_cents, is_free, modality, location, session_window,
    next_start_at, popularity, published_at, is_drop_in, title, summary, fuzzy_text, search_vector)
-select gen_random_uuid(), '0196c3e8-0000-7000-8000-00000000e001', listing_id, site_id, org_id, kind, true,
+select gen_random_uuid(), '0196c3e8-0000-7000-8000-00000000e001', listing_id, site_id, org_id, 'syn-' || g, kind, true,
        array_cat(
          array['kind:' || kind, 'cat:' || cat, 'mode:in_person', 'org:' || org_id::text]
            || case when cost_cents = 0 then array['free'] else array[]::text[] end,

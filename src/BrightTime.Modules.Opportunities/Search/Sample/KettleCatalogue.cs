@@ -219,6 +219,7 @@ public static class KettleCatalogue
             PublishedAt = clock.UtcNow.AddDays(-30 + id),
             Facets = facets,
             Title = title,
+            Slug = SharedKernel.Primitives.Slug.From(title),
             Summary = summary,
             CategoryNames = facets.Categories.ToArray(),
             Sites = sites,

@@ -26,6 +26,22 @@ tenant-aware jobs, audit integration, a `unique_key` for debouncing
 reprojection, and one schema to review. **Decision needed:** confirm, or name
 Hangfire/Quartz if you want an off-the-shelf scheduler.
 
+*Implemented (approved with the plan).* `JobStore` claims with `FOR UPDATE SKIP LOCKED`,
+completes and fails only jobs the same worker still holds, retries with exponential
+backoff (5 s doubling to an hour), dead-letters after `max_attempts`, and reaps jobs
+whose worker stopped responding. Two schema corrections came out of building it:
+
+- The debounce index covered running jobs as well as waiting ones, so an edit made while
+  a projection ran would have collapsed into it and been lost. It now covers waiting
+  jobs only.
+- `platform.job` was tenant-isolated with no worker exception, so a worker serving every
+  tenant could claim nothing. `job_worker_claims` lets `brighttime_jobs` alone see every
+  job; requests still enqueue only for their own tenant.
+
+Not yet built: `LISTEN/NOTIFY` (the worker polls every 2 s), and the `job_schedule` cron
+runner. Until the latter exists, nothing re-projects a listing whose `next_start_at` has
+passed, so the soonest sort drifts until the listing is next edited.
+
 ### D3 — Open Badges 3.0 is more expensive than it looks
 OB 3.0 is W3C Verifiable Credentials 2.0. That means DID management, Ed25519
 key custody and rotation, a proof format choice, and a verifier. My

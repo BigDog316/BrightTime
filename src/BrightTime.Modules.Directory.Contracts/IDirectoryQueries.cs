@@ -1,3 +1,4 @@
+using BrightTime.SharedKernel.Geo;
 using BrightTime.SharedKernel.Ids;
 
 namespace BrightTime.Modules.Directory.Contracts;
@@ -24,6 +25,27 @@ public sealed record ClearanceState(
         && (ExpiresOn is null || ExpiresOn >= asOf);
 }
 
+/// <summary>
+/// A site as other modules see it. The street address is included only when
+/// <see cref="IsAddressPublic"/> is true; otherwise the address fields are null and only
+/// the neighbourhood identifies where it is. The location is always present for distance
+/// search, which never discloses it.
+/// </summary>
+public sealed record SiteSummary(
+    Guid SiteId,
+    OrganisationId OrganisationId,
+    string Name,
+    Guid? NeighbourhoodId,
+    Coordinate? Location,
+    bool IsAddressPublic,
+    string? AddressLine1,
+    string? AddressLine2,
+    string? Locality,
+    string? PostalCode,
+    string? TransitNote,
+    bool? IsWheelchairAccessible,
+    bool IsActive);
+
 /// <summary>What other modules may ask Directory.</summary>
 public interface IDirectoryQueries
 {
@@ -34,6 +56,15 @@ public interface IDirectoryQueries
     Task<string?> GetOrganisationRoleAsync(
         OrganisationId organisationId,
         UserId userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The sites named, active or not. Callers decide what an inactive site means for them.</summary>
+    Task<IReadOnlyList<SiteSummary>> GetSitesAsync(
+        IReadOnlyCollection<Guid> siteIds,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> GetOrganisationNameAsync(
+        OrganisationId organisationId,
         CancellationToken cancellationToken = default);
 
     Task<OrganisationStatus?> GetStatusAsync(

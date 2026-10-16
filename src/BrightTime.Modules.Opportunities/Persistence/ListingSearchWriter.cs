@@ -61,6 +61,7 @@ public sealed class ListingSearchWriter(OpportunitiesDbContext db, IClock clock)
         ListingId = row.ListingId,
         SiteId = row.SiteId,
         OrgId = row.OrganisationId,
+        Slug = row.Slug,
         Kind = row.Kind,
         IsPublished = row.IsPublished,
         Facets = [.. row.Facets],

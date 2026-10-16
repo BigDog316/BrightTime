@@ -189,6 +189,8 @@ public sealed class ListingSearchRecord
 
     public Guid OrgId { get; init; }
 
+    public required string Slug { get; init; }
+
     public required string Kind { get; init; }
 
     public bool IsPublished { get; init; }

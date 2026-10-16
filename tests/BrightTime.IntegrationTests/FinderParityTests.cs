@@ -218,6 +218,9 @@ public sealed class FinderParityTests(DatabaseFixture database)
               if not exists (select from pg_roles where rolname = 'bt_finder_login') then
                 create role bt_finder_login login password 'bt-test-only' in role brighttime_app;
               end if;
+              -- Production grants the application's login membership of the finder
+              -- role, so the finder can SET LOCAL ROLE into it (decision D13).
+              grant brighttime_finder to bt_finder_login;
             end $$;
             """, []);
 

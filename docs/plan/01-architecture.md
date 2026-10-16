@@ -214,7 +214,7 @@ nginx (TLS, HSTS, brotli, static cache)
         └─ Endpoint
 ```
 
-### Five database principals
+### Database principals
 
 | Role | Used by | RLS posture |
 |---|---|---|
@@ -224,6 +224,7 @@ nginx (TLS, HSTS, brotli, static cache)
 | `brighttime_auth` | **the authentication path only** | tenant policy, exempt from the actor guard, granted on the Identity stores and nothing else |
 | `brighttime_jobs` | the worker host | tenant policy, no actor guard (no human actor exists) |
 | `brighttime_readonly` | civic/research reads | suppressed views only; no grant on any fact table |
+| `brighttime_finder` | the public finder only, entered with `SET LOCAL ROLE` (D13) | `BYPASSRLS`; `SELECT` on `opportunity.listing_search` and nothing else, enforced at migration |
 
 `brighttime_auth` exists because login, registration and password reset have
 to read `identity.app_user` before any actor exists. Rather than leaving that

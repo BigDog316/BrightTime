@@ -111,6 +111,14 @@ that **fails deployment** if any module table lacks RLS.
 request in tenant A reads exactly zero tenant-B rows, both through the API and
 through a hand-forged `DbContext` query.
 
+**One deliberate exception (decision D13).** The public finder reads
+`opportunity.listing_search` as `brighttime_finder`, which bypasses RLS, because the
+tenant policy stopped the planner using the search indexes. On that path, isolation
+is the tenant predicate `SearchQueryBuilder` always emits, and the table holds only
+published, public listing data with no youth data. The role cannot read or write any
+other table. The migration fails if that ever changes, and the integration tests
+check it independently.
+
 ### T8 — Provider over-reach: browsing youth they never served
 **Controls:** `youth_record.read` is `◐ grant` only.
 `YouthRecordRequirement` resolves `youth_access_grant` for (org, youth) and

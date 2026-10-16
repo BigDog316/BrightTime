@@ -22,7 +22,7 @@ internal static class Sql
     }
 
     /// <summary>The only role names a test may assume. Anything else is refused before it reaches SQL.</summary>
-    private static readonly string[] AllowedRoles = ["brighttime_app", "brighttime_auth"];
+    private static readonly string[] AllowedRoles = ["brighttime_app", "brighttime_auth", "brighttime_finder"];
 
     /// <summary>Runs <paramref name="body"/> as <paramref name="role"/> with the tenant and actor set, then rolls back.</summary>
     public static async Task<T> AsRoleAsync<T>(

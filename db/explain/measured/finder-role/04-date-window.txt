@@ -1,0 +1,25 @@
+                                                                                QUERY PLAN                                                                                
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=25.54..25.55 rows=1 width=24) (actual time=0.049..0.049 rows=0.00 loops=1)
+   Output: listing_id, next_start_at
+   Buffers: shared hit=10
+   ->  Sort  (cost=25.54..25.55 rows=1 width=24) (actual time=0.049..0.049 rows=0.00 loops=1)
+         Output: listing_id, next_start_at
+         Sort Key: ls.next_start_at
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=10
+         ->  Bitmap Heap Scan on opportunity.listing_search ls  (cost=21.49..25.53 rows=1 width=24) (actual time=0.042..0.042 rows=0.00 loops=1)
+               Output: listing_id, next_start_at
+               Recheck Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{dow:6}'::text[]) AND ls.is_published)
+               Filter: (ls.session_window && tstzrange((date_trunc('week'::text, now()) + '12 days'::interval), (date_trunc('week'::text, now()) + '13 days'::interval)))
+               Buffers: shared hit=7
+               ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..21.49 rows=1 width=0) (actual time=0.039..0.039 rows=0.00 loops=1)
+                     Index Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{dow:6}'::text[]))
+                     Index Searches: 1
+                     Buffers: shared hit=7
+ Planning:
+   Buffers: shared hit=428
+ Planning Time: 1.315 ms
+ Execution Time: 0.099 ms
+(21 rows)
+

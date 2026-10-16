@@ -34,6 +34,17 @@ create extension if not exists pgcrypto;         -- digest() for blind indexes/h
 --                          "requires authenticated actor" RESTRICTIVE policy.
 --                          Its grants are narrow (see 99-rls-and-grants.sql):
 --                          the Identity stores and nothing else.
+--   brighttime_finder     : the public finder's read path, and nothing else.
+--                          BYPASSRLS, with SELECT on opportunity.listing_search
+--                          only. Decision D13: the tenant policy is a security
+--                          barrier that stops the planner using the search
+--                          indexes. Isolation on this path rests on the tenant
+--                          predicate SearchQueryBuilder always emits.
+--                          Attributes are not inherited, so the application
+--                          enters it with SET LOCAL ROLE inside the finder's
+--                          own transaction; the bypass ends when it commits.
+--                          99-rls-and-grants.sql fails the migration if this
+--                          role ever gains a privilege on any other table.
 --   brighttime_readonly   : analytics / research exports. SELECT on
 --                          analytics schema only.
 --   brighttime_jobs       : background worker. Same RLS posture as _app but
@@ -57,6 +68,9 @@ begin
   end if;
   if not exists (select 1 from pg_roles where rolname = 'brighttime_auth') then
     create role brighttime_auth nologin noinherit;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'brighttime_finder') then
+    create role brighttime_finder nologin noinherit bypassrls;
   end if;
   if not exists (select 1 from pg_roles where rolname = 'brighttime_readonly') then
     create role brighttime_readonly nologin noinherit;

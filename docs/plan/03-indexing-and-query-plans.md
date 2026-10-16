@@ -171,19 +171,33 @@ field, any `is_sensitive` application answer. Accommodation terms are a
 
 Execution times are warm-cache, from `EXPLAIN (ANALYZE, BUFFERS)`, on 50,000 rows.
 
-| Scenario | As the app runs it (RLS on) | RLS bypassed | Index used without RLS? |
+| Scenario | Before D13 (RLS on) | As shipped (finder role) | Plan as shipped |
 |---|---|---|---|
-| 01 browse, soonest | 0.09 ms | 0.11 ms | yes, `ix_ls_next_start` |
-| 02 keyword only | **22.1 ms** | 0.12 ms | yes, `ix_ls_fts` |
-| 03 age, category, free, within 5 km | **43.0 ms** | 26.9 ms | yes, `ix_ls_facets`, but see below |
-| 04 date window | **12.1 ms** | 0.10 ms | yes, `ix_ls_window` |
-| 05 fuzzy typo | **65.0 ms** | 17.3 ms | yes, `ix_ls_fuzzy` |
-| 06 six facets, text, date, cost, distance | **20.5 ms** | 0.16 ms | yes, `ix_ls_facets` |
-| 07 translation join | 0.04 ms | 0.03 ms | n/a, empty table |
+| 01 browse, soonest | 0.09 ms | 0.08 ms | index scan, `ix_ls_next_start` |
+| 02 keyword only | 22.1 ms | **0.28 ms** | bitmap, `ix_ls_fts` |
+| 03 age, category, free, within 5 km | 43.0 ms | 26.7 ms | bitmap, `ix_ls_facets`, distance rechecked per row |
+| 04 date window | 12.1 ms | **0.10 ms** | bitmap, `ix_ls_facets` |
+| 05 fuzzy typo | 65.0 ms | 15.7 ms | bitmap, `ix_ls_fuzzy` |
+| 06 six facets, text, date, cost, distance | 20.5 ms | **0.16 ms** | bitmap, `ix_ls_facets` |
+| 07 translation join (RLS measurement, login role) | 0.04 ms | 0.03 ms | empty table, not meaningful |
 
-**Under RLS, scenarios 02, 04, 05 and 06 sequentially scan the whole table.** The
-same queries without RLS use the index and take well under a millisecond,
-apart from fuzzy matching, which is still 17 ms.
+"As shipped" is the finder after decision D13: the same query, run as
+`brighttime_finder`. Raw plans: `db/explain/measured/finder-role/`. The earlier
+columns remain in `rls-on/` and `rls-bypassed/`.
+
+**Before D13, scenarios 02, 04, 05 and 06 sequentially scanned the whole table
+under RLS.** As shipped, every finder scenario uses an index.
+
+**Still slow, and not caused by RLS:**
+
+- **03, facets plus distance, 27 ms.** The facet index returns about 5,700
+  candidates and the distance is checked per row. The planner estimates one row
+  for the combined filter, when 722 match. Next step: test the GiST index on
+  `location` leading for small radii, and add extended statistics if the estimate
+  stays wrong.
+- **05, fuzzy matching, 16 ms.** Trigram similarity over 50,000 short strings.
+  Next step: raise the similarity threshold for short queries, as section "The
+  query" already proposes, and measure again.
 
 Where the predictions were wrong:
 

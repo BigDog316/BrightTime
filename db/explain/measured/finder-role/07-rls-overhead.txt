@@ -1,0 +1,36 @@
+ ?column? 
+----------
+        1
+(1 row)
+
+                                                                                  QUERY PLAN                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Hash Semi Join  (cost=14.20..2857.79 rows=85 width=80) (actual time=0.002..0.003 rows=0.00 loops=1)
+   Output: lt.listing_id, lt.locale, lt.title
+   Hash Cond: (lt.listing_id = listing_search.listing_id)
+   ->  Seq Scan on opportunity.listing_translation lt  (cost=0.00..2842.20 rows=170 width=80) (actual time=0.002..0.002 rows=0.00 loops=1)
+         Output: lt.listing_id, lt.locale, lt.title, lt.summary, lt.description, lt.translation_source, lt.translated_at, lt.translated_by, lt.reviewed_at
+         Filter: EXISTS(SubPlan 1)
+         SubPlan 1
+           ->  Index Scan using listing_pkey on opportunity.listing p  (cost=0.29..8.32 rows=1 width=0) (never executed)
+                 Index Cond: (p.id = lt.listing_id)
+                 Filter: (p.tenant_id = (NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid)
+                 Index Searches: 0
+   ->  Hash  (cost=11.70..11.70 rows=200 width=16) (never executed)
+         Output: listing_search.listing_id
+         ->  Limit  (cost=0.42..11.70 rows=200 width=16) (never executed)
+               Output: listing_search.listing_id
+               ->  Result  (cost=0.42..2819.69 rows=50000 width=16) (never executed)
+                     Output: listing_search.listing_id
+                     One-Time Filter: ((NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid = (current_setting('brighttime.tenant_id'::text))::uuid)
+                     ->  Index Only Scan using ix_ls_next_start on opportunity.listing_search  (cost=0.42..2819.69 rows=50000 width=16) (never executed)
+                           Output: listing_search.tenant_id, listing_search.next_start_at, listing_search.listing_id
+                           Index Cond: (listing_search.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid)
+                           Heap Fetches: 0
+                           Index Searches: 0
+ Planning:
+   Buffers: shared hit=595
+ Planning Time: 2.109 ms
+ Execution Time: 0.027 ms
+(27 rows)
+

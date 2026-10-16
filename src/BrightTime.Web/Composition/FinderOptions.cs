@@ -24,6 +24,12 @@ public sealed class FinderOptions
     [Required]
     public string TimeZone { get; set; } = "America/New_York";
 
+    /// <summary>
+    /// The application's login. In <see cref="FinderMode.Sql"/> that login must be granted
+    /// membership of <c>brighttime_finder</c> (decision D13): the finder enters that role
+    /// with <c>SET LOCAL ROLE</c> for each search, and fails with "permission denied to
+    /// set role" if the grant is missing.
+    /// </summary>
     public string? ConnectionString { get; set; }
 }
 

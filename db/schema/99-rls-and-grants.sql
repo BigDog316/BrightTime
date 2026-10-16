@@ -314,6 +314,13 @@ grant execute on function platform.current_tenant_id(), platform.current_actor_i
                           platform.has_actor(), platform.blind_index(text, bytea)
   to brighttime_auth;
 
+-- Public finder (decision D13): SELECT on the search read model, nothing else.
+-- USAGE on public for pg_trgm and PostGIS, and on platform for the text-search
+-- configurations (platform.ts_en and the rest). No table grant outside
+-- opportunity.listing_search; the assertion at the end of this file enforces it.
+grant usage on schema opportunity, public, platform to brighttime_finder;
+grant select on opportunity.listing_search to brighttime_finder;
+
 -- Research / civic role: suppressed views only. No fact table, ever.
 grant usage on schema analytics to brighttime_readonly;
 revoke all on all tables in schema analytics from brighttime_readonly;
@@ -371,5 +378,47 @@ begin
   loop
     execute format('alter table %I.%I enable row level security', r.sch, r.tbl);
   end loop;
+end
+$$;
+
+-- ---------------------------------------------------------------------
+-- Verification for decision D13. FAILS the migration if:
+--   * any brighttime role other than migrator and finder can bypass RLS, or
+--   * brighttime_finder holds any privilege on any table other than SELECT
+--     on opportunity.listing_search.
+-- A role that bypasses RLS must never be able to reach a youth record. This
+-- makes widening it a deployment failure rather than a review miss.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_bypassers text;
+  v_extra text;
+begin
+  select string_agg(rolname, ', ' order by rolname)
+    into v_bypassers
+  from pg_roles
+  where rolname like 'brighttime\_%'
+    and rolbypassrls
+    and rolname not in ('brighttime_migrator', 'brighttime_finder');
+
+  if v_bypassers is not null then
+    raise exception 'roles that must not bypass RLS do: %', v_bypassers;
+  end if;
+
+  select string_agg(format('%s.%s (%s)', n.nspname, c.relname, p.privilege_type), ', ')
+    into v_extra
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) as p(privilege_type)
+  where c.relkind in ('r', 'p', 'v', 'm')
+    and n.nspname in ('platform','identity','directory','opportunity','enrollment',
+                      'attendance','learning','community','workforce','landscape',
+                      'analytics','notify','integration')
+    and has_table_privilege('brighttime_finder', c.oid, p.privilege_type)
+    and not (n.nspname = 'opportunity' and c.relname = 'listing_search' and p.privilege_type = 'SELECT');
+
+  if v_extra is not null then
+    raise exception 'brighttime_finder may read only opportunity.listing_search, but also has: %', v_extra;
+  end if;
 end
 $$;

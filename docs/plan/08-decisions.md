@@ -138,7 +138,7 @@ are not in the technical requirements:
 2. **Moderation staffing.** A moderation queue with a 1-hour critical SLA
    implies a rota. The software cannot supply that.
 
-### D13 — The public finder reads listing_search outside row-level security (**needs your decision**)
+### D13 — The public finder reads listing_search outside row-level security (**decided: option 2, implemented**)
 
 **What was measured.** With RLS on, the finder's search table is read by a sequential
 scan for keyword, date, fuzzy and combined queries. With RLS bypassed, the same
@@ -172,6 +172,25 @@ youth-data table may ever be read through a bypassing role.
 
 **Why it needs a decision.** Option 2 narrows the defence-in-depth described in
 D4 and T7 for one table. That is a judgement about risk, and it is yours.
+
+**Decided 2026-10-16: option 2.** As implemented:
+
+- `brighttime_finder` is `NOLOGIN BYPASSRLS`, with `SELECT` on
+  `opportunity.listing_search` and no privilege on any other table.
+- The application enters it with `SET LOCAL ROLE` inside the finder's transaction.
+  The bypass reverts at commit, so a pooled connection never carries it. The
+  application's login role must be granted membership of `brighttime_finder`.
+- `SqlListingFinder` refuses an empty tenant before it opens a connection.
+- Three guards, each tested:
+  1. `99-rls-and-grants.sql` fails the migration if the finder role gains any
+     other table privilege, or if any other BrightTime role can bypass RLS.
+     Tested by widening the role in a transaction: the migration names the leak.
+  2. Integration tests: the role cannot read identity, enrolment, attendance,
+     community, audit or listing tables; it cannot write the search table; and two
+     tenants with identical listings never see each other's.
+  3. A unit test that the tenant predicate survives every filter combination.
+- Measured result: every finder scenario now uses an index. Figures are in
+  `03-indexing-and-query-plans.md`.
 
 ## Open questions
 

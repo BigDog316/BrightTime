@@ -200,4 +200,35 @@ public sealed class QueryBuilderTests
         sql.ShouldContain($"{RelevanceScorer.TextWeight.ToString(System.Globalization.CultureInfo.InvariantCulture)} * least");
         sql.ShouldContain($"{RelevanceScorer.PopularityWeight.ToString(System.Globalization.CultureInfo.InvariantCulture)} * least");
     }
+
+    [Fact]
+    public void The_tenant_predicate_is_present_whatever_filters_are_set()
+    {
+        // Decision D13: the finder reads without RLS, so this predicate is the isolation.
+        // It must survive every combination of filters, sort and cursor.
+        var everything = new SearchQuery
+        {
+            TenantId = Tenant,
+            Text = "robotics",
+            AllFacets = ["age:15"],
+            AnyFacets = ["lang:es"],
+            Kinds = ["program"],
+            WindowStart = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
+            WindowEnd = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
+            MaxCostCents = 5000,
+            Origin = new Coordinate(41.0, -73.7),
+            Radius = Distance.FromMetres(5000),
+            InterestTokens = ["int:robotics"],
+            Sort = SearchSort.Nearest,
+            After = new Cursor("12.5", Guid.CreateVersion7()),
+        };
+
+        foreach (SearchQuery query in new[] { Browse(), everything, everything with { FreeOnly = true } })
+        {
+            BuiltQuery built = SearchQueryBuilder.Build(query);
+
+            built.Sql.ShouldContain("where ls.tenant_id = @tenant_id and ls.is_published");
+            built.Parameters["tenant_id"].ShouldBe(Tenant);
+        }
+    }
 }

@@ -1,0 +1,24 @@
+                                                                                      QUERY PLAN                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=125.81..125.87 rows=24 width=20) (actual time=0.234..0.235 rows=0.00 loops=1)
+   Output: ls.listing_id, (ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32))
+   Buffers: shared hit=17
+   ->  Sort  (cost=125.81..125.87 rows=25 width=20) (actual time=0.234..0.234 rows=0.00 loops=1)
+         Output: ls.listing_id, (ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32))
+         Sort Key: (ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32)) DESC, ls.listing_id
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=17
+         ->  Bitmap Heap Scan on opportunity.listing_search ls  (cost=30.39..125.23 rows=25 width=20) (actual time=0.222..0.222 rows=0.00 loops=1)
+               Output: ls.listing_id, ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32)
+               Recheck Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.search_vector @@ '''robot'' & ''school'''::tsquery) AND ls.is_published)
+               Buffers: shared hit=11
+               ->  Bitmap Index Scan on ix_ls_fts  (cost=0.00..30.39 rows=25 width=0) (actual time=0.219..0.219 rows=0.00 loops=1)
+                     Index Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.search_vector @@ '''robot'' & ''school'''::tsquery))
+                     Index Searches: 1
+                     Buffers: shared hit=11
+ Planning:
+   Buffers: shared hit=358
+ Planning Time: 2.076 ms
+ Execution Time: 0.282 ms
+(20 rows)
+

@@ -1,0 +1,20 @@
+                                                                                                                                           QUERY PLAN                                                                                                                                            
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=68.98..85.52 rows=1 width=16) (actual time=0.099..0.099 rows=0.00 loops=1)
+   Output: listing_id
+   Buffers: shared hit=23
+   ->  Bitmap Heap Scan on opportunity.listing_search ls  (cost=68.98..85.52 rows=1 width=16) (actual time=0.098..0.098 rows=0.00 loops=1)
+         Output: listing_id
+         Recheck Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{age:13,cat:arts,lang:es,accom:wheelchair,meals,mode:in_person}'::text[]) AND ls.is_published)
+         Filter: ((ls.search_vector @@ '''arte'''::tsquery) AND (ls.cost_cents <= 5000) AND (ls.session_window && tstzrange(now(), (now() + '60 days'::interval))) AND st_dwithin(ls.location, '0101000020E6100000713D0AD7A37052C0A4703D0AD7834440'::geography, '8000'::double precision, true))
+         Buffers: shared hit=23
+         ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..68.98 rows=1 width=0) (actual time=0.096..0.096 rows=0.00 loops=1)
+               Index Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{age:13,cat:arts,lang:es,accom:wheelchair,meals,mode:in_person}'::text[]))
+               Index Searches: 1
+               Buffers: shared hit=23
+ Planning:
+   Buffers: shared hit=529
+ Planning Time: 16.225 ms
+ Execution Time: 0.155 ms
+(16 rows)
+

@@ -9,18 +9,21 @@ namespace BrightTime.Modules.Opportunities.Search;
 
 /// <summary>
 /// The production finder: runs <see cref="SearchQueryBuilder"/>'s statement against
-/// <c>opportunity.listing_search</c> under the tenant's row-level security.
+/// <c>opportunity.listing_search</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <strong>Not yet verified against a database.</strong> The statement is tested for
-/// its shape and its parameter binding, not for its results or its plan. It runs
-/// once PostGIS is installed and the EXPLAIN harness is in place.
+/// Decision D13. The query runs as <c>brighttime_finder</c>, a role that bypasses
+/// row-level security and may read this one table and nothing else. Under the tenant
+/// policy the planner could not use the search indexes; measured at 50,000 rows the
+/// difference was 12–65 ms against 0.1–0.2 ms.
 /// </para>
 /// <para>
-/// The tenant is set with <c>set_config(..., is_local =&gt; true)</c> inside the same
-/// transaction as the query, mirroring <c>TenantSessionInterceptor</c>. A pooled
-/// connection cannot carry one request's tenant into the next.
+/// Isolation on this path therefore rests on the tenant predicate the builder always
+/// emits. Two guards back it: this class refuses an empty tenant before connecting,
+/// and the migration fails if <c>brighttime_finder</c> ever gains a privilege on any
+/// other table. The role is entered with <c>SET LOCAL ROLE</c>, so the bypass lasts
+/// for this transaction only and never for the connection.
 /// </para>
 /// </remarks>
 public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFinder
@@ -34,6 +37,13 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        if (query.TenantId == Guid.Empty)
+        {
+            // Without RLS on this path, the tenant predicate is the isolation. An
+            // empty tenant would match nothing today, but it must never reach SQL.
+            throw new ArgumentException("A finder query must name its tenant.", nameof(query));
+        }
+
         BuiltQuery built = SearchQueryBuilder.Build(query);
 
         await using NpgsqlConnection connection = await dataSource
@@ -44,7 +54,7 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
             .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken)
             .ConfigureAwait(false);
 
-        await SetTenantAsync(connection, transaction, query.TenantId, cancellationToken).ConfigureAwait(false);
+        await EnterFinderRoleAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
 
         List<FinderItem> rows = [];
         await using (NpgsqlCommand command = new(built.Sql, connection, transaction))
@@ -77,18 +87,20 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
         return new FinderPage(page, nextCursor);
     }
 
-    private static async Task SetTenantAsync(
+    /// <summary>The role that may bypass RLS on the search table, and only that table.</summary>
+    public const string FinderRole = "brighttime_finder";
+
+    /// <summary>
+    /// Switches to the finder role for the rest of this transaction. <c>SET LOCAL</c>
+    /// reverts at commit or rollback, so a pooled connection never carries the bypass
+    /// into the next request.
+    /// </summary>
+    private static async Task EnterFinderRoleAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
-        Guid tenantId,
         CancellationToken cancellationToken)
     {
-        await using NpgsqlCommand command = new(
-            "select set_config('brighttime.tenant_id', @tenant, true), set_config('brighttime.actor_id', '', true)",
-            connection,
-            transaction);
-
-        command.Parameters.Add(new NpgsqlParameter("tenant", tenantId.ToString("D", CultureInfo.InvariantCulture)));
+        await using NpgsqlCommand command = new("set local role " + FinderRole, connection, transaction);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 

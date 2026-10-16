@@ -1,0 +1,35 @@
+                                                                                     QUERY PLAN                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=25957.14..25957.15 rows=1 width=24) (actual time=25.048..26.610 rows=24.00 loops=1)
+   Output: ls.listing_id, (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+   Buffers: shared hit=5073
+   ->  Sort  (cost=25957.14..25957.15 rows=1 width=24) (actual time=25.048..26.607 rows=24.00 loops=1)
+         Output: ls.listing_id, (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+         Sort Key: (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+         Sort Method: top-N heapsort  Memory: 27kB
+         Buffers: shared hit=5073
+         ->  Gather  (cost=1057.16..25957.13 rows=1 width=24) (actual time=11.463..26.544 rows=715.00 loops=1)
+               Output: ls.listing_id, (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+               Workers Planned: 1
+               Workers Launched: 1
+               Buffers: shared hit=5070
+               ->  Parallel Bitmap Heap Scan on opportunity.listing_search ls  (cost=57.16..24957.03 rows=1 width=24) (actual time=8.831..13.522 rows=357.50 loops=2)
+                     Output: ls.listing_id, st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true)
+                     Recheck Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{age:15,cat:stem,free}'::text[]) AND ls.is_published)
+                     Filter: st_dwithin(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, '5000'::double precision, true)
+                     Rows Removed by Filter: 2483
+                     Heap Blocks: exact=4013
+                     Buffers: shared hit=5070
+                     Worker 0:  actual time=6.314..6.322 rows=1.00 loops=1
+                       Heap Blocks: exact=2
+                       Buffers: shared hit=676
+                     ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..57.16 rows=2841 width=0) (actual time=1.825..1.825 rows=5681.00 loops=1)
+                           Index Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{age:15,cat:stem,free}'::text[]))
+                           Index Searches: 1
+                           Buffers: shared hit=42
+ Planning:
+   Buffers: shared hit=520
+ Planning Time: 15.831 ms
+ Execution Time: 26.687 ms
+(31 rows)
+

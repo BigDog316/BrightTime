@@ -80,6 +80,11 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             b.HasKey(c => c.UserId);
             b.Property(c => c.UserId).ValueGeneratedNever().HasColumnName("user_id");
             b.Property(c => c.CanBeMessagedByOrg).HasColumnName("can_be_messaged_by_org");
+
+            // The snake_case convention writes IsUnder13 as is_under13; the schema
+            // says is_under_13. Explicit, because changing the convention would
+            // rename address_line1 and sha256 elsewhere. Found by the drift test.
+            b.Property(c => c.IsUnder13).HasColumnName("is_under_13");
         });
 
         modelBuilder.Entity<RestrictedContact>(b =>

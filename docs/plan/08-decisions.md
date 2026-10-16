@@ -276,3 +276,13 @@ cleanly — partial indexes with `coalesce`, `UNIQUE NULLS NOT DISTINCT`,
 generated columns, constraint triggers, RLS policies, partitioning. I lean
 **(b)**: SQL-first, EF models mapped to it, CI failing on drift in either
 direction. As a DBA you may have a strong view.
+
+*Implemented (approved with the plan).* `SchemaDriftTests` compares every table a
+module context maps against the live schema: a mapped column the database lacks, a
+database column the model leaves unmapped, a type difference, or a nullability
+difference. Its first run found 75 differences across three contexts that had never
+touched a database. 72 came from one convention (strings mapped to `varchar(4000)`;
+the schema is `text`), one was a real runtime bug (`youth_capability.is_under_13`,
+which the naming convention wrote as `is_under13`), and two were spelling. All four
+module contexts now match exactly. Tables no context maps yet are not checked;
+a table that is mapped must be mapped completely.

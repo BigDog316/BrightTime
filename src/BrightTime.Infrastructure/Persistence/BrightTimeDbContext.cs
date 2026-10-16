@@ -20,15 +20,47 @@ namespace BrightTime.Infrastructure.Persistence;
 /// point of having both.
 /// </para>
 /// </remarks>
-public abstract class BrightTimeDbContext(DbContextOptions options, ITenantContext tenantContext)
-    : DbContext(options)
+public abstract class BrightTimeDbContext : DbContext
 {
+    protected BrightTimeDbContext(DbContextOptions options, ITenantContext tenantContext)
+        : base(options)
+    {
+        TenantContext = tenantContext;
+
+        // EF Core skips the transaction for a single-statement SaveChanges. The tenant is
+        // set when a transaction starts, so a one-row write would run without it and the
+        // RLS policy would refuse it. Every save gets a transaction.
+        Database.AutoTransactionBehavior = AutoTransactionBehavior.Always;
+    }
+
     /// <summary>The PostgreSQL schema this module owns.</summary>
     public abstract string Schema { get; }
 
-    protected ITenantContext TenantContext { get; } = tenantContext;
+    protected ITenantContext TenantContext { get; }
 
     protected TenantId TenantId => TenantContext.TenantId;
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in a transaction, which is where the tenant session
+    /// variables live. Reads must go through this; <see cref="RequireTransactionInterceptor"/>
+    /// refuses a command that does not.
+    /// </summary>
+    public async Task<T> InTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+
+        if (Database.CurrentTransaction is not null)
+        {
+            return await work(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
+            await Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        T result = await work(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,19 +73,16 @@ public abstract class BrightTimeDbContext(DbContextOptions options, ITenantConte
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
 
-        // snake_case is the schema's convention; mapping it once here beats
-        // 177 tables of explicit HasColumnName.
-        configurationBuilder.Properties<string>().HaveMaxLength(DefaultStringLength);
+        // The schema uses unbounded text throughout (PostgreSQL stores it exactly as
+        // it stores a capped varchar), with real limits expressed as CHECK
+        // constraints. Mapping strings to varchar(n) here put the model and the
+        // schema out of step on every string column; the drift test caught it.
+        // Columns of another type (citext) declare it explicitly.
+        configurationBuilder.Properties<string>().HaveColumnType("text");
         configurationBuilder.Properties<DateTimeOffset>().HaveColumnType("timestamptz");
         configurationBuilder.Properties<DateOnly>().HaveColumnType("date");
 
         base.ConfigureConventions(configurationBuilder);
     }
 
-    /// <summary>
-    /// Deliberately generous: the schema uses unbounded <c>text</c> throughout
-    /// (PostgreSQL stores it identically to a capped varchar), and real limits
-    /// are expressed as CHECK constraints where they matter.
-    /// </summary>
-    protected const int DefaultStringLength = 4000;
 }

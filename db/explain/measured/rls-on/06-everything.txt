@@ -1,0 +1,33 @@
+                                                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                                                                
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1000.02..266417.12 rows=1 width=16) (actual time=19.522..20.474 rows=0.00 loops=1)
+   Output: listing_id
+   Buffers: shared hit=4167
+   ->  Gather  (cost=1000.02..266417.12 rows=1 width=16) (actual time=19.521..20.473 rows=0.00 loops=1)
+         Output: listing_id
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=4167
+         ->  Result  (cost=0.02..265417.02 rows=1 width=16) (actual time=7.872..7.873 rows=0.00 loops=3)
+               Output: listing_id
+               One-Time Filter: ((NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid = (current_setting('brighttime.tenant_id'::text))::uuid)
+               Buffers: shared hit=4167
+               Worker 0:  actual time=2.141..2.142 rows=0.00 loops=1
+                 Buffers: shared hit=377
+               Worker 1:  actual time=2.140..2.140 rows=0.00 loops=1
+                 Buffers: shared hit=378
+               ->  Parallel Seq Scan on opportunity.listing_search ls  (cost=0.02..265417.02 rows=1 width=16) (actual time=7.869..7.869 rows=0.00 loops=3)
+                     Output: id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets, age_range, grade_range, cost_cents, is_free, modality, neighbourhood_id, location, session_window, next_start_at, next_deadline_at, is_drop_in, search_vector, fuzzy_text, title, summary, popularity, published_at, projected_at
+                     Filter: (ls.is_published AND (ls.cost_cents <= 5000) AND (ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.search_vector @@ '''arte'''::tsquery) AND (ls.facets @> '{age:13,cat:arts,lang:es,accom:wheelchair,meals,mode:in_person}'::text[]) AND (ls.session_window && tstzrange(now(), (now() + '60 days'::interval))) AND st_dwithin(ls.location, '0101000020E6100000713D0AD7A37052C0A4703D0AD7834440'::geography, '8000'::double precision, true))
+                     Rows Removed by Filter: 16667
+                     Buffers: shared hit=4167
+                     Worker 0:  actual time=2.136..2.136 rows=0.00 loops=1
+                       Buffers: shared hit=377
+                     Worker 1:  actual time=2.136..2.136 rows=0.00 loops=1
+                       Buffers: shared hit=378
+ Planning:
+   Buffers: shared hit=520
+ Planning Time: 22.122 ms
+ Execution Time: 20.514 ms
+(29 rows)
+

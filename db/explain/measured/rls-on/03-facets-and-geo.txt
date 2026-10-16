@@ -1,0 +1,38 @@
+                                                                                                                                                                                                        QUERY PLAN                                                                                                                                                                                                         
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=266065.05..266065.05 rows=1 width=24) (actual time=40.956..42.920 rows=24.00 loops=1)
+   Output: ls.listing_id, (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+   Buffers: shared hit=6054
+   ->  Sort  (cost=266065.05..266065.05 rows=1 width=24) (actual time=40.955..42.918 rows=24.00 loops=1)
+         Output: ls.listing_id, (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+         Sort Key: (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+         Sort Method: top-N heapsort  Memory: 27kB
+         Buffers: shared hit=6054
+         ->  Gather  (cost=1000.02..266065.04 rows=1 width=24) (actual time=29.264..42.861 rows=730.00 loops=1)
+               Output: ls.listing_id, (st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true))
+               Workers Planned: 2
+               Workers Launched: 2
+               Buffers: shared hit=6051
+               ->  Result  (cost=0.02..265064.94 rows=1 width=24) (actual time=17.206..28.783 rows=243.33 loops=3)
+                     Output: ls.listing_id, st_distance(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, true)
+                     One-Time Filter: ((NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid = (current_setting('brighttime.tenant_id'::text))::uuid)
+                     Buffers: shared hit=6051
+                     Worker 0:  actual time=11.208..22.793 rows=246.00 loops=1
+                       Buffers: shared hit=2164
+                     Worker 1:  actual time=11.260..22.829 rows=252.00 loops=1
+                       Buffers: shared hit=2165
+                     ->  Parallel Seq Scan on opportunity.listing_search ls  (cost=0.02..265052.44 rows=1 width=48) (actual time=16.590..27.962 rows=243.33 loops=3)
+                           Output: ls.id, ls.tenant_id, ls.listing_id, ls.site_id, ls.org_id, ls.kind, ls.is_published, ls.facets, ls.age_range, ls.grade_range, ls.cost_cents, ls.is_free, ls.modality, ls.neighbourhood_id, ls.location, ls.session_window, ls.next_start_at, ls.next_deadline_at, ls.is_drop_in, ls.search_vector, ls.fuzzy_text, ls.title, ls.summary, ls.popularity, ls.published_at, ls.projected_at
+                           Filter: (ls.is_published AND (ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.facets @> '{age:15,cat:stem,free}'::text[]) AND st_dwithin(ls.location, '0101000020E61000009487855AD37052C023DBF97E6A844440'::geography, '5000'::double precision, true))
+                           Rows Removed by Filter: 16423
+                           Buffers: shared hit=6051
+                           Worker 0:  actual time=10.298..21.672 rows=246.00 loops=1
+                             Buffers: shared hit=2164
+                           Worker 1:  actual time=10.762..22.123 rows=252.00 loops=1
+                             Buffers: shared hit=2165
+ Planning:
+   Buffers: shared hit=508
+ Planning Time: 14.171 ms
+ Execution Time: 42.966 ms
+(34 rows)
+

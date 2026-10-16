@@ -24,18 +24,34 @@ namespace BrightTime.IntegrationTests;
 public sealed class DatabaseFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
+    private string? _externalConnection;
 
     /// <summary>Why the container is unavailable, or null when it started.</summary>
     public string? SkipReason { get; private set; }
 
     public string ConnectionString =>
-        _container?.GetConnectionString()
-        ?? throw new InvalidOperationException(SkipReason ?? "The database container is not running.");
+        _externalConnection
+        ?? _container?.GetConnectionString()
+        ?? throw new InvalidOperationException(SkipReason ?? "No database is available.");
 
-    public bool IsAvailable => _container is not null;
+    public bool IsAvailable => _externalConnection is not null || _container is not null;
+
+    /// <summary>
+    /// Environment variable naming an already-migrated database. When set, the
+    /// fixture uses it as-is and starts no container. The schema is applied by
+    /// db/apply-schema.sh, not by the tests.
+    /// </summary>
+    public const string ExternalConnectionVariable = "BRIGHTTIME_TEST_CONNECTION";
 
     public async ValueTask InitializeAsync()
     {
+        string? external = Environment.GetEnvironmentVariable(ExternalConnectionVariable);
+        if (!string.IsNullOrWhiteSpace(external))
+        {
+            _externalConnection = external;
+            return;
+        }
+
         try
         {
             _container = new PostgreSqlBuilder("postgis/postgis:17-3.4")

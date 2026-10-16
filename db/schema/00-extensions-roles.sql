@@ -163,7 +163,7 @@ create or replace function platform.blind_index(p_value text, p_key bytea)
   returns bytea
   language sql immutable parallel safe
 as $fn$
-  select hmac(lower(btrim(p_value)), p_key, 'sha256')
+  select hmac(convert_to(lower(btrim(p_value)), 'UTF8'), p_key, 'sha256')
 $fn$;
 
 comment on function platform.blind_index(text, bytea) is

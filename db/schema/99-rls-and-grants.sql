@@ -288,6 +288,12 @@ begin
 end
 $$;
 
+-- Schema public stays closed to CREATE, which is what the revoke in 00 protects
+-- against (functions planted in public). USAGE is granted so the application
+-- roles can use what lives there: the pg_trgm % operator and citext comparison.
+-- Without it, fuzzy search and case-insensitive email lookups fail for the app.
+grant usage on schema public to brighttime_app, brighttime_jobs, brighttime_readonly, brighttime_auth;
+
 -- Authentication role: the Identity stores and the tenant lookup. Nothing
 -- else. It has no grant on enrollment, attendance, community, learning or
 -- analytics, so even though it is exempt from the actor guard it cannot
@@ -358,6 +364,9 @@ begin
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where c.relispartition
+      -- Tables only. A partitioned table's index partitions are relkind 'i' and
+      -- cannot take ENABLE ROW SECURITY, so the kind must be restricted here.
+      and c.relkind = 'r'
       and n.nspname in ('platform','opportunity','analytics')
   loop
     execute format('alter table %I.%I enable row level security', r.sch, r.tbl);

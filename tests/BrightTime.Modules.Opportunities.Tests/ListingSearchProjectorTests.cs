@@ -121,6 +121,16 @@ public sealed class ListingSearchProjectorTests
     }
 
     [Fact]
+    public void Popularity_is_carried_into_every_row_so_the_ranking_can_use_it()
+    {
+        // Missing from the first projector: the SQL ranks by popularity, so a row
+        // without it would be ranked as if nothing had ever been saved or viewed.
+        ProjectionSource source = Source([new SiteSource(SiteA, Hood, new Coordinate(41.03, -73.76))]) with { Popularity = 57.5 };
+
+        ListingSearchProjector.Project(source).ShouldAllBe(r => r.Popularity == 57.5);
+    }
+
+    [Fact]
     public void Projection_is_deterministic_for_the_same_source()
     {
         // Compared field by field: records hold their collections by reference, so

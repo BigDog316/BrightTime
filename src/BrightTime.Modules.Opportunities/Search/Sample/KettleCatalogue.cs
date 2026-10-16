@@ -31,6 +31,9 @@ public static class KettleCatalogue
     private static readonly Guid HoodDowntown = Guid.Parse("0196c3e8-0000-7000-8000-00000000f031");
     private static readonly Guid HoodRiverside = Guid.Parse("0196c3e8-0000-7000-8000-00000000f032");
 
+    /// <summary>The organisations in the sample, for tests that need a parent row.</summary>
+    public static IReadOnlyList<Guid> Organisations { get; } = [Org, OrgLibrary, OrgRec];
+
     /// <summary>The sample's rows, projected as the real projector would produce them.</summary>
     public static IReadOnlyList<ListingSearchRow> Rows(IClock clock)
     {

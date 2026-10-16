@@ -1,0 +1,26 @@
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=4780.87..4780.93 rows=24 width=20) (actual time=17.214..17.216 rows=24.00 loops=1)
+   Output: listing_id, (similarity(fuzzy_text, 'baskitball'::text))
+   Buffers: shared hit=4223
+   ->  Sort  (cost=4780.87..4793.50 rows=5051 width=20) (actual time=17.213..17.214 rows=24.00 loops=1)
+         Output: listing_id, (similarity(fuzzy_text, 'baskitball'::text))
+         Sort Key: (similarity(ls.fuzzy_text, 'baskitball'::text)) DESC, ls.listing_id
+         Sort Method: top-N heapsort  Memory: 27kB
+         Buffers: shared hit=4223
+         ->  Bitmap Heap Scan on opportunity.listing_search ls  (cost=130.27..4639.82 rows=5051 width=20) (actual time=1.192..16.927 rows=5000.00 loops=1)
+               Output: listing_id, similarity(fuzzy_text, 'baskitball'::text)
+               Recheck Cond: ((ls.fuzzy_text % 'baskitball'::text) AND ls.is_published)
+               Filter: (ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid)
+               Heap Blocks: exact=4167
+               Buffers: shared hit=4217
+               ->  Bitmap Index Scan on ix_ls_fuzzy  (cost=0.00..129.01 rows=5051 width=0) (actual time=0.838..0.838 rows=5000.00 loops=1)
+                     Index Cond: (ls.fuzzy_text % 'baskitball'::text)
+                     Index Searches: 1
+                     Buffers: shared hit=50
+ Planning:
+   Buffers: shared hit=336
+ Planning Time: 1.852 ms
+ Execution Time: 17.272 ms
+(22 rows)
+

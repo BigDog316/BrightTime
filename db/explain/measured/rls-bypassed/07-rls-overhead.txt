@@ -1,0 +1,22 @@
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Hash Semi Join  (cost=14.25..30.43 rows=170 width=80) (actual time=0.003..0.003 rows=0.00 loops=1)
+   Output: lt.listing_id, lt.locale, lt.title
+   Hash Cond: (lt.listing_id = listing_search.listing_id)
+   ->  Seq Scan on opportunity.listing_translation lt  (cost=0.00..13.40 rows=340 width=80) (actual time=0.002..0.002 rows=0.00 loops=1)
+         Output: lt.listing_id, lt.locale, lt.title, lt.summary, lt.description, lt.translation_source, lt.translated_at, lt.translated_by, lt.reviewed_at
+   ->  Hash  (cost=11.75..11.75 rows=200 width=16) (never executed)
+         Output: listing_search.listing_id
+         ->  Limit  (cost=0.42..11.75 rows=200 width=16) (never executed)
+               Output: listing_search.listing_id
+               ->  Index Only Scan using ix_ls_next_start on opportunity.listing_search  (cost=0.42..2831.42 rows=50000 width=16) (never executed)
+                     Output: listing_search.listing_id
+                     Index Cond: (listing_search.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid)
+                     Heap Fetches: 0
+                     Index Searches: 0
+ Planning:
+   Buffers: shared hit=446
+ Planning Time: 1.488 ms
+ Execution Time: 0.028 ms
+(18 rows)
+

@@ -1,24 +1,18 @@
 # 03 — Indexing strategy and query plans
 
-## Up front: the plans are not measured yet
+## Measured, not predicted
 
-You asked for the query plans for the main search query. I cannot produce
-real ones on this machine — `docker` and `psql` are both absent, so there is
-no PostGIS instance to plan against. **Everything below labelled "expected"
-is a prediction, not an observation.** Fabricating `EXPLAIN ANALYZE` output
-would be worse than useless to you.
+The plans below were measured on PostgreSQL 18.6 with PostGIS 3.6.4, against
+50,000 synthetic search rows for one tenant (`db/explain/synthetic-load.sql`).
+Reproduce them with `db/explain/run-explain.sh` after loading the data.
 
-What is ready to run the moment a database exists:
+Two things are measured and reported. The first is the plans **as the
+application runs them**, under row-level security. The second is the same
+queries with RLS bypassed, which is the best the planner can do on this table.
+The gap between the two is the finding, and it is covered in the RLS section
+and in decision D13.
 
-- `db/explain/run-explain.sh` — runs every scenario with
-  `EXPLAIN (ANALYZE, BUFFERS, VERBOSE, SETTINGS)` and writes one file per
-  scenario into `db/explain/out/`, which gets committed.
-- `db/explain/scenarios/01..07` — browse, text-only, facets+geo, date window,
-  fuzzy, worst case, and an RLS-overhead A/B.
-- A CI job that fails a PR if a committed plan acquires a `Seq Scan` on
-  `opportunity.listing_search`.
-
-Prerequisite: Docker Desktop, OrbStack or Colima. First item in M1 either way.
+Raw plans are in `db/explain/measured/rls-on/` and `db/explain/measured/rls-bypassed/`.
 
 ## The read model
 
@@ -173,89 +167,77 @@ need, immigration status, gender, school performance, any district-sourced
 field, any `is_sensitive` application answer. Accommodation terms are a
 *filter* the user applies, never a ranking input.
 
-## Expected plans
+## Measured plans
 
-Predictions, to be replaced by `db/explain/out/` in M1. Row counts assume one
-tenant with ~8,000 published listings across ~2,400 sites, so ~11,000
-`listing_search` rows, within a 20-tenant deployment of ~220,000 rows.
+Execution times are warm-cache, from `EXPLAIN (ANALYZE, BUFFERS)`, on 50,000 rows.
 
-**Scenario 01 — browse, soonest first, 24 rows.** The whole point of index 6.
+| Scenario | As the app runs it (RLS on) | RLS bypassed | Index used without RLS? |
+|---|---|---|---|
+| 01 browse, soonest | 0.09 ms | 0.11 ms | yes, `ix_ls_next_start` |
+| 02 keyword only | **22.1 ms** | 0.12 ms | yes, `ix_ls_fts` |
+| 03 age, category, free, within 5 km | **43.0 ms** | 26.9 ms | yes, `ix_ls_facets`, but see below |
+| 04 date window | **12.1 ms** | 0.10 ms | yes, `ix_ls_window` |
+| 05 fuzzy typo | **65.0 ms** | 17.3 ms | yes, `ix_ls_fuzzy` |
+| 06 six facets, text, date, cost, distance | **20.5 ms** | 0.16 ms | yes, `ix_ls_facets` |
+| 07 translation join | 0.04 ms | 0.03 ms | n/a, empty table |
 
-```
-Limit
-  └─ Index Scan using ix_ls_next_start on listing_search
-       Index Cond: (tenant_id = $1 AND next_start_at >= now())
-```
-No sort node, no heap fetch beyond 24 rows. Target: < 2 ms, < 40 shared hits.
+**Under RLS, scenarios 02, 04, 05 and 06 sequentially scan the whole table.** The
+same queries without RLS use the index and take well under a millisecond,
+apart from fuzzy matching, which is still 17 ms.
 
-**Scenario 02 — keyword only.**
+Where the predictions were wrong:
 
-```
-Limit
-  └─ Sort  (rank DESC)
-       └─ Bitmap Heap Scan on listing_search
-            Recheck Cond: (search_vector @@ query)
-            └─ Bitmap Index Scan on ix_ls_fts
-```
-The sort is unavoidable: `ts_rank_cd` is not indexable. It sorts the match set,
-not the table — acceptable while matches stay in the low thousands. If a
-common one-word query matches 20k+ rows, the mitigation is a `popularity`
-prefilter, not a bigger sort.
+- **I predicted a `BitmapAnd` of the facet and geo indexes in scenario 03.** Under
+  RLS the planner uses a parallel sequential scan. Without RLS it uses the facet
+  index alone, then rechecks the distance per row.
+- **I predicted the facet index would serve the containment check everywhere.** It
+  does, but only when no security barrier sits in front of it. See below.
+- **The planner estimates one row for the finder's combined filter.** It returns
+  722. Under RLS the estimate is lost entirely, which is part of why the plan is
+  a sequential scan. Without RLS the estimate is still low, so scenario 03 remains
+  the slowest query even with the index in use.
 
-**Scenario 03 — age + category + free + within 5 km. The plan that matters.**
+### Why the index is ignored under RLS
 
-```
-Limit
-  └─ Sort  (distance_m)
-       └─ Bitmap Heap Scan on listing_search
-            Recheck Cond: (facets @> '{age:15,cat:stem,free}' AND ST_DWithin(...))
-            └─ BitmapAnd
-                 ├─ Bitmap Index Scan on ix_ls_facets
-                 └─ Bitmap Index Scan on ix_ls_geo
-```
-If the planner picks only one of the two, the facet statistics target is too
-low or `ST_DWithin`'s selectivity estimate is off. Both are fixable; the
-scenario file exists to catch it.
+The policy `tenant_isolation` on `opportunity.listing_search` is a security barrier.
+PostgreSQL evaluates a security barrier before any user-supplied qualifier, and a
+qualifier can only move below the barrier if it is `LEAKPROOF`. The containment
+operator `@>` and `ST_DWithin` are not leakproof.
 
-**Scenario 04 — date window + day of week.** `BitmapAnd` of `ix_ls_window`
-and `ix_ls_facets`. The GiST range index is the weaker of the two; if the
-window is wide (a whole season) expect the planner to lead with facets and
-recheck the range, which is correct.
+The application's own filters therefore cannot become index conditions. Measured
+attempts that did not change the plan:
 
-**Scenario 05 — fuzzy.** `Bitmap Index Scan on ix_ls_fuzzy` with a recheck.
-`pg_trgm.similarity_threshold` is set per request (`SET LOCAL`), not globally:
-0.3 for a short query, 0.45 for a long one. A global threshold is wrong for
-one of the two.
+1. Marking `platform.current_tenant_id()` `LEAKPROOF`. The function is inlined,
+   so the flag is never consulted.
+2. Adding `SET search_path` to stop inlining. The planner then folds the tenant
+   check into a one-time filter and drops it from index consideration.
+3. Rewriting the policy as a scalar sub-select, `(select platform.current_tenant_id())`.
+   The same fold happens.
 
-**Scenario 06 — worst case, six facets + text + date + cost + distance.**
-Expect `BitmapAnd` over three indexes at most — Postgres stops adding
-bitmaps when marginal selectivity is poor, which is the right instinct. The
-number to watch here is buffer reads, not plan shape. Target: < 15 ms warm.
-
-**Scenario 07 — RLS overhead.** Same query as `brighttime_migrator`
-(BYPASSRLS, hand-written tenant filter) and as `brighttime_app` (policy).
+None of these is a fix inside the DDL. The three attempts were made on the scratch
+database and reverted by rebuilding it from the committed schema.
 
 ## RLS cost, and the stance on it
 
-Three facts that shape the design:
+Measured facts that shape the design:
 
-1. **The tenant policy is nearly free.** `tenant_id =
-   platform_current_tenant_id()` is an indexed equality against a `STABLE`
-   function the planner inlines and evaluates once. It becomes an index
-   condition, not a filter.
-2. **`platform.current_tenant_id()` cannot be `LEAKPROOF`** — only a
-   superuser may mark a function leakproof. The consequence is that Postgres
-   will not push user-supplied quals below the RLS qual in a security barrier
-   context, so some plans lose a qual-pushdown opportunity. For the finder
-   this is irrelevant (the RLS qual *is* the selective one). For views over
-   youth tables it is measurable, which is why reports read fact tables
-   directly under an application policy rather than through stacked views.
-3. **The layer-2 `EXISTS`-against-parent policies are the real cost.** On
-   `opportunity.listing_translation` every row access becomes a semi-join to
-   `listing`. These are all primary-key lookups in detail views, not search,
-   so the prediction is that it does not matter. Scenario 07 is there to
-   check. If it does matter, the fix is mechanical: add `tenant_id` to those
-   child tables and move them into layer 1.
+1. **The tenant policy is not free on the search table.** It was assumed to
+   become an index condition the planner evaluates once. Measured: under the
+   policy, the planner loses the index for every filter the application adds,
+   not just for the tenant check. Scenarios 02, 04, 05 and 06 go from 0.1 ms to
+   12–65 ms. See "Why the index is ignored under RLS" above.
+2. **`platform.current_tenant_id()` cannot be made `LEAKPROOF` in a way that
+   helps.** Marking it leakproof does nothing while it is inlined, and stopping
+   inlining does not restore the index path. Only a superuser may set LEAKPROOF,
+   so any fix in this direction also needs a DBA step.
+3. **The layer-2 `EXISTS`-against-parent policies are not yet measured.** They
+   apply to `opportunity.listing_translation` and other child tables. Scenario 07
+   is the only plan that touches one, and its table is empty, so it proves
+   nothing. Measure once child tables hold data.
+
+The decision this leads to is recorded in `08-decisions.md` as D13, awaiting
+approval. It changes how the public finder reads its data, and that changes a
+security design already approved, so I have not made the change.
 
 **The stance:** RLS carries tenant isolation and one coarse "is there an
 authenticated actor at all" guard (`RESTRICTIVE`, so it tightens rather than

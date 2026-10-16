@@ -138,6 +138,41 @@ are not in the technical requirements:
 2. **Moderation staffing.** A moderation queue with a 1-hour critical SLA
    implies a rota. The software cannot supply that.
 
+### D13 — The public finder reads listing_search outside row-level security (**needs your decision**)
+
+**What was measured.** With RLS on, the finder's search table is read by a sequential
+scan for keyword, date, fuzzy and combined queries. With RLS bypassed, the same
+queries use the index and take well under a millisecond, except fuzzy matching at
+17 ms. At 50,000 rows the RLS cost is 12–65 ms. The cost grows with the table, so
+it will be larger at the 220,000 rows in the capacity plan.
+Details: `docs/plan/03-indexing-and-query-plans.md`, "Measured plans".
+
+**Why it happens.** The tenant policy is a security barrier. PostgreSQL will not
+move the application's non-leakproof filters below it, so the index cannot serve
+them. Three ways to make the function leakproof, or to stop it being inlined,
+were tried and did not change the plan.
+
+**Options.**
+
+1. **Keep RLS on the search table (the status quo).** Isolation is enforced by
+   the database. Cost: the sequential scans above, growing with the table.
+2. **Read the public finder through a dedicated role that bypasses RLS.** The role
+   is granted `SELECT` on `opportunity.listing_search` and nothing else. Isolation
+   for this one surface then rests on the explicit tenant predicate that
+   `SearchQueryBuilder` always emits, plus the fact that the table holds only
+   published, public data and no youth data. RLS stays on every other table and
+   on every write path. Measured ceiling: the no-RLS column above.
+3. **Leakproof wrappers.** Superuser-created, leakproof functions and an operator
+   class over them, so the containment and distance checks can run below the
+   barrier. Keeps RLS, but is fragile, needs a DBA, and is hard to review.
+
+**Recommendation: option 2**, with an integration test that a query through the
+finder's role cannot return another tenant's rows, and a documented rule that no
+youth-data table may ever be read through a bypassing role.
+
+**Why it needs a decision.** Option 2 narrows the defence-in-depth described in
+D4 and T7 for one table. That is a judgement about risk, and it is yours.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -120,7 +120,7 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
             ? Math.Max((start - now).TotalDays, 0)
             : null;
 
-        RankingFeatures features = new(textRank, null, days, overlap, 0);
+        RankingFeatures features = new(textRank, null, days, overlap, row.Popularity);
         return new Scored(row, features, RelevanceScorer.Score(features));
     }
 

@@ -102,13 +102,13 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
         DateTimeOffset? nextStart = ReadNullable<DateTimeOffset>(reader, "next_start_at");
         DateTimeOffset? publishedAt = ReadNullable<DateTimeOffset>(reader, "published_at");
         double? distance = ReadNullable<double>(reader, "distance_m");
-        double score = Convert.ToDouble(reader.GetValue(reader.GetOrdinal("score")), CultureInfo.InvariantCulture);
-        double textRank = Convert.ToDouble(reader.GetValue(reader.GetOrdinal("text_rank")), CultureInfo.InvariantCulture);
-        int interestOverlap = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("interest_overlap")), CultureInfo.InvariantCulture);
-        double popularity = Convert.ToDouble(reader.GetValue(reader.GetOrdinal("popularity")), CultureInfo.InvariantCulture);
+        double score = reader.GetFieldValue<double>(reader.GetOrdinal("score"));
+        double textRank = reader.GetFieldValue<double>(reader.GetOrdinal("text_rank"));
+        long interestOverlap = reader.GetFieldValue<long>(reader.GetOrdinal("interest_overlap"));
+        double popularity = reader.GetFieldValue<double>(reader.GetOrdinal("popularity"));
         double? daysUntilStart = ReadNullable<double>(reader, "days_until_start");
 
-        RankingFeatures features = new(textRank, distance, daysUntilStart, interestOverlap, popularity);
+        RankingFeatures features = new(textRank, distance, daysUntilStart, (int)interestOverlap, popularity);
 
         string sortValue = sort switch
         {
@@ -133,10 +133,15 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
             sortValue);
     }
 
+    /// <summary>
+    /// Typed read. <c>GetFieldValue</c> rather than a cast: Npgsql returns
+    /// <c>timestamptz</c> through <c>GetValue</c> as <see cref="DateTime"/>, and a cast
+    /// to <see cref="DateTimeOffset"/> fails at run time.
+    /// </summary>
     private static T? ReadNullable<T>(NpgsqlDataReader reader, string column) where T : struct
     {
         int ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : (T)reader.GetValue(ordinal);
+        return reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<T>(ordinal);
     }
 
     private static ListingKind ParseKind(string value) => value switch

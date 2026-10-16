@@ -100,6 +100,7 @@ public static class ListingSearchProjector
             Title: source.Title,
             Summary: source.Summary,
             FuzzyText: fuzzy,
-            PublishedAt: source.PublishedAt))];
+            PublishedAt: source.PublishedAt,
+            Popularity: source.Popularity))];
     }
 }

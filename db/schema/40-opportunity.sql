@@ -210,8 +210,11 @@ create table listing_session (
   constraint ck_listing_session_rrule check (rrule is null or rrule ~ '^(RRULE:)?FREQ=')
 );
 create index ix_listing_session_listing on listing_session (listing_id) where not is_cancelled;
-create index ix_listing_session_expand on listing_session (expanded_through)
-  where not is_cancelled and (ends_on is null or ends_on > now()::date);
+-- No time-dependent predicate: now() is STABLE, which an index predicate forbids,
+-- and the date comparison would depend on the session's TimeZone. The expansion
+-- job filters on ends_on at run time; the index only has to find work quickly.
+create index ix_listing_session_expand on listing_session (expanded_through, ends_on)
+  where not is_cancelled;
 
 create table listing_occurrence (
   id          bigint generated always as identity primary key,

@@ -1,0 +1,25 @@
+                                                                                                                                                              QUERY PLAN                                                                                                                                                               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5307.23..5307.29 rows=24 width=20) (actual time=64.932..64.934 rows=24.00 loops=1)
+   Output: listing_id, (similarity(fuzzy_text, 'baskitball'::text))
+   Buffers: shared hit=4173
+   ->  Sort  (cost=5307.23..5308.48 rows=500 width=20) (actual time=64.931..64.932 rows=24.00 loops=1)
+         Output: listing_id, (similarity(fuzzy_text, 'baskitball'::text))
+         Sort Key: (similarity(ls.fuzzy_text, 'baskitball'::text)) DESC, ls.listing_id
+         Sort Method: top-N heapsort  Memory: 27kB
+         Buffers: shared hit=4173
+         ->  Result  (cost=0.02..5293.27 rows=500 width=20) (actual time=0.020..64.677 rows=5000.00 loops=1)
+               Output: listing_id, similarity(fuzzy_text, 'baskitball'::text)
+               One-Time Filter: ((NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid = (current_setting('brighttime.tenant_id'::text))::uuid)
+               Buffers: shared hit=4167
+               ->  Seq Scan on opportunity.listing_search ls  (cost=0.02..5292.02 rows=500 width=29) (actual time=0.017..60.199 rows=5000.00 loops=1)
+                     Output: id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets, age_range, grade_range, cost_cents, is_free, modality, neighbourhood_id, location, session_window, next_start_at, next_deadline_at, is_drop_in, search_vector, fuzzy_text, title, summary, popularity, published_at, projected_at
+                     Filter: (ls.is_published AND (ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.fuzzy_text % 'baskitball'::text))
+                     Rows Removed by Filter: 45000
+                     Buffers: shared hit=4167
+ Planning:
+   Buffers: shared hit=345
+ Planning Time: 1.621 ms
+ Execution Time: 64.971 ms
+(21 rows)
+

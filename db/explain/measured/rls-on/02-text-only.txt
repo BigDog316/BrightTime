@@ -1,0 +1,25 @@
+                                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                                      
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5292.66..5292.72 rows=24 width=20) (actual time=22.118..22.119 rows=0.00 loops=1)
+   Output: ls.listing_id, (ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32))
+   Buffers: shared hit=4173
+   ->  Sort  (cost=5292.66..5292.73 rows=25 width=20) (actual time=22.118..22.118 rows=0.00 loops=1)
+         Output: ls.listing_id, (ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32))
+         Sort Key: (ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32)) DESC, ls.listing_id
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=4173
+         ->  Result  (cost=0.02..5292.08 rows=25 width=20) (actual time=22.107..22.107 rows=0.00 loops=1)
+               Output: ls.listing_id, ts_rank_cd(ls.search_vector, '''robot'' & ''school'''::tsquery, 32)
+               One-Time Filter: ((NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid = (current_setting('brighttime.tenant_id'::text))::uuid)
+               Buffers: shared hit=4167
+               ->  Seq Scan on opportunity.listing_search ls  (cost=0.02..5292.02 rows=25 width=50) (actual time=22.105..22.105 rows=0.00 loops=1)
+                     Output: ls.id, ls.tenant_id, ls.listing_id, ls.site_id, ls.org_id, ls.kind, ls.is_published, ls.facets, ls.age_range, ls.grade_range, ls.cost_cents, ls.is_free, ls.modality, ls.neighbourhood_id, ls.location, ls.session_window, ls.next_start_at, ls.next_deadline_at, ls.is_drop_in, ls.search_vector, ls.fuzzy_text, ls.title, ls.summary, ls.popularity, ls.published_at, ls.projected_at
+                     Filter: (ls.is_published AND (ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.search_vector @@ '''robot'' & ''school'''::tsquery))
+                     Rows Removed by Filter: 50000
+                     Buffers: shared hit=4167
+ Planning:
+   Buffers: shared hit=370
+ Planning Time: 2.090 ms
+ Execution Time: 22.149 ms
+(21 rows)
+

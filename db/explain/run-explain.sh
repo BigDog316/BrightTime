@@ -1,41 +1,28 @@
 #!/usr/bin/env bash
-# Produces the real query plans for the finder against a seeded database.
+# Produces real query plans for the finder's scenarios, against a loaded database.
 #
-# Usage:  db/explain/run-explain.sh [connection-string]
-# Default connection assumes the compose stack from deploy/compose.yml.
+# Usage:
+#   PGPASSWORD=... db/explain/run-explain.sh [connection-uri]
 #
-# Output lands in db/explain/out/ as one file per scenario, each with
-# EXPLAIN (ANALYZE, BUFFERS, VERBOSE, SETTINGS, WAL) so that the plan,
-# the row estimates, the buffer counts and the non-default GUCs are all
-# captured together. Commit them: a plan change in a PR diff is a
-# reviewable event.
+# Runs as the finder's login role, the same one the application connects with, so
+# row-level security is part of every plan measured. Each scenario runs in the same
+# session as its tenant setting, which is the only way the setting reaches the query.
+# One file per scenario in db/explain/out/.
 set -euo pipefail
 
-CONN="${1:-postgresql://brighttime_app@localhost:5432/brighttime}"
+CONN="${1:-postgresql://bt_finder_login@127.0.0.1:5433/brighttime}"
+TENANT="${TENANT:-0196c3e8-0000-7000-8000-00000000e001}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$HERE/out"
 mkdir -p "$OUT"
 
-run() {
-  local name="$1"; shift
+for scenario in "$HERE"/scenarios/*.sql; do
+  name="$(basename "$scenario" .sql)"
   echo "==> $name"
+  # -c and -f in one invocation run in order, in one session.
   psql "$CONN" -X -q -v ON_ERROR_STOP=1 \
-    -c "set local brighttime.tenant_id = '$TENANT';" \
-    -f "$HERE/scenarios/$name.sql" > "$OUT/$name.txt"
-}
-
-TENANT="${TENANT:?set TENANT to the seeded tenant uuid}"
-
-psql "$CONN" -X -q -c "analyze;"
-
-for f in "$HERE"/scenarios/*.sql; do
-  run "$(basename "$f" .sql)"
+    -c "set brighttime.tenant_id = '$TENANT';" \
+    -f "$scenario" > "$OUT/$name.txt"
 done
 
-echo
-echo "Plans written to $OUT"
-echo "Review checklist:"
-echo "  * no Seq Scan on opportunity.listing_search"
-echo "  * BitmapAnd combines the facet GIN with at most one other index"
-echo "  * estimated vs actual rows within 10x at every node"
-echo "  * shared read buffers for a warm cache query under 2000"
+echo "plans written to $OUT"

@@ -1,0 +1,20 @@
+                                                                                                                                                           QUERY PLAN                                                                                                                                                            
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..6.47 rows=24 width=37) (actual time=0.015..0.063 rows=24.00 loops=1)
+   Output: listing_id, title, next_start_at
+   Buffers: shared hit=27
+   ->  Result  (cost=0.42..12594.20 rows=49995 width=37) (actual time=0.014..0.062 rows=24.00 loops=1)
+         Output: listing_id, title, next_start_at
+         One-Time Filter: ((NULLIF(current_setting('brighttime.tenant_id'::text, true), ''::text))::uuid = (current_setting('brighttime.tenant_id'::text))::uuid)
+         Buffers: shared hit=27
+         ->  Index Scan using ix_ls_next_start on opportunity.listing_search ls  (cost=0.42..12594.20 rows=49995 width=37) (actual time=0.011..0.055 rows=24.00 loops=1)
+               Output: id, tenant_id, listing_id, site_id, org_id, kind, is_published, facets, age_range, grade_range, cost_cents, is_free, modality, neighbourhood_id, location, session_window, next_start_at, next_deadline_at, is_drop_in, search_vector, fuzzy_text, title, summary, popularity, published_at, projected_at
+               Index Cond: ((ls.tenant_id = (current_setting('brighttime.tenant_id'::text))::uuid) AND (ls.next_start_at >= now()))
+               Index Searches: 1
+               Buffers: shared hit=27
+ Planning:
+   Buffers: shared hit=338
+ Planning Time: 1.171 ms
+ Execution Time: 0.093 ms
+(16 rows)
+

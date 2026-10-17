@@ -83,6 +83,15 @@ The site speaks the six launch languages: add `?lang=es` (or `zh-Hans`, `bn`, `h
 any page, or use the language links in the header. An organiser can change any sentence, in
 any language, at `/organiser/wording`.
 
+The finder's other pages:
+- **Collections:** `/collections`, with three seeded and two of them featured on the home
+  page.
+- **Neighbourhoods:** `/neighbourhoods`. Downtown, Westside and Riverside have organiser pages
+  in English and Spanish.
+- **Organisations:** `/organisations/{slug}`, for approved organisations only.
+- **Map:** `/search?view=map`.
+- **Saved:** `/saved`, kept on the device, with a calendar file of reminders.
+
 The tenant comes from the host (decision D18). The seed's primary domain is
 `kettle.localhost`, with `kettle.brighttime.test` as an alias, and browsers send
 `*.localhost` to this machine.

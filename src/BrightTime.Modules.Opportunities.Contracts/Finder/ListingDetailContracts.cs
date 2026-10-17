@@ -15,7 +15,8 @@ public sealed record ListingPlace(
     string? PostalCode,
     string? NeighbourhoodName,
     string? TransitNote,
-    bool? IsWheelchairAccessible);
+    bool? IsWheelchairAccessible,
+    Guid? NeighbourhoodId = null);
 
 /// <summary>One upcoming session.</summary>
 public sealed record ListingTime(DateTimeOffset StartsAt, DateTimeOffset EndsAt);
@@ -54,6 +55,9 @@ public sealed record ListingDetail
     public bool IsMachineTranslated { get; init; }
 
     public required string OrganisationName { get; init; }
+
+    /// <summary>The running organisation, so the page can link to its own page.</summary>
+    public OrganisationId? OrganisationId { get; init; }
 
     public int? AgeMin { get; init; }
 

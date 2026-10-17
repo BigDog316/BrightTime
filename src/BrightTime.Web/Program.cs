@@ -6,6 +6,7 @@ using BrightTime.Web.Auditing;
 using BrightTime.Web.Auth;
 using BrightTime.Web.Components;
 using BrightTime.Web.Composition;
+using BrightTime.Web.Finder;
 using BrightTime.Web.Localisation;
 using BrightTime.Web.Tenancy;
 
@@ -80,6 +81,7 @@ app.MapGet("/listings/{slug}/calendar.ics", async (
     string ics = ListingCalendar.ToIcs(listing, page, clock.UtcNow);
     return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), ListingCalendar.ContentType, $"{listing.Slug}.ics");
 });
+app.MapSavedListings();
 app.MapBrightTimeSignIn();
 if (app.Services.GetRequiredService<ConsoleAvailability>().CanSignIn)
 {

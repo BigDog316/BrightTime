@@ -308,7 +308,8 @@ public static class KettleCatalogue
                 null,
                 s.HoodName,
                 s.IsAddressPublic ? s.TransitNote : null,
-                s.IsWheelchairAccessible))],
+                s.IsWheelchairAccessible,
+                s.HoodId))],
             Upcoming = [.. Schedule(clock, listing).Select(o => new ListingTime(o.StartsAt, o.EndsAt))],
             Deadlines = DeadlineOf(clock, listing) is { } d ? [d] : [],
         };

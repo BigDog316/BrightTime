@@ -87,6 +87,51 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
         return new FinderPage(page, nextCursor);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Composed by SearchQueryBuilder from fixed fragments; every caller value is a bound parameter.")]
+    public async Task<NeighbourhoodCounts> CountByNeighbourhoodAsync(SearchQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.TenantId == Guid.Empty)
+        {
+            throw new ArgumentException("A finder query must name its tenant.", nameof(query));
+        }
+
+        BuiltQuery built = SearchQueryBuilder.BuildNeighbourhoodCounts(query);
+        await using NpgsqlConnection connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using NpgsqlTransaction transaction = await connection
+            .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+        await EnterFinderRoleAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+
+        Dictionary<Guid, int> counts = [];
+        int online = 0;
+        await using (NpgsqlCommand command = new(built.Sql, connection, transaction))
+        {
+            foreach ((string name, object? value) in built.Parameters)
+            {
+                command.Parameters.Add(new NpgsqlParameter(name, value ?? DBNull.Value));
+            }
+
+            await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                int n = reader.GetInt32(2);
+                if (reader.GetBoolean(0))
+                {
+                    online += n;
+                }
+                else if (!await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false))
+                {
+                    counts[reader.GetGuid(1)] = n;
+                }
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new NeighbourhoodCounts(counts, online);
+    }
+
     /// <summary>The role that may bypass RLS on the search table, and only that table.</summary>
     public const string FinderRole = "brighttime_finder";
 
@@ -143,7 +188,8 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
             distance,
             score,
             RelevanceScorer.Explain(features),
-            sortValue);
+            sortValue,
+            ReadNullable<DateTimeOffset>(reader, "next_deadline_at"));
     }
 
     /// <summary>

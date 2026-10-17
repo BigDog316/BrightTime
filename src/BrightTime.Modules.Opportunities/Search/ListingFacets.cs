@@ -67,6 +67,9 @@ public sealed record FacetInput
 /// </remarks>
 public static class ListingFacets
 {
+    /// <summary>The facet a listing at a site in this neighbourhood carries, for filtering by area.</summary>
+    public static string NeighbourhoodToken(Guid neighbourhood) => "hood:" + neighbourhood.ToString("D");
+
     public const int MinAge = 0;
     public const int MaxAge = 30;
     public const int MinGrade = -1;
@@ -110,7 +113,7 @@ public static class ListingFacets
 
         foreach (Guid neighbourhood in input.NeighbourhoodIds)
         {
-            tokens.Add("hood:" + neighbourhood.ToString("D"));
+            tokens.Add(NeighbourhoodToken(neighbourhood));
         }
 
         foreach (int age in AgesCovered(input.AgeMin, input.AgeMax))

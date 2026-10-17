@@ -1,0 +1,95 @@
+@page "/saved"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Paging
+@using BrightTime.SharedKernel.Time
+@using BrightTime.Web.Finder
+@inject IListingFinder Finder
+@inject ITenantContext Tenant
+@inject IClock Clock
+
+<PageTitle>@T["saved.title"] · BrightTime</PageTitle>
+
+<h1>@T["saved.title"]</h1>
+@* Saved on this device only (D22): said plainly, because anyone else using it can see them. *@
+<p class="hint">@T["saved.device_only"]</p>
+
+@if (_items.Count == 0)
+{
+    <p>@T["saved.none"] <a href="/search">@T["home.find"]</a></p>
+}
+else
+{
+    <p><a class="button" href="@SavedListings.CalendarPath" download>@T["saved.calendar"]</a></p>
+    <p class="note">@T["saved.calendar_hint"]</p>
+
+    @Group("soon", T["saved.group.soon"], _items.Where(i => i.NextDeadlineAt is { } d && d <= _soon).OrderBy(i => i.NextDeadlineAt))
+    @Group("later", T["saved.group.later"], _items.Where(i => i.NextDeadlineAt is { } d && d > _soon).OrderBy(i => i.NextDeadlineAt))
+    @Group("open", T["saved.group.no_deadline"], _items.Where(i => i.NextDeadlineAt is null).OrderBy(i => i.NextStartAt ?? DateTimeOffset.MaxValue))
+
+    @if (_gone > 0)
+    {
+        <p class="note">@T.Format("saved.gone", ("count", _gone))</p>
+    }
+
+    <form method="post" action="@SavedListings.ChangePath" class="danger-zone">
+        <AntiforgeryToken />
+        <input type="hidden" name="action" value="clear" />
+        <input type="hidden" name="returnUrl" value="/saved" />
+        <button type="submit" class="secondary-button">@T["saved.clear"]</button>
+    </form>
+}
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
+    private IReadOnlyList<FinderItem> _items = [];
+    private int _gone;
+    private DateTimeOffset _soon;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _soon = Clock.UtcNow.AddDays(7);
+        IReadOnlyList<Guid> ids = SavedListings.Read(HttpContext.Request);
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        FinderPage page = await Finder.SearchAsync(new SearchQuery
+        {
+            TenantId = Tenant.TenantId.Value,
+            ListingIds = ids,
+            PageSize = new PageSize(SavedListings.MaxItems),
+        });
+        _items = page.Items;
+        _gone = ids.Count - _items.Count;
+    }
+
+    private RenderFragment Group(string id, string heading, IEnumerable<FinderItem> items) => __builder =>
+    {
+        List<FinderItem> list = [.. items];
+        if (list.Count > 0)
+        {
+            <section aria-labelledby="saved-@id">
+                <h2 id="saved-@id">@heading</h2>
+                <ol class="listing-list">
+                    @foreach (FinderItem item in list)
+                    {
+                        <li class="listing">
+                            <ListingCard Item="item" ShowDeadline="true">
+                                <form method="post" action="@SavedListings.ChangePath" class="inline-form">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="listing" value="@item.ListingId.Value" />
+                                    <input type="hidden" name="action" value="remove" />
+                                    <input type="hidden" name="returnUrl" value="/saved" />
+                                    <button type="submit" class="link-button">@T["saved.remove"]<span class="visually-hidden"> @item.Title</span></button>
+                                </form>
+                            </ListingCard>
+                        </li>
+                    }
+                </ol>
+            </section>
+        }
+    };
+}

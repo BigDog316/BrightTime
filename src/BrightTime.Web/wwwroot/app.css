@@ -765,3 +765,146 @@ button.secondary-button {
         animation: none !important;
     }
 }
+
+/* Finder pages: the neighbourhood map, list and map switch, saved items. */
+
+.hood-map {
+    margin: 0 0 1rem;
+}
+
+.hood-map svg {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    width: 100%;
+}
+
+/* A flex item: an SVG sized only by its viewBox would shrink to nothing. */
+.hood-map.compact {
+    flex: 0 1 16rem;
+    min-width: 10rem;
+}
+
+.hood {
+    fill: var(--bt-tint);
+    stroke: var(--bt-surface);
+    stroke-width: 1.5;
+}
+
+.hood-1 { fill: color-mix(in srgb, var(--bt-accent) 18%, var(--bt-surface)); }
+.hood-2 { fill: color-mix(in srgb, var(--bt-accent) 35%, var(--bt-surface)); }
+.hood-3 { fill: color-mix(in srgb, var(--bt-accent) 55%, var(--bt-surface)); }
+.hood-4 { fill: color-mix(in srgb, var(--bt-accent) 75%, var(--bt-surface)); }
+
+.hood.here {
+    fill: var(--bt-accent);
+}
+
+.hood-map a:hover .hood,
+.hood-map a:focus .hood {
+    stroke: var(--bt-ink);
+    stroke-width: 2.5;
+}
+
+.hood-map a:focus {
+    outline: none;
+}
+
+.hood-name {
+    fill: var(--bt-ink);
+    font-size: 11px;
+    paint-order: stroke;
+    pointer-events: none;
+    stroke: var(--bt-surface);
+    stroke-width: 3px;
+}
+
+.hood-count {
+    fill: var(--bt-ink);
+    font-size: 15px;
+    font-weight: 700;
+    paint-order: stroke;
+    pointer-events: none;
+    stroke: var(--bt-surface);
+    stroke-width: 3px;
+}
+
+.hood-list,
+.hood-picker,
+.kind-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+}
+
+.hood-summary-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+}
+
+.kind-counts {
+    flex-direction: column;
+}
+
+.view-switch {
+    display: flex;
+    gap: 1rem;
+    margin-block: 1rem;
+}
+
+.view-switch a[aria-current] {
+    color: var(--bt-ink);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.filter-chip {
+    background: var(--bt-tint);
+    border-radius: 1rem;
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+}
+
+.filter-chip a {
+    margin-inline-start: 0.5rem;
+}
+
+.curator-note {
+    border-inline-start: 3px solid var(--bt-accent);
+    color: var(--bt-muted);
+    font-style: italic;
+    padding-inline-start: 0.75rem;
+}
+
+.save-form {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-block: 0.5rem;
+}
+
+.home-search {
+    display: flex;
+    gap: 0.5rem;
+    margin-block: 1rem 1.5rem;
+}
+
+.home-search input {
+    flex: 1;
+}
+
+.block details {
+    border-block-end: 1px solid var(--bt-line);
+    padding-block: 0.5rem;
+}
+
+.block summary {
+    cursor: pointer;
+    font-weight: 600;
+}

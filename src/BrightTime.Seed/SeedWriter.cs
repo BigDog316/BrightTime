@@ -68,6 +68,7 @@ internal sealed class SeedWriter(NpgsqlDataSource dataSource)
         await WriteDirectoryAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
         await WriteAccountsAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
         await WriteListingsAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
+        await WriteCurationAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
 
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return counts;
@@ -321,6 +322,48 @@ internal sealed class SeedWriter(NpgsqlDataSource dataSource)
                 insert into opportunity.listing_translation (listing_id, locale, title, summary, description, translation_source)
                 values ($1, $2, $3, $4, $5, 'machine') on conflict do nothing
                 """, l.Id, x.Locale, x.Title, x.Summary, x.Description)))], ct).ConfigureAwait(false);
+    }
+
+    private static async Task WriteCurationAsync(NpgsqlConnection connection, NpgsqlTransaction tx, SeedCounts counts, SeedData data, CancellationToken ct)
+    {
+        Guid t = data.TenantId;
+        IReadOnlyList<SeedCollection> collections = data.Collections ?? [];
+        IReadOnlyList<SeedNeighbourhoodPage> pages = data.NeighbourhoodPages ?? [];
+
+        await RunAsync(connection, tx, counts, "opportunity.collection",
+            [.. collections.Select(c => Row(
+                """
+                insert into opportunity.collection (id, tenant_id, slug, title, description, status, is_featured, sort_order)
+                values ($1, $2, $3, $4, $5, 'published', $6, $7) on conflict do nothing
+                """, c.Id, t, c.Slug, c.Title, c.Description, c.IsFeatured, c.SortOrder))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "opportunity.collection_item",
+            [.. collections.SelectMany(c => c.Items.Select((item, i) => Row(
+                """
+                insert into opportunity.collection_item (collection_id, listing_id, sort_order, curator_note)
+                values ($1, $2, $3, $4) on conflict do nothing
+                """, c.Id, item.ListingId, (short)i, item.Note)))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "opportunity.collection_translation",
+            [.. collections.SelectMany(c => c.Translations.Select(x => Row(
+                """
+                insert into opportunity.collection_translation (collection_id, locale, title, description)
+                values ($1, $2, $3, $4) on conflict do nothing
+                """, c.Id, x.Locale, x.Title, x.Description)))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "opportunity.neighbourhood_page",
+            [.. pages.Select(p => Row(
+                """
+                insert into opportunity.neighbourhood_page (id, tenant_id, neighbourhood_id, status)
+                values ($1, $2, $3, 'published') on conflict do nothing
+                """, p.Id, t, p.NeighbourhoodId))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "opportunity.neighbourhood_page_block",
+            [.. pages.SelectMany(p => p.Blocks.Select(b => Row(
+                """
+                insert into opportunity.neighbourhood_page_block (id, page_id, locale, block_kind, sort_order, heading, body_md, payload)
+                values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb) on conflict do nothing
+                """, b.Id, p.Id, b.Locale, b.Kind, b.SortOrder, b.Heading, b.Body, b.Payload)))], ct).ConfigureAwait(false);
     }
 
     private static NpgsqlBatchCommand Row(string sql, params object?[] values)

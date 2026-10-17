@@ -1,0 +1,72 @@
+@using System.Globalization
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Text
+
+@* One listing in a list: search results, a collection, an organisation's or neighbourhood's
+   page, the saved list. Its heading is an h3 under the list's h2. *@
+<article class="listing-card">
+    <h3 dir="auto"><a href="@Href">@Item.Title</a></h3>
+    <p class="meta">
+        <span>@T["listing.kind." + Item.Kind.ToDbValue()]</span>
+        <span aria-hidden="true">·</span>
+        <span>@Price</span>
+        @if (Item.NextStartAt is { } start)
+        {
+            <span aria-hidden="true">·</span>
+            <time datetime="@start.ToString("O", CultureInfo.InvariantCulture)">@T.Format("finder.results.next", ("when", T.DayTime(start)))</time>
+        }
+        @if (ShowDeadline && Item.NextDeadlineAt is { } due)
+        {
+            <span aria-hidden="true">·</span>
+            <strong><time datetime="@due.ToString("O", CultureInfo.InvariantCulture)">@T.Format("finder.card.deadline", ("date", T.DayShort(due)))</time></strong>
+        }
+    </p>
+    @if (Organisation is { } org)
+    {
+        <p class="byline"><a href="/organisations/@Uri.EscapeDataString(org.Slug)">@org.DisplayName</a></p>
+    }
+    <p dir="auto">@Item.Summary</p>
+    @if (Note is { Length: > 0 })
+    {
+        <p class="curator-note" dir="auto" lang="@NoteLang">@Note</p>
+    }
+    @if (ShowReasons && Item.Reasons.Count > 0)
+    {
+        <ul class="reasons" aria-label="@T["finder.results.why"]">
+            @foreach (Phrase reason in Item.Reasons)
+            {
+                <li>@T[reason]</li>
+            }
+        </ul>
+    }
+    @ChildContent
+</article>
+
+@code {
+    [Parameter, EditorRequired] public FinderItem Item { get; set; } = default!;
+
+    /// <summary>The ?lang= the page was asked for, carried onto the link.</summary>
+    [Parameter] public string? Lang { get; set; }
+
+    [Parameter] public bool ShowReasons { get; set; }
+
+    [Parameter] public bool ShowDeadline { get; set; }
+
+    /// <summary>A curator's note on why this listing is in a collection.</summary>
+    [Parameter] public string? Note { get; set; }
+
+    [Parameter] public string? NoteLang { get; set; }
+
+    /// <summary>The organisation, when it has a page to link to.</summary>
+    [Parameter] public OrganisationLink? Organisation { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Href => $"/listings/{Uri.EscapeDataString(Item.Slug)}" + (Lang is null ? "" : $"?lang={Uri.EscapeDataString(Lang)}");
+
+    private string Price =>
+        Item.IsFree ? T["listing.price.free"]
+        : Item.CostCents > 0 ? T.Format("finder.results.price_from", ("price", T.Money(Item.CostCents)))
+        : T["finder.results.price_varies"];
+}

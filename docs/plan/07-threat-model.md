@@ -100,6 +100,14 @@ complementary suppression. Sites may set `is_address_public = false` and
 serve only a neighbourhood. No endpoint ever returns a count of youth at a
 site on a date.
 
+*Implemented in M1: the public map and organisation pages (D21).*
+- **The map shows a count per neighbourhood and nothing finer.** It is drawn from area
+  boundaries, never a site's location. A test fails if a coordinate reaches the page.
+- **Public site records have no coordinates field at all.** `PublicSite` carries no location,
+  and for a private site no street or transit note either.
+- **Unapproved organisations have no page.** An applying, suspended or rejected
+  organisation's slug answers 404, exactly as one that never existed.
+
 ### T7 — Cross-tenant data access
 **Controls:** RLS tenant policy on every table (layer 1), parent-derived
 policy on child tables (layer 2), `FORCE ROW LEVEL SECURITY` so the owner is
@@ -213,6 +221,11 @@ Phone numbers are verified before any send
 "remember me"; `DELETE /me/sessions` revokes everywhere; refresh tokens are
 rotating and family-chained, so a replayed token kills the family
 (`identity.refresh_token.family_id`).
+
+*M1, saved listings (D22).* Saved listings live in a cookie in the browser, so on a shared
+device the next person can see what was saved. A saved support group can say something
+about someone. The saved page says this plainly, the list can be cleared in one press, and
+the cookie holds listing ids and nothing else.
 
 ### T15 — Youth field collectors put at risk
 **Controls:** `field_assignment` cannot leave `assigned` without a

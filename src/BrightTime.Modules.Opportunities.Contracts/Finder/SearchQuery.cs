@@ -31,6 +31,12 @@ public sealed record SearchQuery
 
     public IReadOnlyList<string>? Kinds { get; init; }
 
+    /// <summary>Only this organisation's listings, for its page.</summary>
+    public Guid? OrganisationId { get; init; }
+
+    /// <summary>Only these listings, for a collection or a saved list. Unpublished ones are left out.</summary>
+    public IReadOnlyList<Guid>? ListingIds { get; init; }
+
     public DateTimeOffset? WindowStart { get; init; }
 
     public DateTimeOffset? WindowEnd { get; init; }

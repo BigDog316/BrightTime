@@ -1,11 +1,17 @@
 @page "/search"
 @using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Directory.Contracts
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.Modules.Opportunities.Search
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Ids
 @using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Text
 @using Microsoft.AspNetCore.WebUtilities
 @inject IListingFinder Finder
 @inject ITenantContext Tenant
+@inject IGeographyQueries Geography
+@inject IOrganisationProfiles Organisations
 
 <PageTitle>@T["finder.title"] · BrightTime</PageTitle>
 
@@ -15,9 +21,9 @@
 <form method="get" action="/search" role="search" class="finder-form" aria-labelledby="filters-heading">
     <h2 id="filters-heading" class="visually-hidden">@T["finder.filters"]</h2>
 
-    @if (Lang is not null)
+    @foreach ((string name, string? value) in Carried)
     {
-        <input type="hidden" name="lang" value="@Lang" />
+        <input type="hidden" name="@name" value="@value" />
     }
 
     <div class="field">
@@ -54,6 +60,20 @@
         </div>
     </div>
 
+    @if (_hoods.Count > 0)
+    {
+        <div class="field">
+            <label for="hood">@T["finder.field.neighbourhood"]</label>
+            <select id="hood" name="hood">
+                <option value="">@T["finder.field.anywhere"]</option>
+                @foreach (NeighbourhoodShape h in _hoods)
+                {
+                    <option value="@h.Code" selected="@(h.Code == Hood)">@h.Name</option>
+                }
+            </select>
+        </div>
+    }
+
     <label class="check">
         <input type="checkbox" name="free" value="1" checked="@IsFreeChecked" />
         @T["finder.field.free"]
@@ -76,6 +96,14 @@
     </div>
 </form>
 
+@if (_organisation is { } org)
+{
+    <p class="filter-chip">
+        @T.Format("finder.filter.organisation", ("organisation", Localisation.Text.Name(org.DisplayName)))
+        <a href="@Href(org: null)">@T["finder.filter.remove"]</a>
+    </p>
+}
+
 @if (Parse is { FieldErrors.Count: > 0 } errored)
 {
     <section class="error-summary" aria-labelledby="error-summary-heading">
@@ -89,10 +117,10 @@
     </section>
 }
 
-@if (Parse is { Notices.Count: > 0 } notices)
+@if (_notices.Count > 0)
 {
     <ul class="notices">
-        @foreach (BrightTime.SharedKernel.Text.Phrase notice in notices.Notices)
+        @foreach (Phrase notice in _notices)
         {
             <li>@T[notice]</li>
         }
@@ -101,54 +129,62 @@
 
 @if (Parse is { IsValid: true })
 {
-    <section aria-labelledby="results-heading" class="results">
-        <h2 id="results-heading">@ResultsHeading</h2>
+    @if (_hoods.Count > 0)
+    {
+        <nav class="view-switch" aria-label="@T["finder.view.label"]">
+            <a href="@Href(view: null)" aria-current="@(IsMap ? null : "page")">@T["finder.view.list"]</a>
+            <a href="@Href(view: "map")" aria-current="@(IsMap ? "page" : null)">@T["finder.view.map"]</a>
+        </nav>
+    }
 
-        @if (_page.Items.Count == 0)
-        {
-            <p class="empty">@T["finder.results.none"]</p>
-        }
-        else
-        {
-            <ol class="listing-list">
-                @foreach (FinderItem item in _page.Items)
+    @if (IsMap && _hoods.Count > 0)
+    {
+        <section aria-labelledby="map-heading" class="results-map">
+            <h2 id="map-heading">@T["finder.map.heading"]</h2>
+            <p class="hint">@T["finder.map.hint"]</p>
+            <NeighbourhoodMap Shapes="_hoods" Counts="_counts" Href="@(h => Href(hood: h.Code, view: null))"
+                              Highlight="_hood?.Id" Label="@T["finder.map.heading"]" />
+            <ul class="hood-list">
+                @foreach (NeighbourhoodShape h in _hoods.OrderByDescending(h => _counts.ByNeighbourhood.GetValueOrDefault(h.Id)).ThenBy(h => h.Name))
                 {
-                    <li class="listing">
-                        <article>
-                            <h3 dir="auto"><a href="@ListingHref(item)">@item.Title</a></h3>
-                            <p class="meta">
-                                <span>@KindLabel(item.Kind)</span>
-                                <span aria-hidden="true">·</span>
-                                <span>@PriceLabel(item)</span>
-                                @if (item.NextStartAt is { } start)
-                                {
-                                    <span aria-hidden="true">·</span>
-                                    <time datetime="@start.ToString("O")">@T.Format("finder.results.next", ("when", T.DayTime(start)))</time>
-                                }
-                            </p>
-                            <p dir="auto">@item.Summary</p>
-                            @if (item.Reasons.Count > 0)
-                            {
-                                <ul class="reasons" aria-label="@T["finder.results.why"]">
-                                    @foreach (BrightTime.SharedKernel.Text.Phrase reason in item.Reasons)
-                                    {
-                                        <li>@T[reason]</li>
-                                    }
-                                </ul>
-                            }
-                        </article>
-                    </li>
+                    <li><a href="@Href(hood: h.Code, view: null)">@T.Format("map.area", ("name", h.Name), ("count", _counts.ByNeighbourhood.GetValueOrDefault(h.Id)))</a></li>
                 }
-            </ol>
+                @if (_counts.OnlineOnly > 0)
+                {
+                    <li>@T.Format("map.online", ("count", _counts.OnlineOnly))</li>
+                }
+            </ul>
+        </section>
+    }
+    else
+    {
+        <section aria-labelledby="results-heading" class="results">
+            <h2 id="results-heading">@ResultsHeading</h2>
 
-            @if (_page.NextCursor is { } cursor)
+            @if (_page.Items.Count == 0)
             {
-                <nav class="pager" aria-label="@T["finder.results.pages"]">
-                    <a rel="next" href="@NextHref(cursor)">@T["finder.results.more"]</a>
-                </nav>
+                <p class="empty">@T["finder.results.none"]</p>
             }
-        }
-    </section>
+            else
+            {
+                <ol class="listing-list">
+                    @foreach (FinderItem item in _page.Items)
+                    {
+                        <li class="listing">
+                            <ListingCard Item="item" Lang="@Lang" ShowReasons="true" Organisation="@_links.GetValueOrDefault(item.OrganisationId)" />
+                        </li>
+                    }
+                </ol>
+
+                @if (_page.NextCursor is { } cursor)
+                {
+                    <nav class="pager" aria-label="@T["finder.results.pages"]">
+                        <a rel="next" href="@Href(after: cursor)">@T["finder.results.more"]</a>
+                    </nav>
+                }
+            }
+        </section>
+    }
 }
 
 @code {
@@ -168,27 +204,83 @@
 
     [SupplyParameterFromQuery(Name = "lang")] public string? Lang { get; set; }
 
+    /// <summary>A neighbourhood, by its code (<c>westside</c>).</summary>
+    [SupplyParameterFromQuery(Name = "hood")] public string? Hood { get; set; }
+
+    /// <summary>An organisation, by its page's slug.</summary>
+    [SupplyParameterFromQuery(Name = "org")] public string? Org { get; set; }
+
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+
     private FinderRequestParse? Parse { get; set; }
 
     private FinderPage _page = FinderPage.Empty;
+    private NeighbourhoodCounts _counts = NeighbourhoodCounts.None;
+    private IReadOnlyList<NeighbourhoodShape> _hoods = [];
+    private NeighbourhoodShape? _hood;
+    private OrganisationProfile? _organisation;
+    private IReadOnlyDictionary<OrganisationId, OrganisationLink> _links = new Dictionary<OrganisationId, OrganisationLink>();
+    private readonly List<Phrase> _notices = [];
 
     private static readonly string[] KindOptions = ["program", "event", "job", "resource"];
 
     private static readonly string[] SortOptions = ["relevance", "soonest", "nearest", "newest"];
 
+    private bool IsMap => View == "map";
+
+    /// <summary>The parameters the form carries but does not show: the language and the organisation filter.</summary>
+    private IEnumerable<(string Name, string? Value)> Carried =>
+        new (string, string?)[] { ("lang", Lang), ("org", _organisation is null ? null : Org), ("view", IsMap ? View : null) }
+            .Where(p => p.Item2 is not null);
+
     protected override async Task OnParametersSetAsync()
     {
-        Dictionary<string, string[]> raw = RawValues(includeAfter: true);
+        Parse = FinderRequestParser.Parse(RawValues(includeAfter: true), Tenant.TenantId.Value, Tenant.Locale);
+        _notices.AddRange(Parse.Notices);
+        _hoods = await Geography.GetNeighbourhoodsAsync(Tenant.Locale.Code);
 
-        Parse = FinderRequestParser.Parse(raw, Tenant.TenantId.Value, Tenant.Locale);
-
-        if (Parse.IsValid)
+        if (!Parse.IsValid)
         {
-            _page = await Finder.SearchAsync(Parse.Query!);
+            return;
+        }
+
+        SearchQuery query = Parse.Query!;
+        if (!string.IsNullOrWhiteSpace(Hood))
+        {
+            _hood = _hoods.FirstOrDefault(h => string.Equals(h.Code, Hood.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (_hood is null)
+            {
+                _notices.Add(Phrase.Of("finder.notice.unknown_neighbourhood"));
+            }
+            else
+            {
+                query = query with { AllFacets = [.. query.AllFacets ?? [], ListingFacets.NeighbourhoodToken(_hood.Id)] };
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(Org))
+        {
+            _organisation = await Organisations.GetAsync(Org.Trim());
+            if (_organisation is null)
+            {
+                _notices.Add(Phrase.Of("finder.notice.unknown_organisation"));
+            }
+            else
+            {
+                query = query with { OrganisationId = _organisation.Id.Value };
+            }
+        }
+
+        if (IsMap)
+        {
+            // The map counts every neighbourhood under the other filters, so it is never narrowed to one.
+            SearchQuery wide = _hood is null ? query : Parse.Query! with { OrganisationId = query.OrganisationId };
+            _counts = await Finder.CountByNeighbourhoodAsync(wide);
         }
         else
         {
-            _page = FinderPage.Empty;
+            _page = await Finder.SearchAsync(query);
+            _links = await Organisations.GetLinksAsync([.. _page.Items.Select(i => i.OrganisationId)]);
         }
     }
 
@@ -224,35 +316,38 @@
         return values;
     }
 
-    private string ListingHref(FinderItem item) =>
-        $"/listings/{Uri.EscapeDataString(item.Slug)}" + (Lang is null ? "" : $"?lang={Uri.EscapeDataString(Lang)}");
+    private const string Keep = "\u0000keep";
+
+    /// <summary>This search with some parameters changed. A cursor applies only to the page it came from.</summary>
+    private string Href(string? hood = Keep, string? org = Keep, string? view = Keep, string? after = null)
+    {
+        List<KeyValuePair<string, string?>> query = [];
+        foreach ((string key, string[] vals) in RawValues(includeAfter: false))
+        {
+            query.AddRange(vals.Select(v => new KeyValuePair<string, string?>(key, v)));
+        }
+
+        void Set(string key, string? value, string? current)
+        {
+            string? chosen = value == Keep ? current : value;
+            if (!string.IsNullOrEmpty(chosen))
+            {
+                query.Add(new(key, chosen));
+            }
+        }
+
+        Set("hood", hood, _hood?.Code);
+        Set("org", org, _organisation is null ? null : Org);
+        Set("view", view, IsMap ? "map" : null);
+        if (after is not null)
+        {
+            query.Add(new("after", after));
+        }
+
+        return QueryHelpers.AddQueryString("/search", query);
+    }
 
     private string ClearHref => Lang is null ? "/search" : $"/search?lang={Uri.EscapeDataString(Lang)}";
-
-    private string NextHref(string cursor)
-    {
-        Dictionary<string, string?> query = [];
-
-        foreach ((string key, string[] values) in RawValues(includeAfter: false))
-        {
-            // Repeated keys (kind) are carried as repeated pairs.
-            query[key] = values[0];
-        }
-
-        query["after"] = cursor;
-
-        string baseUrl = "/search";
-        string url = QueryHelpers.AddQueryString(baseUrl, query);
-
-        // Repeat kind values, which the dictionary above collapses to the first.
-        if (Kind is { Length: > 1 } kinds)
-        {
-            string extra = string.Concat(kinds.Skip(1).Select(k => "&kind=" + Uri.EscapeDataString(k)));
-            url += extra;
-        }
-
-        return url;
-    }
 
     private bool IsKindChecked(string value) =>
         Kind?.Any(k => string.Equals(k, value, StringComparison.OrdinalIgnoreCase)) == true;
@@ -284,17 +379,9 @@
             // "Showing" only when the results are a later page of a longer list. A stale
             // cursor restarts at page one, so the heading must describe what is shown.
             bool isLaterPage = Parse?.Query?.After is not null;
-            return T.Format(_page.NextCursor is null && !isLaterPage ? "finder.results.count" : "finder.results.showing",
+            string count = T.Format(_page.NextCursor is null && !isLaterPage ? "finder.results.count" : "finder.results.showing",
                 ("count", _page.Items.Count));
+            return _hood is null ? count : T.Format("finder.results.in_area", ("count", count), ("area", _hood.Name));
         }
     }
-
-    private string PriceLabel(FinderItem item) =>
-        item.IsFree
-            ? T["listing.price.free"]
-            : item.CostCents > 0
-                ? T.Format("finder.results.price_from", ("price", T.Money(item.CostCents)))
-                : T["finder.results.price_varies"];
-
-    private string KindLabel(ListingKind kind) => T["listing.kind." + kind.ToDbValue()];
 }

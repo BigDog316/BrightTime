@@ -1,0 +1,148 @@
+@using System.Globalization
+@using System.Text
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.Modules.Opportunities.Contracts
+
+@* The county's neighbourhoods as a drawing (decision D21): the tenant's own boundaries, with how
+   many listings each has. No tiles, no script, no coordinates of any site: a count per area is
+   all it shows, so a private address cannot be read off it. Each area is a link. *@
+@if (Shapes.Count > 0)
+{
+    <figure class="hood-map @(Compact ? "compact" : null)" dir="ltr">
+        <svg viewBox="0 0 @Num(Width) @Num(_height)" role="group" aria-label="@Label" focusable="false">
+            @foreach (NeighbourhoodShape shape in Shapes)
+            {
+                int count = CountOf(shape);
+                bool here = shape.Id == Highlight;
+                <a href="@Href(shape)" aria-label="@AreaLabel(shape, count)" aria-current="@(here ? "location" : null)">
+                    <path d="@Path(shape)" class="hood @Bucket(count) @(here ? "here" : null)" fill-rule="evenodd"><title>@AreaLabel(shape, count)</title></path>
+                    @if (Counts is not null && !Compact)
+                    {
+                        @CountLabel(shape, count)
+                    }
+                </a>
+            }
+        </svg>
+        @if (Caption is { Length: > 0 })
+        {
+            <figcaption>@Caption</figcaption>
+        }
+    </figure>
+}
+
+@code {
+    private const double Width = 600;
+
+    [Parameter, EditorRequired] public IReadOnlyList<NeighbourhoodShape> Shapes { get; set; } = [];
+
+    /// <summary>Listings per neighbourhood; without it the map is a plain picker.</summary>
+    [Parameter] public NeighbourhoodCounts? Counts { get; set; }
+
+    [Parameter, EditorRequired] public Func<NeighbourhoodShape, string> Href { get; set; } = default!;
+
+    [Parameter] public Guid? Highlight { get; set; }
+
+    /// <summary>A small map beside text: no numbers, the highlighted area marked.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    [Parameter] public string? Caption { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    private double _minLon, _maxLat, _scale, _height;
+
+    protected override void OnParametersSet()
+    {
+        IEnumerable<(double Longitude, double Latitude)> points = Shapes.SelectMany(s => s.Rings.SelectMany(r => r));
+        List<(double Longitude, double Latitude)> all = [.. points];
+        if (all.Count == 0)
+        {
+            return;
+        }
+
+        _minLon = all.Min(p => p.Longitude);
+        double maxLon = all.Max(p => p.Longitude);
+        double minLat = all.Min(p => p.Latitude);
+        _maxLat = all.Max(p => p.Latitude);
+
+        // Equirectangular, scaled by the cosine of the middle latitude: right for a county.
+        double lonScale = Math.Cos((minLat + _maxLat) / 2 * Math.PI / 180);
+        _scale = Width / Math.Max((maxLon - _minLon) * lonScale, 1e-9) * 0.98;
+        _lonScale = lonScale;
+        _height = Math.Ceiling((_maxLat - minLat) * _scale) + 4;
+    }
+
+    private double _lonScale = 1;
+
+    private (double X, double Y) Project(double lon, double lat) =>
+        (((lon - _minLon) * _lonScale * _scale) + 6, ((_maxLat - lat) * _scale) + 2);
+
+    private string Path(NeighbourhoodShape shape)
+    {
+        StringBuilder d = new();
+        foreach (IReadOnlyList<(double Longitude, double Latitude)> ring in shape.Rings)
+        {
+            for (int i = 0; i < ring.Count; i++)
+            {
+                (double x, double y) = Project(ring[i].Longitude, ring[i].Latitude);
+                d.Append(i == 0 ? 'M' : 'L').Append(Num(x)).Append(',').Append(Num(y)).Append(' ');
+            }
+
+            d.Append("Z ");
+        }
+
+        return d.ToString().TrimEnd();
+    }
+
+    private int CountOf(NeighbourhoodShape shape) => Counts?.ByNeighbourhood.GetValueOrDefault(shape.Id) ?? 0;
+
+    private string AreaLabel(NeighbourhoodShape shape, int count) =>
+        Counts is null ? shape.Name : T.Format("map.area", ("name", shape.Name), ("count", count));
+
+    /// <summary>Shade relative to the busiest area, so differences show whatever the totals.</summary>
+    private string? Bucket(int count)
+    {
+        if (Counts is null)
+        {
+            return null;
+        }
+
+        int max = Counts.ByNeighbourhood.Count == 0 ? 0 : Counts.ByNeighbourhood.Values.Max();
+        double share = max == 0 ? 0 : (double)count / max;
+        return count == 0 ? "hood-0" : share switch
+        {
+            <= 0.25 => "hood-1",
+            <= 0.5 => "hood-2",
+            <= 0.75 => "hood-3",
+            _ => "hood-4",
+        };
+    }
+
+    private static string Num(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The area's name over its count, as SVG text: built by hand, because Razor reserves the
+    /// &lt;text&gt; tag. Hidden from screen readers, which have the link's label instead.
+    /// </summary>
+    private RenderFragment CountLabel(NeighbourhoodShape shape, int count) => builder =>
+    {
+        (double x, double y) = Project(shape.CentroidLongitude, shape.CentroidLatitude);
+        builder.OpenElement(0, "text");
+        builder.AddAttribute(1, "x", Num(x));
+        builder.AddAttribute(2, "y", Num(y - 9));
+        builder.AddAttribute(3, "class", "hood-name");
+        builder.AddAttribute(4, "text-anchor", "middle");
+        builder.AddAttribute(5, "aria-hidden", "true");
+        builder.AddContent(6, shape.Name);
+        builder.CloseElement();
+
+        builder.OpenElement(7, "text");
+        builder.AddAttribute(8, "x", Num(x));
+        builder.AddAttribute(9, "y", Num(y + 12));
+        builder.AddAttribute(10, "class", "hood-count");
+        builder.AddAttribute(11, "text-anchor", "middle");
+        builder.AddAttribute(12, "aria-hidden", "true");
+        builder.AddContent(13, T.Number(count));
+        builder.CloseElement();
+    };
+}

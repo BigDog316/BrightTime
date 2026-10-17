@@ -4,6 +4,8 @@
 @inject IListingDetails Details
 @inject ITenantContext Tenant
 @inject NavigationManager Navigation
+@inject BrightTime.Modules.Directory.Contracts.IOrganisationProfiles Organisations
+@inject BrightTime.Modules.Platform.Contracts.IGeographyQueries Geography
 
 @if (_listing is { } l)
 {
@@ -12,7 +14,7 @@
         <meta name="description" content="@l.Summary" />
     </HeadContent>
 
-    <ListingView Listing="l" Lang="@Lang" />
+    <ListingView Listing="l" Lang="@Lang" OrganisationSlug="@_orgSlug" NeighbourhoodCodes="_hoodCodes" />
 }
 
 @code {
@@ -21,6 +23,8 @@
     [SupplyParameterFromQuery(Name = "lang")] public string? Lang { get; set; }
 
     private ListingDetail? _listing;
+    private string? _orgSlug;
+    private IReadOnlyDictionary<Guid, string> _hoodCodes = new Dictionary<Guid, string>();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -33,6 +37,17 @@
             // A real 404, not a soft "not found" page with a 200: drafts and other tenants'
             // listings must be indistinguishable from slugs that never existed.
             Navigation.NotFound();
+            return;
+        }
+
+        if (_listing.OrganisationId is { } org)
+        {
+            _orgSlug = (await Organisations.GetLinksAsync([org])).GetValueOrDefault(org)?.Slug;
+        }
+
+        if (_listing.Places.Any(p => p.NeighbourhoodId is not null))
+        {
+            _hoodCodes = (await Geography.GetNeighbourhoodsAsync(Tenant.Locale.Code)).ToDictionary(h => h.Id, h => h.Code);
         }
     }
 }

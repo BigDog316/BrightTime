@@ -27,17 +27,22 @@ internal static class KettleSeed
         IReadOnlyList<SeedOrganisation> organisations = KettleOrganisations.Organisations(now);
         IReadOnlyList<SeedSite> sites = KettleOrganisations.Sites(areas);
 
+        IReadOnlyList<SeedTerm> terms = KettleTaxonomy.Terms();
+        IReadOnlyList<SeedListing> listings = KettleListings.Build(organisations, sites, areas, today);
+
         return new SeedData(
             TenantId,
             areas,
             districts,
             KettleGeography.Schools(areas, districts),
             KettleGeography.Transit(areas),
-            KettleTaxonomy.Terms(),
+            terms,
             organisations,
             sites,
-            KettleListings.Build(organisations, sites, areas, today),
+            listings,
             KettleAccounts.Roles(),
-            KettleAccounts.Users(organisations, sites));
+            KettleAccounts.Users(organisations, sites),
+            KettleCuration.Collections(listings, terms),
+            KettleCuration.NeighbourhoodPages(areas));
     }
 }

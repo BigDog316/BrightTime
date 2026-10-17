@@ -1,0 +1,235 @@
+@page "/neighbourhoods/{Code}"
+@using System.Text.Json
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Search
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Paging
+@inject IGeographyQueries Geography
+@inject IListingFinder Finder
+@inject ICurationQueries Curation
+@inject ITenantContext Tenant
+@inject NavigationManager Navigation
+
+@if (_hood is { } hood)
+{
+    <PageTitle>@hood.Name · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/neighbourhoods">@T["hoods.title"]</a></p>
+    <h1>@hood.Name</h1>
+
+    <section aria-labelledby="counts-heading" class="hood-summary">
+        <h2 id="counts-heading" class="visually-hidden">@T["hoods.what_is_here"]</h2>
+        <div class="hood-summary-row">
+            <NeighbourhoodMap Shapes="_all" Href="@(h => "/neighbourhoods/" + h.Code)" Highlight="hood.Id" Compact="true"
+                              Label="@T.Format("hoods.map_label", ("name", hood.Name))" />
+            <ul class="kind-counts">
+                <li><a href="@SearchHref(null)"><strong>@T.Format("finder.results.count", ("count", _total))</strong></a></li>
+                @foreach ((string kind, int count) in _byKind.Where(k => k.Count > 0))
+                {
+                    <li><a href="@SearchHref(kind)">@T.Format("hoods.kind_count." + kind, ("count", count))</a></li>
+                }
+            </ul>
+        </div>
+    </section>
+
+    @if (_page is { } page)
+    {
+        <div class="hood-blocks" lang="@BlockLang">
+            @foreach (PageBlock block in page.Blocks)
+            {
+                @Block(block)
+            }
+        </div>
+    }
+
+    <section aria-labelledby="upcoming-heading">
+        <h2 id="upcoming-heading">@T.Format("hoods.upcoming", ("name", hood.Name))</h2>
+        @if (_upcoming.Items.Count == 0)
+        {
+            <p>@T["hoods.nothing_upcoming"]</p>
+        }
+        else
+        {
+            <ol class="listing-list">
+                @foreach (FinderItem item in _upcoming.Items)
+                {
+                    <li class="listing"><ListingCard Item="item" ShowDeadline="true" /></li>
+                }
+            </ol>
+            <p><a href="@SearchHref(null)">@T.Format("hoods.all_here", ("name", hood.Name))</a></p>
+        }
+    </section>
+}
+
+@code {
+    private static readonly string[] Kinds = ["program", "event", "job", "resource"];
+
+    [Parameter] public string Code { get; set; } = string.Empty;
+
+    private IReadOnlyList<NeighbourhoodShape> _all = [];
+    private NeighbourhoodShape? _hood;
+    private NeighbourhoodPageView? _page;
+    private int _total;
+    private List<(string Kind, int Count)> _byKind = [];
+    private FinderPage _upcoming = FinderPage.Empty;
+    private readonly Dictionary<string, FinderPage> _lists = [];
+    private readonly Dictionary<string, CollectionView?> _collections = [];
+
+    private string? BlockLang => _page is { } p && p.ContentLanguage != T.Locale.Code ? p.ContentLanguage : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _all = await Geography.GetNeighbourhoodsAsync(Tenant.Locale.Code);
+        _hood = _all.FirstOrDefault(h => string.Equals(h.Code, Code, StringComparison.OrdinalIgnoreCase));
+        if (_hood is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        SearchQuery here = new() { TenantId = Tenant.TenantId.Value, AllFacets = [ListingFacets.NeighbourhoodToken(_hood.Id)] };
+        _total = (await Finder.CountByNeighbourhoodAsync(here)).ByNeighbourhood.GetValueOrDefault(_hood.Id);
+        foreach (string kind in Kinds)
+        {
+            NeighbourhoodCounts c = await Finder.CountByNeighbourhoodAsync(here with { Kinds = [kind] });
+            _byKind.Add((kind, c.ByNeighbourhood.GetValueOrDefault(_hood.Id)));
+        }
+
+        _upcoming = await Finder.SearchAsync(here with { Sort = SearchSort.Soonest, PageSize = new PageSize(6) });
+
+        _page = await Curation.GetNeighbourhoodPageAsync(_hood.Id, Tenant.Locale.Code);
+        foreach (PageBlock block in _page?.Blocks ?? [])
+        {
+            if (block.Kind == "listing_list" && Payload(block) is { } list)
+            {
+                string? kind = Text(list, "kind");
+                int limit = Math.Clamp(Number(list, "limit") ?? 6, 1, 24);
+                string key = $"{kind}:{limit}";
+                if (!_lists.ContainsKey(key))
+                {
+                    _lists[key] = await Finder.SearchAsync(here with
+                    {
+                        Kinds = kind is { } k && Kinds.Contains(k) ? [k] : null,
+                        Sort = SearchSort.Soonest,
+                        PageSize = new PageSize(limit),
+                    });
+                }
+            }
+            else if (block.Kind == "collection" && Payload(block) is { } c && Text(c, "collection") is { } slug && !_collections.ContainsKey(slug))
+            {
+                _collections[slug] = await Curation.GetCollectionAsync(slug, Tenant.Locale.Code);
+            }
+        }
+    }
+
+    private string SearchHref(string? kind) =>
+        $"/search?hood={Uri.EscapeDataString(_hood!.Code)}" + (kind is null ? "" : $"&kind={kind}");
+
+    /// <summary>One organiser block. A payload that does not parse is left out rather than half-shown.</summary>
+    private RenderFragment Block(PageBlock block) => __builder =>
+    {
+        JsonElement? payload = Payload(block);
+        switch (block.Kind)
+        {
+            case "rich_text":
+            case "transit":
+                <section class="block block-@block.Kind">
+                    @if (block.Heading is { Length: > 0 } h)
+                    {
+                        <h2 dir="auto">@h</h2>
+                    }
+                    <MarkdownView Source="@block.Body" />
+                </section>
+                break;
+
+            case "faq" when payload is { } p && p.TryGetProperty("items", out JsonElement items) && items.ValueKind == JsonValueKind.Array:
+                <section class="block block-faq">
+                    <h2 dir="auto">@(block.Heading ?? T["hoods.faq"])</h2>
+                    @foreach (JsonElement item in items.EnumerateArray())
+                    {
+                        @if (Text(item, "q") is { } q && Text(item, "a") is { } a)
+                        {
+                            <details>
+                                <summary dir="auto">@q</summary>
+                                <MarkdownView Source="@a" />
+                            </details>
+                        }
+                    }
+                </section>
+                break;
+
+            case "contact_list" when payload is { } p && p.TryGetProperty("contacts", out JsonElement contacts) && contacts.ValueKind == JsonValueKind.Array:
+                <section class="block block-contacts">
+                    <h2 dir="auto">@(block.Heading ?? T["hoods.contacts"])</h2>
+                    <ul class="contacts">
+                        @foreach (JsonElement contact in contacts.EnumerateArray())
+                        {
+                            <li>
+                                <strong dir="auto">@Text(contact, "name")</strong>
+                                @if (Text(contact, "role") is { } role)
+                                {
+                                    <span class="note" dir="auto">@role</span>
+                                }
+                                @if (Text(contact, "phone") is { } phone)
+                                {
+                                    <br /><a href="tel:@(new string(phone.Where(c => char.IsAsciiDigit(c) || c == '+').ToArray()))" dir="ltr">@phone</a>
+                                }
+                                @if (Text(contact, "email") is { } email)
+                                {
+                                    <br /><a href="mailto:@email" dir="ltr">@email</a>
+                                }
+                                @if (Text(contact, "url") is { } url && BrightTime.Web.Finder.PlainMarkdown.IsSafe(url) && url.StartsWith("http", StringComparison.Ordinal))
+                                {
+                                    <br /><a href="@url" rel="external noopener" dir="ltr">@(new Uri(url).Host)</a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </section>
+                break;
+
+            case "listing_list" when payload is { } p && _lists.TryGetValue($"{Text(p, "kind")}:{Math.Clamp(Number(p, "limit") ?? 6, 1, 24)}", out FinderPage? list) && list.Items.Count > 0:
+                <section class="block block-listings">
+                    <h2 dir="auto">@(block.Heading ?? T.Format("hoods.upcoming", ("name", _hood!.Name)))</h2>
+                    <ol class="listing-list">
+                        @foreach (FinderItem item in list.Items)
+                        {
+                            <li class="listing"><ListingCard Item="item" ShowDeadline="true" /></li>
+                        }
+                    </ol>
+                </section>
+                break;
+
+            case "collection" when payload is { } p && Text(p, "collection") is { } slug && _collections.GetValueOrDefault(slug) is { } c:
+                <section class="block block-collection">
+                    <h2 dir="auto">@(block.Heading ?? c.Title)</h2>
+                    @if (c.Description is { Length: > 0 } d)
+                    {
+                        <p dir="auto">@d</p>
+                    }
+                    <p><a href="/collections/@Uri.EscapeDataString(c.Slug)">@T.Format("hoods.see_collection", ("count", c.Entries.Count))</a></p>
+                </section>
+                break;
+        }
+    };
+
+    private static JsonElement? Payload(PageBlock block)
+    {
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(block.Payload);
+            return doc.RootElement.ValueKind == JsonValueKind.Object ? doc.RootElement.Clone() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? Text(JsonElement e, string name) =>
+        e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String && v.GetString() is { Length: > 0 } s ? s : null;
+
+    private static int? Number(JsonElement e, string name) =>
+        e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int n) ? n : null;
+}

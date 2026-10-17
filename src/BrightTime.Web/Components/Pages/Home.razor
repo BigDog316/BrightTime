@@ -1,9 +1,92 @@
 @page "/"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Paging
+@using BrightTime.SharedKernel.Time
+@inject ICurationQueries Curation
+@inject IListingFinder Finder
+@inject IGeographyQueries Geography
+@inject ITenantContext Tenant
+@inject IClock Clock
 
 <PageTitle>BrightTime</PageTitle>
 
 <h1>BrightTime</h1>
 
-<p>@T["home.lead"]</p>
+<p class="lead">@T["home.lead"]</p>
 
-<p><a href="/search">@T["home.find"]</a></p>
+<form method="get" action="/search" role="search" class="home-search" aria-label="@T["finder.title"]">
+    <label for="home-q" class="visually-hidden">@T["finder.field.text"]</label>
+    <input id="home-q" name="q" type="search" maxlength="200" placeholder="@T["finder.field.text"]" />
+    <button type="submit">@T["finder.search"]</button>
+</form>
+
+@if (_featured.Count > 0)
+{
+    <section aria-labelledby="featured-heading">
+        <h2 id="featured-heading">@T["home.featured"]</h2>
+        <ul class="card-list collections">
+            @foreach (CollectionSummary c in _featured)
+            {
+                <li>
+                    <a href="/collections/@Uri.EscapeDataString(c.Slug)" dir="auto" lang="@(c.ContentLanguage == T.Locale.Code ? null : c.ContentLanguage)">@c.Title</a>
+                    <span class="note">@T.Format("collections.count", ("count", c.ListingCount))</span>
+                </li>
+            }
+        </ul>
+        <p><a href="/collections">@T["home.all_collections"]</a></p>
+    </section>
+}
+
+<section aria-labelledby="week-heading">
+    <h2 id="week-heading">@T["home.this_week"]</h2>
+    @if (_week.Items.Count == 0)
+    {
+        <p>@T["home.nothing_this_week"] <a href="/search">@T["home.find"]</a></p>
+    }
+    else
+    {
+        <ol class="listing-list">
+            @foreach (FinderItem item in _week.Items)
+            {
+                <li class="listing"><ListingCard Item="item" /></li>
+            }
+        </ol>
+        <p><a href="/search?sort=soonest">@T["home.more_soon"]</a></p>
+    }
+</section>
+
+@if (_hoods.Count > 0)
+{
+    <section aria-labelledby="hoods-heading">
+        <h2 id="hoods-heading">@T["home.near_you"]</h2>
+        <ul class="hood-picker">
+            @foreach (NeighbourhoodShape h in _hoods)
+            {
+                <li><a href="/neighbourhoods/@h.Code">@h.Name</a></li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<CollectionSummary> _featured = [];
+    private FinderPage _week = FinderPage.Empty;
+    private IReadOnlyList<NeighbourhoodShape> _hoods = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        DateTimeOffset now = Clock.UtcNow;
+        _featured = await Curation.ListCollectionsAsync(Tenant.Locale.Code, featuredOnly: true);
+        _week = await Finder.SearchAsync(new SearchQuery
+        {
+            TenantId = Tenant.TenantId.Value,
+            WindowStart = now,
+            WindowEnd = now.AddDays(7),
+            Sort = SearchSort.Soonest,
+            PageSize = new PageSize(6),
+        });
+        _hoods = await Geography.GetNeighbourhoodsAsync(Tenant.Locale.Code);
+    }
+}

@@ -349,7 +349,7 @@ writes it.
 Reversible: an interceptor could be added later for a "nothing touched a youth table
 unaudited" cross-check. It would add to these rows, not replace them.
 
-### D20 — Interface strings are JSON catalogues with ICU plurals, not .resx (**proposed 2026-10-17; implemented, reversible**)
+### D20 — Interface strings are JSON catalogues with ICU plurals, not .resx (**accepted 2026-10-17**)
 
 The plan asked for "the `en` resource file" without saying which format. These are flat JSON
 files, one per locale, using a subset of ICU MessageFormat.
@@ -374,6 +374,47 @@ files, one per locale, using a subset of ICU MessageFormat.
 
 Reversible: the catalogue sits behind `Text`, so a move to `IStringLocalizer` with a
 MessageFormat library would change one service, not the pages.
+
+### D21 — The M1 map is a drawing of the tenant's neighbourhoods, not a tile map (**proposed 2026-10-17; implemented, reversible**)
+
+The plan said "MapLibre + OSM, clustered pins". What shipped is a server-rendered SVG of the
+tenant's own neighbourhood boundaries (`platform.neighbourhood`), shaded and labelled with how
+many listings each has under the search's filters. Each area is a link that narrows the search.
+
+- **Fictional geography.** Kettle County's coordinates sit over a real county. Street tiles would
+  show real roads and places under made-up names.
+- **Privacy:**
+  - A count per area is all the map shows, so a site whose address is private cannot be read
+    off it (T6). Pins would need to be coarsened for those sites anyway.
+  - No tile server learns a young person's IP address or where they are looking.
+- **Low bandwidth and no JavaScript.** The map is a few kilobytes of HTML and works with
+  scripts off, as the finder must. The plan's `?lowbw=1` list-only mode is unnecessary.
+- **What it is not.** It has no street-level detail, no "near me" and no clustering of
+  individual sites. A real tenant will want street context.
+
+**MapLibre + OSM stays the direction** for a real tenant, as an island over this drawing. It
+needs two things from you: approval to download MapLibre GL JS (a pinned version from npm,
+vendored, with no CDN at run time), and an answer to Q7 on which tile source to use. Ours, or a
+paid provider's; OSM's public tile servers forbid this use. Until then the drawing is the map.
+
+### D22 — Saved listings live on the device until accounts exist; reminders come through the calendar (**proposed 2026-10-17; implemented, reversible**)
+
+M1 has no registration, so there is no account to save to. `saved_item` and
+`listing_reminder` both need one.
+
+- **Saved:** a cookie holding listing ids, and nothing about the person. It is HttpOnly,
+  SameSite=Lax, kept for 90 days, at most 50 ids. Plain forms and redirects, so it works
+  without JavaScript. Ids that are no longer published are dropped when shown.
+- **Reminders:** `/saved/calendar.ics` gives every saved listing's upcoming sessions and
+  deadlines, with an alarm an hour before each session and a day before each deadline. The
+  person's own calendar reminds them, and BrightTime holds no email or phone number for a
+  minor it has no consent for.
+- **Cost:** saving is per browser, and anyone sharing that browser sees the list (T14). The
+  saved page says so beside a button that clears it.
+
+When accounts arrive (M2), signing in moves the cookie's ids into `saved_item`, and server
+reminders use `listing_reminder` under the consent rules. The cookie path stays for people who
+never sign in.
 
 ## Open questions
 

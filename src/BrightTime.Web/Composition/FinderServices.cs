@@ -69,9 +69,14 @@ public static class FinderServices
             services.AddScoped<ITaxonomyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
             services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
             services.AddScoped<IListingDetails, SqlListingDetails>();
+            services.AddScoped<ICurationQueries, Modules.Opportunities.Curation.CurationQueries>();
+            services.AddScoped<IOrganisationProfiles, OrganisationProfiles>();
         }
         else
         {
+            services.AddSingleton<ICurationQueries, NoCuration>();
+            services.AddSingleton<IOrganisationProfiles, NoOrganisationProfiles>();
+            services.AddSingleton<IGeographyQueries, NoGeography>();
             services.AddSingleton<IListingDetails>(sp =>
             {
                 IClock clock = sp.GetRequiredService<IClock>();

@@ -1,0 +1,41 @@
+@page "/neighbourhoods"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Platform.Contracts
+@inject IGeographyQueries Geography
+@inject IListingFinder Finder
+@inject ITenantContext Tenant
+
+<PageTitle>@T["hoods.title"] · BrightTime</PageTitle>
+
+<h1>@T["hoods.title"]</h1>
+<p class="lead">@T["hoods.lead"]</p>
+
+@if (_hoods.Count == 0)
+{
+    <p>@T["hoods.none"]</p>
+}
+else
+{
+    <NeighbourhoodMap Shapes="_hoods" Counts="_counts" Href="@(h => "/neighbourhoods/" + h.Code)" Label="@T["hoods.title"]" />
+    <ul class="hood-list">
+        @foreach (NeighbourhoodShape h in _hoods)
+        {
+            <li><a href="/neighbourhoods/@h.Code">@T.Format("map.area", ("name", h.Name), ("count", _counts.ByNeighbourhood.GetValueOrDefault(h.Id)))</a></li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<NeighbourhoodShape> _hoods = [];
+    private NeighbourhoodCounts _counts = NeighbourhoodCounts.None;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _hoods = await Geography.GetNeighbourhoodsAsync(Tenant.Locale.Code);
+        if (_hoods.Count > 0)
+        {
+            _counts = await Finder.CountByNeighbourhoodAsync(new SearchQuery { TenantId = Tenant.TenantId.Value });
+        }
+    }
+}

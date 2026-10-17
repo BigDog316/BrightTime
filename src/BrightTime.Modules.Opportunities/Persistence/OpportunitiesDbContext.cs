@@ -38,6 +38,16 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<ListingTranslationRecord> ListingTranslations => Set<ListingTranslationRecord>();
 
+    public DbSet<CollectionRecord> Collections => Set<CollectionRecord>();
+
+    public DbSet<CollectionItemRecord> CollectionItems => Set<CollectionItemRecord>();
+
+    public DbSet<CollectionTranslationRecord> CollectionTranslations => Set<CollectionTranslationRecord>();
+
+    public DbSet<NeighbourhoodPageRecord> NeighbourhoodPages => Set<NeighbourhoodPageRecord>();
+
+    public DbSet<NeighbourhoodPageBlockRecord> NeighbourhoodPageBlocks => Set<NeighbourhoodPageBlockRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -131,6 +141,44 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
             b.ToTable("listing_translation");
             b.HasKey(x => new { x.ListingId, x.Locale });
             b.Property(x => x.TranslatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<CollectionRecord>(b =>
+        {
+            b.ToTable("collection");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Slug).HasColumnType("citext");
+            b.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            b.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<CollectionItemRecord>(b =>
+        {
+            b.ToTable("collection_item");
+            b.HasKey(x => new { x.CollectionId, x.ListingId });
+        });
+
+        modelBuilder.Entity<CollectionTranslationRecord>(b =>
+        {
+            b.ToTable("collection_translation");
+            b.HasKey(x => new { x.CollectionId, x.Locale });
+        });
+
+        modelBuilder.Entity<NeighbourhoodPageRecord>(b =>
+        {
+            b.ToTable("neighbourhood_page");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<NeighbourhoodPageBlockRecord>(b =>
+        {
+            b.ToTable("neighbourhood_page_block");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Payload).HasColumnType("jsonb");
         });
 
         modelBuilder.ApplySnakeCaseNames();

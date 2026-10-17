@@ -1,0 +1,40 @@
+@page "/collections"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@inject ICurationQueries Curation
+@inject ITenantContext Tenant
+
+<PageTitle>@T["collections.title"] · BrightTime</PageTitle>
+
+<h1>@T["collections.title"]</h1>
+<p class="lead">@T["collections.lead"]</p>
+
+@if (_collections.Count == 0)
+{
+    <p>@T["collections.none"]</p>
+}
+else
+{
+    <ul class="card-list collections">
+        @foreach (CollectionSummary c in _collections)
+        {
+            <li>
+                <a href="/collections/@Uri.EscapeDataString(c.Slug)" dir="auto" lang="@LangAttr(c.ContentLanguage)">@c.Title</a>
+                <span class="note">@T.Format("collections.count", ("count", c.ListingCount))</span>
+                @if (c.Description is { Length: > 0 } d)
+                {
+                    <p dir="auto" lang="@LangAttr(c.ContentLanguage)">@d</p>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<CollectionSummary> _collections = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _collections = await Curation.ListCollectionsAsync(Tenant.Locale.Code, featuredOnly: false);
+
+    private string? LangAttr(string language) => language == T.Locale.Code ? null : language;
+}

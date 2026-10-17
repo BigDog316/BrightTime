@@ -1,0 +1,201 @@
+@page "/organisations/{Slug}"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Paging
+@using BrightTime.SharedKernel.Primitives
+@inject IOrganisationProfiles Organisations
+@inject IListingFinder Finder
+@inject IGeographyQueries Geography
+@inject ITenantContext Tenant
+@inject NavigationManager Navigation
+
+@if (_org is { } o)
+{
+    <PageTitle>@o.DisplayName · BrightTime</PageTitle>
+    <HeadContent>
+        @if (o.Mission is { Length: > 0 } m)
+        {
+            <meta name="description" content="@m" />
+        }
+    </HeadContent>
+
+    <article class="organisation" aria-labelledby="org-title">
+        <header>
+            <p class="eyebrow">@(T.Has("organisation.kind." + o.Kind) ? T["organisation.kind." + o.Kind] : o.Kind)</p>
+            <h1 id="org-title" dir="auto">@o.DisplayName</h1>
+            @if (o.Mission is { Length: > 0 } mission)
+            {
+                <p class="lead" dir="auto">@mission</p>
+            }
+        </header>
+
+        <section aria-labelledby="org-contact-heading">
+            <h2 id="org-contact-heading">@T["org.contact"]</h2>
+            <dl class="facts">
+                @if (SafeLink(o.WebsiteUrl) is { } site)
+                {
+                    <dt>@T["organiser.org.website"]</dt>
+                    <dd><a href="@site" rel="external noopener" dir="ltr">@Display(site)</a></dd>
+                }
+                @if (o.PublicEmail is { Length: > 0 } email)
+                {
+                    <dt>@T["account.field.email"]</dt>
+                    <dd><a href="mailto:@email" dir="ltr">@email</a></dd>
+                }
+                @if (o.PublicPhone is { Length: > 0 } phone)
+                {
+                    <dt>@T["editor.field.contact_phone"]</dt>
+                    <dd><a href="tel:@PhoneHref(phone)" dir="ltr">@phone</a></dd>
+                }
+                @if (o.LanguagesServed.Count > 0)
+                {
+                    <dt>@T["org.languages"]</dt>
+                    <dd>
+                        @for (int i = 0; i < o.LanguagesServed.Count; i++)
+                        {
+                            <span lang="@o.LanguagesServed[i]" dir="auto">@LanguageName(o.LanguagesServed[i])</span>@(i < o.LanguagesServed.Count - 1 ? T["format.list_separator"] : "")
+                        }
+                    </dd>
+                }
+            </dl>
+        </section>
+
+        @if (o.Sites.Count > 0)
+        {
+            <section aria-labelledby="org-sites-heading">
+                <h2 id="org-sites-heading">@T.Format("listing.places", ("count", o.Sites.Count))</h2>
+                <ul class="places">
+                    @foreach (PublicSite s in o.Sites)
+                    {
+                        <li>
+                            <p class="place-name" dir="auto">@s.Name</p>
+                            @if (s.IsAddressPublic)
+                            {
+                                <address dir="auto">
+                                    @foreach (string line in AddressLines(s))
+                                    {
+                                        @line<br />
+                                    }
+                                </address>
+                            }
+                            else if (Hood(s.NeighbourhoodId) is { } hood)
+                            {
+                                <p>@T.Format("listing.places.area", ("area", Localisation.Text.Name(hood.Name))) @T["listing.places.address_after_registering"]</p>
+                            }
+                            @if (Hood(s.NeighbourhoodId) is { } area)
+                            {
+                                <p class="note"><a href="/neighbourhoods/@area.Code">@T.Format("org.more_in_area", ("area", Localisation.Text.Name(area.Name)))</a></p>
+                            }
+                            @if (s.TransitNote is { Length: > 0 } transit)
+                            {
+                                <p class="note" dir="auto">@transit</p>
+                            }
+                            @if (Features(s) is { Count: > 0 } features)
+                            {
+                                <p class="note">@string.Join(T["format.list_separator"], features)</p>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        <section aria-labelledby="org-listings-heading">
+            <h2 id="org-listings-heading">@T["org.listings"]</h2>
+            @if (_listings.Items.Count == 0)
+            {
+                <p>@T["org.no_listings"]</p>
+            }
+            else
+            {
+                <ol class="listing-list">
+                    @foreach (FinderItem item in _listings.Items)
+                    {
+                        <li class="listing"><ListingCard Item="item" Lang="@Lang" ShowDeadline="true" /></li>
+                    }
+                </ol>
+                @if (_listings.NextCursor is not null)
+                {
+                    <p><a href="/search?org=@Uri.EscapeDataString(o.Slug)">@T["org.all_listings"]</a></p>
+                }
+            }
+        </section>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "lang")] public string? Lang { get; set; }
+
+    private OrganisationProfile? _org;
+    private FinderPage _listings = FinderPage.Empty;
+    private IReadOnlyList<NeighbourhoodShape> _hoods = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _org = string.IsNullOrWhiteSpace(Slug) || Slug.Length > BrightTime.SharedKernel.Primitives.Slug.MaxLength
+            ? null
+            : await Organisations.GetAsync(Slug);
+        if (_org is null)
+        {
+            // Applying, suspended and rejected organisations answer exactly as unknown ones.
+            Navigation.NotFound();
+            return;
+        }
+
+        _hoods = await Geography.GetNeighbourhoodsAsync(Tenant.Locale.Code);
+        _listings = await Finder.SearchAsync(new SearchQuery
+        {
+            TenantId = Tenant.TenantId.Value,
+            OrganisationId = _org.Id.Value,
+            Sort = SearchSort.Soonest,
+            PageSize = new PageSize(12),
+        });
+    }
+
+    private NeighbourhoodShape? Hood(Guid? id) => id is { } h ? _hoods.FirstOrDefault(x => x.Id == h) : null;
+
+    private List<string> Features(PublicSite s)
+    {
+        List<string> features = [];
+        if (s.IsWheelchairAccessible == true)
+        {
+            features.Add(T["org.feature.wheelchair"]);
+        }
+
+        if (s.HasAccessibleRestroom == true)
+        {
+            features.Add(T["org.feature.restroom"]);
+        }
+
+        if (s.HasElevator == true)
+        {
+            features.Add(T["org.feature.elevator"]);
+        }
+
+        if (s.HasQuietSpace == true)
+        {
+            features.Add(T["org.feature.quiet"]);
+        }
+
+        return features;
+    }
+
+    private static IEnumerable<string> AddressLines(PublicSite s) =>
+        new[] { s.AddressLine1, s.AddressLine2, string.Join(" ", new[] { s.Locality, s.PostalCode }.Where(x => !string.IsNullOrWhiteSpace(x))) }
+            .Where(x => !string.IsNullOrWhiteSpace(x))!;
+
+    private static string? SafeLink(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+            ? uri.AbsoluteUri
+            : null;
+
+    private static string Display(string url) => new Uri(url).Host;
+
+    private static string PhoneHref(string phone) => new(phone.Where(c => char.IsAsciiDigit(c) || c == '+').ToArray());
+
+    private static string LanguageName(string code) => Locale.TryFromCode(code, out Locale l) ? l.NativeName : code;
+}

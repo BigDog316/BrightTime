@@ -142,4 +142,20 @@ internal sealed record SeedData(
     IReadOnlyList<SeedSite> Sites,
     IReadOnlyList<SeedListing> Listings,
     IReadOnlyList<Kettle.SeedRole> Roles,
-    IReadOnlyList<Kettle.SeedUser> Users);
+    IReadOnlyList<Kettle.SeedUser> Users,
+    IReadOnlyList<SeedCollection>? Collections = null,
+    IReadOnlyList<SeedNeighbourhoodPage>? NeighbourhoodPages = null);
+
+internal sealed record SeedCollection(
+    Guid Id,
+    string Slug,
+    string Title,
+    string Description,
+    bool IsFeatured,
+    short SortOrder,
+    IReadOnlyList<(Guid ListingId, string? Note)> Items,
+    IReadOnlyList<(string Locale, string Title, string Description)> Translations);
+
+internal sealed record SeedPageBlock(Guid Id, string Locale, string Kind, short SortOrder, string? Heading, string? Body, string Payload);
+
+internal sealed record SeedNeighbourhoodPage(Guid Id, Guid NeighbourhoodId, IReadOnlyList<SeedPageBlock> Blocks);

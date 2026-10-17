@@ -133,6 +133,7 @@ public sealed class SqlListingDetails(
             PrimaryLanguage = l.PrimaryLanguage,
             IsMachineTranslated = tr is { TranslationSource: "machine" },
             OrganisationName = organisationName,
+            OrganisationId = new OrganisationId(l.OrgId),
             AgeMin = l.AgeMin,
             AgeMax = l.AgeMax,
             GradeMin = l.GradeMin,
@@ -163,7 +164,8 @@ public sealed class SqlListingDetails(
                 s.PostalCode,
                 s.NeighbourhoodId is { } h && hoodNames.TryGetValue(h, out string? name) ? name : null,
                 s.TransitNote,
-                s.IsWheelchairAccessible))],
+                s.IsWheelchairAccessible,
+                s.NeighbourhoodId))],
             Upcoming = loaded.Upcoming,
             Deadlines = loaded.Deadlines,
         };

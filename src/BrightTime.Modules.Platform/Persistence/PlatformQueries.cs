@@ -113,6 +113,70 @@ public sealed class PlatformQueries(PlatformDbContext db) : ITaxonomyQueries, IG
         }, cancellationToken);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "A constant statement; the locale is a bound parameter.")]
+    public Task<IReadOnlyList<NeighbourhoodShape>> GetNeighbourhoodsAsync(string locale, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<NeighbourhoodShape>>(async ct =>
+        {
+            // Raw SQL for the spatial functions; inside the context's transaction, so under the
+            // tenant policy like everything else. Simplified to about 10 m and five decimals:
+            // a map outline, a fraction of the full geometry's size.
+            System.Data.Common.DbConnection connection = db.Database.GetDbConnection();
+            await using System.Data.Common.DbCommand command = connection.CreateCommand();
+            command.Transaction = Microsoft.EntityFrameworkCore.Storage.DbContextTransactionExtensions.GetDbTransaction(db.Database.CurrentTransaction!);
+            command.CommandText =
+                """
+                select n.id, n.code::text,
+                       coalesce((select nm.name from platform.neighbourhood_name nm where nm.neighbourhood_id = n.id and nm.locale = @locale),
+                                (select nm.name from platform.neighbourhood_name nm where nm.neighbourhood_id = n.id and nm.locale = 'en'),
+                                n.code::text),
+                       st_asgeojson(st_simplifypreservetopology(n.boundary::geometry, 0.0001), 5),
+                       st_x(n.centroid::geometry), st_y(n.centroid::geometry)
+                  from platform.neighbourhood n
+                 where n.kind = 'neighbourhood' and n.boundary is not null and n.centroid is not null
+                   and (n.effective_to is null or n.effective_to >= current_date)
+                 order by 3
+                """;
+            System.Data.Common.DbParameter p = command.CreateParameter();
+            p.ParameterName = "locale";
+            p.Value = locale;
+            command.Parameters.Add(p);
+
+            List<NeighbourhoodShape> shapes = [];
+            await using System.Data.Common.DbDataReader reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                shapes.Add(new NeighbourhoodShape(
+                    reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
+                    Rings(reader.GetString(3)), reader.GetDouble(4), reader.GetDouble(5)));
+            }
+
+            return shapes;
+        }, cancellationToken);
+
+    /// <summary>The rings of a GeoJSON Polygon or MultiPolygon, in order.</summary>
+    internal static IReadOnlyList<IReadOnlyList<(double, double)>> Rings(string geoJson)
+    {
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(geoJson);
+        System.Text.Json.JsonElement root = doc.RootElement;
+        System.Text.Json.JsonElement coordinates = root.GetProperty("coordinates");
+        IEnumerable<System.Text.Json.JsonElement> polygons = root.GetProperty("type").GetString() == "MultiPolygon"
+            ? coordinates.EnumerateArray()
+            : [coordinates];
+
+        List<IReadOnlyList<(double, double)>> rings = [];
+        foreach (System.Text.Json.JsonElement polygon in polygons)
+        {
+            foreach (System.Text.Json.JsonElement ring in polygon.EnumerateArray())
+            {
+                rings.Add([.. ring.EnumerateArray().Select(pt => (pt[0].GetDouble(), pt[1].GetDouble()))]);
+            }
+        }
+
+        return rings;
+    }
+
     /// <summary>The requested locale if present, otherwise English, otherwise nothing.</summary>
     private static string? Pick(IEnumerable<(string Locale, string Name)> names, string locale)
     {

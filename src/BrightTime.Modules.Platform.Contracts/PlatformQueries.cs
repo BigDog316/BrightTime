@@ -29,12 +29,42 @@ public interface ITaxonomyQueries
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// A neighbourhood's outline for the public map: rings of (longitude, latitude), outer first,
+/// already simplified. A boundary drawn by the organiser, never a site's location.
+/// </summary>
+public sealed record NeighbourhoodShape(
+    Guid Id,
+    string Code,
+    string Name,
+    IReadOnlyList<IReadOnlyList<(double Longitude, double Latitude)>> Rings,
+    double CentroidLongitude,
+    double CentroidLatitude);
+
 /// <summary>Place-name lookups for other modules.</summary>
 public interface IGeographyQueries
 {
+    /// <summary>The tenant's neighbourhoods (the smallest areas, not towns or the county), named in <paramref name="locale"/>.</summary>
+    Task<IReadOnlyList<NeighbourhoodShape>> GetNeighbourhoodsAsync(
+        string locale,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Neighbourhood names in <paramref name="locale"/>, falling back to English.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetNeighbourhoodNamesAsync(
         IReadOnlyCollection<Guid> neighbourhoodIds,
         string locale,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>Sample data has no map: no neighbourhood shapes, no names beyond the listings' own.</summary>
+public sealed class NoGeography : IGeographyQueries
+{
+    public Task<IReadOnlyList<NeighbourhoodShape>> GetNeighbourhoodsAsync(string locale, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<NeighbourhoodShape>>([]);
+
+    public Task<IReadOnlyDictionary<Guid, string>> GetNeighbourhoodNamesAsync(
+        IReadOnlyCollection<Guid> neighbourhoodIds,
+        string locale,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
 }

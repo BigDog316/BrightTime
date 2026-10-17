@@ -1,0 +1,54 @@
+@using BrightTime.Web.Finder
+@* Organiser-written text, rendered from parsed blocks with ordinary encoding: never raw markup. *@
+@foreach (PlainMarkdown.Block block in PlainMarkdown.Parse(Source))
+{
+    @switch (block)
+    {
+        case PlainMarkdown.Heading { Level: 3 } h:
+            <h3 dir="auto" lang="@Lang">@Runs(h.Runs)</h3>
+            break;
+        case PlainMarkdown.Heading h:
+            <h4 dir="auto" lang="@Lang">@Runs(h.Runs)</h4>
+            break;
+        case PlainMarkdown.BulletList list:
+            <ul dir="auto" lang="@Lang">
+                @foreach (IReadOnlyList<PlainMarkdown.Run> item in list.Items)
+                {
+                    <li>@Runs(item)</li>
+                }
+            </ul>
+            break;
+        case PlainMarkdown.Paragraph p:
+            <p dir="auto" lang="@Lang">@Runs(p.Runs)</p>
+            break;
+    }
+}
+
+@code {
+    [Parameter] public string? Source { get; set; }
+
+    /// <summary>The text's language, when it differs from the page's.</summary>
+    [Parameter] public string? Lang { get; set; }
+
+    private static RenderFragment Runs(IReadOnlyList<PlainMarkdown.Run> runs) => __builder =>
+    {
+        foreach (PlainMarkdown.Run run in runs)
+        {
+            switch (run)
+            {
+                case PlainMarkdown.StrongRun s:
+                    <strong>@s.Text</strong>
+                    break;
+                case PlainMarkdown.EmphasisRun e:
+                    <em>@e.Text</em>
+                    break;
+                case PlainMarkdown.LinkRun l:
+                    <a href="@l.Href" rel="@(l.Href.StartsWith('/') ? null : "external noopener")">@l.Text</a>
+                    break;
+                case PlainMarkdown.TextRun t:
+                    @t.Text
+                    break;
+            }
+        }
+    };
+}

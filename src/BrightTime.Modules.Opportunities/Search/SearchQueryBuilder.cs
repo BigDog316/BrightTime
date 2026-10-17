@@ -112,12 +112,58 @@ public static class SearchQueryBuilder
         return new BuiltQuery(sql.ToString(), parameters);
     }
 
+    /// <summary>
+    /// The neighbourhood counts for the map: the search's filters, grouped by neighbourhood, with
+    /// online-only rows (no site) apart.
+    /// </summary>
+    public static BuiltQuery BuildNeighbourhoodCounts(SearchQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var parameters = new Dictionary<string, object?>(StringComparer.Ordinal) { ["tenant_id"] = query.TenantId };
+        var predicates = new StringBuilder();
+        AddFilterPredicates(query, predicates, parameters);
+        if (!string.IsNullOrWhiteSpace(query.Text))
+        {
+            parameters["text"] = query.Text!.Trim();
+            parameters["ts_config"] = query.TextSearchConfig;
+        }
+
+        if (query.Origin is not null)
+        {
+            parameters["origin_lat"] = query.Origin!.Value.Latitude;
+            parameters["origin_lon"] = query.Origin!.Value.Longitude;
+        }
+
+        var sql = new StringBuilder();
+        sql.Append("select ls.site_id is null as online, ls.neighbourhood_id,\n");
+        sql.Append("       count(distinct ls.listing_id)::int as listings\n");
+        sql.Append("from opportunity.listing_search ls\n");
+        sql.Append("where ls.tenant_id = @tenant_id and ls.is_published\n");
+        sql.Append(predicates);
+        sql.Append("group by 1, 2");
+        return new BuiltQuery(sql.ToString(), parameters);
+    }
+
     private static void AddFilterPredicates(SearchQuery query, StringBuilder predicates, Dictionary<string, object?> parameters)
     {
         if (query.Kinds is { Count: > 0 } kinds)
         {
             predicates.Append("    and ls.kind = any(@kinds)\n");
             parameters["kinds"] = kinds.ToArray();
+        }
+
+        if (query.OrganisationId is { } organisation)
+        {
+            predicates.Append("    and ls.org_id = @org_id\n");
+            parameters["org_id"] = organisation;
+        }
+
+        if (query.ListingIds is { } listingIds)
+        {
+            // An empty list matches nothing, rather than everything.
+            predicates.Append("    and ls.listing_id = any(@listing_ids)\n");
+            parameters["listing_ids"] = listingIds.ToArray();
         }
 
         if (query.AllFacets is { Count: > 0 } all)

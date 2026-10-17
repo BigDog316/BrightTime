@@ -61,6 +61,18 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
         return Task.FromResult(new FinderPage(items, nextCursor));
     }
 
+    public Task<NeighbourhoodCounts> CountByNeighbourhoodAsync(SearchQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        List<ListingSearchRow> matched = [.. _rows.Where(r => r.IsPublished && query.TenantId == KettleCatalogue.TenantId && Matches(r, query))];
+        Dictionary<Guid, int> counts = matched
+            .Where(r => r.SiteId is not null && r.NeighbourhoodId is not null)
+            .GroupBy(r => r.NeighbourhoodId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.ListingId).Distinct().Count());
+        int online = matched.Where(r => r.SiteId is null).Select(r => r.ListingId).Distinct().Count();
+        return Task.FromResult(new NeighbourhoodCounts(counts, online));
+    }
+
     /// <summary>Nearest without an origin is relevance, matching the SQL builder.</summary>
     private static SearchSort EffectiveSort(SearchQuery query) =>
         query.Sort == SearchSort.Nearest ? SearchSort.Relevance : query.Sort;
@@ -68,6 +80,16 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
     private static bool Matches(ListingSearchRow row, SearchQuery query)
     {
         if (query.Kinds is { Count: > 0 } kinds && !kinds.Contains(row.Kind, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        if (query.OrganisationId is { } org && row.OrganisationId != org)
+        {
+            return false;
+        }
+
+        if (query.ListingIds is { } ids && !ids.Contains(row.ListingId))
         {
             return false;
         }
@@ -214,7 +236,8 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
             null,
             x.Score,
             RelevanceScorer.Explain(x.Features),
-            sortValue);
+            sortValue,
+            x.Row.NextDeadlineAt);
     }
 
     private static ListingKind ParseKind(string value) => value switch

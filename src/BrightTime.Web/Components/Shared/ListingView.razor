@@ -2,6 +2,8 @@
 @using BrightTime.Infrastructure.Tenancy
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.SharedKernel.Primitives
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Web.Finder
 @inject ITenantContext Tenant
 
 @* The listing as a family sees it. The public page and the organiser's preview both render
@@ -10,11 +12,33 @@
     <header>
         <p class="eyebrow">@T["listing.kind." + l.Kind.ToDbValue()]</p>
         <h1 id="listing-title" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Title</h1>
-        <p class="byline">@T.Format("listing.byline", ("organisation", Org))</p>
+        @if (OrganisationSlug is { } orgSlug)
+        {
+            <p class="byline">@T["listing.byline_before"] <a href="/organisations/@Uri.EscapeDataString(orgSlug)"><bdi>@l.OrganisationName</bdi></a></p>
+        }
+        else
+        {
+            <p class="byline">@T.Format("listing.byline", ("organisation", Org))</p>
+        }
         <p class="lead" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Summary</p>
         @if (l.IsMachineTranslated)
         {
             <p class="note">@T.Format("listing.machine_translated", ("language", LanguageInPage(l.PrimaryLanguage)))</p>
+        }
+        @if (ShowPublicLinks && HttpContext is not null)
+        {
+            @* A plain form: saving works without JavaScript, and the list stays on this device (D22). *@
+            <form method="post" action="@SavedListings.ChangePath" class="save-form">
+                <AntiforgeryToken />
+                <input type="hidden" name="listing" value="@l.Id.Value" />
+                <input type="hidden" name="action" value="@(IsSaved ? "remove" : "save")" />
+                <input type="hidden" name="returnUrl" value="@ReturnPath" />
+                <button type="submit" class="secondary-button" aria-pressed="@(IsSaved ? "true" : "false")">@T[IsSaved ? "saved.saved" : "saved.save"]</button>
+                @if (IsSaved)
+                {
+                    <a href="/saved">@T["saved.see_all"]</a>
+                }
+            </form>
         }
     </header>
 
@@ -170,6 +194,10 @@
                 {
                     <li>
                         <p class="place-name" dir="auto">@p.Name</p>
+                        @if (HoodCode(p) is { } hoodCode && p.NeighbourhoodName is { } hoodName)
+                        {
+                            <p class="note"><a href="/neighbourhoods/@hoodCode">@T.Format("org.more_in_area", ("area", Localisation.Text.Name(hoodName)))</a></p>
+                        }
                         @if (p.IsAddressPublic)
                         {
                             <address dir="auto">
@@ -252,6 +280,21 @@
 
     /// <summary>False for a preview: no calendar file or search link for a listing that is not public.</summary>
     [Parameter] public bool ShowPublicLinks { get; set; } = true;
+
+    /// <summary>The organisation's page, when it has one (approved organisations only).</summary>
+    [Parameter] public string? OrganisationSlug { get; set; }
+
+    /// <summary>Neighbourhood codes by id, for linking a place to its neighbourhood's page.</summary>
+    [Parameter] public IReadOnlyDictionary<Guid, string>? NeighbourhoodCodes { get; set; }
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private bool IsSaved => HttpContext is not null && SavedListings.Contains(HttpContext.Request, Listing.Id.Value);
+
+    private string ReturnPath => HttpContext is { } http ? http.Request.Path + http.Request.QueryString : "/saved";
+
+    private string? HoodCode(ListingPlace p) =>
+        p.NeighbourhoodId is { } id && NeighbourhoodCodes?.TryGetValue(id, out string? code) == true ? code : null;
 
     // Short, because the markup reads it on almost every line.
     private ListingDetail l => Listing;

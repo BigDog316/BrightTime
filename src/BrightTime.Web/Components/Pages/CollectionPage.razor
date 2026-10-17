@@ -1,0 +1,76 @@
+@page "/collections/{Slug}"
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Paging
+@inject ICurationQueries Curation
+@inject IListingFinder Finder
+@inject IOrganisationProfiles Organisations
+@inject ITenantContext Tenant
+@inject NavigationManager Navigation
+
+@if (_collection is { } c)
+{
+    <PageTitle>@c.Title · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/collections">@T["collections.title"]</a></p>
+    <h1 dir="auto" lang="@LangAttr">@c.Title</h1>
+    @if (c.Description is { Length: > 0 } description)
+    {
+        <p class="lead" dir="auto" lang="@LangAttr">@description</p>
+    }
+
+    @if (_items.Count == 0)
+    {
+        <p>@T["collections.empty"]</p>
+    }
+    else
+    {
+        <ol class="listing-list">
+            @foreach ((FinderItem item, string? note) in _items)
+            {
+                <li class="listing">
+                    <ListingCard Item="item" Lang="@Lang" ShowDeadline="true" Note="@note" NoteLang="@LangAttr"
+                                 Organisation="@_links.GetValueOrDefault(item.OrganisationId)" />
+                </li>
+            }
+        </ol>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "lang")] public string? Lang { get; set; }
+
+    private CollectionView? _collection;
+    private List<(FinderItem Item, string? Note)> _items = [];
+    private IReadOnlyDictionary<OrganisationId, OrganisationLink> _links = new Dictionary<OrganisationId, OrganisationLink>();
+
+    private string? LangAttr => _collection is { } c && c.ContentLanguage != T.Locale.Code ? c.ContentLanguage : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _collection = string.IsNullOrWhiteSpace(Slug) || Slug.Length > BrightTime.SharedKernel.Primitives.Slug.MaxLength
+            ? null
+            : await Curation.GetCollectionAsync(Slug, Tenant.Locale.Code);
+        if (_collection is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        // Through the finder, so only what is published appears, in the curator's order.
+        List<Guid> order = [.. _collection.Entries.Take(PageSize.Max).Select(e => e.ListingId)];
+        FinderPage found = await Finder.SearchAsync(new SearchQuery
+        {
+            TenantId = Tenant.TenantId.Value,
+            ListingIds = order,
+            PageSize = new PageSize(PageSize.Max),
+        });
+        Dictionary<Guid, FinderItem> byId = found.Items.ToDictionary(i => i.ListingId.Value);
+        _items = [.. _collection.Entries.Where(e => byId.ContainsKey(e.ListingId)).Select(e => (byId[e.ListingId], e.CuratorNote))];
+        _links = await Organisations.GetLinksAsync([.. _items.Select(i => i.Item.OrganisationId)]);
+    }
+}

@@ -12,6 +12,7 @@
     <Project Path="src/BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
     <Project Path="src/BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <Project Path="src/BrightTime.Seed/BrightTime.Seed.csproj" />
     <Project Path="src/BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
     <Project Path="src/BrightTime.Ui.Design/BrightTime.Ui.Design.csproj" />
     <Project Path="src/BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
@@ -25,6 +26,7 @@
     <Project Path="tests/BrightTime.Modules.Identity.Tests/BrightTime.Modules.Identity.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Opportunities.Tests/BrightTime.Modules.Opportunities.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Platform.Tests/BrightTime.Modules.Platform.Tests.csproj" />
+    <Project Path="tests/BrightTime.Seed.Tests/BrightTime.Seed.Tests.csproj" />
     <Project Path="tests/BrightTime.SharedKernel.Tests/BrightTime.SharedKernel.Tests.csproj" />
     <Project Path="tests/BrightTime.Web.Tests/BrightTime.Web.Tests.csproj" />
   </Folder>

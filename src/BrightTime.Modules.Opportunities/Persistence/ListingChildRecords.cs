@@ -51,3 +51,26 @@ public sealed class ListingDeadlineRecord
 
     public string? Label { get; set; }
 }
+
+/// <summary>A listing's title, summary and description in a locale other than its primary language.</summary>
+public sealed class ListingTranslationRecord
+{
+    public Guid ListingId { get; init; }
+
+    public required string Locale { get; init; }
+
+    public required string Title { get; set; }
+
+    public required string Summary { get; set; }
+
+    public string? Description { get; set; }
+
+    /// <summary>human, machine or machine_reviewed. Machine text is shown, and labelled as such.</summary>
+    public string TranslationSource { get; set; } = "human";
+
+    public DateTimeOffset TranslatedAt { get; set; }
+
+    public Guid? TranslatedBy { get; set; }
+
+    public DateTimeOffset? ReviewedAt { get; set; }
+}

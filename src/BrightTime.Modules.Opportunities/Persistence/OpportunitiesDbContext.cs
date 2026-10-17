@@ -36,6 +36,8 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<ListingDeadlineRecord> ListingDeadlines => Set<ListingDeadlineRecord>();
 
+    public DbSet<ListingTranslationRecord> ListingTranslations => Set<ListingTranslationRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -122,6 +124,13 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
             b.ToTable("listing_deadline");
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<ListingTranslationRecord>(b =>
+        {
+            b.ToTable("listing_translation");
+            b.HasKey(x => new { x.ListingId, x.Locale });
+            b.Property(x => x.TranslatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.ApplySnakeCaseNames();

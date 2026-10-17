@@ -17,9 +17,13 @@
     <article class="listing-detail" aria-labelledby="listing-title">
         <header>
             <p class="eyebrow">@KindLabel(l.Kind)</p>
-            <h1 id="listing-title" dir="auto">@l.Title</h1>
+            <h1 id="listing-title" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Title</h1>
             <p class="byline">From <bdi>@l.OrganisationName</bdi></p>
-            <p class="lead" dir="auto">@l.Summary</p>
+            <p class="lead" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Summary</p>
+            @if (l.IsMachineTranslated)
+            {
+                <p class="note">Translated automatically from @EnglishLanguageName(l.PrimaryLanguage). It may contain mistakes.</p>
+            }
         </header>
 
         <section aria-labelledby="glance-heading">
@@ -214,7 +218,7 @@
                    dir="auto": the provider may write in a different language from the page's. *@
                 @foreach (string paragraph in Paragraphs(description))
                 {
-                    <p dir="auto">@paragraph</p>
+                    <p dir="auto" lang="@LangAttr(l.DescriptionLanguage)">@paragraph</p>
                 }
             </section>
         }
@@ -243,6 +247,13 @@
             Navigation.NotFound();
         }
     }
+
+    /// <summary>
+    /// A lang attribute only where the content's language differs from the page's, so screen
+    /// readers switch voice for it and browsers pick the right fonts and hyphenation.
+    /// </summary>
+    private string? LangAttr(string language) =>
+        string.Equals(language, Tenant.Locale.Code, StringComparison.OrdinalIgnoreCase) ? null : language;
 
     private string LangSuffix => Lang is null ? "" : $"?lang={Uri.EscapeDataString(Lang)}";
 
@@ -331,6 +342,10 @@
         "document_submission" => "Documents due",
         _ => "Deadline",
     };
+
+    /// <summary>For a sentence in the (still English-only) interface text.</summary>
+    private static string EnglishLanguageName(string code) =>
+        Locale.TryFromCode(code, out Locale supported) ? supported.EnglishName : code;
 
     /// <summary>The language's own name for itself, which is how a speaker looks for it.</summary>
     private static string LanguageName(string code)

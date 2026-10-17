@@ -38,6 +38,21 @@ public sealed record ListingDetail
 
     public string? Description { get; init; }
 
+    /// <summary>
+    /// The language of <see cref="Title"/> and <see cref="Summary"/>: the visitor's when a
+    /// translation exists, otherwise the listing's own. The page marks it with <c>lang</c>.
+    /// </summary>
+    public string ContentLanguage { get; init; } = "en";
+
+    /// <summary>The language of <see cref="Description"/>, which a translation may lack.</summary>
+    public string DescriptionLanguage { get; init; } = "en";
+
+    /// <summary>The listing's own language, which the provider wrote in.</summary>
+    public string PrimaryLanguage { get; init; } = "en";
+
+    /// <summary>True when the text shown is an unreviewed machine translation; the page says so.</summary>
+    public bool IsMachineTranslated { get; init; }
+
     public required string OrganisationName { get; init; }
 
     public int? AgeMin { get; init; }

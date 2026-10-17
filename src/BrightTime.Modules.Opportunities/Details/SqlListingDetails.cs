@@ -52,8 +52,14 @@ public sealed class SqlListingDetails(
             }
 
             Guid id = listing.Id;
+            ListingTranslationRecord? translation = string.Equals(locale, listing.PrimaryLanguage, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : await db.ListingTranslations.AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.ListingId == id && t.Locale == locale, ct).ConfigureAwait(false);
+
             return new Loaded(
                 listing,
+                translation,
                 await db.ListingSites.AsNoTracking().Where(x => x.ListingId == id).Select(x => x.SiteId).ToListAsync(ct).ConfigureAwait(false),
                 await db.ListingTerms.AsNoTracking().Where(x => x.ListingId == id).Select(x => x.TermId).ToListAsync(ct).ConfigureAwait(false),
                 await db.ListingAccommodations.AsNoTracking().Where(x => x.ListingId == id).Select(x => x.TermId).ToListAsync(ct).ConfigureAwait(false),
@@ -76,6 +82,8 @@ public sealed class SqlListingDetails(
         }
 
         ListingRecord l = loaded.Listing;
+        ListingTranslationRecord? tr = loaded.Translation;
+        string contentLanguage = tr?.Locale ?? l.PrimaryLanguage;
 
         IReadOnlyList<SiteSummary> sites = await directory.GetSitesAsync(loaded.SiteIds, cancellationToken).ConfigureAwait(false);
         string organisationName = await directory
@@ -96,9 +104,15 @@ public sealed class SqlListingDetails(
             Id = new ListingId(l.Id),
             Slug = l.Slug,
             Kind = ParseKind(l.Kind),
-            Title = l.Title,
-            Summary = l.Summary,
-            Description = l.Description,
+            Title = tr?.Title ?? l.Title,
+            Summary = tr?.Summary ?? l.Summary,
+
+            // A translation without a description falls back to the original, marked as such.
+            Description = tr?.Description ?? l.Description,
+            ContentLanguage = contentLanguage,
+            DescriptionLanguage = tr?.Description is not null ? contentLanguage : l.PrimaryLanguage,
+            PrimaryLanguage = l.PrimaryLanguage,
+            IsMachineTranslated = tr is { TranslationSource: "machine" },
             OrganisationName = organisationName,
             AgeMin = l.AgeMin,
             AgeMax = l.AgeMax,
@@ -138,6 +152,7 @@ public sealed class SqlListingDetails(
 
     private sealed record Loaded(
         ListingRecord Listing,
+        ListingTranslationRecord? Translation,
         IReadOnlyList<Guid> SiteIds,
         IReadOnlyList<Guid> TermIds,
         IReadOnlyList<Guid> AccommodationTermIds,

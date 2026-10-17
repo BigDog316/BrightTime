@@ -139,6 +139,9 @@ services:
       ConnectionStrings__BrightTime: >-
         Host=postgres;Database=brighttime;Username=brighttime_app;Password=local-only-not-a-secret
       Api__BaseUrl: http://api:8080
+      # nginx has no fixed address on the compose network, so trust the network. In
+      # production, list the proxy's address in Network__TrustedProxies__0 instead.
+      Network__TrustedNetworks__0: 172.16.0.0/12
     depends_on:
       postgres:
         condition: service_healthy

@@ -12,10 +12,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddClientNetwork(builder.Configuration);
 builder.Services.AddBrightTimeFinder(builder.Configuration);
 builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
+
+// First: everything after it, from HTTPS redirection to the rate limiter, needs the real
+// client address and scheme rather than the reverse proxy's.
+app.UseClientNetwork();
 
 if (!app.Environment.IsDevelopment())
 {

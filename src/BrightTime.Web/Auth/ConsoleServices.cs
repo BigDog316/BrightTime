@@ -131,15 +131,39 @@ public static class ConsoleServices
         }
 
         // T21: every authentication route is rate limited per client address, on top of the
-        // per-account lockout, so guessing across many accounts is slowed too.
+        // per-account lockout, so guessing across many accounts is slowed too. The address is
+        // the real client's behind a trusted proxy; see ClientNetwork.
         int perMinute = Math.Max(1, auth.SignInAttemptsPerMinute);
         services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            // Say what happened. Left empty, a 429 is re-executed through the not-found page:
+            // "the content does not exist", or a 400 when the re-executed POST lacks a token.
+            o.OnRejected = async (rejected, cancellationToken) =>
+            {
+                HttpContext http = rejected.HttpContext;
+                if (http.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>() is { } pages)
+                {
+                    pages.Enabled = false;
+                }
+
+                http.Response.Headers.RetryAfter = "60";
+                const string message = "Too many attempts. Wait a minute and try again.";
+                if (http.Request.HasJsonContentType())
+                {
+                    await http.Response.WriteAsJsonAsync(new { error = message }, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    http.Response.ContentType = "text/plain; charset=utf-8";
+                    await http.Response.WriteAsync(message, cancellationToken).ConfigureAwait(false);
+                }
+            };
             o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
                 HttpMethods.IsPost(http.Request.Method) && IsAuthenticationPath(http.Request.Path)
                     ? RateLimitPartition.GetFixedWindowLimiter(
-                        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
                         _ => new FixedWindowRateLimiterOptions { PermitLimit = perMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })
                     : RateLimitPartition.GetNoLimiter("unlimited"));
         });

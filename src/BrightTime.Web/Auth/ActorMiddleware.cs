@@ -23,7 +23,15 @@ public sealed class ActorMiddleware(RequestDelegate next)
         {
             if (context.User.GetTenantId() != tenant.TenantId.Value || context.User.GetUserId() is not { } user)
             {
+                // With a body, so it is not re-executed as "not found".
+                if (context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>() is { } pages)
+                {
+                    pages.Enabled = false;
+                }
+
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "text/plain; charset=utf-8";
+                await context.Response.WriteAsync("This session belongs to a different site. Sign out and sign in again.").ConfigureAwait(false);
                 return;
             }
 

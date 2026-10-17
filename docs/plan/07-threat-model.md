@@ -297,9 +297,20 @@ timing difference.
   - An external-only account sets a password first: `prompt=login` re-authentication is
     honoured unevenly by providers.
 
+*Implemented: the client address behind the proxy.*
+- **Trust:** `X-Forwarded-For` and `X-Forwarded-Proto` are believed only from proxies in
+  `Network:TrustedProxies` or `Network:TrustedNetworks`.
+  - Only the right-most `ForwardLimit` entries are read, which a trusted hop appended
+    itself.
+  - With nothing configured, forwarded headers are off, because the middleware reads empty
+    trust lists as "trust everyone".
+  - A one-time warning names a peer whose forwarded headers were ignored.
+- **Rate-limit key:** the IPv4 address, or the IPv6 /64, so a host cannot rotate through its
+  prefix for a fresh allowance.
+- **Rejections:** they carry `Retry-After` and a message, and are not re-executed through the
+  not-found page, which had turned them into "does not exist" or a 400.
+
 - **Still open:**
-  - behind nginx, rate limiting needs forwarded-headers configuration, or every client
-    shares the proxy's address;
   - applying step-up to consent, guardian verification and export when those exist;
   - passkeys for youth onboarding (M2);
   - the mobile token flow.

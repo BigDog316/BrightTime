@@ -24,6 +24,15 @@ public static class BrightTimeClaims
 
     public const string Locale = "brighttime:locale";
 
+    /// <summary>
+    /// When the person last proved who they are, in Unix seconds (the OpenID Connect claim
+    /// name). Set at sign-in and at step-up; kept, not reset, when the cookie is revalidated.
+    /// </summary>
+    public const string AuthTime = "auth_time";
+
+    /// <summary>How they proved it: one of <see cref="AuthenticationMethods"/>.</summary>
+    public const string AuthMethod = "brighttime:amr";
+
     public static string FormatMembership(Guid organisationId, string orgRole) =>
         $"{organisationId:D}:{orgRole}";
 

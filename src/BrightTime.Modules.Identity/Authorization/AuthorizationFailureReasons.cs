@@ -33,6 +33,7 @@ public static class AuthorizationFailureReasons
     public const string ClearanceExpired = "clearance.expired";
     public const string ContactRestricted = "contact.restricted";
     public const string ReasonRequired = "audit.reason_required";
+    public const string StepUpRequired = "authentication.step_up_required";
 
     public static AuthorizationFailureReason For(IAuthorizationHandler handler, string code, string message)
     {

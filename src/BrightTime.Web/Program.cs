@@ -65,6 +65,7 @@ if (app.Services.GetRequiredService<ConsoleAvailability>().CanSignIn)
 {
     app.MapBrightTimePasskeys();
     app.MapExternalSignIn();
+    app.MapStepUp();
 }
 
 app.MapRazorComponents<App>()

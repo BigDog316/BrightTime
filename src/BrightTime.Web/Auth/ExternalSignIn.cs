@@ -5,6 +5,7 @@ using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Time;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -136,14 +137,15 @@ public static partial class ExternalSignIn
             }
 
             return Challenge(provider, link: user, returnUrl: null);
-        }).RequireAuthorization();
+        }).RequireAuthorization(StepUp.Policy);
 
         endpoints.MapGet(FinishPath, async (
             HttpContext http,
             ITenantContext tenant,
             IOptions<AuthOptions> options,
             ExternalLogins logins,
-            BrightTimePrincipalFactory factory) =>
+            BrightTimePrincipalFactory factory,
+            IClock clock) =>
         {
             AuthenticateResult external = await http.AuthenticateAsync(ExternalScheme).ConfigureAwait(false);
             await http.SignOutAsync(ExternalScheme).ConfigureAwait(false);
@@ -177,7 +179,7 @@ public static partial class ExternalSignIn
 
             UserId? user = await logins.FindAsync(tenant.TenantId, issuer, sub.Value, http.RequestAborted).ConfigureAwait(false);
             ClaimsPrincipal? principal = user is { } id
-                ? await factory.CreateAsync(tenant.TenantId, id, http.RequestAborted).ConfigureAwait(false)
+                ? await factory.CreateAsync(tenant.TenantId, id, new AuthenticationEvent(AuthenticationMethods.External, clock.UtcNow), http.RequestAborted).ConfigureAwait(false)
                 : null;
             if (principal is null)
             {

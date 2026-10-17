@@ -3,7 +3,8 @@
 @using BrightTime.Modules.Identity.SignIn
 @using BrightTime.SharedKernel.Ids
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize]
+@* Changing how the account signs in is a step-up action (T21): the page itself needs a recent confirmation. *@
+@attribute [Authorize(Policy = BrightTime.Web.Auth.StepUp.Policy)]
 @inherits ConsoleComponent
 
 <PageTitle>Sign-in and security · BrightTime</PageTitle>

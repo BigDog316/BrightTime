@@ -46,14 +46,37 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
     private const int RandomBytes = 32;
 
     /// <summary>The account the email and password belong to, or null for any failure at all.</summary>
-    public async Task<UserId?> CheckPasswordAsync(TenantId tenant, string email, string password, CancellationToken cancellationToken = default)
+    public Task<UserId?> CheckPasswordAsync(TenantId tenant, string email, string password, CancellationToken cancellationToken = default) =>
+        CheckAsync(tenant, (c, tx, ct) => FindByEmailAsync(c, tx, email, ct), password, cancellationToken);
+
+    /// <summary>
+    /// Step-up: whether this signed-in account's own password is the one given. Failures count
+    /// toward the same lockout as sign-in, so a borrowed session cannot be used to guess it.
+    /// </summary>
+    public async Task<bool> ConfirmPasswordAsync(TenantId tenant, UserId user, string password, CancellationToken cancellationToken = default) =>
+        await CheckAsync(tenant, (c, tx, ct) => FindByIdAsync(c, tx, user.Value, ct), password, cancellationToken).ConfigureAwait(false) == user;
+
+    /// <summary>Whether the account has a password at all, so step-up knows what to offer.</summary>
+    public async Task<bool> HasPasswordAsync(TenantId tenant, UserId user, CancellationToken cancellationToken = default)
+    {
+        await using NpgsqlConnection connection = await authDataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using NpgsqlTransaction tx = await BeginAsync(connection, tenant, cancellationToken).ConfigureAwait(false);
+        return await ScalarAsync<bool>(connection, tx,
+            "select password_hash is not null from identity.app_user where id = @id", cancellationToken, ("id", user.Value)).ConfigureAwait(false);
+    }
+
+    private async Task<UserId?> CheckAsync(
+        TenantId tenant,
+        Func<NpgsqlConnection, NpgsqlTransaction, CancellationToken, Task<Account?>> find,
+        string password,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(password);
 
         await using NpgsqlConnection connection = await authDataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using NpgsqlTransaction tx = await BeginAsync(connection, tenant, cancellationToken).ConfigureAwait(false);
 
-        Account? account = await FindByEmailAsync(connection, tx, email, cancellationToken).ConfigureAwait(false);
+        Account? account = await find(connection, tx, cancellationToken).ConfigureAwait(false);
         DateTimeOffset now = clock.UtcNow;
 
         if (account is null || !account.CanSignIn || account.LockoutEnd > now)
@@ -213,6 +236,9 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
         return tx;
     }
 
+    private const string AccountColumns =
+        "select id, email::text, password_hash, status, account_kind, locale, access_failed_count, lockout_end, lockout_enabled from identity.app_user";
+
     private static async Task<Account?> FindByEmailAsync(NpgsqlConnection connection, NpgsqlTransaction tx, string email, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -220,14 +246,20 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
             return null;
         }
 
-        await using NpgsqlCommand command = new(
-            """
-            select id, email::text, password_hash, status, account_kind, locale, access_failed_count, lockout_end, lockout_enabled
-              from identity.app_user
-             where normalized_email = upper(btrim(@email)) and deleted_at is null
-               for update
-            """, connection, tx);
-        command.Parameters.Add(new NpgsqlParameter("email", email));
+        return await ReadAccountAsync(connection, tx,
+            AccountColumns + " where normalized_email = upper(btrim(@key)) and deleted_at is null for update", email, ct).ConfigureAwait(false);
+    }
+
+    private static Task<Account?> FindByIdAsync(NpgsqlConnection connection, NpgsqlTransaction tx, Guid id, CancellationToken ct) =>
+        ReadAccountAsync(connection, tx, AccountColumns + " where id = @key and deleted_at is null for update", id, ct);
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Both statements are constants in this class; the key is a bound parameter.")]
+    private static async Task<Account?> ReadAccountAsync(NpgsqlConnection connection, NpgsqlTransaction tx, string sql, object key, CancellationToken ct)
+    {
+        await using NpgsqlCommand command = new(sql, connection, tx);
+        command.Parameters.Add(new NpgsqlParameter("key", key));
 
         await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false))

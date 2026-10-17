@@ -30,6 +30,9 @@ public sealed class AuthOptions
     /// </summary>
     public bool CheckBreachedPasswords { get; set; }
 
+    /// <summary>How recently a person must have proved who they are for a step-up action (T21).</summary>
+    public int StepUpMinutes { get; set; } = 10;
+
     /// <summary>Sign-in, forgot-password and reset submissions allowed per client address per minute.</summary>
     public int SignInAttemptsPerMinute { get; set; } = 10;
 

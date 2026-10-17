@@ -24,8 +24,14 @@ public sealed class BrightTimePrincipalFactory(AccountReader accounts, IDirector
     public const string StampClaim = "brighttime:stamp";
 
     /// <summary>The principal for an active account in this tenant, or null for anything else.</summary>
-    public async Task<ClaimsPrincipal?> CreateAsync(TenantId tenant, UserId user, CancellationToken cancellationToken = default)
+    public async Task<ClaimsPrincipal?> CreateAsync(
+        TenantId tenant,
+        UserId user,
+        AuthenticationEvent authenticated,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(authenticated);
+
         AccountSnapshot? account = await accounts.GetAsync(tenant, user, cancellationToken).ConfigureAwait(false);
         if (account is null || !account.IsActive || account.TenantId != tenant)
         {
@@ -42,6 +48,8 @@ public sealed class BrightTimePrincipalFactory(AccountReader accounts, IDirector
             new(BrightTimeClaims.TenantId, tenant.Value.ToString("D")),
             new(BrightTimeClaims.AccountKind, account.AccountKind),
             new(StampClaim, account.SecurityStamp),
+            new(BrightTimeClaims.AuthTime, authenticated.At.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new(BrightTimeClaims.AuthMethod, authenticated.Method),
             .. account.Roles.Select(r => new Claim(ClaimTypes.Role, r)),
             .. account.Permissions.Select(p => new Claim(BrightTimeClaims.Permission, p)),
             .. memberships.Select(m => new Claim(
@@ -55,5 +63,22 @@ public sealed class BrightTimePrincipalFactory(AccountReader accounts, IDirector
         }
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, AuthenticationType, ClaimTypes.Name, ClaimTypes.Role));
+    }
+}
+
+/// <summary>
+/// When and how someone proved who they are. A fresh sign-in or a step-up makes a new one; a
+/// cookie revalidation carries the old one forward, so refreshing a session never counts as
+/// authenticating again.
+/// </summary>
+public sealed record AuthenticationEvent(string Method, DateTimeOffset At)
+{
+    /// <summary>The event a principal carries, or one so old it satisfies no step-up.</summary>
+    public static AuthenticationEvent From(ClaimsPrincipal principal)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+        return new AuthenticationEvent(
+            principal.GetAuthenticationMethod() ?? "unknown",
+            principal.GetAuthenticatedAt() ?? DateTimeOffset.UnixEpoch);
     }
 }

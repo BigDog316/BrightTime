@@ -67,8 +67,12 @@ public static class ConsoleServices
 
         services.AddAuthorizationBuilder()
             .AddPolicy(ReviewPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Listings.Review)))
-            .AddPolicy(VetPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Organisations.Vet)));
+            .AddPolicy(VetPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Organisations.Vet)))
+            .AddPolicy(StepUp.Policy, p => p.RequireAuthenticatedUser()
+                .AddRequirements(new RecentAuthenticationRequirement(TimeSpan.FromMinutes(Math.Max(1, auth.StepUpMinutes)))));
         services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
+        services.AddSingleton<IAuthorizationHandler, RecentAuthenticationHandler>();
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, StepUpResultHandler>();
         services.AddSingleton<IAuthorizationHandler, OrganisationScopeHandler>();
 
         if (canSignIn)
@@ -174,7 +178,8 @@ public static class ConsoleServices
                 HttpContext http,
                 IAntiforgery antiforgery,
                 ITenantContext tenant,
-                BrightTimePrincipalFactory factory) =>
+                BrightTimePrincipalFactory factory,
+                IClock clock) =>
             {
                 if (!await IsValidPostAsync(http, antiforgery).ConfigureAwait(false))
                 {
@@ -188,7 +193,8 @@ public static class ConsoleServices
                 }
 
                 string? returnUrl = form["returnUrl"];
-                ClaimsPrincipal? principal = await factory.CreateAsync(tenant.TenantId, new UserId(userId), http.RequestAborted).ConfigureAwait(false);
+                ClaimsPrincipal? principal = await factory.CreateAsync(
+                    tenant.TenantId, new UserId(userId), new AuthenticationEvent(AuthenticationMethods.Development, clock.UtcNow), http.RequestAborted).ConfigureAwait(false);
                 if (principal is null)
                 {
                     return Results.BadRequest("That account cannot sign in.");
@@ -208,6 +214,7 @@ public static class ConsoleServices
         PasskeyEndpoints.SignInOptionsPath, PasskeyEndpoints.SignInPath,
         PasskeyEndpoints.RegisterOptionsPath, PasskeyEndpoints.RegisterPath,
         ExternalSignIn.StartPath, ExternalSignIn.LinkPath,
+        StepUp.ConfirmPage, StepUp.PasskeyOptionsPath, StepUp.PasskeyPath,
     ];
 
     private static bool IsAuthenticationPath(PathString path) =>
@@ -273,7 +280,7 @@ public static class ConsoleServices
         BrightTimePrincipalFactory? factory = context.HttpContext.RequestServices.GetService<BrightTimePrincipalFactory>();
         ClaimsPrincipal? fresh = factory is null
             ? null
-            : await factory.CreateAsync(tenant.TenantId, new UserId(userId), context.HttpContext.RequestAborted).ConfigureAwait(false);
+            : await factory.CreateAsync(tenant.TenantId, new UserId(userId), AuthenticationEvent.From(current), context.HttpContext.RequestAborted).ConfigureAwait(false);
 
         if (fresh is null
             || fresh.FindFirstValue(BrightTimePrincipalFactory.StampClaim) != current.FindFirstValue(BrightTimePrincipalFactory.StampClaim))

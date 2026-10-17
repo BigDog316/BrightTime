@@ -5,6 +5,7 @@ using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Time;
 using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -53,7 +54,7 @@ public static class PasskeyEndpoints
                 tenant.TenantId, new UserId(user), http.User.Identity?.Name ?? "BrightTime account", http.RequestAborted).ConfigureAwait(false);
             Remember(http, RegisterPurpose(user), options.ToJson());
             return Results.Content(options.ToJson(), "application/json");
-        }).RequireAuthorization();
+        }).RequireAuthorization(StepUp.Policy);
 
         endpoints.MapPost(RegisterPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant) =>
         {
@@ -73,7 +74,7 @@ public static class PasskeyEndpoints
             Result result = await passkeys.CompleteRegistrationAsync(
                 tenant.TenantId, new UserId(user), CredentialCreateOptions.FromJson(remembered), response, name, http.RequestAborted).ConfigureAwait(false);
             return result.IsSuccess ? Results.Ok(new { ok = true }) : Problem(result.Error!.Message);
-        }).RequireAuthorization();
+        }).RequireAuthorization(StepUp.Policy);
 
         endpoints.MapPost(SignInOptionsPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys) =>
         {
@@ -92,7 +93,8 @@ public static class PasskeyEndpoints
             IAntiforgery antiforgery,
             Passkeys passkeys,
             ITenantContext tenant,
-            BrightTimePrincipalFactory factory) =>
+            BrightTimePrincipalFactory factory,
+            IClock clock) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false))
             {
@@ -110,7 +112,7 @@ public static class PasskeyEndpoints
             UserId? user = await passkeys.CompleteSignInAsync(
                 tenant.TenantId, AssertionOptions.FromJson(remembered), response, http.RequestAborted).ConfigureAwait(false);
             ClaimsPrincipal? principal = user is { } id
-                ? await factory.CreateAsync(tenant.TenantId, id, http.RequestAborted).ConfigureAwait(false)
+                ? await factory.CreateAsync(tenant.TenantId, id, new AuthenticationEvent(AuthenticationMethods.Passkey, clock.UtcNow), http.RequestAborted).ConfigureAwait(false)
                 : null;
             if (principal is null)
             {

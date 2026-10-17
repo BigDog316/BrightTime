@@ -36,6 +36,11 @@
             body: JSON.stringify(body ?? {}),
         });
         const data = await response.json().catch(() => ({}));
+        if (response.status === 403 && data.confirm) {
+            // Step-up: confirm it's you, then come back.
+            location.assign(data.confirm);
+            throw new Error("Confirm it's you to continue.");
+        }
         if (!response.ok) {
             throw new Error(data.error ?? (response.status === 429
                 ? "Too many attempts. Wait a minute and try again."
@@ -92,6 +97,30 @@
         location.assign(result.redirect);
     }
 
+    async function confirm(button) {
+        const options = await post("/account/confirm/passkey/options");
+        options.challenge = fromBase64Url(options.challenge);
+        options.allowCredentials = (options.allowCredentials ?? []).map((c) => ({ ...c, id: fromBase64Url(c.id) }));
+
+        const credential = await navigator.credentials.get({ publicKey: options });
+        const result = await post("/account/confirm/passkey", {
+            returnUrl: button.dataset.returnUrl ?? null,
+            credential: {
+                id: credential.id,
+                rawId: toBase64Url(credential.rawId),
+                type: credential.type,
+                response: {
+                    authenticatorData: toBase64Url(credential.response.authenticatorData),
+                    clientDataJSON: toBase64Url(credential.response.clientDataJSON),
+                    signature: toBase64Url(credential.response.signature),
+                    userHandle: credential.response.userHandle ? toBase64Url(credential.response.userHandle) : null,
+                },
+                clientExtensionResults: credential.getClientExtensionResults?.() ?? {},
+            },
+        });
+        location.assign(result.redirect);
+    }
+
     function report(button, message) {
         const target = document.getElementById(button.dataset.errorTarget ?? "passkey-error");
         if (target) {
@@ -112,6 +141,8 @@
         try {
             if (button.dataset.passkeyAction === "register") {
                 await register();
+            } else if (button.dataset.passkeyAction === "confirm") {
+                await confirm(button);
             } else {
                 await signIn(button);
             }

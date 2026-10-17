@@ -1,0 +1,117 @@
+@page "/account/confirm"
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+<PageTitle>Confirm it's you · BrightTime</PageTitle>
+
+<h1>Confirm it's you</h1>
+
+<p>
+    You're signed in as <strong>@User.Identity?.Name</strong>. This next step changes how your account is protected,
+    so we need to check it's really you first.
+</p>
+
+@if (_failed)
+{
+    <p class="notice error" role="alert" id="confirm-error">
+        That password isn't right. After five wrong tries the account is locked for 15 minutes.
+    </p>
+}
+
+@if (_hasPasskeys)
+{
+    <section class="needs-webauthn" aria-labelledby="confirm-passkey-heading">
+        <h2 id="confirm-passkey-heading" class="visually-hidden">Confirm with a passkey</h2>
+        <p class="notice error" id="passkey-error" role="alert" tabindex="-1" hidden></p>
+        <button type="button" data-passkey-action="confirm" data-return-url="@ReturnUrl">Confirm with a passkey</button>
+    </section>
+}
+
+@if (_hasPassword)
+{
+    @if (_hasPasskeys)
+    {
+        <p class="or-divider needs-webauthn">Or use your password:</p>
+    }
+    <form method="post" class="editor sign-in" @formname="confirm-password" @onsubmit="ConfirmPasswordAsync">
+        <AntiforgeryToken />
+        @* For password managers: which account this password is for. *@
+        <input type="email" name="username" autocomplete="username" value="@User.Identity?.Name" hidden readonly />
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required
+                   aria-describedby="@(_failed ? "confirm-error" : null)" />
+        </div>
+        <div class="actions">
+            <button type="submit">Confirm</button>
+        </div>
+    </form>
+}
+else if (!_hasPasskeys)
+{
+    <p>
+        Your account has no password or passkey to confirm with. <a href="/account/forgot">Set a password</a> (we'll email
+        you a link), then come back here.
+    </p>
+}
+
+@if (Availability.DevelopmentSignIn)
+{
+    <form method="post" @formname="confirm-development" @onsubmit="ConfirmDevelopmentAsync">
+        <AntiforgeryToken />
+        <p class="note">Development site: <button type="submit" class="link-button">confirm without a password</button>.</p>
+    </form>
+}
+
+@if (!_hasPassword)
+{
+    @* The passkey script reads the antiforgery token from the page. *@
+    <AntiforgeryToken />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private bool _hasPassword;
+    private bool _hasPasskeys;
+    private bool _failed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.CanSignIn)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _hasPassword = await Get<PasswordAccounts>().HasPasswordAsync(Tenant.TenantId, Actor);
+        _hasPasskeys = await Get<Passkeys>().HasPasskeysAsync(Tenant.TenantId, Actor);
+    }
+
+    private async Task ConfirmPasswordAsync()
+    {
+        bool confirmed = await Get<PasswordAccounts>().ConfirmPasswordAsync(Tenant.TenantId, Actor, FormValue("password"), HttpContext.RequestAborted);
+        if (!confirmed || !await StepUp.ReissueAsync(HttpContext, AuthenticationMethods.Password))
+        {
+            _failed = true;
+            return;
+        }
+
+        Navigation.NavigateTo(ConsoleServices.LocalReturnPath(ReturnUrl, User));
+    }
+
+    private async Task ConfirmDevelopmentAsync()
+    {
+        // Development only (D14); the form is not rendered, and this refuses, anywhere else.
+        if (!Availability.DevelopmentSignIn || !await StepUp.ReissueAsync(HttpContext, AuthenticationMethods.Development))
+        {
+            return;
+        }
+
+        Navigation.NavigateTo(ConsoleServices.LocalReturnPath(ReturnUrl, User));
+    }
+}

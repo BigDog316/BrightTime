@@ -42,19 +42,7 @@ public sealed class Passkeys(IFido2 fido2, NpgsqlDataSource authDataSource, IClo
     /// <summary>Registration options for a signed-in account, excluding the passkeys it already has.</summary>
     public async Task<CredentialCreateOptions> BeginRegistrationAsync(TenantId tenant, UserId user, string userName, CancellationToken cancellationToken = default)
     {
-        List<byte[]> existing = [];
-        await using (NpgsqlConnection connection = await authDataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false))
-        {
-            await using NpgsqlTransaction tx = await BeginAsync(connection, tenant, cancellationToken).ConfigureAwait(false);
-            await using NpgsqlCommand command = new(
-                "select credential_id from identity.user_credential where user_id = @u and revoked_at is null", connection, tx);
-            command.Parameters.Add(new NpgsqlParameter("u", user.Value));
-            await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                existing.Add(await reader.GetFieldValueAsync<byte[]>(0, cancellationToken).ConfigureAwait(false));
-            }
-        }
+        IReadOnlyList<byte[]> existing = await CredentialIdsAsync(tenant, user, cancellationToken).ConfigureAwait(false);
 
         return fido2.RequestNewCredential(new RequestNewCredentialParams
         {
@@ -147,6 +135,40 @@ public sealed class Passkeys(IFido2 fido2, NpgsqlDataSource authDataSource, IClo
 
         await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Step-up options: only this account's passkeys are allowed, and the caller still checks
+    /// that the answer came from this account.
+    /// </summary>
+    public async Task<AssertionOptions> BeginConfirmAsync(TenantId tenant, UserId user, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<byte[]> ids = await CredentialIdsAsync(tenant, user, cancellationToken).ConfigureAwait(false);
+        return fido2.GetAssertionOptions(new GetAssertionOptionsParams
+        {
+            AllowedCredentials = [.. ids.Select(id => new PublicKeyCredentialDescriptor(id))],
+            UserVerification = UserVerificationRequirement.Required,
+        });
+    }
+
+    public async Task<bool> HasPasskeysAsync(TenantId tenant, UserId user, CancellationToken cancellationToken = default) =>
+        (await CredentialIdsAsync(tenant, user, cancellationToken).ConfigureAwait(false)).Count > 0;
+
+    private async Task<IReadOnlyList<byte[]>> CredentialIdsAsync(TenantId tenant, UserId user, CancellationToken ct)
+    {
+        List<byte[]> ids = [];
+        await using NpgsqlConnection connection = await authDataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using NpgsqlTransaction tx = await BeginAsync(connection, tenant, ct).ConfigureAwait(false);
+        await using NpgsqlCommand command = new(
+            "select credential_id from identity.user_credential where user_id = @u and revoked_at is null", connection, tx);
+        command.Parameters.Add(new NpgsqlParameter("u", user.Value));
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            ids.Add(await reader.GetFieldValueAsync<byte[]>(0, ct).ConfigureAwait(false));
+        }
+
+        return ids;
     }
 
     /// <summary>Sign-in options: any of the person's passkeys, chosen by their device.</summary>

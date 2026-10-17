@@ -1,5 +1,6 @@
 @page "/sign-in"
 @using System.Security.Claims
+@using BrightTime.Modules.Identity.Authorization
 @using BrightTime.Modules.Identity.SignIn
 @using BrightTime.SharedKernel.Ids
 @using BrightTime.Web.Auth
@@ -129,7 +130,8 @@ else
 
         UserId? user = await Get<PasswordAccounts>().CheckPasswordAsync(Tenant.TenantId, _email, password, HttpContext.RequestAborted);
         ClaimsPrincipal? principal = user is { } id
-            ? await Get<BrightTimePrincipalFactory>().CreateAsync(Tenant.TenantId, id, HttpContext.RequestAborted)
+            ? await Get<BrightTimePrincipalFactory>().CreateAsync(
+                Tenant.TenantId, id, new AuthenticationEvent(AuthenticationMethods.Password, Get<BrightTime.SharedKernel.Time.IClock>().UtcNow), HttpContext.RequestAborted)
             : null;
 
         if (principal is null)

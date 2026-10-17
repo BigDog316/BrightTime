@@ -280,10 +280,27 @@ timing difference.
   BrightTime accounts.
 - **Callback carried to another browser:** fails on the correlation cookie.
 
+*Implemented: step-up.*
+- **Session claims:** the session carries `auth_time` and how the person authenticated.
+  Cookie revalidation keeps them, so refreshing a session never counts as authenticating.
+- **The policy:** `RecentAuthenticationRequirement` (`StepUp.Policy`, 10 minutes by
+  default, `Auth:StepUpMinutes`).
+  - Applied today to the account security page and its actions: adding or removing a
+    passkey, and connecting or disconnecting an external account.
+  - Consent grants, guardian verification and youth-record export should declare the same
+    policy as they are built.
+- **Failure handling:** a page request is redirected to `/account/confirm` and returned
+  afterwards. A script call gets a 403 naming the confirm page.
+- **Confirming:**
+  - with the account's own password, which shares sign-in's lockout;
+  - or with one of its own passkeys; another account's passkey is refused.
+  - An external-only account sets a password first: `prompt=login` re-authentication is
+    honoured unevenly by providers.
+
 - **Still open:**
   - behind nginx, rate limiting needs forwarded-headers configuration, or every client
     shares the proxy's address;
-  - step-up authentication for consent, guardian verification and export;
+  - applying step-up to consent, guardian verification and export when those exist;
   - passkeys for youth onboarding (M2);
   - the mobile token flow.
 

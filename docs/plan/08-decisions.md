@@ -208,7 +208,7 @@ D4 and T7 for one table. That is a judgement about risk, and it is yours.
 - Measured result: every finder scenario now uses an index. Figures are in
   `03-indexing-and-query-plans.md`.
 
-### D14 — Development sign-in until Identity sign-in exists (**decided by me, review it**)
+### D14 — Development sign-in until Identity sign-in exists (**accepted 2026-10-17**)
 
 The provider console and the review queue need a signed-in person with permissions and
 organisation memberships; nothing signs anyone in yet. Building ASP.NET Core Identity
@@ -237,7 +237,37 @@ the reset flow.
 *Update (passkeys implemented).* A signed-in person adds passkeys at `/account/security` and
 signs in with one from `/sign-in`, through the same factory. External OIDC followed; see D17.
 
-### D17 — External sign-in signs in; it never creates or matches accounts (**decided by me, review it**)
+### D15 — Edits to a published listing go live and are reviewed after (**accepted 2026-10-17**)
+
+`ListingLifecycle` gates first publication (a provider submits, an organiser publishes) but
+said nothing about editing a listing that is already live. Re-review before the change shows
+would pull a running program off the site, or freeze a corrected time, for as long as the
+queue takes. So:
+
+- An approved organisation's edit to a published listing is saved and projected at once.
+- The listing then appears in the review queue's **Changed since review** lane
+  (`updated_at > reviewed_at`). The organiser marks it reviewed, or unpublishes it with a
+  reason the provider sees.
+- A listing is never published without an organiser having seen it once.
+
+The side-by-side diff in the screen inventory needs stored revisions; until those exist,
+the lane shows the current version and when it changed.
+
+*Accepted as is for now.* The long-term direction is stored revisions: the published version
+stays live while an edited revision is reviewed, which is what the review queue's
+side-by-side diff needs. That is a later slice: a revision table, editor changes and the diff
+view.
+
+### D16 — Consoles are server-rendered forms, not interactive components (**accepted 2026-10-17**)
+
+The screen inventory marks the provider and organiser consoles "Interactive". They are
+built as static server-rendered forms (GET pages, POST with antiforgery), like the finder.
+They work without JavaScript, every action is a plain HTTP round trip that the tests drive
+directly, and there is no circuit to hold per editor. The schedule preview is a
+server round trip ("Preview sessions") rather than live. Interactivity can be layered on
+where it earns its keep.
+
+### D17 — External sign-in signs in; it never creates or matches accounts (**accepted 2026-10-17**)
 
 Any number of OpenID Connect providers can be configured under `Auth:External:<name>`
 (Google, Microsoft Entra for a district, and so on). Each is an authorization-code flow with
@@ -267,32 +297,7 @@ The rules around it:
 Providers are deployment-wide configuration for now. Per-tenant providers, such as each
 district's own Entra, arrive with host-based tenant resolution.
 
-### D15 — Edits to a published listing go live and are reviewed after (**decided by me, review it**)
-
-`ListingLifecycle` gates first publication (a provider submits, an organiser publishes) but
-said nothing about editing a listing that is already live. Re-review before the change shows
-would pull a running program off the site, or freeze a corrected time, for as long as the
-queue takes. So:
-
-- An approved organisation's edit to a published listing is saved and projected at once.
-- The listing then appears in the review queue's **Changed since review** lane
-  (`updated_at > reviewed_at`). The organiser marks it reviewed, or unpublishes it with a
-  reason the provider sees.
-- A listing is never published without an organiser having seen it once.
-
-The side-by-side diff in the screen inventory needs stored revisions; until those exist,
-the lane shows the current version and when it changed.
-
-### D16 — Consoles are server-rendered forms, not interactive components
-
-The screen inventory marks the provider and organiser consoles "Interactive". They are
-built as static server-rendered forms (GET pages, POST with antiforgery), like the finder.
-They work without JavaScript, every action is a plain HTTP round trip that the tests drive
-directly, and there is no circuit to hold per editor. The schedule preview is a
-server round trip ("Preview sessions") rather than live. Interactivity can be layered on
-where it earns its keep.
-
-### D18 — A request's tenant comes from its host (**decided by me, review it**)
+### D18 — A request's tenant comes from its host (**accepted 2026-10-17**)
 
 `Tenancy:Mode=Host` (the default with a database) resolves each request's tenant from
 `platform.tenant_domain`, before anything reads it.

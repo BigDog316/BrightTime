@@ -95,6 +95,8 @@ internal sealed record SeedListing
     public required string PrimaryLanguage { get; init; }
     public required string Status { get; init; }
     public DateTimeOffset? PublishedAt { get; init; }
+    public DateTimeOffset? ReviewedAt { get; init; }
+    public string? ReviewNote { get; init; }
     public DateTimeOffset? SubmittedAt { get; init; }
     public DateTimeOffset? UnpublishedAt { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
@@ -138,4 +140,6 @@ internal sealed record SeedData(
     IReadOnlyList<SeedTerm> Terms,
     IReadOnlyList<SeedOrganisation> Organisations,
     IReadOnlyList<SeedSite> Sites,
-    IReadOnlyList<SeedListing> Listings);
+    IReadOnlyList<SeedListing> Listings,
+    IReadOnlyList<Kettle.SeedRole> Roles,
+    IReadOnlyList<Kettle.SeedUser> Users);

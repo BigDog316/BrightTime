@@ -83,4 +83,20 @@ public sealed class ListingLifecycleTests
     public void An_unpublished_listing_can_be_restored_by_an_organiser() =>
         CanTransition(ListingStatus.Unpublished, ListingStatus.Published, Mover.Organiser, Ready)
             .IsSuccess.ShouldBeTrue();
+
+    [Fact]
+    public void A_provider_can_send_an_unpublished_listing_back_for_review_but_not_republish_it()
+    {
+        CanTransition(ListingStatus.Unpublished, ListingStatus.PendingReview, Mover.Provider, Ready).IsSuccess.ShouldBeTrue();
+        CanTransition(ListingStatus.Unpublished, ListingStatus.Published, Mover.Provider, Ready).IsSuccess.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Messages_name_states_in_words_not_database_values()
+    {
+        Result result = CanTransition(ListingStatus.PendingReview, ListingStatus.ChangesRequested, Mover.Organiser, Ready);
+
+        result.Error!.Message.ShouldContain("changes requested");
+        result.Error.Message.ShouldNotContain("_");
+    }
 }

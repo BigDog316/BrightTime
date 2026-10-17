@@ -1,0 +1,210 @@
+@page "/organiser/review/organisations/{OrgId:guid}"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Review
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.VetPolicy)]
+@inherits ConsoleComponent
+
+@if (_org is { } o)
+{
+    <PageTitle>Review: @o.DisplayName · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/organiser/review">Review queue</a></p>
+    <h1>@o.DisplayName</h1>
+
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <dl class="facts review-facts">
+        <dt>Status</dt><dd>@Words(o.Status)</dd>
+        <dt>Legal name</dt><dd>@o.LegalName</dd>
+        <dt>Kind</dt><dd>@o.Kind.Replace('_', ' ')</dd>
+        @if (o.WebsiteUrl is { } site)
+        {
+            @* Shown as text, not a link: an applicant's URL is unvetted. *@
+            <dt>Website</dt><dd><code>@site</code></dd>
+        }
+        @if (o.PublicEmail is { } email)
+        {
+            <dt>Email</dt><dd>@email</dd>
+        }
+        @if (o.PublicPhone is { } phone)
+        {
+            <dt>Phone</dt><dd>@phone</dd>
+        }
+        <dt>Languages</dt><dd>@string.Join(", ", o.LanguagesServed)</dd>
+        <dt>Applied</dt><dd>@Local(o.SubmittedAt)</dd>
+        <dt>Active owners</dt><dd>@o.ActiveOwners</dd>
+        <dt>Sites</dt>
+        <dd>
+            @if (o.Sites.Count == 0)
+            {
+                <span>None. An organisation needs a site before it can be approved.</span>
+            }
+            else
+            {
+                <ul>@foreach (string s in o.Sites) { <li>@s</li> }</ul>
+            }
+        </dd>
+    </dl>
+
+    @if (o.Mission is { Length: > 0 } mission)
+    {
+        <h2>What they do</h2>
+        <p dir="auto">@mission</p>
+    }
+
+    <section class="review-actions" aria-labelledby="decide-heading">
+        <h2 id="decide-heading">Decision</h2>
+        @if (o.Status == OrganisationStatus.Applied)
+        {
+            <form method="post" @formname="start" @onsubmit="StartReviewAsync">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">Start review</button>
+                <span class="hint">Marks it as under review, so other organisers know someone has it.</span>
+            </form>
+        }
+        @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.Suspended
+             && User.HasPermission(Permissions.Organisations.Approve))
+        {
+            <form method="post" @formname="approve" @onsubmit="ApproveAsync">
+                <AntiforgeryToken />
+                <button type="submit">@(o.Status == OrganisationStatus.Suspended ? "Reinstate" : "Approve")</button>
+            </form>
+        }
+        @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview)
+        {
+            @ReasonForm("changes", "Request changes", "What should the organisation change or send?")
+        }
+        @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.ChangesRequested or OrganisationStatus.Suspended)
+        {
+            @ReasonForm("reject", "Reject", "Why is the application rejected? The organisation sees this.")
+        }
+        @if (o.Status == OrganisationStatus.Approved && User.HasPermission(Permissions.Organisations.Suspend))
+        {
+            @ReasonForm("suspend", "Suspend", "Why is it suspended? The organisation sees this.")
+        }
+    </section>
+
+    @if (o.History.Count > 0)
+    {
+        <section aria-labelledby="history-heading">
+            <h2 id="history-heading">History</h2>
+            <ol class="history">
+                @foreach (VettingHistoryRow h in o.History)
+                {
+                    <li>
+                        <time datetime="@h.OccurredAt.ToString("O")">@Local(h.OccurredAt)</time>:
+                        @(h.From?.Replace('_', ' ') ?? "new") → @h.To.Replace('_', ' ')
+                        @if (h.Note is { Length: > 0 } note)
+                        {
+                            <span>: “@note”</span>
+                        }
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private OrganisationForReview? _org;
+    private string? _problem;
+    private readonly Dictionary<string, string> _reasonErrors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _org = await Get<OrganisationReview>().GetAsync(new OrganisationId(OrgId));
+        if (_org is null)
+        {
+            Navigation.NotFound();
+        }
+    }
+
+    private Task StartReviewAsync() => DecideAsync(OrganisationStatus.UnderReview, null, "started");
+
+    private Task ApproveAsync() => User.HasPermission(Permissions.Organisations.Approve)
+        ? DecideAsync(OrganisationStatus.Approved, null, "approved")
+        : Refuse();
+
+    private Task RequestChangesAsync() => DecideAsync(OrganisationStatus.ChangesRequested, "changes", "changes_requested");
+
+    private Task RejectAsync() => DecideAsync(OrganisationStatus.Rejected, "reject", "rejected");
+
+    private Task SuspendAsync() => User.HasPermission(Permissions.Organisations.Suspend)
+        ? DecideAsync(OrganisationStatus.Suspended, "suspend", "suspended")
+        : Refuse();
+
+    private Task Refuse()
+    {
+        _problem = "Your account cannot make that decision.";
+        HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    }
+
+    private async Task DecideAsync(OrganisationStatus to, string? reasonForm, string done)
+    {
+        string? reason = reasonForm is null ? null : FormValue("reason");
+        Result result = await Get<OrganisationReview>().DecideAsync(new OrganisationId(OrgId), to, reason, Actor);
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo(to == OrganisationStatus.UnderReview
+                ? $"/organiser/review/organisations/{OrgId}"
+                : $"/organiser/review?done={done}");
+            return;
+        }
+
+        if (reasonForm is not null && result.Error!.Code == "organisation.reason_required")
+        {
+            _reasonErrors[reasonForm] = result.Error.Message;
+        }
+        else
+        {
+            _problem = result.Error!.Message;
+        }
+    }
+
+    private RenderFragment ReasonForm(string formName, string button, string label) => __builder =>
+    {
+        string id = $"reason-{formName}";
+        bool invalid = _reasonErrors.ContainsKey(formName);
+        Func<Task> handler = formName switch
+        {
+            "changes" => RequestChangesAsync,
+            "reject" => RejectAsync,
+            _ => SuspendAsync,
+        };
+        <form method="post" class="reason-form" @formname="@formName" @onsubmit="handler">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="@id">@label</label>
+                <textarea id="@id" name="reason" rows="3" aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? id + "-error" : null)"></textarea>
+                @if (invalid)
+                {
+                    <p class="field-error" id="@id-error">@_reasonErrors[formName]</p>
+                }
+            </div>
+            <button type="submit" class="secondary-button">@button</button>
+        </form>
+    };
+
+    private string Local(DateTimeOffset? at) => at is { } t
+        ? TimeZoneInfo.ConvertTime(t, Tenant.TimeZone).ToString("MMM d, yyyy, h:mm tt", Tenant.Locale.ToCulture())
+        : "";
+
+    private static string Words(OrganisationStatus s) => s.ToDbValue().Replace('_', ' ');
+}

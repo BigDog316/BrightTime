@@ -206,6 +206,42 @@ public sealed partial class KettleSeedTests
         (id.Variant & 0b1100).ShouldBe(0b1000);
     }
 
+    [Fact]
+    public void Every_organisation_has_exactly_one_owner_account()
+    {
+        foreach (SeedOrganisation org in Data.Organisations)
+        {
+            Data.Users.Count(u => u.Memberships.Any(m => m.OrgId == org.Id && m.OrgRole == "owner"))
+                .ShouldBe(1, org.DisplayName);
+        }
+    }
+
+    [Fact]
+    public void Organisers_can_review_and_provider_staff_cannot()
+    {
+        IReadOnlyList<string> Permissions(string role) => Data.Roles.Single(r => r.Name == role).Permissions;
+
+        Data.Users.Count(u => u.Roles.Contains("network_organiser")).ShouldBe(2);
+        Permissions("network_organiser").ShouldContain("listings.review");
+        Permissions("provider_admin").ShouldNotContain("listings.review");
+        Permissions("program_staff").ShouldNotContain("listings.review");
+        Data.Roles.SelectMany(r => r.Permissions).ShouldAllBe(p => BrightTime.Modules.Identity.Authorization.Permissions.All.Contains(p));
+    }
+
+    [Fact]
+    public void Seeded_accounts_are_fictional_and_unique()
+    {
+        Data.Users.Select(u => u.Email.ToUpperInvariant()).ShouldBeUnique("ux_app_user_name is case-insensitive");
+        Data.Users.ShouldAllBe(u => u.Email.EndsWith(".example.org", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Published_listings_start_reviewed_so_the_changed_lane_starts_empty()
+    {
+        Data.Listings.Where(l => l.Status == "published").ShouldAllBe(l => l.ReviewedAt == l.PublishedAt);
+        Data.Listings.Where(l => l.Status == "changes_requested").ShouldAllBe(l => l.ReviewNote != null);
+    }
+
     [GeneratedRegex(@"^\(555\) 555-01\d\d$")]
     private static partial Regex FictionalPhone();
 }

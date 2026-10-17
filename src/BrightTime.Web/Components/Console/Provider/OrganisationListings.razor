@@ -1,0 +1,118 @@
+@page "/provider/orgs/{OrgId:guid}"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>Not allowed · BrightTime</PageTitle>
+    <h1>You can't manage this organisation's listings</h1>
+    <p>Only its staff can. <a href="/provider">Go to your organisations</a>.</p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@_name listings · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">Your organisations</a></p>
+    <h1>@_name</h1>
+
+    @if (_status != OrganisationStatus.Approved)
+    {
+        <p class="notice">
+            This organisation is <strong>@Words(_status.ToDbValue())</strong>. You can draft listings and
+            submit them, but none can be published until the organisation is approved.
+        </p>
+    }
+
+    <p><a class="button" href="/provider/orgs/@OrgId/listings/new">New listing</a></p>
+
+    @if (_rows.Count == 0)
+    {
+        <p>No listings yet.</p>
+    }
+
+    @foreach (var group in _rows.GroupBy(r => r.Status).OrderBy(g => Order(g.Key)))
+    {
+        <section aria-labelledby="status-@group.Key">
+            <h2 id="status-@group.Key">@Heading(group.Key) <span class="count">(@group.Count())</span></h2>
+            <ul class="card-list">
+                @foreach (ListingRow row in group)
+                {
+                    <li>
+                        <a href="/provider/orgs/@OrgId/listings/@row.Id">@row.Title</a>
+                        <span class="note">@Words(row.Kind.ToDbValue()) · updated @row.UpdatedAt.ToString("MMM d, yyyy", Tenant.Locale.ToCulture())</span>
+                        @if (row.ReviewNote is { Length: > 0 } note && row.Status is ListingStatus.ChangesRequested or ListingStatus.Rejected or ListingStatus.Unpublished)
+                        {
+                            <p class="review-note"><strong>Organiser's note:</strong> @note</p>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private OrganisationStatus _status;
+    private IReadOnlyList<ListingRow> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        OrganisationId org = new(OrgId);
+        if (!await CanActForAsync(org, Permissions.Listings.Create))
+        {
+            Forbid();
+            return;
+        }
+
+        IDirectoryQueries directory = Get<IDirectoryQueries>();
+        _name = await directory.GetOrganisationNameAsync(org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _status = await directory.GetStatusAsync(org) ?? OrganisationStatus.Applied;
+        _rows = await Get<ListingEditor>().ListForOrganisationAsync(org);
+    }
+
+    // What needs the provider first: things sent back, then drafts, then the rest.
+    private static int Order(ListingStatus s) => s switch
+    {
+        ListingStatus.ChangesRequested => 0,
+        ListingStatus.Draft => 1,
+        ListingStatus.PendingReview => 2,
+        ListingStatus.Published => 3,
+        ListingStatus.Unpublished => 4,
+        ListingStatus.Rejected => 5,
+        _ => 6,
+    };
+
+    private static string Heading(ListingStatus s) => s switch
+    {
+        ListingStatus.ChangesRequested => "Changes requested",
+        ListingStatus.Draft => "Drafts",
+        ListingStatus.PendingReview => "Waiting for review",
+        ListingStatus.Published => "Published",
+        ListingStatus.Unpublished => "Unpublished",
+        ListingStatus.Rejected => "Rejected",
+        _ => "Archived",
+    };
+
+    private static string Words(string dbValue) => dbValue.Replace('_', ' ');
+}

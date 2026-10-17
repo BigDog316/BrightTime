@@ -36,6 +36,8 @@ internal static class KettleSeed
             KettleTaxonomy.Terms(),
             organisations,
             sites,
-            KettleListings.Build(organisations, sites, areas, today));
+            KettleListings.Build(organisations, sites, areas, today),
+            KettleAccounts.Roles(),
+            KettleAccounts.Users(organisations, sites));
     }
 }

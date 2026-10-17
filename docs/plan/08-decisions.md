@@ -208,6 +208,51 @@ D4 and T7 for one table. That is a judgement about risk, and it is yours.
 - Measured result: every finder scenario now uses an index. Figures are in
   `03-indexing-and-query-plans.md`.
 
+### D14 — Development sign-in until Identity sign-in exists (**decided by me, review it**)
+
+The provider console and the review queue need a signed-in person with permissions and
+organisation memberships; nothing signs anyone in yet. Building ASP.NET Core Identity
+(passwords, passkeys, OIDC, reset) is its own M1 slice, so the consoles were built against
+a seam instead:
+
+- `BrightTimePrincipalFactory` builds the principal from the database: tenant, account
+  kind, permission claims from `app_user_role` → `app_role_claim`, and one membership claim
+  per active `org_membership`. Identity rows are read as `brighttime_auth`; memberships as
+  the application, with the user as the actor.
+- The cookie scheme, authorization handlers and pages are the production ones.
+- The only stub is how someone proves who they are: `/dev/sign-in` lists seeded accounts
+  and signs in as one. It is mapped only when the environment is Development **and**
+  `Auth:DevelopmentSignIn` is true; otherwise the route does not exist (404), which a test
+  checks. Production therefore has no way to sign in until Identity lands, which is the
+  safe failure.
+
+Identity sign-in replaces `/dev/sign-in` and calls the same factory.
+
+### D15 — Edits to a published listing go live and are reviewed after (**decided by me, review it**)
+
+`ListingLifecycle` gates first publication (a provider submits, an organiser publishes) but
+said nothing about editing a listing that is already live. Re-review before the change shows
+would pull a running program off the site, or freeze a corrected time, for as long as the
+queue takes. So:
+
+- An approved organisation's edit to a published listing is saved and projected at once.
+- The listing then appears in the review queue's **Changed since review** lane
+  (`updated_at > reviewed_at`). The organiser marks it reviewed, or unpublishes it with a
+  reason the provider sees.
+- A listing is never published without an organiser having seen it once.
+
+The side-by-side diff in the screen inventory needs stored revisions; until those exist,
+the lane shows the current version and when it changed.
+
+### D16 — Consoles are server-rendered forms, not interactive components
+
+The screen inventory marks the provider and organiser consoles "Interactive". They are
+built as static server-rendered forms (GET pages, POST with antiforgery), like the finder.
+They work without JavaScript, every action is a plain HTTP round trip that the tests drive
+directly, and there is no circuit to hold per editor. The schedule preview is a
+server round trip ("Preview sessions") rather than live. Interactivity can be layered on
+where it earns its keep.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

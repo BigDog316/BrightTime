@@ -71,6 +71,21 @@ public sealed class DirectoryQueries(DirectoryDbContext db, IClock clock) : IDir
         }, cancellationToken);
     }
 
+    public Task<IReadOnlyList<SiteSummary>> GetOrganisationSitesAsync(
+        OrganisationId organisationId,
+        CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<SiteSummary>>(async ct =>
+        {
+            List<Site> sites = await db.Sites
+                .AsNoTracking()
+                .Where(s => s.OrgId == organisationId.Value)
+                .OrderByDescending(s => s.IsActive).ThenBy(s => s.Name)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            return [.. sites.Select(ToSummary)];
+        }, cancellationToken);
+
     public Task<string?> GetOrganisationNameAsync(
         OrganisationId organisationId,
         CancellationToken cancellationToken = default) =>

@@ -45,6 +45,38 @@ public sealed class PlatformQueries(PlatformDbContext db) : ITaxonomyQueries, IG
         }, cancellationToken);
     }
 
+    public Task<IReadOnlyList<VocabularyTerm>> GetVocabularyAsync(
+        string vocabulary,
+        string locale,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vocabulary);
+
+        return db.InTransactionAsync<IReadOnlyList<VocabularyTerm>>(async ct =>
+        {
+            List<TaxonomyTerm> terms = await db.TaxonomyTerms
+                .AsNoTracking()
+                .Where(t => t.Vocabulary == vocabulary && t.IsActive)
+                .OrderBy(t => t.SortOrder).ThenBy(t => t.Code)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            Guid[] ids = [.. terms.Select(t => t.Id)];
+            List<TaxonomyTermName> names = await db.TaxonomyTermNames
+                .AsNoTracking()
+                .Where(n => ids.Contains(n.TermId) && (n.Locale == locale || n.Locale == FallbackLocale))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            return [.. terms.Select(t => new VocabularyTerm(
+                t.Id,
+                t.Code,
+                Pick(names.Where(n => n.TermId == t.Id).Select(n => (n.Locale, n.Name)), locale) ?? t.Code,
+                t.ParentId,
+                t.SortOrder))];
+        }, cancellationToken);
+    }
+
     public Task<IReadOnlyDictionary<Guid, string>> GetNeighbourhoodNamesAsync(
         IReadOnlyCollection<Guid> neighbourhoodIds,
         string locale,

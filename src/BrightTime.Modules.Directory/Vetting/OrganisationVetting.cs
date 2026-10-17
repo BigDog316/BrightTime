@@ -115,7 +115,7 @@ public static class OrganisationVetting
         {
             return Error.Conflict(
                 "organisation.no_change",
-                $"The organisation is already {to.ToDbValue()}.");
+                $"The organisation is already {Words(to)}.");
         }
 
         if (!Allowed.TryGetValue(from, out (OrganisationStatus To, Mover By)[]? transitions)
@@ -123,7 +123,7 @@ public static class OrganisationVetting
         {
             return Error.Conflict(
                 "organisation.terminal_state",
-                $"An organisation that is {from.ToDbValue()} cannot change state. It must apply again.");
+                $"An organisation that is {Words(from)} cannot change state. It must apply again.");
         }
 
         (OrganisationStatus To, Mover By)[] matching = [.. transitions.Where(t => t.To == to)];
@@ -132,7 +132,7 @@ public static class OrganisationVetting
         {
             return Error.Conflict(
                 "organisation.invalid_transition",
-                $"An organisation cannot go from {from.ToDbValue()} to {to.ToDbValue()}.");
+                $"An organisation cannot go from {Words(from)} to {Words(to)}.");
         }
 
         if (!matching.Any(t => t.By == by))
@@ -140,8 +140,8 @@ public static class OrganisationVetting
             return Error.Forbidden(
                 "organisation.wrong_mover",
                 by == Mover.Provider
-                    ? $"Only a network organiser can move an organisation to {to.ToDbValue()}."
-                    : $"Only the organisation itself can move to {to.ToDbValue()}.");
+                    ? $"Only a network organiser can move an organisation to {Words(to)}."
+                    : $"Only the organisation itself can move to {Words(to)}.");
         }
 
         return RequirementsFor(to, context);
@@ -155,7 +155,7 @@ public static class OrganisationVetting
             when string.IsNullOrWhiteSpace(context.Reason) =>
             Error.Validation(
                 "organisation.reason_required",
-                $"Moving an organisation to {to.ToDbValue()} needs a reason the provider can read."),
+                $"Moving an organisation to {Words(to)} needs a reason the provider can read."),
 
         _ => Result.Success(),
     };
@@ -199,4 +199,7 @@ public static class OrganisationVetting
         Allowed.TryGetValue(from, out (OrganisationStatus To, Mover By)[]? transitions)
             ? [.. transitions.Where(t => t.By == by).Select(t => t.To).Distinct()]
             : [];
+
+    /// <summary>A status as a person reads it: "changes requested", not "changes_requested".</summary>
+    private static string Words(OrganisationStatus status) => status.ToDbValue().Replace('_', ' ');
 }

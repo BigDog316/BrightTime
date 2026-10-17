@@ -63,6 +63,11 @@ public interface IDirectoryQueries
         IReadOnlyCollection<Guid> siteIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>An organisation's sites, active ones first, for its own staff to choose from.</summary>
+    Task<IReadOnlyList<SiteSummary>> GetOrganisationSitesAsync(
+        OrganisationId organisationId,
+        CancellationToken cancellationToken = default);
+
     Task<string?> GetOrganisationNameAsync(
         OrganisationId organisationId,
         CancellationToken cancellationToken = default);

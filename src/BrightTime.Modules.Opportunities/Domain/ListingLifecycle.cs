@@ -65,6 +65,10 @@ public static class ListingLifecycle
         [ListingStatus.Unpublished] =
         [
             (ListingStatus.Published, Mover.Organiser),
+
+            // Back on sale next season, or fixed after an organiser took it down: the provider
+            // asks again, and an organiser looks again.
+            (ListingStatus.PendingReview, Mover.Provider),
             (ListingStatus.Archived, Mover.Provider),
         ],
 
@@ -79,14 +83,14 @@ public static class ListingLifecycle
 
         if (from == to)
         {
-            return Error.Conflict("listing.no_change", $"The listing is already {to.ToDbValue()}.");
+            return Error.Conflict("listing.no_change", $"The listing is already {Words(to)}.");
         }
 
         if (!Allowed.TryGetValue(from, out (ListingStatus To, Mover By)[]? transitions) || transitions.Length == 0)
         {
             return Error.Conflict(
                 "listing.terminal_state",
-                $"A listing that is {from.ToDbValue()} cannot change state. Clone it to start again.");
+                $"A listing that is {Words(from)} cannot change state. Clone it to start again.");
         }
 
         (ListingStatus To, Mover By)[] matching = [.. transitions.Where(t => t.To == to)];
@@ -94,7 +98,7 @@ public static class ListingLifecycle
         {
             return Error.Conflict(
                 "listing.invalid_transition",
-                $"A listing cannot go from {from.ToDbValue()} to {to.ToDbValue()}.");
+                $"A listing cannot go from {Words(from)} to {Words(to)}.");
         }
 
         if (!matching.Any(t => t.By == by))
@@ -102,8 +106,8 @@ public static class ListingLifecycle
             return Error.Forbidden(
                 "listing.wrong_mover",
                 by == Mover.Provider
-                    ? $"Only a network organiser can move a listing to {to.ToDbValue()}."
-                    : $"Only the owning organisation can move a listing to {to.ToDbValue()}.");
+                    ? $"Only a network organiser can move a listing to {Words(to)}."
+                    : $"Only the owning organisation can move a listing to {Words(to)}.");
         }
 
         return RequirementsFor(to, context);
@@ -134,11 +138,14 @@ public static class ListingLifecycle
             case ListingStatus.ChangesRequested:
             case ListingStatus.Unpublished:
                 return string.IsNullOrWhiteSpace(context.Reason)
-                    ? Error.Validation("listing.reason_required", $"Moving a listing to {to.ToDbValue()} needs a reason the provider can read.")
+                    ? Error.Validation("listing.reason_required", $"Moving a listing to {Words(to)} needs a reason the provider can read.")
                     : Result.Success();
 
             default:
                 return Result.Success();
         }
     }
+
+    /// <summary>A status as a person reads it: "changes requested", not "changes_requested".</summary>
+    private static string Words(ListingStatus status) => status.ToDbValue().Replace('_', ' ');
 }

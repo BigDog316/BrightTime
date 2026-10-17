@@ -66,6 +66,7 @@ internal sealed class SeedWriter(NpgsqlDataSource dataSource)
         await WriteGeographyAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
         await WriteTaxonomyAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
         await WriteDirectoryAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
+        await WriteAccountsAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
         await WriteListingsAsync(connection, tx, counts, data, ct).ConfigureAwait(false);
 
         await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -204,6 +205,51 @@ internal sealed class SeedWriter(NpgsqlDataSource dataSource)
                 s.NeighbourhoodId, s.IsAddressPublic, s.TransitNote, s.IsWheelchairAccessible))], ct).ConfigureAwait(false);
     }
 
+    private static async Task WriteAccountsAsync(
+        NpgsqlConnection connection, NpgsqlTransaction tx, SeedCounts counts, SeedData data, CancellationToken ct)
+    {
+        Guid t = data.TenantId;
+
+        await RunAsync(connection, tx, counts, "identity.app_role",
+            [.. data.Roles.Select(r => Row(
+                """
+                insert into identity.app_role (id, tenant_id, name, normalized_name, concurrency_stamp, is_system)
+                values ($1, $2, $3, upper($3), $4, true) on conflict do nothing
+                """, r.Id, t, r.Name, r.Id.ToString("N")))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "identity.app_role_claim",
+            [.. data.Roles.SelectMany(r => r.Permissions.Select(p => Row(
+                """
+                insert into identity.app_role_claim (role_id, claim_type, claim_value)
+                values ($1, $2, $3) on conflict do nothing
+                """, r.Id, Modules.Identity.Authorization.BrightTimeClaims.Permission, p)))], ct).ConfigureAwait(false);
+
+        // No password: these accounts are reached through development sign-in (D14) until
+        // Identity sign-in exists, and through a password reset after that.
+        await RunAsync(connection, tx, counts, "identity.app_user",
+            [.. data.Users.Select(u => Row(
+                """
+                insert into identity.app_user
+                  (id, tenant_id, user_name, normalized_user_name, email, normalized_email, email_confirmed,
+                   security_stamp, concurrency_stamp, account_kind, status, locale)
+                values ($1, $2, $3, upper($3), $3, upper($3), true, $4, $5, 'adult', 'active', 'en')
+                on conflict do nothing
+                """, u.Id, t, u.Email, SeedIds.For("stamp/" + u.Email).ToString("N"), u.Id.ToString("N")))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "identity.app_user_role",
+            [.. data.Users.SelectMany(u => u.Roles.Select(r => Row(
+                "insert into identity.app_user_role (user_id, role_id) values ($1, $2) on conflict do nothing",
+                u.Id, Kettle.KettleAccounts.RoleId(r))))], ct).ConfigureAwait(false);
+
+        await RunAsync(connection, tx, counts, "directory.org_membership",
+            [.. data.Users.SelectMany(u => u.Memberships.Select(m => Row(
+                """
+                insert into directory.org_membership (id, tenant_id, org_id, user_id, org_role, status, invited_at, joined_at)
+                values ($1, $2, $3, $4, $5, 'active', now() - interval '30 days', now() - interval '29 days')
+                on conflict do nothing
+                """, m.Id, t, m.OrgId, u.Id, m.OrgRole)))], ct).ConfigureAwait(false);
+    }
+
     private static async Task WriteListingsAsync(
         NpgsqlConnection connection, NpgsqlTransaction tx, SeedCounts counts, SeedData data, CancellationToken ct)
     {
@@ -217,16 +263,20 @@ internal sealed class SeedWriter(NpgsqlDataSource dataSource)
                    age_min, age_max, grade_min, grade_max, modality, virtual_url, is_drop_in, meals_provided,
                    transport_provided, transport_note, cost_model, cost_cents_min, cost_cents_max, sliding_scale_note,
                    registration_mode, external_url, capacity_total, waitlist_enabled, submitted_at, published_at,
-                   unpublished_at, expires_at, source, season_label, contact_email, contact_phone, accessibility_note)
+                   unpublished_at, expires_at, source, season_label, contact_email, contact_phone, accessibility_note,
+                   reviewed_at, reviewed_by, review_note, created_at, updated_at)
                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, 'manual', $33, $34, $35, $36)
+                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, 'manual', $33, $34, $35, $36,
+                        $37, case when $37::timestamptz is null and $39::text is null then null else $38::uuid end, $39,
+                        coalesce($30::timestamptz, $29::timestamptz, now()), coalesce($30::timestamptz, $29::timestamptz, now()))
                 on conflict do nothing
                 """,
                 l.Id, t, l.OrgId, l.Kind, l.Slug, l.Title, l.Summary, l.Description, l.PrimaryLanguage, l.Status,
                 l.AgeMin, l.AgeMax, l.GradeMin, l.GradeMax, l.Modality, l.VirtualUrl, l.IsDropIn, l.MealsProvided,
                 l.TransportProvided, l.TransportNote, l.CostModel, l.CostCentsMin, l.CostCentsMax, l.SlidingScaleNote,
                 l.RegistrationMode, l.ExternalUrl, l.CapacityTotal, l.WaitlistEnabled, l.SubmittedAt, l.PublishedAt,
-                l.UnpublishedAt, l.ExpiresAt, l.SeasonLabel, l.ContactEmail, l.ContactPhone, l.AccessibilityNote))], ct).ConfigureAwait(false);
+                l.UnpublishedAt, l.ExpiresAt, l.SeasonLabel, l.ContactEmail, l.ContactPhone, l.AccessibilityNote,
+                l.ReviewedAt, Kettle.KettleAccounts.OrganiserId, l.ReviewNote))], ct).ConfigureAwait(false);
 
         await RunAsync(connection, tx, counts, "opportunity.listing_site",
             [.. data.Listings.SelectMany(l => l.SiteIds.Select(s => Row(

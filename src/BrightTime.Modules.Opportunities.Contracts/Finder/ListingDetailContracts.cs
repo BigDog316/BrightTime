@@ -117,4 +117,14 @@ public interface IListingDetails
         string slug,
         string locale,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One listing in any state, as a family would see it once published: for an organiser's
+    /// review and a provider's preview. Never for an anonymous page; the caller authorises.
+    /// </summary>
+    Task<ListingDetail?> GetForReviewAsync(
+        TenantId tenant,
+        Guid listingId,
+        string locale,
+        CancellationToken cancellationToken = default);
 }

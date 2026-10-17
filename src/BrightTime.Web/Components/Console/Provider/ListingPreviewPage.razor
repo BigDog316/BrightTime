@@ -1,0 +1,55 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/preview"
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <h1>You can't preview this listing</h1>
+}
+else if (_listing is { } listing)
+{
+    <PageTitle>Preview: @listing.Title · BrightTime</PageTitle>
+    <p class="notice" role="note">
+        Preview. This is how the listing will look to families once it is published.
+        <a href="/provider/orgs/@OrgId/listings/@ListingId">Back to the editor</a>
+    </p>
+    <ListingView Listing="listing" ShowPublicLinks="false" />
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    private ListingDetail? _listing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(new OrganisationId(OrgId), Permissions.Listings.Create))
+        {
+            Forbid();
+            return;
+        }
+
+        _listing = await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code);
+
+        // The organisation is checked through the editor's own read, so one organisation's
+        // staff cannot preview another's draft by guessing an id.
+        var owned = await Get<BrightTime.Modules.Opportunities.Editing.ListingEditor>().LoadAsync(ListingId);
+        if (_listing is null || owned?.OrganisationId.Value != OrgId)
+        {
+            _listing = null;
+            Navigation.NotFound();
+        }
+    }
+}

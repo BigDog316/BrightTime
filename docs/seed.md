@@ -16,6 +16,7 @@ demonstrated on. Nothing in it is a real provider, place or person:
 | Providers | 60 organisations (54 approved, 6 awaiting review) and 85 sites, 5 of them with a private address |
 | Listings | 420 across all four kinds, about 93% published and the rest spread across draft, review, changes requested and unpublished |
 | Languages | Spanish for every listing and all six locales for 12 of the 54 activity templates; a few listings are written in Spanish, Chinese, Bengali, Haitian Creole or Arabic first |
+| Accounts | 12 roles with their default permissions; an owner for every organisation (`admin@<org-slug>.example.org`), a staff member for those with more than one site (`staff@…`), and two network organisers (`organiser@kettle.example.org`, `organiser2@…`). No passwords. |
 
 All schedules are relative to the run date, so the site always has upcoming sessions.
 A given date always produces the same catalogue: the ids come from names, and the choices
@@ -42,10 +43,26 @@ dotnet run --project src/BrightTime.Seed -- --connection "Host=127.0.0.1;Port=54
   seed is a searchable site, with no worker needed. `--skip-projection` leaves it to the
   worker.
 - **Date:** `--today yyyy-MM-dd` pins the run date, for reproducing a catalogue.
+- **Fresh database:** `--recreate` drops the database the connection names, rebuilds it
+  from `db/schema` (no psql needed), then seeds. It refuses any database whose name does
+  not start with `brighttime`.
+
+## Signing in to the consoles
+
+Until Identity sign-in exists (decision D14), the seeded accounts are reached through
+`/dev/sign-in`. It is offered only in the Development environment, and only with:
+
+- `Auth:DevelopmentSignIn=true`;
+- `Auth:ConnectionString` set to a login that is a member of `brighttime_auth`.
+
+Elsewhere the route does not exist.
 
 To run the web app on the seed, set `Finder:Mode=Sql`,
 `Finder:TenantId=0196c3e8-0000-7000-8000-00000000f001`, and a `Finder:ConnectionString`
 whose login is a member of both `brighttime_app` and `brighttime_finder` (decision D13).
+The consoles also need `Auth:ConnectionString`, as above. Approvals and edits are projected
+into search by the jobs host (`ConnectionStrings:Jobs`, a member of `brighttime_jobs`), so run
+it alongside.
 
 ## Translations
 

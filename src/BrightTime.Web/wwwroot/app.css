@@ -414,6 +414,248 @@ a.button:hover {
     min-height: 2.75rem;
 }
 
+/* Site header and consoles. Logical properties, so Arabic mirrors without overrides. */
+
+.site-header {
+    align-items: center;
+    box-sizing: border-box;
+    margin-inline: auto;
+    max-width: 44rem;
+    padding-inline: 1rem;
+    border-block-end: 1px solid var(--bt-line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    justify-content: space-between;
+    margin-block-end: 0.5rem;
+    padding-block: 0.75rem;
+}
+
+.site-header nav {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+
+.brand {
+    color: var(--bt-ink);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.site-header a,
+.card-list a,
+.queue a,
+.eyebrow a,
+.status-line a {
+    color: var(--bt-accent);
+}
+
+.signed-in-as {
+    color: var(--bt-muted);
+    font-size: 0.9rem;
+}
+
+.inline-form {
+    display: inline;
+}
+
+/* Element-qualified so they win over the global submit-button style. */
+button.link-button {
+    background: none;
+    border: 0;
+    color: var(--bt-accent);
+    cursor: pointer;
+    font: inherit;
+    min-height: 2.75rem;
+    padding: 0;
+    text-decoration: underline;
+}
+
+button.secondary-button {
+    background: var(--bt-surface);
+    border: 1px solid var(--bt-accent);
+    border-radius: 0.375rem;
+    color: var(--bt-accent);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    min-height: 2.75rem;
+    padding: 0.5rem 1.25rem;
+}
+
+.notice {
+    background: var(--bt-tint);
+    border-inline-start: 4px solid var(--bt-accent);
+    border-radius: 0.25rem;
+    padding: 0.75rem 1rem;
+}
+
+.notice.success {
+    border-inline-start-color: #2e7d32;
+}
+
+.notice.error {
+    border-inline-start-color: var(--bt-error);
+}
+
+.card-list,
+.account-list {
+    display: grid;
+    gap: 0.75rem;
+    list-style: none;
+    padding: 0;
+}
+
+.card-list li {
+    border: 1px solid var(--bt-line);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+.card-list .note {
+    display: block;
+}
+
+.count {
+    color: var(--bt-muted);
+    font-weight: 400;
+}
+
+.review-note {
+    background: var(--bt-tint);
+    border-radius: 0.5rem;
+    margin-block: 1rem;
+    padding: 0.5rem 1rem;
+}
+
+.editor fieldset {
+    border: 1px solid var(--bt-line);
+    border-radius: 0.5rem;
+    margin-block: 1.25rem;
+    padding: 0.75rem 1rem 1rem;
+}
+
+.editor legend {
+    font-size: 1.15rem;
+    font-weight: 700;
+    padding-inline: 0.25rem;
+}
+
+.editor input[type="text"],
+.editor input[type="url"],
+.editor input[type="email"],
+.editor input[type="tel"],
+.editor input[type="date"],
+.editor input[type="time"],
+.editor input[type="number"],
+.editor select,
+.editor textarea,
+.reason-form textarea {
+    border: 1px solid var(--bt-muted);
+    border-radius: 0.375rem;
+    box-sizing: border-box;
+    font: inherit;
+    max-width: 100%;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.6rem;
+    width: 100%;
+}
+
+.editor .field-short input {
+    max-width: 10rem;
+}
+
+.editor [aria-invalid="true"],
+.reason-form [aria-invalid="true"] {
+    border: 2px solid var(--bt-error);
+}
+
+.editor-sections {
+    font-size: 0.95rem;
+    line-height: 2;
+}
+
+.editor-sections a {
+    color: var(--bt-accent);
+}
+
+.hint {
+    color: var(--bt-muted);
+    font-size: 0.9rem;
+    margin: 0 0 0.25rem;
+}
+
+.label {
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+}
+
+.term-group {
+    margin-block-end: 0.5rem;
+}
+
+.term-children {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1rem;
+    padding-inline-start: 1.75rem;
+}
+
+.radio-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.25rem;
+}
+
+.radio-column {
+    display: grid;
+}
+
+.preview {
+    background: var(--bt-tint);
+    border-radius: 0.5rem;
+    margin-block-start: 0.75rem;
+    padding: 0.25rem 1rem;
+}
+
+.danger-zone {
+    border-block-start: 1px solid var(--bt-line);
+    margin-block-start: 2.5rem;
+}
+
+.review-actions form {
+    margin-block: 1rem;
+}
+
+.review-facts {
+    margin-block-end: 1.5rem;
+}
+
+.preview-frame {
+    border: 2px dashed var(--bt-line);
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+}
+
+.queue {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.queue th,
+.queue td {
+    border-block-end: 1px solid var(--bt-line);
+    padding: 0.5rem;
+    text-align: start;
+    vertical-align: top;
+}
+
+.history {
+    padding-inline-start: 1.25rem;
+}
+
 @media (min-width: 40rem) {
     .field-row {
         grid-template-columns: 1fr 1fr;

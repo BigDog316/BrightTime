@@ -146,6 +146,12 @@ internal static class KettleListings
             PrimaryLanguage = primary,
             Status = status,
             PublishedAt = published,
+
+            // Everything published was looked at once, at publication (decision D15).
+            ReviewedAt = published,
+            ReviewNote = status == "changes_requested"
+                ? "Please add the room or entrance families should use, and confirm the end date."
+                : null,
             SubmittedAt = submitted,
             UnpublishedAt = unpublished,
 

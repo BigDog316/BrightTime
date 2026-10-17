@@ -228,5 +228,8 @@ public sealed class ListingPageHostileContentTests : IClassFixture<WebApplicatio
     {
         public Task<ListingDetail?> GetPublishedAsync(TenantId tenant, string slug, string locale, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Equals(slug, listing.Slug, StringComparison.Ordinal) ? listing : null);
+
+        public Task<ListingDetail?> GetForReviewAsync(TenantId tenant, Guid listingId, string locale, CancellationToken cancellationToken = default) =>
+            Task.FromResult(listingId == listing.Id.Value ? listing : null);
     }
 }

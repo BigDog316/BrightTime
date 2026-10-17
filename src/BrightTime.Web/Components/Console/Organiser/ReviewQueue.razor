@@ -1,0 +1,150 @@
+@page "/organiser/review"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Review
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.ReviewPolicy)]
+@inherits ConsoleComponent
+
+<PageTitle>Review queue · BrightTime</PageTitle>
+
+<h1>Review queue</h1>
+
+@if (Done is { Length: > 0 })
+{
+    <p class="notice success" role="status">@DoneMessage(Done)</p>
+}
+
+@if (!Availability.IsAvailable)
+{
+    <p>The review queue needs the database, which this site is not using.</p>
+}
+else
+{
+    <section aria-labelledby="listings-heading">
+        <h2 id="listings-heading">Listings waiting for review <span class="count">(@_listings.AwaitingReview.Count)</span></h2>
+        @if (_listings.AwaitingReview.Count == 0)
+        {
+            <p>Nothing waiting.</p>
+        }
+        else
+        {
+            <table class="queue">
+                <caption class="visually-hidden">Oldest first</caption>
+                <thead><tr><th scope="col">Listing</th><th scope="col">Organisation</th><th scope="col">Submitted</th></tr></thead>
+                <tbody>
+                    @foreach (ListingRow row in _listings.AwaitingReview)
+                    {
+                        <tr>
+                            <td><a href="/organiser/review/listings/@row.Id">@row.Title</a></td>
+                            <td>@OrgName(row)</td>
+                            <td>@When(row.SubmittedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section aria-labelledby="changed-heading">
+        <h2 id="changed-heading">Published listings changed since review <span class="count">(@_listings.ChangedSinceReview.Count)</span></h2>
+        <p class="hint">Edits to a live listing go live at once. Look them over, and unpublish anything that should not be there.</p>
+        @if (_listings.ChangedSinceReview.Count == 0)
+        {
+            <p>Nothing changed.</p>
+        }
+        else
+        {
+            <table class="queue">
+                <thead><tr><th scope="col">Listing</th><th scope="col">Organisation</th><th scope="col">Changed</th></tr></thead>
+                <tbody>
+                    @foreach (ListingRow row in _listings.ChangedSinceReview)
+                    {
+                        <tr>
+                            <td><a href="/organiser/review/listings/@row.Id">@row.Title</a></td>
+                            <td>@OrgName(row)</td>
+                            <td>@When(row.UpdatedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    @if (_canVet)
+    {
+        <section aria-labelledby="orgs-heading">
+            <h2 id="orgs-heading">Organisations applying <span class="count">(@_organisations.Count)</span></h2>
+            @if (_organisations.Count == 0)
+            {
+                <p>Nothing waiting.</p>
+            }
+            else
+            {
+                <table class="queue">
+                    <thead><tr><th scope="col">Organisation</th><th scope="col">Status</th><th scope="col">Applied</th></tr></thead>
+                    <tbody>
+                        @foreach (OrganisationQueueRow o in _organisations)
+                        {
+                            <tr>
+                                <td><a href="/organiser/review/organisations/@o.Id.Value">@o.DisplayName</a></td>
+                                <td>@o.Status.ToDbValue().Replace('_', ' ')</td>
+                                <td>@When(o.SubmittedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private ListingsForReview _listings = new([], []);
+    private IReadOnlyList<OrganisationQueueRow> _organisations = [];
+    private readonly Dictionary<Guid, string> _orgNames = [];
+    private bool _canVet;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            return;
+        }
+
+        _listings = await Get<ListingEditor>().ReviewQueueAsync();
+
+        var directory = Get<IDirectoryQueries>();
+        foreach (var org in _listings.AwaitingReview.Concat(_listings.ChangedSinceReview).Select(r => r.OrganisationId).Distinct())
+        {
+            _orgNames[org.Value] = await directory.GetOrganisationNameAsync(org) ?? "Unknown";
+        }
+
+        _canVet = User.HasPermission(Permissions.Organisations.Vet);
+        if (_canVet)
+        {
+            _organisations = await Get<OrganisationReview>().QueueAsync();
+        }
+    }
+
+    private string OrgName(ListingRow row) => _orgNames.GetValueOrDefault(row.OrganisationId.Value, "Unknown");
+
+    private string When(DateTimeOffset? at) => at is { } t
+        ? TimeZoneInfo.ConvertTime(t, Tenant.TimeZone).ToString("MMM d, h:mm tt", Tenant.Locale.ToCulture())
+        : "";
+
+    private static string DoneMessage(string done) => done switch
+    {
+        "published" => "Published. It will appear in search within a minute.",
+        "changes_requested" => "Sent back to the provider with your note.",
+        "rejected" => "Rejected. The provider can see your reason.",
+        "unpublished" => "Unpublished. The provider can see your reason.",
+        "reviewed" => "Marked as reviewed.",
+        "approved" => "Organisation approved.",
+        _ => "Done.",
+    };
+}

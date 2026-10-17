@@ -1,0 +1,66 @@
+@page "/provider"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+<PageTitle>Your organisations · BrightTime</PageTitle>
+
+<h1>Your organisations</h1>
+
+@if (!Availability.IsAvailable)
+{
+    <p>The provider console needs the database, which this site is not using.</p>
+}
+else if (_organisations.Count == 0)
+{
+    <p>Your account is not a member of any organisation yet. Ask an organisation's owner to invite you.</p>
+}
+else
+{
+    <ul class="card-list">
+        @foreach (var (id, name, role, status) in _organisations)
+        {
+            <li>
+                <a href="/provider/orgs/@id.Value">@name</a>
+                <span class="note">Your role: @role · Organisation status: @status.ToDbValue().Replace('_', ' ')</span>
+            </li>
+        }
+    </ul>
+}
+
+@if (User.HasPermission(Permissions.Listings.Review))
+{
+    <p><a href="/organiser/review">Go to the review queue</a></p>
+}
+
+@code {
+    private List<(OrganisationId Id, string Name, string Role, OrganisationStatus Status)> _organisations = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            return;
+        }
+
+        IDirectoryQueries directory = Get<IDirectoryQueries>();
+        foreach (var claim in User.FindAll(BrightTimeClaims.OrganisationMembership))
+        {
+            if (BrightTimeClaims.TryParseMembership(claim.Value, out Guid orgId, out string role))
+            {
+                OrganisationId id = new(orgId);
+                string? name = await directory.GetOrganisationNameAsync(id);
+                OrganisationStatus? status = await directory.GetStatusAsync(id);
+                if (name is not null && status is not null)
+                {
+                    _organisations.Add((id, name, role, status.Value));
+                }
+            }
+        }
+
+        _organisations.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCulture));
+    }
+}

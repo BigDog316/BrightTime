@@ -1,0 +1,570 @@
+@page "/provider/orgs/{OrgId:guid}/listings/new"
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}"
+@using System.Globalization
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Domain
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.Modules.Opportunities.Search
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>Not allowed · BrightTime</PageTitle>
+    <h1>You can't edit this organisation's listings</h1>
+    <p>Only its staff can. <a href="/provider">Go to your organisations</a>.</p>
+}
+else if (_orgName is not null)
+{
+    <PageTitle>@(ListingId is null ? "New listing" : $"Edit {_title}") · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId">@_orgName</a></p>
+    <h1>@(ListingId is null ? "New listing" : _title)</h1>
+
+    @if (_status is { } status)
+    {
+        <p class="status-line">
+            Status: <strong>@StatusLabel(status)</strong>
+            @if (status == ListingStatus.Published)
+            {
+                <span> · <a href="/listings/@_slug">View it on the site</a></span>
+            }
+            else
+            {
+                <span> · <a href="/provider/orgs/@OrgId/listings/@ListingId/preview">Preview as families will see it</a></span>
+            }
+        </p>
+    }
+
+    @if (Saved == "1")
+    {
+        <p class="notice success" role="status">Saved.@(_status == ListingStatus.Published ? " The change is live, and the network organiser will review it." : "")</p>
+    }
+    @if (Submitted == "1")
+    {
+        <p class="notice success" role="status">Submitted. A network organiser will review it before it is published.</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_reviewNote is { Length: > 0 } note && _status is ListingStatus.ChangesRequested or ListingStatus.Rejected or ListingStatus.Unpublished)
+    {
+        <section class="review-note" aria-labelledby="review-note-heading">
+            <h2 id="review-note-heading">The organiser's note</h2>
+            <p>@note</p>
+        </section>
+    }
+
+    @if (_status == ListingStatus.PendingReview)
+    {
+        <p>This listing is waiting for a network organiser. To change it, withdraw it from review first.</p>
+        <form method="post" @formname="withdraw" @onsubmit="WithdrawAsync">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary-button">Withdraw from review</button>
+        </form>
+    }
+    else if (_status is { } s && !ListingEditor.IsEditable(s))
+    {
+        <p>A @StatusLabel(s).ToLowerInvariant() listing can't be edited.</p>
+    }
+    else
+    {
+        @if (_errors.Count > 0)
+        {
+            <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1">
+                <h2 id="error-summary-heading">Check these fields</h2>
+                <ul>
+                    @foreach (var (field, messages) in _errors)
+                    {
+                        <li><a href="#@field">@messages[0]</a></li>
+                    }
+                </ul>
+            </section>
+        }
+
+        <form method="post" class="editor" @formname="listing" @onsubmit="SaveAsync" novalidate>
+            <AntiforgeryToken />
+            <input type="hidden" name="Version" value="@_form.Version" />
+
+            <nav class="editor-sections" aria-label="Sections">
+                <a href="#basics">Basics</a> · <a href="#audience">Audience</a> · <a href="#topics">Topics</a> ·
+                <a href="#where">Where</a> · <a href="#when">When</a> · <a href="#cost">Cost</a> ·
+                <a href="#registration">Registration</a> · <a href="#access">Access and support</a> · <a href="#contact">Contact</a>
+            </nav>
+
+            <fieldset id="basics">
+                <legend>Basics</legend>
+                <div class="field">
+                    <label for="Kind">Kind of listing</label>
+                    <select id="Kind" name="Kind" aria-invalid="@Invalid("Kind")" aria-describedby="@Described("Kind")">
+                        @foreach (var (value, label) in Kinds)
+                        {
+                            <option value="@value" selected="@(_form.Kind == value)">@label</option>
+                        }
+                    </select>
+                    @Error("Kind")
+                </div>
+                @Text("Title", "Title", _form.Title, hint: "Short and plain: what it is, not who runs it.", max: ListingFormParser.MaxTitle)
+                @Text("Summary", "One-sentence summary", _form.Summary, hint: "Shown in search results.", max: ListingFormParser.MaxSummary)
+                <div class="field">
+                    <label for="Description">Description</label>
+                    <p class="hint" id="hint-Description">Plain text. Leave a blank line between paragraphs.</p>
+                    <textarea id="Description" name="Description" rows="8" maxlength="@ListingFormParser.MaxDescription"
+                              aria-invalid="@Invalid("Description")" aria-describedby="hint-Description @Described("Description")">@_form.Description</textarea>
+                    @Error("Description")
+                </div>
+                <div class="field">
+                    <label for="PrimaryLanguage">Written in</label>
+                    <select id="PrimaryLanguage" name="PrimaryLanguage">
+                        @foreach (Locale l in Locale.Supported)
+                        {
+                            <option value="@l.Code" selected="@(_form.PrimaryLanguage == l.Code)">@l.NativeName (@l.EnglishName)</option>
+                        }
+                    </select>
+                    @Error("PrimaryLanguage")
+                </div>
+            </fieldset>
+
+            <fieldset id="audience">
+                <legend>Audience</legend>
+                <div class="field-row">
+                    @Text("AgeMin", "Youngest age", _form.AgeMin, type: "number", width: "short")
+                    @Text("AgeMax", "Oldest age", _form.AgeMax, type: "number", width: "short")
+                </div>
+                <div class="field-row">
+                    @Text("GradeMin", "Lowest grade", _form.GradeMin, hint: "-1 for pre-K, 0 for kindergarten.", type: "number", width: "short")
+                    @Text("GradeMax", "Highest grade", _form.GradeMax, type: "number", width: "short")
+                </div>
+            </fieldset>
+
+            <fieldset id="topics">
+                <legend>Topics</legend>
+                <p class="hint">Choose at least one category. Interests help families who search by what they enjoy.</p>
+                <div id="TermIds">
+                    @foreach (VocabularyTerm category in _categories)
+                    {
+                        <div class="term-group">
+                            @Check("TermIds", category.Id.ToString(), category.Name, _form.TermIds.Contains(category.Id), strong: true)
+                            <div class="term-children">
+                                @foreach (VocabularyTerm interest in _interests.Where(i => i.ParentId == category.Id))
+                                {
+                                    @Check("TermIds", interest.Id.ToString(), interest.Name, _form.TermIds.Contains(interest.Id))
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                @Error("TermIds")
+            </fieldset>
+
+            <fieldset id="where">
+                <legend>Where</legend>
+                <div id="Modality" class="radio-row">
+                    @Radio("Modality", "in_person", "In person", _form.Modality)
+                    @Radio("Modality", "virtual", "Online", _form.Modality)
+                    @Radio("Modality", "hybrid", "Both", _form.Modality)
+                </div>
+                @Error("Modality")
+                <div id="SiteIds" class="field">
+                    <p class="label">Sites</p>
+                    @if (_sites.Count == 0)
+                    {
+                        <p class="hint">This organisation has no active sites. Add one before listing something in person.</p>
+                    }
+                    @foreach (SiteSummary site in _sites)
+                    {
+                        @Check("SiteIds", site.SiteId.ToString(), site.Name, _form.SiteIds.Contains(site.SiteId))
+                    }
+                    @Error("SiteIds")
+                </div>
+                @Text("VirtualUrl", "Link to join online", _form.VirtualUrl, hint: "Only for online or hybrid listings.", type: "url")
+            </fieldset>
+
+            <fieldset id="when">
+                <legend>When</legend>
+                <div id="Repeats" class="radio-row">
+                    @Radio("Repeats", "weekly", "Every week", _form.Repeats)
+                    @Radio("Repeats", "once", "One date", _form.Repeats)
+                </div>
+                <div id="Days" class="field">
+                    <p class="label">Days (for weekly)</p>
+                    <div class="radio-row">
+                        @foreach (var (code, label) in Days)
+                        {
+                            @Check("Days", code, label, _form.Days.Contains(code))
+                        }
+                    </div>
+                    @Error("Days")
+                </div>
+                <div class="field-row">
+                    @Text("StartsOn", "First date", _form.StartsOn, type: "date")
+                    @Text("EndsOn", "Last date", _form.EndsOn, hint: "For weekly sessions.", type: "date")
+                </div>
+                <div class="field-row">
+                    @Text("StartTime", "Starts at", _form.StartTime, type: "time")
+                    @Text("EndTime", "Ends at", _form.EndTime, type: "time")
+                </div>
+                <button type="submit" name="action" value="preview" class="secondary-button">Preview sessions</button>
+                @if (_preview is { } preview)
+                {
+                    <div class="preview" role="status">
+                        <p>The next @preview.Count sessions:</p>
+                        <ol>
+                            @foreach (Occurrence o in preview)
+                            {
+                                <li>@Local(o.StartsAt, "dddd, MMMM d, yyyy, h:mm tt") to @Local(o.EndsAt, "h:mm tt")</li>
+                            }
+                        </ol>
+                    </div>
+                }
+            </fieldset>
+
+            <fieldset id="cost">
+                <legend>Cost</legend>
+                <div id="CostModel" class="radio-column">
+                    @Radio("CostModel", "free", "Free", _form.CostModel)
+                    @Radio("CostModel", "fixed", "A fixed price", _form.CostModel)
+                    @Radio("CostModel", "sliding_scale", "A sliding scale", _form.CostModel)
+                    @Radio("CostModel", "varies", "It varies", _form.CostModel)
+                    @Radio("CostModel", "stipend_paid", "Participants are paid (jobs)", _form.CostModel)
+                </div>
+                @Error("CostModel")
+                <div class="field-row">
+                    @Text("CostMin", "Price, or lowest price ($)", _form.CostMin, width: "short")
+                    @Text("CostMax", "Highest price ($)", _form.CostMax, hint: "Sliding scale only.", width: "short")
+                </div>
+                @Text("SlidingScaleNote", "How the sliding scale works", _form.SlidingScaleNote, max: ListingFormParser.MaxNote)
+            </fieldset>
+
+            <fieldset id="registration">
+                <legend>Registration</legend>
+                <div id="RegistrationMode" class="radio-column">
+                    @Radio("RegistrationMode", "external", "On our own website", _form.RegistrationMode)
+                    @Radio("RegistrationMode", "builtin", "Through BrightTime (opens later this year)", _form.RegistrationMode)
+                    @Radio("RegistrationMode", "none", "No registration: drop in", _form.RegistrationMode)
+                </div>
+                @Error("RegistrationMode")
+                @Text("ExternalUrl", "Registration link", _form.ExternalUrl, hint: "The page where families sign up.", type: "url")
+                @Text("Capacity", "Places available", _form.Capacity, hint: "Needed for registration through BrightTime.", type: "number", width: "short")
+                <div class="field-row">
+                    <div class="field">
+                        <label for="DeadlineKind">Deadline</label>
+                        <select id="DeadlineKind" name="DeadlineKind" aria-invalid="@Invalid("DeadlineKind")">
+                            <option value="">None</option>
+                            @foreach (string kind in ListingFormParser.DeadlineKinds)
+                            {
+                                <option value="@kind" selected="@(_form.DeadlineKind == kind)">@DeadlineLabel(kind)</option>
+                            }
+                        </select>
+                        @Error("DeadlineKind")
+                    </div>
+                    @Text("DeadlineOn", "Deadline date", _form.DeadlineOn, type: "date")
+                </div>
+            </fieldset>
+
+            <fieldset id="access">
+                <legend>Access and support</legend>
+                <div id="AccommodationIds">
+                    @foreach (VocabularyTerm a in _accommodations)
+                    {
+                        @Check("AccommodationIds", a.Id.ToString(), a.Name, _form.AccommodationIds.Contains(a.Id))
+                    }
+                </div>
+                @Error("AccommodationIds")
+                @Text("AccessibilityNote", "Anything else about access", _form.AccessibilityNote, max: ListingFormParser.MaxNote)
+                @Check("MealsProvided", "true", "A meal or snack is provided", _form.MealsProvided)
+                @Check("TransportProvided", "true", "Transport is provided", _form.TransportProvided)
+                @Text("TransportNote", "Getting there", _form.TransportNote, max: ListingFormParser.MaxNote)
+                @Check("IsDropIn", "true", "Families can drop in without booking", _form.IsDropIn)
+                <div id="Languages" class="field">
+                    <p class="label">Languages spoken at the program</p>
+                    <div class="radio-row">
+                        @foreach (Locale l in Locale.Supported)
+                        {
+                            @Check("Languages", l.Code, l.NativeName, _form.Languages.Contains(l.Code))
+                        }
+                    </div>
+                    @Error("Languages")
+                </div>
+            </fieldset>
+
+            <fieldset id="contact">
+                <legend>Contact for families</legend>
+                @Text("ContactEmail", "Email", _form.ContactEmail, type: "email")
+                @Text("ContactPhone", "Phone", _form.ContactPhone, type: "tel", width: "short")
+            </fieldset>
+
+            <div class="actions">
+                <button type="submit" name="action" value="save">@(ListingId is null ? "Save draft" : "Save changes")</button>
+                @if (CanSubmit)
+                {
+                    <button type="submit" name="action" value="submit">Save and submit for review</button>
+                }
+                <a href="/provider/orgs/@OrgId" class="secondary">Cancel</a>
+            </div>
+        </form>
+
+        @if (_status == ListingStatus.Published)
+        {
+            <form method="post" class="danger-zone" @formname="unpublish" @onsubmit="UnpublishAsync">
+                <AntiforgeryToken />
+                <h2>Take it off the site</h2>
+                <div class="field">
+                    <label for="reason">Why? (the organiser sees this)</label>
+                    <textarea id="reason" name="reason" rows="2" aria-invalid="@Invalid("reason")" aria-describedby="@Described("reason")"></textarea>
+                    @Error("reason")
+                </div>
+                <button type="submit" class="secondary-button">Unpublish</button>
+            </form>
+        }
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid? ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    [SupplyParameterFromQuery(Name = "submitted")] public string? Submitted { get; set; }
+
+    private static readonly (string Value, string Label)[] Kinds =
+        [("program", "Program"), ("event", "Event"), ("job", "Job or internship"), ("resource", "Drop-in resource")];
+
+    private static readonly (string Code, string Label)[] Days =
+        [("MO", "Mon"), ("TU", "Tue"), ("WE", "Wed"), ("TH", "Thu"), ("FR", "Fri"), ("SA", "Sat"), ("SU", "Sun")];
+
+    private ListingForm _form = new();
+    private IReadOnlyDictionary<string, string[]> _errors = new Dictionary<string, string[]>();
+    private string? _problem;
+    private IReadOnlyList<Occurrence>? _preview;
+
+    private string? _orgName;
+    private ListingStatus? _status;
+    private string? _title;
+    private string? _slug;
+    private string? _reviewNote;
+
+    private IReadOnlyList<VocabularyTerm> _categories = [];
+    private IReadOnlyList<VocabularyTerm> _interests = [];
+    private IReadOnlyList<VocabularyTerm> _accommodations = [];
+    private IReadOnlyList<SiteSummary> _sites = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    private bool CanSubmit => _status is null or ListingStatus.Draft or ListingStatus.ChangesRequested or ListingStatus.Unpublished
+                              && User.HasPermission(Permissions.Listings.SubmitForReview);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Listings.Create))
+        {
+            Forbid();
+            return;
+        }
+
+        IDirectoryQueries directory = Get<IDirectoryQueries>();
+        _orgName = await directory.GetOrganisationNameAsync(Org);
+        if (_orgName is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (ListingId is { } id && !await LoadListingAsync(id, keepPostedForm: IsPost))
+        {
+            return;
+        }
+
+        string locale = Tenant.Locale.Code;
+        ITaxonomyQueries taxonomy = Get<ITaxonomyQueries>();
+        _categories = await taxonomy.GetVocabularyAsync("category", locale);
+        _interests = await taxonomy.GetVocabularyAsync("interest", locale);
+        _accommodations = await taxonomy.GetVocabularyAsync("accommodation", locale);
+        _sites = [.. (await directory.GetOrganisationSitesAsync(Org)).Where(s => s.IsActive)];
+    }
+
+    /// <returns>False when the listing is not this organisation's; the page is then a 404.</returns>
+    private async Task<bool> LoadListingAsync(Guid id, bool keepPostedForm)
+    {
+        EditableListing? listing = await Get<ListingEditor>().LoadAsync(id);
+        if (listing is null || listing.OrganisationId != Org)
+        {
+            _orgName = null;
+            Navigation.NotFound();
+            return false;
+        }
+
+        _status = listing.Status;
+        _title = listing.Form.Title;
+        _slug = listing.Slug;
+        _reviewNote = listing.ReviewNote;
+        if (!keepPostedForm)
+        {
+            _form = listing.Form;
+        }
+
+        return true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _form = ListingFormBinder.Read(HttpContext.Request.Form);
+        string action = FormValue("action");
+        ListingEditor editor = Get<ListingEditor>();
+
+        if (action == "preview")
+        {
+            _preview = editor.PreviewSessions(_form, 8);
+            if (_preview is null)
+            {
+                (_, _errors) = ListingFormParser.Parse(_form);
+            }
+
+            return;
+        }
+
+        SaveOutcome outcome = await editor.SaveAsync(Org, ListingId, _form, Actor);
+        if (!outcome.Saved)
+        {
+            _errors = outcome.Errors;
+            _problem = outcome.Problem;
+            return;
+        }
+
+        Guid id = outcome.ListingId!.Value;
+        if (action == "submit" && CanSubmit)
+        {
+            Result submitted = await editor.TransitionAsync(id, ListingStatus.PendingReview, ListingLifecycle.Mover.Provider, Org, null, Actor);
+            if (!submitted.IsSuccess)
+            {
+                // Saved but not submitted: show the reason against the saved version.
+                await LoadListingAsync(id, keepPostedForm: false);
+                _problem = "Saved, but not submitted: " + submitted.Error!.Message;
+                return;
+            }
+
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{id}?submitted=1");
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{id}?saved=1");
+    }
+
+    private async Task WithdrawAsync()
+    {
+        Result result = await Get<ListingEditor>().TransitionAsync(ListingId!.Value, ListingStatus.Draft, ListingLifecycle.Mover.Provider, Org, null, Actor);
+        if (!result.IsSuccess)
+        {
+            _problem = result.Error!.Message;
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}");
+    }
+
+    private async Task UnpublishAsync()
+    {
+        string reason = FormValue("reason");
+        Result result = await Get<ListingEditor>().TransitionAsync(ListingId!.Value, ListingStatus.Unpublished, ListingLifecycle.Mover.Provider, Org, reason, Actor);
+        if (!result.IsSuccess)
+        {
+            _errors = new Dictionary<string, string[]> { ["reason"] = [result.Error!.Message] };
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}");
+    }
+
+    private string Local(DateTimeOffset at, string format) =>
+        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString(format, Tenant.Locale.ToCulture());
+
+    private bool HasError(string field) => _errors.ContainsKey(field);
+
+    private string? Invalid(string field) => HasError(field) ? "true" : null;
+
+    private string? Described(string field) => HasError(field) ? $"err-{field}" : null;
+
+    private RenderFragment? Error(string field) => HasError(field)
+        ? __builder =>
+        {
+            <p class="field-error" id="err-@field">@string.Join(" ", _errors[field])</p>
+        }
+        : null;
+
+    private RenderFragment Text(string name, string label, string value, string? hint = null, string type = "text", int? max = null, string? width = null) => __builder =>
+    {
+        <div class="field @(width is null ? "" : "field-" + width)">
+            <label for="@name">@label</label>
+            @if (hint is not null)
+            {
+                <p class="hint" id="hint-@name">@hint</p>
+            }
+            <input id="@name" name="@name" type="@type" value="@value" maxlength="@max"
+                   aria-invalid="@Invalid(name)" aria-describedby="@Join(hint is null ? null : "hint-" + name, Described(name))" />
+            @Error(name)
+        </div>
+    };
+
+    private static RenderFragment Check(string name, string value, string label, bool isChecked, bool strong = false) => __builder =>
+    {
+        <label class="check">
+            <input type="checkbox" name="@name" value="@value" checked="@isChecked" />
+            @if (strong)
+            {
+                <strong>@label</strong>
+            }
+            else
+            {
+                @label
+            }
+        </label>
+    };
+
+    private static RenderFragment Radio(string name, string value, string label, string current) => __builder =>
+    {
+        <label class="check">
+            <input type="radio" name="@name" value="@value" checked="@(current == value)" />
+            @label
+        </label>
+    };
+
+    private static string? Join(string? a, string? b) =>
+        (a, b) switch
+        {
+            (null, null) => null,
+            (null, _) => b,
+            (_, null) => a,
+            _ => $"{a} {b}",
+        };
+
+    private static string StatusLabel(ListingStatus s) => s.ToDbValue().Replace('_', ' ') switch
+    {
+        var t => char.ToUpperInvariant(t[0]) + t[1..],
+    };
+
+    private static string DeadlineLabel(string kind) => kind switch
+    {
+        "application" => "Application deadline",
+        "registration" => "Registration deadline",
+        "audition" => "Audition date",
+        "early_bird" => "Early-bird price ends",
+        "scholarship" => "Scholarship deadline",
+        _ => "Documents due",
+    };
+}

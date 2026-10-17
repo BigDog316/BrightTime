@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/BrightTime.Web/BrightTime.Web.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Seed/BrightTime.Seed.csproj" />
   </ItemGroup>
 
 </Project>

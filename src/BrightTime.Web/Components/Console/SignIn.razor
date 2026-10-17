@@ -1,0 +1,27 @@
+@page "/sign-in"
+@inherits ConsoleComponent
+
+<PageTitle>Sign in · BrightTime</PageTitle>
+
+<h1>Sign in</h1>
+
+@if (Availability.DevelopmentSignIn)
+{
+    <p>This is a development site. Choose a seeded account to sign in as.</p>
+    <p><a class="button" href="@DevHref">Choose an account</a></p>
+}
+else if (!Availability.HasDatabase)
+{
+    <p>This site is running on sample data, which has no accounts. The provider and organiser consoles need the database.</p>
+}
+else
+{
+    @* Decision D14: sign-in with a password, passkey or single sign-on comes with Identity. *@
+    <p>Signing in is not available on this site yet.</p>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private string DevHref => ReturnUrl is null ? "/dev/sign-in" : $"/dev/sign-in?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+}

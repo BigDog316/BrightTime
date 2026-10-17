@@ -31,11 +31,28 @@ public sealed class InMemoryListingDetails(IReadOnlyList<ListingDetail> details,
             return Task.FromResult<ListingDetail?>(null);
         }
 
+        return Task.FromResult<ListingDetail?>(Current(detail));
+    }
+
+    public Task<ListingDetail?> GetForReviewAsync(
+        TenantId tenant,
+        Guid listingId,
+        string locale,
+        CancellationToken cancellationToken = default)
+    {
+        ListingDetail? detail = tenant.Value == KettleCatalogue.TenantId
+            ? _bySlug.Values.FirstOrDefault(d => d.Id.Value == listingId)
+            : null;
+        return Task.FromResult(detail is null ? null : Current(detail));
+    }
+
+    private ListingDetail Current(ListingDetail detail)
+    {
         DateTimeOffset now = clock.UtcNow;
-        return Task.FromResult<ListingDetail?>(detail with
+        return detail with
         {
             Upcoming = [.. detail.Upcoming.Where(t => t.StartsAt >= now).Take(Details.SqlListingDetails.UpcomingShown)],
             Deadlines = [.. detail.Deadlines.Where(d => d.DueAt >= now)],
-        });
+        };
     }
 }

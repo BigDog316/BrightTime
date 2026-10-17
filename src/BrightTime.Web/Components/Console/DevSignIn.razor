@@ -1,0 +1,63 @@
+@page "/dev/sign-in"
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.SignIn
+@inherits ConsoleComponent
+
+@if (_accounts is { } accounts)
+{
+    <PageTitle>Development sign-in · BrightTime</PageTitle>
+
+    <h1>Development sign-in</h1>
+    <p class="note">
+        Seeded accounts, signed in without a password. This page exists only in the Development
+        environment with <code>Auth:DevelopmentSignIn</code> set (decision D14).
+    </p>
+
+    <h2>Organisers</h2>
+    @AccountList(accounts.Where(a => a.Roles.Contains(BrightTimeRoles.NetworkOrganiser)))
+
+    <h2>Provider staff</h2>
+    @AccountList(accounts.Where(a => !a.Roles.Contains(BrightTimeRoles.NetworkOrganiser)))
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private IReadOnlyList<AccountSnapshot>? _accounts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.DevelopmentSignIn)
+        {
+            // Not "forbidden": outside development this page does not exist.
+            Navigation.NotFound();
+            return;
+        }
+
+        _accounts = await Get<AccountReader>().ListWithRolesAsync(
+            Tenant.TenantId,
+            [BrightTimeRoles.NetworkOrganiser, BrightTimeRoles.ProviderAdmin, BrightTimeRoles.ProgramStaff],
+            limit: 500);
+    }
+
+    private RenderFragment AccountList(IEnumerable<AccountSnapshot> accounts) => __builder =>
+    {
+        <ul class="account-list">
+            @foreach (AccountSnapshot a in accounts)
+            {
+                <li>
+                    <form method="post" action="/dev/sign-in/as">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="userId" value="@a.UserId.Value" />
+                        @if (ReturnUrl is not null)
+                        {
+                            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                        }
+                        <button type="submit" class="link-button">@a.UserName</button>
+                        <span class="note">@string.Join(", ", a.Roles)</span>
+                    </form>
+                </li>
+            }
+        </ul>
+    };
+}

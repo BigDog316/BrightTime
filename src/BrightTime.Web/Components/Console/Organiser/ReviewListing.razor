@@ -1,0 +1,178 @@
+@page "/organiser/review/listings/{ListingId:guid}"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Domain
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.ReviewPolicy)]
+@inherits ConsoleComponent
+
+@if (_listing is { } listing && _detail is { } detail)
+{
+    <PageTitle>Review: @detail.Title · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/organiser/review">Review queue</a></p>
+    <h1>Review: @detail.Title</h1>
+
+    <dl class="facts review-facts">
+        <dt>Organisation</dt>
+        <dd>@_orgName (@_orgStatus.ToDbValue().Replace('_', ' '))</dd>
+        <dt>Status</dt>
+        <dd>@listing.Status.ToDbValue().Replace('_', ' ')@(listing.ChangedSinceReview ? ", changed since it was last reviewed" : "")</dd>
+        <dt>Last changed</dt>
+        <dd>@Local(listing.UpdatedAt)</dd>
+        @if (listing.ReviewNote is { Length: > 0 } note)
+        {
+            <dt>Last note to the provider</dt>
+            <dd>@note</dd>
+        }
+    </dl>
+
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_orgStatus != OrganisationStatus.Approved && listing.Status == ListingStatus.PendingReview)
+    {
+        <p class="notice">
+            The organisation is not approved yet, so this listing cannot be published. You can still send it back with a note.
+        </p>
+    }
+
+    <section class="review-actions" aria-labelledby="decide-heading">
+        <h2 id="decide-heading">Decision</h2>
+
+        @switch (listing.Status)
+        {
+            case ListingStatus.PendingReview:
+                <form method="post" @formname="publish" @onsubmit="PublishAsync">
+                    <AntiforgeryToken />
+                    <button type="submit">Approve and publish</button>
+                </form>
+                @ReasonForm("changes", "Request changes", "What should the provider change?", ListingStatus.ChangesRequested, "changes_requested")
+                @ReasonForm("reject", "Reject", "Why is it rejected? The provider sees this; they will need to start a new listing.", ListingStatus.Rejected, "rejected")
+                break;
+
+            case ListingStatus.Published:
+                @if (listing.ChangedSinceReview)
+                {
+                    <form method="post" @formname="reviewed" @onsubmit="MarkReviewedAsync">
+                        <AntiforgeryToken />
+                        <button type="submit">The changes are fine</button>
+                    </form>
+                }
+                @ReasonForm("unpublish", "Unpublish", "Why is it coming down? The provider sees this.", ListingStatus.Unpublished, "unpublished")
+                break;
+
+            case ListingStatus.Unpublished:
+                <form method="post" @formname="republish" @onsubmit="PublishAsync">
+                    <AntiforgeryToken />
+                    <button type="submit">Publish again</button>
+                </form>
+                break;
+
+            default:
+                <p>There is nothing to decide on a listing that is @listing.Status.ToDbValue().Replace('_', ' ').</p>
+                break;
+        }
+    </section>
+
+    <section class="review-preview" aria-label="How families will see it">
+        <h2>How families will see it</h2>
+        <div class="preview-frame">
+            <ListingView Listing="detail" ShowPublicLinks="false" />
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid ListingId { get; set; }
+
+    private EditableListing? _listing;
+    private ListingDetail? _detail;
+    private string? _orgName;
+    private OrganisationStatus _orgStatus;
+    private string? _problem;
+    private readonly Dictionary<string, string> _reasonErrors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = await Get<ListingEditor>().LoadAsync(ListingId);
+        _detail = await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code);
+        if (_listing is null || _detail is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        IDirectoryQueries directory = Get<IDirectoryQueries>();
+        _orgName = await directory.GetOrganisationNameAsync(_listing.OrganisationId);
+        _orgStatus = await directory.GetStatusAsync(_listing.OrganisationId) ?? OrganisationStatus.Applied;
+    }
+
+    private async Task DecideAsync(ListingStatus to, string? reasonField, string done)
+    {
+        string? reason = reasonField is null ? null : FormValue("reason");
+        Result result = await Get<ListingEditor>().TransitionAsync(
+            ListingId, to, ListingLifecycle.Mover.Organiser, null, reason, Actor);
+
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/review?done={done}");
+            return;
+        }
+
+        if (reasonField is not null && result.Error!.Code == "listing.reason_required")
+        {
+            _reasonErrors[reasonField] = result.Error.Message;
+        }
+        else
+        {
+            _problem = result.Error!.Message;
+        }
+    }
+
+    private Task PublishAsync() => DecideAsync(ListingStatus.Published, null, "published");
+
+    private async Task MarkReviewedAsync()
+    {
+        Result result = await Get<ListingEditor>().MarkReviewedAsync(ListingId, Actor);
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo("/organiser/review?done=reviewed");
+            return;
+        }
+
+        _problem = result.Error!.Message;
+    }
+
+    private RenderFragment ReasonForm(string formName, string button, string label, ListingStatus to, string done) => __builder =>
+    {
+        string id = $"reason-{formName}";
+        bool invalid = _reasonErrors.ContainsKey(formName);
+        <form method="post" class="reason-form" @formname="@formName" @onsubmit="() => DecideAsync(to, formName, done)">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="@id">@label</label>
+                <textarea id="@id" name="reason" rows="3" aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? id + "-error" : null)"></textarea>
+                @if (invalid)
+                {
+                    <p class="field-error" id="@id-error">@_reasonErrors[formName]</p>
+                }
+            </div>
+            <button type="submit" class="secondary-button">@button</button>
+        </form>
+    };
+
+    private string Local(DateTimeOffset at) =>
+        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("MMM d, yyyy, h:mm tt", Tenant.Locale.ToCulture());
+}

@@ -1,6 +1,26 @@
 @inherits LayoutComponentBase
+@using BrightTime.Modules.Identity.Authorization
 
-<a class="skip-link" href="#main">Skip to results</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="site-header">
+    <a class="brand" href="/search">BrightTime</a>
+    @if (HttpContext?.User is { Identity.IsAuthenticated: true } user)
+    {
+        <nav aria-label="Console">
+            <a href="/provider">Your organisations</a>
+            @if (user.HasPermission(Permissions.Listings.Review))
+            {
+                <a href="/organiser/review">Review queue</a>
+            }
+            <span class="signed-in-as">@user.Identity!.Name</span>
+            <form method="post" action="/sign-out" class="inline-form">
+                <AntiforgeryToken />
+                <button type="submit" class="link-button">Sign out</button>
+            </form>
+        </nav>
+    }
+</header>
 
 <main id="main" tabindex="-1">
     @Body
@@ -11,3 +31,7 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+}

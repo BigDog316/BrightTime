@@ -2,6 +2,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.SharedKernel.Time;
+using BrightTime.Web.Auth;
 using BrightTime.Web.Components;
 using BrightTime.Web.Composition;
 using BrightTime.Web.Tenancy;
@@ -12,6 +13,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddBrightTimeFinder(builder.Configuration);
+builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
@@ -27,6 +29,11 @@ app.UseHttpsRedirection();
 // Sets the tenant and locale before any page reads them. Runs for every request,
 // including the static-asset requests, which then carry the default locale harmlessly.
 app.UseMiddleware<TenantRequestMiddleware>();
+
+// After the tenant: the cookie validator rebuilds claims from the tenant's database.
+app.UseAuthentication();
+app.UseMiddleware<ActorMiddleware>();
+app.UseAuthorization();
 
 app.UseAntiforgery();
 
@@ -52,6 +59,8 @@ app.MapGet("/listings/{slug}/calendar.ics", async (
     string ics = ListingCalendar.ToIcs(listing, page, clock.UtcNow);
     return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), ListingCalendar.ContentType, $"{listing.Slug}.ics");
 });
+app.MapBrightTimeSignIn();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

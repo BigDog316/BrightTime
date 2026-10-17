@@ -37,13 +37,32 @@ public sealed class SqlListingDetails(
         DateTimeOffset now = clock.UtcNow;
         string published = ListingStatus.Published.ToDbValue();
 
+        return await ReadAsync(
+            l => l.TenantId == tenant.Value
+                 && l.Slug == slug
+                 && l.Status == published
+                 && (l.ExpiresAt == null || l.ExpiresAt > now),
+            locale, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<ListingDetail?> GetForReviewAsync(
+        TenantId tenant,
+        Guid listingId,
+        string locale,
+        CancellationToken cancellationToken = default) =>
+        ReadAsync(l => l.TenantId == tenant.Value && l.Id == listingId, locale, cancellationToken);
+
+    private async Task<ListingDetail?> ReadAsync(
+        System.Linq.Expressions.Expression<Func<ListingRecord, bool>> which,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = clock.UtcNow;
+
         Loaded? loaded = await db.InTransactionAsync(async ct =>
         {
             ListingRecord? listing = await db.Listings.AsNoTracking()
-                .Where(l => l.TenantId == tenant.Value
-                            && l.Slug == slug
-                            && l.Status == published
-                            && (l.ExpiresAt == null || l.ExpiresAt > now))
+                .Where(which)
                 .FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
             if (listing is null)

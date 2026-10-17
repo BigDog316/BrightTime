@@ -1,0 +1,376 @@
+@using System.Globalization
+@using BrightTime.Infrastructure.Tenancy
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Primitives
+@inject ITenantContext Tenant
+
+@* The listing as a family sees it. The public page and the organiser's preview both render
+   this, so what is approved is exactly what is published. *@
+<article class="listing-detail" aria-labelledby="listing-title">
+    <header>
+        <p class="eyebrow">@KindLabel(l.Kind)</p>
+        <h1 id="listing-title" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Title</h1>
+        <p class="byline">From <bdi>@l.OrganisationName</bdi></p>
+        <p class="lead" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Summary</p>
+        @if (l.IsMachineTranslated)
+        {
+            <p class="note">Translated automatically from @EnglishLanguageName(l.PrimaryLanguage). It may contain mistakes.</p>
+        }
+    </header>
+
+    <section aria-labelledby="glance-heading">
+        <h2 id="glance-heading">At a glance</h2>
+        <dl class="facts">
+            @if (AgeLabel(l) is { } ages)
+            {
+                <dt>Ages</dt>
+                <dd>@ages</dd>
+            }
+            @if (GradeLabel(l) is { } grades)
+            {
+                <dt>Grades</dt>
+                <dd>@grades</dd>
+            }
+            <dt>Price</dt>
+            <dd>
+                @PriceLabel(l)
+                @if (l.SlidingScaleNote is { Length: > 0 } note)
+                {
+                    <span class="note">@note</span>
+                }
+            </dd>
+            <dt>Where</dt>
+            <dd>@ModalityLabel(l.Modality)</dd>
+            @if (l.Languages.Count > 0)
+            {
+                <dt>Languages</dt>
+                <dd>@string.Join(", ", l.Languages.Select(LanguageName))</dd>
+            }
+            @if (l.Categories.Count > 0)
+            {
+                <dt>Topics</dt>
+                <dd>@string.Join(", ", l.Categories)</dd>
+            }
+            @if (l.MealsProvided)
+            {
+                <dt>Food</dt>
+                <dd>A meal or snack is provided.</dd>
+            }
+            @if (l.TransportProvided || l.TransportNote is { Length: > 0 })
+            {
+                <dt>Getting there</dt>
+                <dd>@(l.TransportNote is { Length: > 0 } t ? t : "Transport is provided.")</dd>
+            }
+        </dl>
+    </section>
+
+    <section aria-labelledby="register-heading" class="register">
+        <h2 id="register-heading">@RegisterHeading(l)</h2>
+        @switch (l.RegistrationMode)
+        {
+            case RegistrationMode.External when SafeLink(l.ExternalUrl) is { } url:
+                @* No target="_blank": the visitor decides whether to open a new tab. *@
+                <p>
+                    <a class="button" href="@url" rel="external noopener noreferrer">
+                        @RegisterAction(l)<span class="visually-hidden"> (opens the provider's website)</span>
+                    </a>
+                </p>
+                <p class="note">You will register on @l.OrganisationName's own website.</p>
+                break;
+
+            case RegistrationMode.External:
+                <p>Contact @l.OrganisationName to @(l.Kind == ListingKind.Job ? "apply" : "register").</p>
+                break;
+
+            case RegistrationMode.Builtin:
+            case RegistrationMode.WaitlistOnly:
+                @* Built-in registration is a later milestone; say so rather than show a dead button. *@
+                <p>Registration through BrightTime opens soon. Until then, contact @l.OrganisationName to save a place.</p>
+                break;
+
+            default:
+                <p>No registration needed. @(l.IsDropIn ? "Just come along." : "")</p>
+                break;
+        }
+
+        @if (l.Deadlines.Count > 0)
+        {
+            <h3>Dates to remember</h3>
+            <ul class="deadlines">
+                @foreach (ListingDeadlineView d in l.Deadlines)
+                {
+                    <li>
+                        <strong>@(d.Label ?? DeadlineLabel(d.Kind))</strong>:
+                        <time datetime="@d.DueAt.ToString("O", CultureInfo.InvariantCulture)">@LocalDate(d.DueAt)</time>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (l.ContactEmail is { Length: > 0 } || l.ContactPhone is { Length: > 0 })
+        {
+            <h3>Questions</h3>
+            <ul class="contact">
+                @if (l.ContactEmail is { Length: > 0 } email)
+                {
+                    <li><a href="mailto:@email">@email</a></li>
+                }
+                @if (l.ContactPhone is { Length: > 0 } phone)
+                {
+                    <li><a href="tel:@PhoneHref(phone)">@phone</a></li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="schedule-heading">
+        <h2 id="schedule-heading">Upcoming sessions</h2>
+        @if (l.Upcoming.Count == 0)
+        {
+            <p>No upcoming sessions are scheduled. Check back later, or contact @l.OrganisationName.</p>
+        }
+        else
+        {
+            <ol class="sessions">
+                @foreach (ListingTime t in l.Upcoming)
+                {
+                    <li>
+                        <time datetime="@t.StartsAt.ToString("O", CultureInfo.InvariantCulture)">@LocalRange(t)</time>
+                    </li>
+                }
+            </ol>
+            <p class="note">Times are local time.</p>
+            @if (ShowPublicLinks)
+            {
+                <p><a class="calendar-link" href="@CalendarHref" download>Add these sessions to your calendar</a></p>
+            }
+        }
+    </section>
+
+    @if (l.Places.Count > 0)
+    {
+        <section aria-labelledby="places-heading">
+            <h2 id="places-heading">@(l.Places.Count == 1 ? "Location" : "Locations")</h2>
+            <ul class="places">
+                @foreach (ListingPlace p in l.Places)
+                {
+                    <li>
+                        <p class="place-name" dir="auto">@p.Name</p>
+                        @if (p.IsAddressPublic)
+                        {
+                            <address>
+                                @foreach (string line in AddressLines(p))
+                                {
+                                    @line<br />
+                                }
+                            </address>
+                        }
+                        else
+                        {
+                            <p>
+                                @(p.NeighbourhoodName is { } hood ? $"In the {hood} area. " : "")The exact address is shared once you register.
+                            </p>
+                        }
+                        @if (p.TransitNote is { Length: > 0 } transit)
+                        {
+                            <p class="note" dir="auto">@transit</p>
+                        }
+                        @if (p.IsWheelchairAccessible == true)
+                        {
+                            <p class="note">Wheelchair accessible.</p>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    @if (l.Accommodations.Count > 0 || l.AccessibilityNote is { Length: > 0 })
+    {
+        <section aria-labelledby="access-heading">
+            <h2 id="access-heading">Accessibility and support</h2>
+            @if (l.Accommodations.Count > 0)
+            {
+                <ul>
+                    @foreach (string a in l.Accommodations)
+                    {
+                        <li>@a</li>
+                    }
+                </ul>
+            }
+            @if (l.AccessibilityNote is { Length: > 0 } access)
+            {
+                <p dir="auto">@access</p>
+            }
+        </section>
+    }
+
+    @if (l.Description is { Length: > 0 } description)
+    {
+        <section aria-labelledby="about-heading">
+            <h2 id="about-heading">About</h2>
+            @* Plain text from the provider, split into paragraphs and encoded. Never markup.
+               dir="auto": the provider may write in a different language from the page's. *@
+            @foreach (string paragraph in Paragraphs(description))
+            {
+                <p dir="auto" lang="@LangAttr(l.DescriptionLanguage)">@paragraph</p>
+            }
+        </section>
+    }
+
+    @if (ShowPublicLinks)
+    {
+        <p class="back"><a href="@SearchHref">Back to search</a></p>
+    }
+</article>
+
+@code {
+    /// <summary>The listing, as a family sees it.</summary>
+    [Parameter, EditorRequired] public ListingDetail Listing { get; set; } = default!;
+
+    /// <summary>The ?lang= the page was asked for, carried onto its links.</summary>
+    [Parameter] public string? Lang { get; set; }
+
+    /// <summary>False for a preview: no calendar file or search link for a listing that is not public.</summary>
+    [Parameter] public bool ShowPublicLinks { get; set; } = true;
+
+    // Short, because the markup reads it on almost every line.
+    private ListingDetail l => Listing;
+
+    /// <summary>
+    /// A lang attribute only where the content's language differs from the page's, so screen
+    /// readers switch voice for it and browsers pick the right fonts and hyphenation.
+    /// </summary>
+    private string? LangAttr(string language) =>
+        string.Equals(language, Tenant.Locale.Code, StringComparison.OrdinalIgnoreCase) ? null : language;
+
+    private string LangSuffix => Lang is null ? "" : $"?lang={Uri.EscapeDataString(Lang)}";
+
+    private string SearchHref => "/search" + LangSuffix;
+
+    private string CalendarHref => $"/listings/{Uri.EscapeDataString(Listing.Slug)}/calendar.ics";
+
+    private CultureInfo Culture => Tenant.Locale.ToCulture();
+
+    private string LocalRange(ListingTime t)
+    {
+        DateTimeOffset start = TimeZoneInfo.ConvertTime(t.StartsAt, Tenant.TimeZone);
+        DateTimeOffset end = TimeZoneInfo.ConvertTime(t.EndsAt, Tenant.TimeZone);
+        string day = start.ToString("dddd, MMMM d", Culture);
+        return start.Date == end.Date
+            ? $"{day}, {start.ToString("t", Culture)} – {end.ToString("t", Culture)}"
+            : $"{day}, {start.ToString("t", Culture)} – {end.ToString("dddd, MMMM d, t", Culture)}";
+    }
+
+    private string LocalDate(DateTimeOffset at) =>
+        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("dddd, MMMM d, yyyy", Culture);
+
+    private string FormatMoney(int cents) => new Money(cents).Format(Tenant.Locale);
+
+    private string PriceLabel(ListingDetail l) => l.CostModel switch
+    {
+        CostModel.Free => "Free",
+        CostModel.Fixed when l.CostCentsMin is { } c => FormatMoney(c),
+        CostModel.SlidingScale when l.CostCentsMin is { } min && l.CostCentsMax is { } max =>
+            $"{FormatMoney(min)} to {FormatMoney(max)}, on a sliding scale",
+        CostModel.StipendPaid => "This is a paid position",
+        _ => "Price varies. Contact the provider for details.",
+    };
+
+    private static string? AgeLabel(ListingDetail l) => (l.AgeMin, l.AgeMax) switch
+    {
+        ({ } min, { } max) => $"{min} to {max}",
+        ({ } min, null) => $"{min} and up",
+        (null, { } max) => $"Up to {max}",
+        _ => null,
+    };
+
+    private static string? GradeLabel(ListingDetail l) => (l.GradeMin, l.GradeMax) switch
+    {
+        ({ } min, { } max) => $"{Grade(min)} to {Grade(max)}",
+        ({ } min, null) => $"{Grade(min)} and up",
+        (null, { } max) => $"Up to {Grade(max)}",
+        _ => null,
+    };
+
+    /// <summary>The schema stores pre-K as -1 and kindergarten as 0.</summary>
+    private static string Grade(int grade) => grade switch
+    {
+        -1 => "pre-K",
+        0 => "kindergarten",
+        _ => $"grade {grade}",
+    };
+
+    private static string ModalityLabel(Modality m) => m switch
+    {
+        Modality.Virtual => "Online",
+        Modality.Hybrid => "In person and online",
+        _ => "In person",
+    };
+
+    private static string KindLabel(ListingKind kind) => kind switch
+    {
+        ListingKind.Program => "Program",
+        ListingKind.Event => "Event",
+        ListingKind.Job => "Job or internship",
+        _ => "Drop-in resource",
+    };
+
+    private static string RegisterHeading(ListingDetail l) => l.Kind == ListingKind.Job ? "How to apply" : "How to join";
+
+    private static string RegisterAction(ListingDetail l) => l.Kind == ListingKind.Job ? "Apply" : "Register";
+
+    /// <summary>The kinds in <c>ck_listing_deadline_kind</c>; the provider's own label wins when set.</summary>
+    private static string DeadlineLabel(string kind) => kind switch
+    {
+        "application" => "Application deadline",
+        "registration" => "Registration deadline",
+        "audition" => "Audition date",
+        "early_bird" => "Early-bird price ends",
+        "scholarship" => "Scholarship deadline",
+        "document_submission" => "Documents due",
+        _ => "Deadline",
+    };
+
+    /// <summary>For a sentence in the (still English-only) interface text.</summary>
+    private static string EnglishLanguageName(string code) =>
+        Locale.TryFromCode(code, out Locale supported) ? supported.EnglishName : code;
+
+    /// <summary>The language's own name for itself, which is how a speaker looks for it.</summary>
+    private static string LanguageName(string code)
+    {
+        if (Locale.TryFromCode(code, out Locale supported))
+        {
+            return supported.NativeName;
+        }
+
+        try
+        {
+            return CultureInfo.GetCultureInfo(code).NativeName;
+        }
+        catch (CultureNotFoundException)
+        {
+            return code;
+        }
+    }
+
+    private static IEnumerable<string> AddressLines(ListingPlace p) =>
+        new[] { p.AddressLine1, p.AddressLine2, string.Join(" ", new[] { p.Locality, p.PostalCode }.Where(x => !string.IsNullOrWhiteSpace(x))) }
+            .Where(x => !string.IsNullOrWhiteSpace(x))!;
+
+    private static IEnumerable<string> Paragraphs(string text) =>
+        text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// The database only accepts http(s) here; this check is so that a bad row from an
+    /// import or a future code path still cannot put a <c>javascript:</c> URL in a link.
+    /// </summary>
+    private static string? SafeLink(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+            ? uri.AbsoluteUri
+            : null;
+
+    private static string PhoneHref(string phone) =>
+        new(phone.Where(c => char.IsAsciiDigit(c) || c == '+').ToArray());
+}

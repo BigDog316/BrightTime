@@ -1,0 +1,112 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/clone"
+@using System.Globalization
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["editor.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is { } listing)
+{
+    <PageTitle>@T.Format("clone.title", ("title", listing.Form.Title)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/listings/@ListingId">@listing.Form.Title</a></p>
+    <h1>@T.Format("clone.title", ("title", listing.Form.Title))</h1>
+
+    <p>@T["clone.intro"]</p>
+    @if (listing.Form.StartsOn is { Length: > 0 } starts)
+    {
+        <p>@T.Format("clone.current_start", ("date", starts))</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <ErrorSummary Errors="@_errors" />
+    <form method="post" class="editor" @formname="clone" @onsubmit="CloneAsync" novalidate>
+        <AntiforgeryToken />
+        <TextField Name="StartsOn" Label="@T["clone.starts_on"]" Value="@_startsOn" Hint="@T["clone.starts_on_hint"]" Type="date" Errors="@_errors" />
+        <TextField Name="SeasonLabel" Label="@T["clone.season_label"]" Value="@_label" Hint="@T["clone.season_label_hint"]" Max="60" Errors="@_errors" />
+        <div class="actions">
+            <button type="submit">@T["clone.submit"]</button>
+            <a href="/provider/orgs/@OrgId/listings/@ListingId" class="secondary">@T["form.cancel"]</a>
+        </div>
+    </form>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    private EditableListing? _listing;
+    private FieldErrors _errors = FieldErrors.None;
+    private string? _problem;
+    private string _startsOn = "";
+    private string _label = "";
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Listings.Create))
+        {
+            Forbid();
+            return;
+        }
+
+        EditableListing? listing = await Get<ListingEditor>().LoadAsync(ListingId);
+        if (listing is null || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing;
+
+        // A year on is the usual answer: the same season, next year.
+        if (!IsPost && DateOnly.TryParseExact(listing.Form.StartsOn, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly start))
+        {
+            _startsOn = start.AddYears(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private async Task CloneAsync()
+    {
+        _startsOn = FormValue("StartsOn").Trim();
+        _label = FormValue("SeasonLabel").Trim();
+        if (!DateOnly.TryParseExact(_startsOn, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly startsOn))
+        {
+            _errors = new FieldErrors(new Dictionary<string, Phrase[]>
+            {
+                ["StartsOn"] = [Phrase.Of(_startsOn.Length == 0 ? "editor.error.date_required" : "editor.error.date_format")],
+            });
+            return;
+        }
+
+        (Guid? id, Phrase? problem) = await Get<ListingEditor>().CloneAsync(Org, ListingId, startsOn, _label, Actor);
+        if (id is null)
+        {
+            _problem = problem is { } p ? T[p] : null;
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{id}?saved=1");
+    }
+}

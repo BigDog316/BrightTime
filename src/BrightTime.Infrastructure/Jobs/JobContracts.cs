@@ -24,6 +24,12 @@ public sealed record JobRequest
     /// One that is already running does not absorb it, so an edit made mid-run is not lost.
     /// </summary>
     public string? UniqueKey { get; init; }
+
+    /// <summary>
+    /// Not before this time: a projection at the moment a listing is due to appear or come down.
+    /// A scheduled job should carry its own unique key, or it would absorb an immediate one.
+    /// </summary>
+    public DateTimeOffset? RunAfter { get; init; }
 }
 
 /// <summary>Executes one job type. Registered with <c>AddJobHandler</c> and resolved per job, in a fresh scope.</summary>

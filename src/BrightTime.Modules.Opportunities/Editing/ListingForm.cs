@@ -76,6 +76,12 @@ public sealed class ListingForm
     /// <summary>RFC 5545 day codes: MO, TU, WE, TH, FR, SA, SU.</summary>
     public IList<string> Days { get; init; } = [];
 
+    /// <summary>Every how many weeks a weekly schedule meets: "1" to "4".</summary>
+    public string Interval { get; set; } = "1";
+
+    /// <summary>Days the schedule does not meet (holidays, breaks): yyyy-MM-dd, one per line or comma separated.</summary>
+    public string SkipDates { get; set; } = string.Empty;
+
     /// <summary>yyyy-MM-dd, as an HTML date input sends it.</summary>
     public string StartsOn { get; set; } = string.Empty;
 
@@ -90,6 +96,15 @@ public sealed class ListingForm
     public string DeadlineKind { get; set; } = string.Empty;
 
     public string DeadlineOn { get; set; } = string.Empty;
+
+    /// <summary>
+    /// yyyy-MM-dd, or empty to show as soon as it is published. An approved listing stays out
+    /// of search until the start of this day.
+    /// </summary>
+    public string ShowFrom { get; set; } = string.Empty;
+
+    /// <summary>yyyy-MM-dd, or empty. The listing leaves search at the end of this day.</summary>
+    public string TakeDownAfter { get; set; } = string.Empty;
 
     /// <summary>
     /// The row version the editor was opened at. A save against a newer version is refused,

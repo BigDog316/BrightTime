@@ -1,0 +1,132 @@
+@* A site's fields: on the site page, and as the first site of an application (Prefix "Site."). *@
+@using System.Globalization
+@using BrightTime.Modules.Directory.Domain
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Platform.Contracts
+
+<TextField Name="@(Prefix + "Name")" Label="@T["provider.site.name"]" Value="@Form.Name" Hint="@T["provider.site.name_hint"]" Max="ProviderForms.MaxName" Errors="@Errors" />
+<TextField Name="@(Prefix + "AddressLine1")" Label="@T["provider.site.address1"]" Value="@Form.AddressLine1" Max="ProviderForms.MaxName" Autocomplete="address-line1" Errors="@Errors" />
+<TextField Name="@(Prefix + "AddressLine2")" Label="@T["provider.site.address2"]" Value="@Form.AddressLine2" Max="ProviderForms.MaxName" Autocomplete="address-line2" Errors="@Errors" />
+<div class="field-row">
+    <TextField Name="@(Prefix + "Locality")" Label="@T["provider.site.locality"]" Value="@Form.Locality" Max="100" Autocomplete="address-level2" Errors="@Errors" />
+    <TextField Name="@(Prefix + "PostalCode")" Label="@T["provider.site.postal_code"]" Value="@Form.PostalCode" Max="10" Width="short" Autocomplete="postal-code" Errors="@Errors" />
+</div>
+<div class="field">
+    <label for="@(Prefix)NeighbourhoodId">@T["provider.site.neighbourhood"]</label>
+    <p class="hint" id="hint-@(Prefix)NeighbourhoodId">@T["provider.site.neighbourhood_hint"]</p>
+    <select id="@(Prefix)NeighbourhoodId" name="@(Prefix)NeighbourhoodId" aria-invalid="@Errors.Invalid(Prefix + "NeighbourhoodId")"
+            aria-describedby="@Errors.DescribedBy(Prefix + "NeighbourhoodId", "hint-" + Prefix + "NeighbourhoodId")">
+        <option value="">@T["provider.site.choose_neighbourhood"]</option>
+        @foreach (NeighbourhoodShape hood in Neighbourhoods.OrderBy(n => n.Name, StringComparer.CurrentCulture))
+        {
+            <option value="@hood.Id" selected="@(Form.NeighbourhoodId == hood.Id.ToString())">@hood.Name</option>
+        }
+    </select>
+    <FieldError Name="@(Prefix + "NeighbourhoodId")" Errors="@Errors" />
+</div>
+<label class="check">
+    <input type="checkbox" name="@(Prefix)IsAddressPublic" value="true" checked="@Form.IsAddressPublic" />
+    @T["provider.site.address_public"]
+</label>
+<p class="hint">@T["provider.site.address_public_hint"]</p>
+
+@if (Full)
+{
+    <fieldset id="@(Prefix)access">
+        <legend>@T["provider.site.access"]</legend>
+        @foreach (var (field, label, value) in Features)
+        {
+            <div class="field">
+                <p class="label" id="label-@(Prefix + field)">@label</p>
+                <div class="radio-row" role="radiogroup" aria-labelledby="label-@(Prefix + field)">
+                    @foreach (var (option, text) in TriOptions)
+                    {
+                        <label class="check">
+                            <input type="radio" name="@(Prefix + field)" value="@option" checked="@(value == option)" />
+                            @text
+                        </label>
+                    }
+                </div>
+                <FieldError Name="@(Prefix + field)" Errors="@Errors" />
+            </div>
+        }
+        <TextField Name="@(Prefix + "EntranceNote")" Label="@T["provider.site.entrance_note"]" Value="@Form.EntranceNote" Rows="2" Max="ProviderForms.MaxNote" Errors="@Errors" />
+        <TextField Name="@(Prefix + "TransitNote")" Label="@T["provider.site.transit_note"]" Value="@Form.TransitNote" Hint="@T["provider.site.transit_note_hint"]" Rows="2" Max="ProviderForms.MaxNote" Errors="@Errors" />
+        <TextField Name="@(Prefix + "ParkingNote")" Label="@T["provider.site.parking_note"]" Value="@Form.ParkingNote" Rows="2" Max="ProviderForms.MaxNote" Errors="@Errors" />
+    </fieldset>
+
+    <fieldset id="@(Prefix)Hours">
+        <legend>@T["provider.site.hours"]</legend>
+        <p class="hint">@T["provider.site.hours_hint"]</p>
+        <FieldError Name="@(Prefix + "Hours")" Errors="@Errors" />
+        <div class="table-scroll">
+            <table class="hours">
+                <thead>
+                    <tr>
+                        <th scope="col">@T["provider.site.hours_day"]</th>
+                        <th scope="col">@T["provider.site.hours_opens"]</th>
+                        <th scope="col">@T["provider.site.hours_closes"]</th>
+                        <th scope="col">@T["provider.site.hours_season"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < ProviderFormBinder.HourRows; i++)
+                    {
+                        SiteHoursForm row = i < Form.Hours.Count ? Form.Hours[i] : new SiteHoursForm(((i + 1) % 7).ToString(CultureInfo.InvariantCulture), "", "", SiteSeasons.AllYear);
+                        string name = string.Create(CultureInfo.InvariantCulture, $"{Prefix}Hours[{i}].");
+                        int number = i + 1;
+                        <tr>
+                            <td>
+                                <select name="@(name)Day" aria-label="@T.Format("provider.site.hours_row_day", ("row", number))">
+                                    @for (int d = 0; d < 7; d++)
+                                    {
+                                        string value = d.ToString(CultureInfo.InvariantCulture);
+                                        <option value="@value" selected="@(row.Day == value)">@T.Culture.DateTimeFormat.GetDayName((DayOfWeek)d)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input type="time" name="@(name)Opens" value="@row.Opens" aria-label="@T.Format("provider.site.hours_row_opens", ("row", number))" /></td>
+                            <td><input type="time" name="@(name)Closes" value="@row.Closes" aria-label="@T.Format("provider.site.hours_row_closes", ("row", number))" /></td>
+                            <td>
+                                <select name="@(name)Season" aria-label="@T.Format("provider.site.hours_row_season", ("row", number))">
+                                    @foreach (string season in SiteSeasons.All)
+                                    {
+                                        <option value="@season" selected="@(row.Season == season)">@T["provider.season." + season]</option>
+                                    }
+                                </select>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </fieldset>
+}
+
+@code {
+    [Parameter, EditorRequired] public SiteForm Form { get; set; } = new();
+
+    [Parameter, EditorRequired] public IReadOnlyList<NeighbourhoodShape> Neighbourhoods { get; set; } = [];
+
+    [Parameter, EditorRequired] public FieldErrors Errors { get; set; } = FieldErrors.None;
+
+    [Parameter] public string Prefix { get; set; } = "";
+
+    /// <summary>Access features and hours too. The application asks only for the address; the rest can follow.</summary>
+    [Parameter] public bool Full { get; set; } = true;
+
+    private IEnumerable<(string Value, string Text)> TriOptions =>
+    [
+        ("yes", T["provider.site.answer.yes"]),
+        ("no", T["provider.site.answer.no"]),
+        ("", T["provider.site.answer.unknown"]),
+    ];
+
+    private IEnumerable<(string Field, string Label, string Value)> Features =>
+    [
+        (nameof(SiteForm.Wheelchair), T["provider.site.wheelchair"], Form.Wheelchair),
+        (nameof(SiteForm.Restroom), T["provider.site.restroom"], Form.Restroom),
+        (nameof(SiteForm.Elevator), T["provider.site.elevator"], Form.Elevator),
+        (nameof(SiteForm.QuietSpace), T["provider.site.quiet_space"], Form.QuietSpace),
+    ];
+}

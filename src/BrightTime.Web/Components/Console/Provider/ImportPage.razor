@@ -1,0 +1,277 @@
+@page "/provider/orgs/{OrgId:guid}/import"
+@using System.Text
+@using System.Text.Json
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.Modules.Opportunities.Import
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.DataProtection
+@attribute [Authorize]
+@attribute [Microsoft.AspNetCore.Mvc.RequestSizeLimit(MaxRequestBytes)]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["import.denied"]</h1>
+    <p>@T["import.admins_only"] <a href="/provider/orgs/@OrgId">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("import.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="import" Role="@_role" />
+
+    <h2>@T["provider.nav.import"]</h2>
+
+    @if (Created is not null)
+    {
+        <p class="notice success" role="status">@T.Format("import.applied", ("created", Number(Created)), ("updated", Number(Updated)), ("skipped", Number(Skipped)))</p>
+        <p><a href="/provider/orgs/@OrgId">@T["import.see_listings"]</a></p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_report is { Problem: null } report)
+    {
+        <section aria-labelledby="report-heading">
+            <h3 id="report-heading">@T["import.report.heading"]</h3>
+            <p role="status">@T.Format("import.report.summary",
+                ("create", report.Count(ImportAction.Create)), ("update", report.Count(ImportAction.Update)),
+                ("skip", report.Count(ImportAction.Skip)), ("invalid", report.Count(ImportAction.Invalid)))</p>
+
+            <div class="table-scroll">
+                <table class="import-report">
+                    <thead>
+                        <tr>
+                            <th scope="col">@T["import.report.row"]</th>
+                            <th scope="col">@T["import.report.id"]</th>
+                            <th scope="col">@T["import.report.title"]</th>
+                            <th scope="col">@T["import.report.outcome"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (ImportRowReport row in report.Rows)
+                        {
+                            <tr class="import-@row.Action.ToString().ToLowerInvariant()">
+                                <td>@row.Row</td>
+                                <td dir="auto">@row.ExternalId</td>
+                                <td dir="auto">@row.Title</td>
+                                <td>
+                                    <strong>@T["import.action." + row.Action.ToString().ToLowerInvariant()]</strong>
+                                    @if (row.Errors.Count > 0)
+                                    {
+                                        <ul>
+                                            @foreach (ImportProblem p in row.Errors)
+                                            {
+                                                <li>@(p.Column == "*" ? "" : p.Column + ": ")@T[p.Message]</li>
+                                            }
+                                        </ul>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (!report.CanApply)
+            {
+                <p>@T["import.nothing_to_apply"]</p>
+            }
+        </section>
+    }
+
+    @* Rendered for an apply POST too: a static form's handler runs only if its form is on the page. *@
+    @if (_report is { CanApply: true } || _applyPosted)
+    {
+        <form method="post" @formname="apply" @onsubmit="ApplyAsync">
+            <AntiforgeryToken />
+            <input type="hidden" name="payload" value="@_payload" />
+            <p>@T["import.apply_hint"]</p>
+            <button type="submit">@T["import.apply"]</button>
+        </form>
+    }
+
+    <section aria-labelledby="upload-heading">
+        <h3 id="upload-heading">@T[_report is null ? "import.upload.heading" : "import.upload.again"]</h3>
+        <p>@T.Format("import.intro", ("rows", ListingImporter.MaxRows), ("size", ListingImporter.MaxBytes / 1024))</p>
+        <p><a href="@TemplatePath" download>@T["import.template"]</a> · @T["import.template_hint"]</p>
+
+        <form method="post" class="editor" enctype="multipart/form-data" @formname="upload" @onsubmit="UploadAsync">
+            <AntiforgeryToken />
+            <div id="Format" class="radio-row">
+                <label class="check"><input type="radio" name="Format" value="csv" checked="@(_format == ImportFormat.Csv)" /> @T["import.format.csv"]</label>
+                <label class="check"><input type="radio" name="Format" value="hsds" checked="@(_format == ImportFormat.Hsds)" /> @T["import.format.hsds"]</label>
+            </div>
+            <div class="field">
+                <label for="File">@T["import.file"]</label>
+                <input id="File" name="File" type="file" accept=".csv,.json,text/csv,application/json" required />
+            </div>
+            <div class="field">
+                <label for="DefaultCategory">@T["import.default_category"]</label>
+                <p class="hint" id="hint-DefaultCategory">@T["import.default_category_hint"]</p>
+                <select id="DefaultCategory" name="DefaultCategory" aria-describedby="hint-DefaultCategory">
+                    <option value="">@T["editor.option.none"]</option>
+                    @foreach (VocabularyTerm c in _categories)
+                    {
+                        <option value="@c.Id" selected="@(_defaultCategory == c.Id)">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="actions">
+                <button type="submit">@T["import.check"]</button>
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    public const string TemplatePath = "/provider/import-template.csv";
+
+    /// <summary>The file, the form around it, and on apply the protected copy of it, with room to spare.</summary>
+    private const long MaxRequestBytes = 4L * 1024 * 1024;
+
+    /// <summary>How long a checked file may wait for "apply" before it must be checked again.</summary>
+    private static readonly TimeSpan PayloadLifetime = TimeSpan.FromMinutes(30);
+
+    private const string PayloadPurpose = "BrightTime.ListingImport.v1";
+
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "created")] public string? Created { get; set; }
+
+    [SupplyParameterFromQuery(Name = "updated")] public string? Updated { get; set; }
+
+    [SupplyParameterFromQuery(Name = "skipped")] public string? Skipped { get; set; }
+
+    private string? _name;
+    private string _role = "";
+    private IReadOnlyList<VocabularyTerm> _categories = [];
+    private ImportReport? _report;
+    private string? _payload;
+    private string? _problem;
+    private ImportFormat _format = ImportFormat.Csv;
+    private Guid? _defaultCategory;
+    private bool _applyPosted;
+
+    private OrganisationId Org => new(OrgId);
+
+    private sealed record Payload(Guid Org, ImportFormat Format, Guid? DefaultCategory, string Content);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Listings.BulkImport, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _role = RoleIn(Org) ?? "";
+        _categories = await Get<ITaxonomyQueries>().GetVocabularyAsync("category", Tenant.Locale.Code);
+        _applyPosted = IsPost && HttpContext.Request.HasFormContentType && HttpContext.Request.Form["_handler"] == "apply";
+    }
+
+    private async Task UploadAsync()
+    {
+        IFormCollection form = HttpContext.Request.Form;
+        _format = form["Format"] == "hsds" ? ImportFormat.Hsds : ImportFormat.Csv;
+        _defaultCategory = Guid.TryParse(form["DefaultCategory"], out Guid category) ? category : null;
+
+        IFormFile? file = form.Files["File"];
+        if (file is null || file.Length == 0)
+        {
+            _problem = T["import.error.no_file"];
+            return;
+        }
+
+        if (file.Length > ListingImporter.MaxBytes)
+        {
+            _problem = T.Format("import.error.file_too_large", ("max", ListingImporter.MaxBytes / 1024));
+            return;
+        }
+
+        string content;
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(), new UTF8Encoding(false, throwOnInvalidBytes: true));
+            content = await reader.ReadToEndAsync(HttpContext.RequestAborted);
+        }
+        catch (DecoderFallbackException)
+        {
+            _problem = T["import.error.encoding"];
+            return;
+        }
+
+        _report = await Get<ListingImporter>().DryRunAsync(Org, _format, content, _defaultCategory);
+        if (_report.Problem is { } problem)
+        {
+            _problem = T[problem];
+            return;
+        }
+
+        // The file comes back with "apply", sealed so it cannot be changed or replayed elsewhere.
+        string json = JsonSerializer.Serialize(new Payload(OrgId, _format, _defaultCategory, content));
+        _payload = Protector().Protect(json, PayloadLifetime);
+    }
+
+    private async Task ApplyAsync()
+    {
+        Payload? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<Payload>(Protector().Unprotect(FormValue("payload"), out _));
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            payload = null;
+        }
+
+        if (payload is null || payload.Org != OrgId)
+        {
+            _applyPosted = false;
+            _problem = T["import.error.expired"];
+            return;
+        }
+
+        // Checked again: a site may have closed, or a listing gone for review, since the dry run.
+        (ImportReport report, ImportOutcome? outcome) = await Get<ListingImporter>()
+            .ApplyAsync(Org, payload.Format, payload.Content, payload.DefaultCategory, Actor);
+        if (outcome is null)
+        {
+            _applyPosted = false;
+            _report = report;
+            _problem = report.Problem is { } problem ? T[problem] : T["import.nothing_to_apply"];
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/import?created={outcome.Created}&updated={outcome.Updated}&skipped={outcome.Skipped.Count}");
+    }
+
+    private ITimeLimitedDataProtector Protector() =>
+        Get<IDataProtectionProvider>().CreateProtector(PayloadPurpose).ToTimeLimitedDataProtector();
+
+    private static int Number(string? value) => int.TryParse(value, out int n) && n >= 0 ? n : 0;
+}

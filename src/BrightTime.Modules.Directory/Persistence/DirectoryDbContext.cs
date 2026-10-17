@@ -25,6 +25,10 @@ public sealed class DirectoryDbContext(DbContextOptions<DirectoryDbContext> opti
 
     public DbSet<StaffClearance> Clearances => Set<StaffClearance>();
 
+    public DbSet<SiteHours> SiteHours => Set<SiteHours>();
+
+    public DbSet<SiteAssignment> SiteAssignments => Set<SiteAssignment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -91,6 +95,18 @@ public sealed class DirectoryDbContext(DbContextOptions<DirectoryDbContext> opti
             b.HasIndex(c => new { c.TenantId, c.ExpiresOn })
              .HasFilter("status in ('cleared','conditional')");
             b.HasIndex(c => c.UserId);
+        });
+
+        modelBuilder.Entity<SiteHours>(b =>
+        {
+            b.ToTable("site_hours");
+            b.HasKey(h => new { h.SiteId, h.DayOfWeek, h.Season, h.OpensAt });
+        });
+
+        modelBuilder.Entity<SiteAssignment>(b =>
+        {
+            b.ToTable("site_assignment");
+            b.HasKey(a => new { a.OrgMembershipId, a.SiteId });
         });
 
         modelBuilder.ApplySnakeCaseNames();

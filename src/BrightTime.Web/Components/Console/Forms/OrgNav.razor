@@ -1,0 +1,36 @@
+@* The tabs across an organisation's console pages. Each tab shows only to those who can use it. *@
+@using BrightTime.Modules.Identity.Authorization
+<nav class="org-nav" aria-label="@T["provider.nav.label"]">
+    <ul>
+        @foreach (var (key, path, show) in Tabs)
+        {
+            @if (show)
+            {
+                <li><a href="@($"/provider/orgs/{OrgId}{path}")" aria-current="@(Current == key ? "page" : null)">@T["provider.nav." + key]</a></li>
+            }
+        }
+    </ul>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    /// <summary>listings, profile, sites, staff or import.</summary>
+    [Parameter, EditorRequired] public string Current { get; set; } = "listings";
+
+    /// <summary>The signed-in person's role in this organisation.</summary>
+    [Parameter, EditorRequired] public string Role { get; set; } = "";
+
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private bool IsAdmin => Role is OrganisationRoles.Owner or OrganisationRoles.Admin;
+
+    private IEnumerable<(string Key, string Path, bool Show)> Tabs =>
+    [
+        ("listings", "", true),
+        ("profile", "/profile", true),
+        ("sites", "/sites", true),
+        ("staff", "/staff", true),
+        ("import", "/import", IsAdmin && HttpContext.User.HasPermission(Permissions.Listings.BulkImport)),
+    ];
+}

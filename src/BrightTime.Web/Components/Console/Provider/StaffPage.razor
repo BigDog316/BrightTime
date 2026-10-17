@@ -1,0 +1,342 @@
+@page "/provider/orgs/{OrgId:guid}/staff"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Auth
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.staff.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.staff.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="staff" Role="@_role" />
+
+    <h2>@T["provider.nav.staff"]</h2>
+
+    @if (Done is { Length: > 0 } done && done is "invited" or "role" or "sites" or "removed")
+    {
+        <p class="notice success" role="status">@T["provider.staff.done." + done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p class="hint">@T["provider.staff.clearance_note"]</p>
+
+    <div class="table-scroll">
+        <table class="staff">
+            <thead>
+                <tr>
+                    <th scope="col">@T["provider.staff.person"]</th>
+                    <th scope="col">@T["provider.staff.role"]</th>
+                    <th scope="col">@T["provider.staff.sites"]</th>
+                    <th scope="col">@T["provider.staff.clearances"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (MemberRow m in _members)
+                {
+                    <tr>
+                        <td>
+                            <span dir="auto">@(_emails.TryGetValue(m.UserId, out string? email) ? email : T["provider.staff.no_address"])</span>
+                            @if (m.Title is { Length: > 0 } title)
+                            {
+                                <br /><span class="note" dir="auto">@title</span>
+                            }
+                            @if (m.Status != "active")
+                            {
+                                <br /><span class="note">@T["provider.staff.status." + m.Status]</span>
+                            }
+                        </td>
+                        <td>@T["organisation.role." + m.Role]</td>
+                        <td>@string.Join(", ", m.SiteIds.Select(s => _siteNames.TryGetValue(s, out string? n) ? n : "").Where(n => n.Length > 0)) </td>
+                        <td>
+                            @if (m.Clearances.Count == 0)
+                            {
+                                <span class="note">@T["provider.staff.clearance.none"]</span>
+                            }
+                            @foreach (ClearanceView c in m.Clearances)
+                            {
+                                <span class="clearance clearance-@c.Status">@T["clearance.kind." + c.Kind]: @T["clearance.status." + c.Status]@(c.ExpiresOn is { } on ? " · " + T.Format("provider.staff.clearance.expires", ("date", T.DateShort(on))) : "")</span><br />
+                            }
+                        </td>
+                    </tr>
+                    @if (_canManage && m.UserId != Actor.Value)
+                    {
+                        <tr class="manage-row">
+                            <td colspan="4">
+                                <details>
+                                    <summary>@T["provider.staff.manage"]</summary>
+                                    <form method="post" @formname="@("role-" + m.MembershipId.ToString("N"))" @onsubmit="ChangeRoleAsync" class="inline-actions">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="membership" value="@m.MembershipId" />
+                                        <label for="role-@m.MembershipId">@T["provider.staff.role"]</label>
+                                        <select id="role-@m.MembershipId" name="role">
+                                            @foreach (string role in AssignableRoles)
+                                            {
+                                                <option value="@role" selected="@(m.Role == role)">@T["organisation.role." + role]</option>
+                                            }
+                                        </select>
+                                        <button type="submit" class="secondary-button">@T["provider.staff.change_role"]</button>
+                                    </form>
+                                    <form method="post" @formname="@("sites-" + m.MembershipId.ToString("N"))" @onsubmit="SetSitesAsync">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="membership" value="@m.MembershipId" />
+                                        <fieldset>
+                                            <legend>@T["provider.staff.sites"]</legend>
+                                            @foreach (SiteSummary site in _sites)
+                                            {
+                                                <label class="check">
+                                                    <input type="checkbox" name="sites" value="@site.SiteId" checked="@m.SiteIds.Contains(site.SiteId)" />
+                                                    @site.Name
+                                                </label>
+                                            }
+                                        </fieldset>
+                                        <button type="submit" class="secondary-button">@T["provider.staff.save_sites"]</button>
+                                    </form>
+                                    <form method="post" @formname="@("remove-" + m.MembershipId.ToString("N"))" @onsubmit="RemoveAsync">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="membership" value="@m.MembershipId" />
+                                        <button type="submit" class="secondary-button">@T[m.Status == "invited" ? "provider.staff.withdraw" : "provider.staff.remove"]</button>
+                                    </form>
+                                </details>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_canManage)
+    {
+        <section aria-labelledby="invite-heading">
+            <h2 id="invite-heading">@T["provider.staff.invite"]</h2>
+            <p class="hint">@T["provider.staff.invite_hint"]</p>
+            <ErrorSummary Errors="@_errors" />
+            <form method="post" class="editor" @formname="invite" @onsubmit="InviteAsync" novalidate>
+                <AntiforgeryToken />
+                <TextField Name="Email" Label="@T["account.field.email"]" Value="@_email" Type="email" Max="AccountProvisioning.MaxEmailLength" Errors="@_errors" />
+                <div class="field">
+                    <label for="Role">@T["provider.staff.role"]</label>
+                    <select id="Role" name="Role">
+                        @foreach (string role in AssignableRoles)
+                        {
+                            <option value="@role" selected="@(role == MemberRoles.Staff)">@T["organisation.role." + role]</option>
+                        }
+                    </select>
+                    <FieldError Name="Role" Errors="@_errors" />
+                </div>
+                <TextField Name="Title" Label="@T["provider.staff.job_title"]" Value="@_title" Max="100" Errors="@_errors" />
+                @if (_sites.Count > 0)
+                {
+                    <fieldset>
+                        <legend>@T["provider.staff.sites"]</legend>
+                        @foreach (SiteSummary site in _sites)
+                        {
+                            <label class="check">
+                                <input type="checkbox" name="Sites" value="@site.SiteId" />
+                                @site.Name
+                            </label>
+                        }
+                    </fieldset>
+                }
+                <div class="actions">
+                    <button type="submit">@T["provider.staff.send_invitation"]</button>
+                </div>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private string? _name;
+    private string _role = "";
+    private bool _canManage;
+    private IReadOnlyList<MemberRow> _members = [];
+    private IReadOnlyDictionary<Guid, string> _emails = new Dictionary<Guid, string>();
+    private IReadOnlyList<SiteSummary> _sites = [];
+    private Dictionary<Guid, string> _siteNames = [];
+    private FieldErrors _errors = FieldErrors.None;
+    private string? _problem;
+    private string _email = "";
+    private string _title = "";
+
+    private OrganisationId Org => new(OrgId);
+
+    /// <summary>Only an owner offers "owner".</summary>
+    private IEnumerable<string> AssignableRoles => MemberRoles.Assignable.Where(r => r != MemberRoles.Owner || _role == MemberRoles.Owner);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Listings.Create, OrganisationRoles.Viewer))
+        {
+            Forbid();
+            return;
+        }
+
+        IDirectoryQueries directory = Get<IDirectoryQueries>();
+        _name = await directory.GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _role = RoleIn(Org) ?? "";
+        _canManage = await CanActForAsync(Org, Permissions.Staff.Invite, OrganisationRoles.Admin);
+        _members = await Get<StaffDirectory>().ListAsync(OrgId);
+        if (Services.GetService<AccountProvisioning>() is { } accounts)
+        {
+            _emails = await accounts.EmailsAsync(Tenant.TenantId, [.. _members.Select(m => m.UserId)]);
+        }
+
+        IReadOnlyList<SiteSummary> sites = await directory.GetOrganisationSitesAsync(Org);
+        _siteNames = sites.ToDictionary(s => s.SiteId, s => s.Name);
+        _sites = [.. sites.Where(s => s.IsActive)];
+    }
+
+    /// <summary>
+    /// The answer reads the same whether or not the address had an account, and a youth or
+    /// child address is quietly not invited (D23): an organisation's admin learns nothing
+    /// about who uses the platform.
+    /// </summary>
+    private async Task InviteAsync()
+    {
+        if (!_canManage)
+        {
+            return;
+        }
+
+        _email = FormValue("Email").Trim();
+        _title = FormValue("Title").Trim();
+        string role = FormValue("Role");
+        Guid[] sites = [.. HttpContext.Request.Form["Sites"].Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => _siteNames.ContainsKey(g))];
+
+        Dictionary<string, Phrase[]> errors = new(StringComparer.Ordinal);
+        if (!ProviderForms.LooksLikeEmail(_email))
+        {
+            errors["Email"] = [Phrase.Of("editor.error.email")];
+        }
+
+        if (!AssignableRoles.Contains(role, StringComparer.Ordinal))
+        {
+            errors["Role"] = [Phrase.Of("editor.error.choose_option")];
+        }
+
+        if (_title.Length > 100)
+        {
+            errors["Title"] = [Phrase.Of("editor.error.too_long", ("max", 100), ("length", _title.Length))];
+        }
+
+        if (errors.Count > 0)
+        {
+            _errors = new FieldErrors(errors);
+            return;
+        }
+
+        if (Get<AccountProvisioning>() is { } accounts
+            && await accounts.FindOrCreateAdultAsync(Tenant.TenantId, _email) is var (invitee, created))
+        {
+            Result result = await Get<StaffDirectory>().InviteAsync(OrgId, invitee, role, _title.Length == 0 ? null : _title, sites, Actor, _role);
+            if (!result.IsSuccess)
+            {
+                _problem = T.Error(result.Error!);
+                return;
+            }
+
+            if (Get<BrightTime.Web.Tenancy.SiteContext>().BaseUrl is { } siteUrl)
+            {
+                Get<AccountMailDispatcher>().RequestMembership(AccountMailKind.Invitation, Tenant.TenantId, _email, _name!, created, siteUrl, Tenant.Locale);
+            }
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/staff?done=invited");
+    }
+
+    private async Task ChangeRoleAsync()
+    {
+        if (!_canManage || !Guid.TryParse(FormValue("membership"), out Guid membership))
+        {
+            return;
+        }
+
+        string role = FormValue("role");
+        Result result = await Get<StaffDirectory>().ChangeRoleAsync(OrgId, membership, role, Actor, _role);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        // A person made admin needs the administrator's permissions too; they apply at their next sign-in check.
+        if (_members.FirstOrDefault(m => m.MembershipId == membership) is { Status: "active" } member
+            && Services.GetService<AccountProvisioning>() is { } accounts)
+        {
+            await accounts.GrantRoleAsync(Tenant.TenantId, new UserId(member.UserId), AccountProvisioning.GlobalRoleFor(role));
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/staff?done=role");
+    }
+
+    private async Task SetSitesAsync()
+    {
+        if (!_canManage || !Guid.TryParse(FormValue("membership"), out Guid membership))
+        {
+            return;
+        }
+
+        Guid[] sites = [.. HttpContext.Request.Form["sites"].Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => _siteNames.ContainsKey(g))];
+        Result result = await Get<StaffDirectory>().SetSitesAsync(OrgId, membership, sites, Actor);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/staff?done=sites");
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (!_canManage || !Guid.TryParse(FormValue("membership"), out Guid membership))
+        {
+            return;
+        }
+
+        Result result = await Get<StaffDirectory>().RemoveAsync(OrgId, membership, Actor, _role);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/staff?done=removed");
+    }
+}

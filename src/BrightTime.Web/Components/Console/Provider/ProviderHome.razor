@@ -1,5 +1,8 @@
 @page "/provider"
 @using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Web.Auth
 @using BrightTime.Modules.Identity.Authorization
 @using BrightTime.SharedKernel.Ids
 @using Microsoft.AspNetCore.Authorization
@@ -9,6 +12,32 @@
 <PageTitle>@T["site.nav.organisations"] · BrightTime</PageTitle>
 
 <h1>@T["site.nav.organisations"]</h1>
+
+@if (Answered is "accepted" or "declined")
+{
+    <p class="notice success" role="status">@T["provider.invitation." + Answered]</p>
+}
+
+@if (_invitations.Count > 0)
+{
+    <section aria-labelledby="invitations-heading">
+        <h2 id="invitations-heading">@T["provider.invitations"]</h2>
+        <ul class="card-list">
+            @foreach (Invitation invitation in _invitations)
+            {
+                <li>
+                    <p>@T.Format("provider.invitation.text", ("organisation", invitation.OrganisationName), ("role", T["organisation.role." + invitation.Role]))</p>
+                    <form method="post" @formname="@("answer-" + invitation.MembershipId.ToString("N"))" @onsubmit="AnswerAsync" class="inline-actions">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="membership" value="@invitation.MembershipId" />
+                        <button type="submit" name="answer" value="accept">@T["provider.invitation.accept"]</button>
+                        <button type="submit" name="answer" value="decline" class="secondary-button">@T["provider.invitation.decline"]</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    </section>
+}
 
 @if (!Availability.IsAvailable)
 {
@@ -31,13 +60,21 @@ else
     </ul>
 }
 
+@if (Availability.CanSignIn)
+{
+    <p><a href="/providers/apply">@T["provider.apply_another"]</a></p>
+}
+
 @if (User.HasPermission(Permissions.Listings.Review))
 {
     <p><a href="/organiser/review">@T["provider.go_to_review"]</a></p>
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "answered")] public string? Answered { get; set; }
+
     private List<(OrganisationId Id, string Name, string Role, OrganisationStatus Status)> _organisations = [];
+    private IReadOnlyList<Invitation> _invitations = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -45,6 +82,8 @@ else
         {
             return;
         }
+
+        _invitations = await Get<StaffDirectory>().InvitationsAsync(Actor);
 
         IDirectoryQueries directory = Get<IDirectoryQueries>();
         foreach (var claim in User.FindAll(BrightTimeClaims.OrganisationMembership))
@@ -62,5 +101,33 @@ else
         }
 
         _organisations.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCulture));
+    }
+
+    /// <summary>
+    /// Accepting makes the membership active, grants the role that goes with it, and refreshes
+    /// the session so the organisation is open on the next page.
+    /// </summary>
+    private async Task AnswerAsync()
+    {
+        if (!Guid.TryParse(FormValue("membership"), out Guid membership))
+        {
+            return;
+        }
+
+        bool accept = FormValue("answer") == "accept";
+        Invitation? invitation = _invitations.FirstOrDefault(i => i.MembershipId == membership);
+        if (invitation is null || !await Get<StaffDirectory>().AnswerAsync(Actor, membership, accept))
+        {
+            Navigation.NavigateTo("/provider");
+            return;
+        }
+
+        if (accept && Services.GetService<AccountProvisioning>() is { } accounts)
+        {
+            await accounts.GrantRoleAsync(Tenant.TenantId, Actor, AccountProvisioning.GlobalRoleFor(invitation.Role));
+            await SessionRefresh.RefreshAsync(HttpContext, Tenant.TenantId, Actor);
+        }
+
+        Navigation.NavigateTo($"/provider?answered={(accept ? "accepted" : "declined")}");
     }
 }

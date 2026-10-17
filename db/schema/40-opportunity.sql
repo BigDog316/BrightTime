@@ -64,6 +64,9 @@ create table listing (
   review_note        text,
   published_at       timestamptz,
   unpublished_at     timestamptz,
+  -- Scheduled publication: an approved listing appears in search from publish_at and
+  -- comes down at expires_at. A projection job is queued for each moment.
+  publish_at         timestamptz,
   expires_at         timestamptz,
 
   -- provenance
@@ -113,6 +116,7 @@ create table listing (
   constraint ck_listing_builtin_capacity check (
     registration_mode <> 'builtin' or capacity_total is not null),
   constraint ck_listing_published check ((status = 'published') = (published_at is not null)),
+  constraint ck_listing_schedule check (publish_at is null or expires_at is null or expires_at > publish_at),
   constraint ck_listing_job_is_paid check (kind <> 'job' or cost_model in ('stipend_paid','free')),
   constraint ck_listing_resource_dropin check (kind <> 'resource' or registration_mode = 'none')
 );
@@ -121,6 +125,9 @@ create index ix_listing_review_queue on listing (tenant_id, submitted_at)
   where status in ('pending_review','changes_requested');
 create index ix_listing_published on listing (tenant_id, published_at desc) where status = 'published';
 create index ix_listing_expiring on listing (expires_at) where status = 'published' and expires_at is not null;
+-- An import is idempotent: a row's external id names one listing per organisation and source.
+create unique index ux_listing_source_record on listing (org_id, source, source_record_id)
+  where source_record_id is not null;
 create index ix_listing_url_recheck on listing (external_url_checked_at)
   where registration_mode = 'external' and status = 'published';
 create trigger listing_touch before update on listing

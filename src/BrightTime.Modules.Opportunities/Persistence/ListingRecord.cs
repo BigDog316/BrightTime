@@ -94,6 +94,9 @@ public sealed class ListingRecord
 
     public DateTimeOffset? UnpublishedAt { get; set; }
 
+    /// <summary>Scheduled publication: a published listing is not in search before this.</summary>
+    public DateTimeOffset? PublishAt { get; set; }
+
     public DateTimeOffset? ExpiresAt { get; set; }
 
     public string Source { get; set; } = "manual";

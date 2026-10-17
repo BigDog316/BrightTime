@@ -1,0 +1,142 @@
+@page "/provider/orgs/{OrgId:guid}/sites/new"
+@page "/provider/orgs/{OrgId:guid}/sites/{SiteId:guid}"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Geo
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.sites.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@(SiteId is null ? T["provider.sites.new"] : T.Format("provider.sites.edit_title", ("site", _form.Name))) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/sites">@_name</a></p>
+    <h1>@(SiteId is null ? T["provider.sites.new"] : _title)</h1>
+
+    @if (Saved == "1")
+    {
+        <p class="notice success" role="status">@T["provider.sites.saved"]</p>
+    }
+    @if (!_form.Active)
+    {
+        <p class="notice">@T["provider.sites.closed_notice"]</p>
+    }
+
+    <p class="hint">@T["provider.sites.location_note"]</p>
+
+    <ErrorSummary Errors="@_errors" />
+    <form method="post" class="editor" @formname="site" @onsubmit="SaveAsync" novalidate>
+        <AntiforgeryToken />
+        <SiteFields Form="@_form" Neighbourhoods="@_neighbourhoods" Errors="@_errors" />
+        <div class="actions">
+            <button type="submit">@T[SiteId is null ? "provider.sites.create" : "editor.save_changes"]</button>
+            <a href="/provider/orgs/@OrgId/sites" class="secondary">@T["form.cancel"]</a>
+        </div>
+    </form>
+
+    @if (SiteId is not null)
+    {
+        <form method="post" class="danger-zone" @formname="open-state" @onsubmit="ToggleAsync">
+            <AntiforgeryToken />
+            <h2>@T[_form.Active ? "provider.sites.close_heading" : "provider.sites.reopen_heading"]</h2>
+            <p>@T[_form.Active ? "provider.sites.close_hint" : "provider.sites.reopen_hint"]</p>
+            <button type="submit" class="secondary-button">@T[_form.Active ? "provider.sites.close" : "provider.sites.reopen"]</button>
+        </form>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid? SiteId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    private string? _name;
+    private string? _title;
+    private SiteForm _form = new();
+    private FieldErrors _errors = FieldErrors.None;
+    private IReadOnlyList<NeighbourhoodShape> _neighbourhoods = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        OrganisationId org = new(OrgId);
+        if (!await CanActForAsync(org, Permissions.Sites.Manage))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (SiteId is { } id)
+        {
+            SiteForm? loaded = await Get<SiteEditor>().LoadAsync(OrgId, id);
+            if (loaded is null)
+            {
+                _name = null;
+                Navigation.NotFound();
+                return;
+            }
+
+            _form = loaded;
+            _title = loaded.Name;
+        }
+
+        _neighbourhoods = await Get<IGeographyQueries>().GetNeighbourhoodsAsync(Tenant.Locale.Code);
+    }
+
+    private async Task SaveAsync()
+    {
+        bool active = _form.Active;
+        _form = ProviderFormBinder.Site(HttpContext.Request.Form) with { Active = active };
+        var errors = ProviderForms.Check(_form, [.. _neighbourhoods.Select(n => n.Id)]);
+        if (errors.Count > 0)
+        {
+            _errors = new FieldErrors(errors);
+            return;
+        }
+
+        // Placed at the neighbourhood's centre until a geocoder exists (Q7).
+        NeighbourhoodShape hood = _neighbourhoods.First(n => n.Id == Guid.Parse(_form.NeighbourhoodId));
+        Guid? saved = await Get<SiteEditor>().SaveAsync(OrgId, SiteId, _form, new Coordinate(hood.CentroidLatitude, hood.CentroidLongitude), Actor);
+        if (saved is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/sites/{saved}?saved=1");
+    }
+
+    private async Task ToggleAsync()
+    {
+        if (SiteId is { } id)
+        {
+            await Get<SiteEditor>().SetActiveAsync(OrgId, id, !_form.Active, Actor);
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/sites/{id}");
+        }
+    }
+}

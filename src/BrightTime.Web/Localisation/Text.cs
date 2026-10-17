@@ -106,6 +106,9 @@ public sealed partial class Text(Catalogue catalogue, ITenantContext tenant, IWo
     /// <summary>"Oct 17, 2026".</summary>
     public string DateShort(DateTimeOffset at) => Local(at).ToString(Locale.Dates.DateShort, Culture);
 
+    /// <summary>A calendar day, with no time and so no zone to convert from.</summary>
+    public string DateShort(DateOnly day) => day.ToString(Locale.Dates.DateShort, Culture);
+
     /// <summary>The locale's short time: "3:30 PM", "15:30".</summary>
     public string Time(DateTimeOffset at) => Local(at).ToString("t", Culture);
 

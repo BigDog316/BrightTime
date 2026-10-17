@@ -44,8 +44,11 @@ public sealed record ParsedListing
     public required TimeOnly StartTime { get; init; }
     public required TimeOnly EndTime { get; init; }
     public string? Rrule { get; init; }
+    public IReadOnlyList<DateOnly> SkipDates { get; init; } = [];
     public string? DeadlineKind { get; init; }
     public DateOnly? DeadlineOn { get; init; }
+    public DateOnly? ShowFrom { get; init; }
+    public DateOnly? TakeDownAfter { get; init; }
 }
 
 /// <summary>
@@ -68,6 +71,12 @@ public static class ListingFormParser
 
     public static readonly IReadOnlyList<string> DayCodes = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
+    /// <summary>"Every week" to "every four weeks": the patterns providers actually run.</summary>
+    public const int MaxInterval = 4;
+
+    /// <summary>A school year's holidays and breaks, with room to spare.</summary>
+    public const int MaxSkipDates = 60;
+
     /// <summary>The editor's field order, for ordering error summaries.</summary>
     private static readonly string[] FieldOrder =
     [
@@ -75,8 +84,9 @@ public static class ListingFormParser
         nameof(ListingForm.PrimaryLanguage), nameof(ListingForm.AgeMin), nameof(ListingForm.AgeMax),
         nameof(ListingForm.GradeMin), nameof(ListingForm.GradeMax), nameof(ListingForm.TermIds),
         nameof(ListingForm.Modality), nameof(ListingForm.SiteIds), nameof(ListingForm.VirtualUrl),
-        nameof(ListingForm.Repeats), nameof(ListingForm.Days), nameof(ListingForm.StartsOn), nameof(ListingForm.EndsOn),
-        nameof(ListingForm.StartTime), nameof(ListingForm.EndTime), nameof(ListingForm.CostModel),
+        nameof(ListingForm.Repeats), nameof(ListingForm.Days), nameof(ListingForm.Interval), nameof(ListingForm.StartsOn),
+        nameof(ListingForm.EndsOn), nameof(ListingForm.StartTime), nameof(ListingForm.EndTime), nameof(ListingForm.SkipDates),
+        nameof(ListingForm.ShowFrom), nameof(ListingForm.TakeDownAfter), nameof(ListingForm.CostModel),
         nameof(ListingForm.CostMin), nameof(ListingForm.CostMax), nameof(ListingForm.SlidingScaleNote),
         nameof(ListingForm.RegistrationMode), nameof(ListingForm.ExternalUrl), nameof(ListingForm.Capacity),
         nameof(ListingForm.DeadlineKind), nameof(ListingForm.DeadlineOn), nameof(ListingForm.AccommodationIds),
@@ -184,7 +194,19 @@ public static class ListingFormParser
                 Add(nameof(form.EndsOn), Phrase.Of("editor.error.ends_on_required"));
             }
 
-            rrule = "FREQ=WEEKLY;BYDAY=" + string.Join(',', days);
+            int interval = 1;
+            if (!string.IsNullOrWhiteSpace(form.Interval)
+                && (!int.TryParse(form.Interval.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out interval)
+                    || interval is < 1 or > MaxInterval))
+            {
+                Add(nameof(form.Interval), Phrase.Of("editor.error.interval", ("max", MaxInterval)));
+                interval = 1;
+            }
+
+            // INTERVAL=1 is the default and is left out, so existing rules read the same.
+            rrule = interval == 1
+                ? "FREQ=WEEKLY;BYDAY=" + string.Join(',', days)
+                : $"FREQ=WEEKLY;INTERVAL={interval.ToString(CultureInfo.InvariantCulture)};BYDAY={string.Join(',', days)}";
         }
         else
         {
@@ -207,6 +229,51 @@ public static class ListingFormParser
         if (weekly && startsOn is { } first && days.Length > 0)
         {
             startsOn = days.Select(d => NextOrSame(first, d)).Min();
+        }
+
+        List<DateOnly> skipDates = [];
+        if (weekly)
+        {
+            string[] typed = form.SkipDates.Split([',', ';', '\n', '\r', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (typed.Length > MaxSkipDates)
+            {
+                Add(nameof(form.SkipDates), Phrase.Of("editor.error.too_many_skip_dates", ("max", MaxSkipDates)));
+            }
+            else
+            {
+                foreach (string value in typed)
+                {
+                    if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly skip))
+                    {
+                        Add(nameof(form.SkipDates), Phrase.Of("editor.error.skip_date_format", ("value", value)));
+                        break;
+                    }
+
+                    if (startsOn is { } from && endsOn is { } to && (skip < from || skip > to))
+                    {
+                        Add(nameof(form.SkipDates), Phrase.Of("editor.error.skip_date_outside", ("value", value)));
+                        break;
+                    }
+
+                    skipDates.Add(skip);
+                }
+            }
+
+            skipDates = [.. skipDates.Distinct().Order()];
+        }
+
+        DateOnly? showFrom = Date(form.ShowFrom, nameof(form.ShowFrom), Add, required: false);
+        DateOnly? takeDownAfter = Date(form.TakeDownAfter, nameof(form.TakeDownAfter), Add, required: false);
+        if (showFrom is { } show)
+        {
+            // ck_listing_schedule: it must come down after it goes up. An event comes down the day after it ends.
+            DateOnly? lastShown = kind == ListingKind.Event && endsOn is { } eventEnd
+                ? (takeDownAfter is { } t && t < eventEnd ? t : eventEnd)
+                : takeDownAfter;
+            if (lastShown is { } last && last < show)
+            {
+                Add(takeDownAfter is not null ? nameof(form.TakeDownAfter) : nameof(form.ShowFrom), Phrase.Of("editor.error.shown_before_taken_down"));
+            }
         }
 
         string? deadlineKind = string.IsNullOrWhiteSpace(form.DeadlineKind) ? null : form.DeadlineKind;
@@ -306,8 +373,11 @@ public static class ListingFormParser
             StartTime = startTime.Value,
             EndTime = endTime.Value,
             Rrule = rrule,
+            SkipDates = skipDates,
             DeadlineKind = deadlineKind,
             DeadlineOn = deadlineOn,
+            ShowFrom = showFrom,
+            TakeDownAfter = takeDownAfter,
         }, new Dictionary<string, Phrase[]>(StringComparer.Ordinal));
     }
 
@@ -316,7 +386,7 @@ public static class ListingFormParser
     {
         ArgumentNullException.ThrowIfNull(listing);
 
-        var rule = new SessionRule(zone, listing.StartsOn, listing.EndsOn, listing.StartTime, listing.EndTime, listing.Rrule, []);
+        var rule = new SessionRule(zone, listing.StartsOn, listing.EndsOn, listing.StartTime, listing.EndTime, listing.Rrule, listing.SkipDates);
         DateOnly from = listing.StartsOn > today ? listing.StartsOn : today;
         return [.. OccurrenceExpander.Expand(rule, from, from.AddDays(MaxSeasonDays)).Take(count)];
     }
@@ -435,7 +505,7 @@ public static class ListingFormParser
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static DateOnly NextOrSame(DateOnly day, string code)
+    internal static DateOnly NextOrSame(DateOnly day, string code)
     {
         DayOfWeek target = code switch
         {

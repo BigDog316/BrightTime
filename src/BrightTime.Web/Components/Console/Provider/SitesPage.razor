@@ -1,0 +1,110 @@
+@page "/provider/orgs/{OrgId:guid}/sites"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.sites.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.sites.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="sites" Role="@_role" />
+
+    <h2>@T["provider.nav.sites"]</h2>
+    <p class="hint">@T["provider.sites.intro"]</p>
+
+    @if (_canManage)
+    {
+        <p><a class="button" href="/provider/orgs/@OrgId/sites/new">@T["provider.sites.new"]</a></p>
+    }
+
+    @if (_sites.Count == 0)
+    {
+        <p>@T["provider.sites.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list">
+            @foreach (SiteRow site in _sites)
+            {
+                <li>
+                    @if (_canManage)
+                    {
+                        <a href="/provider/orgs/@OrgId/sites/@site.Id">@site.Name</a>
+                    }
+                    else
+                    {
+                        <strong>@site.Name</strong>
+                    }
+                    <span class="note">
+                        @string.Join(", ", new[] { site.AddressLine1, site.Locality }.Where(p => !string.IsNullOrWhiteSpace(p)))
+                        @if (site.NeighbourhoodId is { } hood && _hoods.TryGetValue(hood, out string? hoodName))
+                        {
+                            <span> · @hoodName</span>
+                        }
+                        @if (!site.IsAddressPublic)
+                        {
+                            <span> · @T["provider.sites.address_private"]</span>
+                        }
+                        @if (!site.IsActive)
+                        {
+                            <span> · <strong>@T["provider.sites.closed"]</strong></span>
+                        }
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private string _role = "";
+    private bool _canManage;
+    private IReadOnlyList<SiteRow> _sites = [];
+    private IReadOnlyDictionary<Guid, string> _hoods = new Dictionary<Guid, string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        OrganisationId org = new(OrgId);
+        if (!await CanActForAsync(org, Permissions.Listings.Create, OrganisationRoles.Viewer))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _role = RoleIn(org) ?? "";
+        _canManage = await CanActForAsync(org, Permissions.Sites.Manage);
+        _sites = await Get<SiteEditor>().ListAsync(OrgId);
+        _hoods = await Get<IGeographyQueries>().GetNeighbourhoodNamesAsync(
+            [.. _sites.Select(s => s.NeighbourhoodId).OfType<Guid>().Distinct()], Tenant.Locale.Code);
+    }
+}

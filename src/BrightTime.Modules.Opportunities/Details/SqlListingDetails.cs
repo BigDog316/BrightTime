@@ -41,6 +41,7 @@ public sealed class SqlListingDetails(
             l => l.TenantId == tenant.Value
                  && l.Slug == slug
                  && l.Status == published
+                 && (l.PublishAt == null || l.PublishAt <= now)
                  && (l.ExpiresAt == null || l.ExpiresAt > now),
             locale, cancellationToken).ConfigureAwait(false);
     }

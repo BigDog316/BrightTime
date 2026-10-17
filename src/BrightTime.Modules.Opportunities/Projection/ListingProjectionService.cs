@@ -70,6 +70,15 @@ public sealed class ListingProjectionService(
 
             string config = Locale.Resolve(snapshot.Listing.PrimaryLanguage).TextSearchConfig;
             await writer.ReplaceAsync(tenant.Value, listingId, rows, config, ct).ConfigureAwait(false);
+
+            // Queued from here rather than by the editor, so every route that changes the
+            // listing (editor, review, import, clone) gets the boundary job, and a job that runs
+            // a moment early queues itself again rather than leaving the listing stale.
+            if (NextBoundary(snapshot.Listing, now) is { } boundary)
+            {
+                await db.ScheduleProjectionAtAsync(tenant, listingId, boundary, ct).ConfigureAwait(false);
+            }
+
             return 0;
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -199,8 +208,7 @@ public sealed class ListingProjectionService(
             ListingId = listing.Id,
             OrganisationId = listing.OrgId,
             OrganisationName = organisationName,
-            IsPublished = listing.Status == ListingStatus.Published.ToDbValue()
-                          && (listing.ExpiresAt is null || listing.ExpiresAt > now),
+            IsPublished = IsLive(listing, now),
             PublishedAt = listing.PublishedAt,
             Title = listing.Title,
             Slug = listing.Slug,
@@ -233,6 +241,31 @@ public sealed class ListingProjectionService(
                 IsDropIn = listing.IsDropIn,
             },
         };
+    }
+
+    /// <summary>Published, past its show-from moment, and not yet taken down.</summary>
+    internal static bool IsLive(ListingRecord listing, DateTimeOffset now) =>
+        listing.Status == ListingStatus.Published.ToDbValue()
+        && (listing.PublishAt is null || listing.PublishAt <= now)
+        && (listing.ExpiresAt is null || listing.ExpiresAt > now);
+
+    /// <summary>
+    /// The next moment this listing's visibility changes by itself, if any. Nothing else
+    /// re-projects a listing when it reaches its show-from or take-down time.
+    /// </summary>
+    internal static DateTimeOffset? NextBoundary(ListingRecord listing, DateTimeOffset now)
+    {
+        if (listing.Status != ListingStatus.Published.ToDbValue())
+        {
+            return null;
+        }
+
+        if (listing.PublishAt is { } show && show > now)
+        {
+            return show;
+        }
+
+        return listing.ExpiresAt is { } end && end > now ? end : null;
     }
 
     /// <summary>Reads a CHECK-constrained text column back into its enum. An unknown value is a schema/code mismatch.</summary>

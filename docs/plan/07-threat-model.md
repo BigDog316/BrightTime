@@ -199,6 +199,13 @@ can never become an action. Translation and summarisation outputs are marked
 when the target is youth-facing. Stored HTML is sanitised to an allowlist on
 write *and* on render.
 
+*Implemented for import (M1):* an imported row becomes a draft and never publishes itself.
+An update to an already-published listing goes live as an editor's change does, and enters
+the organiser's "changed since review" lane (D15). Imported text is treated like typed text:
+the same length limits, and plain Markdown rendered with HTML escaped. An HSDS file's
+organisation ids are ignored, so everything lands in the uploading organisation. Codes it
+doesn't know are dropped rather than trusted.
+
 ### T12 — Offline data on staff and youth devices
 **Controls:** SQLCipher with the key in Keychain / Android Keystore; roster
 packs carry the minimum fields; TTL purge; `kiosk_device.wipe_requested_at`
@@ -301,6 +308,14 @@ timing difference.
   common-password check. The breached-password check against the HIBP range API is
   available behind `Auth:CheckBreachedPasswords`, off by default because it is an
   outbound call.
+*Implemented for provider sign-up and invitations (D23):*
+- **Same answer every time:** an application or an invitation gets the same response
+  whether the address is new, already has an account, or belongs to a youth or child.
+  Mail goes out after the response.
+- **Typed addresses grant nothing:** an account made from one has no password until its
+  owner sets one through the emailed link. An existing account only gains an invitation,
+  and its roles change only when its owner accepts.
+- **Rate limiting:** the application form shares sign-in's per-address limit.
 *Implemented for passkeys (web):*
 - **Ceremonies:** WebAuthn with discoverable credentials and user verification required,
   and no attestation. The user handle is the account id, never an email.

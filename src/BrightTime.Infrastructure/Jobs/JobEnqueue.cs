@@ -25,13 +25,14 @@ public static class JobEnqueue
 
         Guid id = SharedKernel.Ids.UuidV7.NewId();
         Guid? tenant = request.TenantId?.Value;
+        DateTimeOffset? runAfter = request.RunAfter;
         string payload = JobExecutionContext.WritePayload(request.Payload);
 
         int inserted = await db.Database.ExecuteSqlAsync(
             $"""
-            insert into platform.job (id, tenant_id, queue, job_type, payload, priority, max_attempts, unique_key)
+            insert into platform.job (id, tenant_id, queue, job_type, payload, priority, max_attempts, unique_key, run_after)
             values ({id}, {tenant}, {request.Queue}, {request.JobType}, {payload}::jsonb,
-                    {request.Priority}, {request.MaxAttempts}, {request.UniqueKey})
+                    {request.Priority}, {request.MaxAttempts}, {request.UniqueKey}, coalesce({runAfter}, now()))
             on conflict (unique_key) where unique_key is not null and state = 'ready' do nothing
             """,
             cancellationToken).ConfigureAwait(false);

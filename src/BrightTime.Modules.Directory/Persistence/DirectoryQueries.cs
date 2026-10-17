@@ -178,7 +178,11 @@ public sealed class DirectoryQueries(DirectoryDbContext db, IClock clock) : IDir
             new OrganisationId(site.OrgId),
             site.Name,
             site.NeighbourhoodId,
-            site.Location is { } point ? new Coordinate(point.Y, point.X) : null,
+            // Only a location precise enough to rank by: a site placed at its neighbourhood's
+            // centre would otherwise come out "nearest" to everyone near that centre.
+            site.Location is { } point && GeocodeAccuracyValues.IsUsableForDistanceSearch(site.GeocodeAccuracy)
+                ? new Coordinate(point.Y, point.X)
+                : null,
             site.IsAddressPublic,
             showAddress ? site.AddressLine1 : null,
             showAddress ? site.AddressLine2 : null,

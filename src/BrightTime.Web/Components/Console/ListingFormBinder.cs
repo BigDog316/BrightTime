@@ -50,12 +50,16 @@ public static class ListingFormBinder
             ContactPhone = S(nameof(ListingForm.ContactPhone)),
             Repeats = S(nameof(ListingForm.Repeats)),
             Days = Many(nameof(ListingForm.Days)),
+            Interval = S(nameof(ListingForm.Interval)),
+            SkipDates = S(nameof(ListingForm.SkipDates)),
             StartsOn = S(nameof(ListingForm.StartsOn)),
             EndsOn = S(nameof(ListingForm.EndsOn)),
             StartTime = S(nameof(ListingForm.StartTime)),
             EndTime = S(nameof(ListingForm.EndTime)),
             DeadlineKind = S(nameof(ListingForm.DeadlineKind)),
             DeadlineOn = S(nameof(ListingForm.DeadlineOn)),
+            ShowFrom = S(nameof(ListingForm.ShowFrom)),
+            TakeDownAfter = S(nameof(ListingForm.TakeDownAfter)),
             Version = S(nameof(ListingForm.Version)),
         };
     }

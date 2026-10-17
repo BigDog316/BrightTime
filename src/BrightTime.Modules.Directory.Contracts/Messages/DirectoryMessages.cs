@@ -62,3 +62,21 @@ public sealed record ClearanceLapsed(
 {
     public static string MessageType => "directory.clearance.lapsed";
 }
+
+/// <summary>
+/// The background job Directory queues when a site's address, neighbourhood, place or open
+/// state changes, so modules that copy site data (the listing search rows) refresh it.
+/// </summary>
+/// <remarks>
+/// A job rather than an <see cref="IModuleMessage"/> until the outbox has a dispatcher: the job
+/// is written in the same transaction as the change, which is the guarantee the outbox exists to
+/// give. Opportunities handles it.
+/// </remarks>
+public static class SiteChangedJob
+{
+    public const string JobType = "directory.site_changed";
+
+    public sealed record Payload(Guid SiteId);
+
+    public static string UniqueKey(Guid siteId) => $"{JobType}:{siteId:N}";
+}

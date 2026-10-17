@@ -707,6 +707,101 @@ button.secondary-button {
     vertical-align: top;
 }
 
+/* ---- Provider management ----------------------------------------------- */
+
+.org-nav ul {
+    border-block-end: 1px solid var(--bt-line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.25rem;
+    list-style: none;
+    margin: 0 0 1.5rem;
+    padding: 0;
+}
+
+.org-nav a {
+    display: inline-block;
+    padding-block: 0.5rem;
+}
+
+.org-nav a[aria-current="page"] {
+    border-block-end: 3px solid var(--bt-accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+/* Wide tables scroll inside themselves, so a phone never scrolls the whole page sideways. */
+.table-scroll {
+    margin-block: 1rem;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.staff,
+.import-report,
+.hours {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.staff th,
+.staff td,
+.import-report th,
+.import-report td,
+.hours th,
+.hours td {
+    border-block-end: 1px solid var(--bt-line);
+    padding: 0.5rem;
+    text-align: start;
+    vertical-align: top;
+}
+
+.staff .manage-row td {
+    border-block-end-width: 2px;
+    padding-block-start: 0;
+}
+
+.staff details form {
+    margin-block: 0.75rem;
+}
+
+.import-report ul {
+    margin: 0.25rem 0 0;
+    padding-inline-start: 1.25rem;
+}
+
+.import-invalid td:last-child strong {
+    color: var(--bt-error);
+}
+
+.clearance {
+    font-size: 0.9rem;
+}
+
+.clearance-cleared {
+    font-weight: 600;
+}
+
+.clearance-expired,
+.clearance-not_cleared {
+    color: var(--bt-error);
+}
+
+.inline-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.site-footer {
+    border-block-start: 1px solid var(--bt-line);
+    color: var(--bt-muted);
+    margin-block-start: 3rem;
+    padding: 1rem;
+    text-align: center;
+}
+
 .history {
     padding-inline-start: 1.25rem;
 }

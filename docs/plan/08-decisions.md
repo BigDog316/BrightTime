@@ -375,7 +375,7 @@ files, one per locale, using a subset of ICU MessageFormat.
 Reversible: the catalogue sits behind `Text`, so a move to `IStringLocalizer` with a
 MessageFormat library would change one service, not the pages.
 
-### D21 — The M1 map is a drawing of the tenant's neighbourhoods, not a tile map (**proposed 2026-10-17; implemented, reversible**)
+### D21 — The M1 map is a drawing of the tenant's neighbourhoods, not a tile map (**accepted 2026-10-17**)
 
 The plan said "MapLibre + OSM, clustered pins". What shipped is a server-rendered SVG of the
 tenant's own neighbourhood boundaries (`platform.neighbourhood`), shaded and labelled with how
@@ -397,7 +397,7 @@ needs two things from you: approval to download MapLibre GL JS (a pinned version
 vendored, with no CDN at run time), and an answer to Q7 on which tile source to use. Ours, or a
 paid provider's; OSM's public tile servers forbid this use. Until then the drawing is the map.
 
-### D22 — Saved listings live on the device until accounts exist; reminders come through the calendar (**proposed 2026-10-17; implemented, reversible**)
+### D22 — Saved listings live on the device until accounts exist; reminders come through the calendar (**accepted 2026-10-17**)
 
 M1 has no registration, so there is no account to save to. `saved_item` and
 `listing_reminder` both need one.
@@ -415,6 +415,60 @@ M1 has no registration, so there is no account to save to. `saved_item` and
 When accounts arrive (M2), signing in moves the cookie's ids into `saved_item`, and server
 reminders use `listing_reminder` under the consent rules. The cookie path stays for people who
 never sign in.
+
+### D23 — Provider sign-up and invitations make adult accounts without saying who already has one (**proposed 2026-10-17; implemented, reversible**)
+
+M1 has no registration, but the acceptance test starts with a provider applying, and an owner
+has to invite staff. Both start from an email address someone typed, which may not be theirs.
+
+- **Apply** (`/providers/apply`, public, rate limited with the sign-in routes):
+  - **New address:** an adult account with no password is made. The applicant owns the
+    organisation at once, because only the address's owner can set the password. The email
+    carries the reset link, which also confirms the address.
+  - **Existing address:** the owner membership is an invitation, accepted after signing in.
+    The email carries a sign-in link.
+  - **Youth, child or erased address:** nothing is made and no email is sent.
+  - The answer is the same page in all three cases.
+  - **Signed-in adult:** owns the new organisation at once, since the session proves the
+    address.
+- **Invite** (owners and admins): always an invitation, accepted after signing in. A new
+  address gets the set-password link first. The answer is the same, and a youth address is
+  quietly not invited, so an organisation's admin learns nothing about who uses the platform.
+- **Roles:** the global role is granted when a membership becomes active, never when an
+  address is typed. Owners and admins get `provider_admin`; staff and viewers get
+  `program_staff`. The role stays after the membership ends: organisation-scoped
+  permissions also need a live membership, so it reaches nothing. Accepting refreshes the
+  session, so the organisation opens on the next page.
+- **Email:** sent after the response by `AccountMailDispatcher`, which grew out of the
+  reset dispatcher and keeps its rules (T21).
+  - The set-password link is the 60-minute reset token. When it runs out, "Forgot password"
+    sends another.
+  - Making or finding the account happens in the request. An insert and a no-op differ by
+    about a millisecond, which is accepted.
+- **Cost:** anyone can file an application that names any address. That puts an `applied`
+  organisation in the organiser's queue and sends one email, which says to ignore it. It
+  cannot get anyone into the account. The answer is rate limiting per client address plus
+  vetting. If spam becomes real, the next step is a CAPTCHA or confirming the email first,
+  either of which needs your call.
+
+Rejected: requiring sign-up first. There is no registration in M1, and a sign-up form has the
+same enumeration problem.
+
+### D24 — Cross-module changes travel as jobs until the outbox has a dispatcher (**proposed 2026-10-17; implemented, reversible**)
+
+The plan sends module events through `platform.outbox_message`, but nothing dispatches it
+yet. `IOutboxWriter` has no implementation. Provider management needs one such event:
+editing or closing a site must re-project the listings held there, because search copies
+the site's place.
+
+What shipped: `SiteEditor` queues a `directory.site_changed` job (`SiteChangedJob` in
+Directory.Contracts) in the same transaction as the change. Opportunities handles it by
+queueing a projection for each listing at that site. This gives the guarantee the outbox
+exists for: no change without its event, no event without its change. Jobs debounce on
+the site id.
+
+Moving to the outbox later means publishing `SiteLocationChanged` instead and subscribing
+the same handler. One call site changes.
 
 ## Open questions
 
@@ -466,6 +520,11 @@ Pelias (no third party sees a family's address, but it is infrastructure you
 operate), or a hosted geocoder (easier, but a family's typed address reaches
 a vendor). Given D8 I lean self-hosted Nominatim in the compose stack.
 Confirm, since it changes the deployment footprint.
+
+*Until then (2026-10-17):* a site made in the provider console is placed at its
+neighbourhood's centre with `geocode_accuracy = 'locality'`. It appears in neighbourhood and
+map results, but distance search skips it: locality accuracy is not used for distance, and
+the finder now enforces that. Seeded sites keep their exact places.
 
 **Q8 — Content screening provider.** "Automated screening for personal
 information and abuse before posting" needs an implementation.

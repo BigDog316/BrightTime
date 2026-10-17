@@ -1,0 +1,10 @@
+@if (Errors.Has(Name))
+{
+    <p class="field-error" id="err-@Name">@T.Join(Errors.For(Name))</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    [Parameter, EditorRequired] public FieldErrors Errors { get; set; } = FieldErrors.None;
+}

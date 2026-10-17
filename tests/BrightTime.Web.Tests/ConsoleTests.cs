@@ -370,7 +370,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
     private Task<string> StatusAsync(Guid id) =>
         db.ScalarAsync<string>("select status from opportunity.listing where id = @id", ("id", id));
 
-    private static (string, string)[] Fields(ListingForm f, string action)
+    internal static (string, string)[] Fields(ListingForm f, string action)
     {
         List<(string, string)> fields =
         [
@@ -382,6 +382,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
             ("TransportNote", f.TransportNote), ("AccessibilityNote", f.AccessibilityNote), ("ContactEmail", f.ContactEmail),
             ("ContactPhone", f.ContactPhone), ("Repeats", f.Repeats), ("StartsOn", f.StartsOn), ("EndsOn", f.EndsOn),
             ("StartTime", f.StartTime), ("EndTime", f.EndTime), ("DeadlineKind", f.DeadlineKind), ("DeadlineOn", f.DeadlineOn),
+            ("Interval", f.Interval), ("SkipDates", f.SkipDates), ("ShowFrom", f.ShowFrom), ("TakeDownAfter", f.TakeDownAfter),
         ];
 
         fields.AddRange(f.TermIds.Select(t => ("TermIds", t.ToString())));

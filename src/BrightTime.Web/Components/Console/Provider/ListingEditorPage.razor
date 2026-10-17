@@ -40,6 +40,7 @@ else if (_orgName is not null)
             {
                 <span> · <a href="/provider/orgs/@OrgId/listings/@ListingId/preview">@T["editor.preview_link"]</a></span>
             }
+            <span> · <a href="/provider/orgs/@OrgId/listings/@ListingId/clone">@T["clone.link"]</a></span>
         </p>
     }
 
@@ -206,6 +207,17 @@ else if (_orgName is not null)
                     </div>
                     @Error("Days")
                 </div>
+                <div class="field field-short">
+                    <label for="Interval">@T["editor.field.interval"]</label>
+                    <select id="Interval" name="Interval" aria-invalid="@Invalid("Interval")" aria-describedby="@Described("Interval")">
+                        @for (int n = 1; n <= ListingFormParser.MaxInterval; n++)
+                        {
+                            string value = n.ToString(CultureInfo.InvariantCulture);
+                            <option value="@value" selected="@(_form.Interval == value)">@T.Format("editor.option.interval", ("count", n))</option>
+                        }
+                    </select>
+                    @Error("Interval")
+                </div>
                 <div class="field-row">
                     @Field("StartsOn", T["editor.field.starts_on"], _form.StartsOn, type: "date")
                     @Field("EndsOn", T["editor.field.ends_on"], _form.EndsOn, hint: T["editor.field.ends_on_hint"], type: "date")
@@ -213,6 +225,13 @@ else if (_orgName is not null)
                 <div class="field-row">
                     @Field("StartTime", T["editor.field.start_time"], _form.StartTime, type: "time")
                     @Field("EndTime", T["editor.field.end_time"], _form.EndTime, type: "time")
+                </div>
+                <div class="field">
+                    <label for="SkipDates">@T["editor.field.skip_dates"]</label>
+                    <p class="hint" id="hint-SkipDates">@T["editor.field.skip_dates_hint"]</p>
+                    <textarea id="SkipDates" name="SkipDates" rows="3" aria-invalid="@Invalid("SkipDates")"
+                              aria-describedby="hint-SkipDates @Described("SkipDates")">@_form.SkipDates</textarea>
+                    @Error("SkipDates")
                 </div>
                 <button type="submit" name="action" value="preview" class="secondary-button">@T["editor.preview_sessions"]</button>
                 @if (_preview is { } preview)
@@ -227,6 +246,15 @@ else if (_orgName is not null)
                         </ol>
                     </div>
                 }
+            </fieldset>
+
+            <fieldset id="showing">
+                <legend>@T["editor.section.showing"]</legend>
+                <p class="hint">@T["editor.showing_hint"]</p>
+                <div class="field-row">
+                    @Field("ShowFrom", T["editor.field.show_from"], _form.ShowFrom, hint: T["editor.field.show_from_hint"], type: "date")
+                    @Field("TakeDownAfter", T["editor.field.take_down_after"], _form.TakeDownAfter, hint: T["editor.field.take_down_after_hint"], type: "date")
+                </div>
             </fieldset>
 
             <fieldset id="cost">
@@ -341,7 +369,7 @@ else if (_orgName is not null)
 
     private static readonly string[] Kinds = ["program", "event", "job", "resource"];
 
-    private static readonly string[] Sections = ["basics", "audience", "topics", "where", "when", "cost", "registration", "access", "contact"];
+    private static readonly string[] Sections = ["basics", "audience", "topics", "where", "when", "showing", "cost", "registration", "access", "contact"];
 
     private static readonly (string Code, DayOfWeek Day)[] Days =
     [

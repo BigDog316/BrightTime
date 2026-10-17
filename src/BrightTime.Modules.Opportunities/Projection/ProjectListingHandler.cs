@@ -44,12 +44,34 @@ public static class ListingProjection
             UniqueKey = $"{ProjectListingHandler.JobType}:{listingId:N}",
         }, cancellationToken);
 
+    /// <summary>
+    /// Queues a projection for the moment a listing appears in or leaves search. Its key names
+    /// the moment, so it neither absorbs an immediate projection nor is absorbed by one, and a
+    /// second request for the same moment collapses into the first.
+    /// </summary>
+    /// <remarks>The job runs a second after the moment, so the listing's clock has passed it.</remarks>
+    public static Task<bool> ScheduleProjectionAtAsync(
+        this OpportunitiesDbContext db,
+        TenantId tenant,
+        Guid listingId,
+        DateTimeOffset at,
+        CancellationToken cancellationToken = default) =>
+        db.EnqueueJobAsync(new JobRequest
+        {
+            JobType = ProjectListingHandler.JobType,
+            TenantId = tenant,
+            Payload = new ProjectListingHandler.Payload(listingId),
+            UniqueKey = FormattableString.Invariant($"{ProjectListingHandler.JobType}:{listingId:N}:at:{at.ToUnixTimeSeconds()}"),
+            RunAfter = at.AddSeconds(1),
+        }, cancellationToken);
+
     /// <summary>Registers the projection service and its job handler. Module contexts and queries are registered by the host.</summary>
     public static IServiceCollection AddListingProjection(this IServiceCollection services)
     {
         services.AddScoped<ListingSearchWriter>();
         services.AddScoped<ListingProjectionService>();
         services.AddJobHandler<ProjectListingHandler>();
+        services.AddJobHandler<SiteChangedHandler>();
         return services;
     }
 }

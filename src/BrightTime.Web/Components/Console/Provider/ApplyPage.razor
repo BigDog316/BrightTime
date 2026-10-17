@@ -1,0 +1,174 @@
+@page "/providers/apply"
+@using System.Security.Claims
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Geo
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Auth
+@using BrightTime.Web.Components.Console.Forms
+@inherits ConsoleComponent
+
+<PageTitle>@T["apply.title"] · BrightTime</PageTitle>
+
+<h1>@T["apply.title"]</h1>
+
+@if (!Availability.CanSignIn)
+{
+    <p>@T["account.unavailable"]</p>
+}
+else if (Sent == "1")
+{
+    @* The same words whether or not the address already had an account (D23, T21). *@
+    <p class="notice success" role="status">@T["apply.sent"]</p>
+    <p>@T["apply.sent_next"]</p>
+}
+else if (_refused)
+{
+    <p class="notice error" role="alert">@T["apply.adults_only"]</p>
+}
+else
+{
+    <p>@T["apply.intro"]</p>
+    <ul>
+        <li>@T["apply.step.review"]</li>
+        <li>@T["apply.step.draft"]</li>
+    </ul>
+
+    <ErrorSummary Errors="@_errors" />
+
+    <form method="post" class="editor" @formname="apply" @onsubmit="ApplyAsync" novalidate>
+        <AntiforgeryToken />
+
+        <fieldset id="you">
+            <legend>@T["apply.section.you"]</legend>
+            @if (SignedIn)
+            {
+                <p>@T["apply.signed_in"]</p>
+            }
+            else
+            {
+                <TextField Name="Email" Label="@T["account.field.email"]" Value="@_email" Hint="@T["apply.email_hint"]" Type="email" Autocomplete="email" Max="AccountProvisioning.MaxEmailLength" Errors="@_errors" />
+            }
+        </fieldset>
+
+        <fieldset id="organisation">
+            <legend>@T["apply.section.organisation"]</legend>
+            <OrganisationFields Form="@_organisation" Errors="@_errors" />
+        </fieldset>
+
+        <fieldset id="site">
+            <legend>@T["apply.section.site"]</legend>
+            <p class="hint">@T["apply.site_hint"]</p>
+            <SiteFields Form="@_site" Neighbourhoods="@_neighbourhoods" Errors="@_errors" Prefix="Site." Full="false" />
+        </fieldset>
+
+        <div class="actions">
+            <button type="submit">@T["apply.submit"]</button>
+        </div>
+    </form>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "sent")] public string? Sent { get; set; }
+
+    private OrganisationForm _organisation = new();
+    private SiteForm _site = new();
+    private string _email = "";
+    private FieldErrors _errors = FieldErrors.None;
+    private IReadOnlyList<NeighbourhoodShape> _neighbourhoods = [];
+    private bool _refused;
+
+    private bool SignedIn => User.Identity?.IsAuthenticated == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.CanSignIn)
+        {
+            return;
+        }
+
+        // Organisations are run by adults: a signed-in youth or child account cannot apply.
+        if (SignedIn && User.FindFirstValue(BrightTimeClaims.AccountKind) != "adult")
+        {
+            _refused = true;
+            return;
+        }
+
+        _neighbourhoods = await Get<IGeographyQueries>().GetNeighbourhoodsAsync(Tenant.Locale.Code);
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_refused || !Availability.CanSignIn)
+        {
+            return;
+        }
+
+        IFormCollection posted = HttpContext.Request.Form;
+        _organisation = ProviderFormBinder.Organisation(posted);
+        _site = ProviderFormBinder.Site(posted, "Site.");
+        _email = FormValue("Email").Trim();
+
+        Dictionary<string, Phrase[]> errors = new(StringComparer.Ordinal);
+        if (!SignedIn && !ProviderForms.LooksLikeEmail(_email))
+        {
+            errors["Email"] = [Phrase.Of("editor.error.email")];
+        }
+
+        foreach (var (field, messages) in ProviderForms.Check(_organisation))
+        {
+            errors[field] = messages;
+        }
+
+        foreach (var (field, messages) in ProviderForms.Check(_site, [.. _neighbourhoods.Select(n => n.Id)]))
+        {
+            // The application asks only for the address; hours and features are checked on the site page.
+            if (field is not ("Hours" or "Wheelchair" or "Restroom" or "Elevator" or "QuietSpace" or "EntranceNote" or "TransitNote" or "ParkingNote"))
+            {
+                errors["Site." + field] = messages;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            _errors = new FieldErrors(errors);
+            return;
+        }
+
+        NeighbourhoodShape hood = _neighbourhoods.First(n => n.Id == Guid.Parse(_site.NeighbourhoodId));
+        Coordinate place = new(hood.CentroidLatitude, hood.CentroidLongitude);
+        OrganisationApplications applications = Get<OrganisationApplications>();
+        AccountProvisioning accounts = Get<AccountProvisioning>();
+
+        if (SignedIn)
+        {
+            // Signed in proves the address: the applicant owns the organisation at once.
+            OrganisationId org = await applications.ApplyAsync(_organisation, _site, place, Actor, applicantIsActive: true);
+            await accounts.GrantRoleAsync(Tenant.TenantId, Actor, AccountProvisioning.GlobalRoleFor(OrganisationRoles.Owner));
+            await SessionRefresh.RefreshAsync(HttpContext, Tenant.TenantId, Actor);
+            Navigation.NavigateTo($"/provider/orgs/{org.Value}?applied=1");
+            return;
+        }
+
+        // A new account is the applicant's at once, since only the address's owner can set its
+        // password; an existing one must sign in and accept. A youth or child address gets
+        // nothing, and the answer is the same in every case.
+        if (await accounts.FindOrCreateAdultAsync(Tenant.TenantId, _email) is var (applicant, created)
+            && Get<BrightTime.Web.Tenancy.SiteContext>().BaseUrl is { } siteUrl)
+        {
+            await applications.ApplyAsync(_organisation, _site, place, applicant, applicantIsActive: created);
+            if (created)
+            {
+                await accounts.GrantRoleAsync(Tenant.TenantId, applicant, AccountProvisioning.GlobalRoleFor(OrganisationRoles.Owner));
+            }
+
+            Get<AccountMailDispatcher>().RequestMembership(
+                AccountMailKind.Welcome, Tenant.TenantId, _email, _organisation.DisplayName.Trim(), created, siteUrl, Tenant.Locale);
+        }
+
+        Navigation.NavigateTo("/providers/apply?sent=1");
+    }
+}

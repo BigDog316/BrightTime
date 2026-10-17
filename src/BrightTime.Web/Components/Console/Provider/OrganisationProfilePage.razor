@@ -1,0 +1,167 @@
+@page "/provider/orgs/{OrgId:guid}/profile"
+@using System.Globalization
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Directory.Vetting
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.profile.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_view is { } view)
+{
+    <PageTitle>@T.Format("provider.profile.title", ("organisation", view.Form.DisplayName)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@view.Form.DisplayName</h1>
+    <OrgNav OrgId="@OrgId" Current="profile" Role="@_role" />
+
+    <p class="status-line">@T["provider.profile.status"] <strong>@T[OrganisationVetting.StatusPhrase(view.Status)]</strong>
+        @if (view.Status == OrganisationStatus.Approved)
+        {
+            <span> · <a href="/organisations/@view.Slug">@T["editor.view_on_site"]</a></span>
+        }
+    </p>
+
+    @if (Saved == "1")
+    {
+        <p class="notice success" role="status">@T["provider.profile.saved"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (view.ReviewNote is { Length: > 0 } note && view.Status is OrganisationStatus.ChangesRequested or OrganisationStatus.Rejected)
+    {
+        <section class="review-note" aria-labelledby="review-note-heading">
+            <h2 id="review-note-heading">@T["editor.organiser_note"]</h2>
+            <p dir="auto">@note</p>
+        </section>
+    }
+
+    @if (_canEdit)
+    {
+        <ErrorSummary Errors="@_errors" />
+        <form method="post" class="editor" @formname="profile" @onsubmit="SaveAsync" novalidate>
+            <AntiforgeryToken />
+            <input type="hidden" name="Version" value="@view.Version.ToString(CultureInfo.InvariantCulture)" />
+            <OrganisationFields Form="@_form" Errors="@_errors" />
+            <div class="actions">
+                <button type="submit">@T["editor.save_changes"]</button>
+            </div>
+        </form>
+
+        @if (view.Status == OrganisationStatus.ChangesRequested)
+        {
+            <form method="post" @formname="resubmit" @onsubmit="ResubmitAsync">
+                <AntiforgeryToken />
+                <p>@T["provider.profile.resubmit_hint"]</p>
+                <button type="submit">@T["provider.profile.resubmit"]</button>
+            </form>
+        }
+    }
+    else
+    {
+        <dl class="facts">
+            <dt>@T["provider.org.legal_name"]</dt><dd>@view.Form.LegalName</dd>
+            <dt>@T["provider.org.kind"]</dt><dd>@T["organisation.kind." + view.Form.Kind]</dd>
+            <dt>@T["provider.org.website"]</dt><dd>@view.Form.WebsiteUrl</dd>
+            <dt>@T["provider.org.public_email"]</dt><dd>@view.Form.PublicEmail</dd>
+            <dt>@T["provider.org.public_phone"]</dt><dd>@view.Form.PublicPhone</dd>
+        </dl>
+        <p class="hint">@T["provider.profile.admins_edit"]</p>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    private OrganisationProfileView? _view;
+    private OrganisationForm _form = new();
+    private FieldErrors _errors = FieldErrors.None;
+    private string? _problem;
+    private string _role = "";
+    private bool _canEdit;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Listings.Create, OrganisationRoles.Viewer))
+        {
+            Forbid();
+            return;
+        }
+
+        _role = RoleIn(Org) ?? "";
+        _canEdit = await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin);
+        _view = await Get<OrganisationSettings>().LoadAsync(OrgId);
+        if (_view is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _form = _view.Form;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_canEdit || _view is null)
+        {
+            return;
+        }
+
+        _form = ProviderFormBinder.Organisation(HttpContext.Request.Form);
+        var errors = ProviderForms.Check(_form);
+        if (errors.Count > 0)
+        {
+            _errors = new FieldErrors(errors);
+            return;
+        }
+
+        if (!uint.TryParse(FormValue("Version"), NumberStyles.None, CultureInfo.InvariantCulture, out uint version)
+            || !await Get<OrganisationSettings>().SaveAsync(OrgId, _form, version, Actor))
+        {
+            _problem = T["provider.profile.concurrent_save"];
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/profile?saved=1");
+    }
+
+    private async Task ResubmitAsync()
+    {
+        if (!_canEdit)
+        {
+            return;
+        }
+
+        Result result = await Get<OrganisationSettings>().MoveAsync(OrgId, OrganisationStatus.Applied, Actor);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/profile");
+    }
+}

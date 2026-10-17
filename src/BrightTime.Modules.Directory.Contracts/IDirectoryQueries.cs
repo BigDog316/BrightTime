@@ -28,8 +28,9 @@ public sealed record ClearanceState(
 /// <summary>
 /// A site as other modules see it. The street address and the transit note are included
 /// only when <see cref="IsAddressPublic"/> is true; otherwise they are null and only the
-/// neighbourhood identifies where it is. The location is always present for distance
-/// search, which never discloses it.
+/// neighbourhood identifies where it is. The location is present when it is precise enough
+/// for distance search (which never discloses it), and null for a site placed only at its
+/// neighbourhood's centre.
 /// </summary>
 public sealed record SiteSummary(
     Guid SiteId,

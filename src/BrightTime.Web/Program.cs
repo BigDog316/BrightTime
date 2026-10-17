@@ -82,6 +82,12 @@ app.MapGet("/listings/{slug}/calendar.ics", async (
     return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), ListingCalendar.ContentType, $"{listing.Slug}.ics");
 });
 app.MapSavedListings();
+
+// The import template is the same for everyone and holds nothing private.
+app.MapGet(BrightTime.Web.Components.Console.Provider.ImportPage.TemplatePath, () => Results.File(
+    System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(BrightTime.Modules.Opportunities.Import.CsvListingFormat.Template())).ToArray(),
+    "text/csv; charset=utf-8",
+    "brighttime-listings.csv"));
 app.MapBrightTimeSignIn();
 if (app.Services.GetRequiredService<ConsoleAvailability>().CanSignIn)
 {

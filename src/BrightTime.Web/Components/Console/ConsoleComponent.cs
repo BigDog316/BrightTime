@@ -59,4 +59,18 @@ public abstract class ConsoleComponent : ComponentBase
     }
 
     protected string FormValue(string name) => HttpContext.Request.Form[name].ToString();
+
+    /// <summary>The signed-in person's role in <paramref name="organisation"/>, from their active memberships, or null.</summary>
+    protected string? RoleIn(OrganisationId organisation)
+    {
+        foreach (Claim claim in User.FindAll(BrightTimeClaims.OrganisationMembership))
+        {
+            if (BrightTimeClaims.TryParseMembership(claim.Value, out Guid id, out string role) && id == organisation.Value)
+            {
+                return role;
+            }
+        }
+
+        return null;
+    }
 }

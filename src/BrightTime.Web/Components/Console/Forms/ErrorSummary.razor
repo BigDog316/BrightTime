@@ -1,0 +1,22 @@
+@* The list at the top of a form that failed: each problem links to its field. *@
+@if (Errors.Count > 0)
+{
+    <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1">
+        <h2 id="error-summary-heading">@T["form.check_fields"]</h2>
+        <ul>
+            @foreach (var (field, messages) in Errors.All)
+            {
+                <li><a href="#@Anchor(field)">@T[messages[0]]</a></li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public FieldErrors Errors { get; set; } = FieldErrors.None;
+
+    /// <summary>Some errors belong to a group of inputs rather than to one, and name the group.</summary>
+    [Parameter] public Func<string, string>? AnchorFor { get; set; }
+
+    private string Anchor(string field) => AnchorFor?.Invoke(field) ?? field;
+}

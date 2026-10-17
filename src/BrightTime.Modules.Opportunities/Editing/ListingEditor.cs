@@ -150,6 +150,11 @@ public sealed class ListingEditor(
                 DeadlineKind = deadline?.DeadlineKind ?? string.Empty,
                 DeadlineOn = deadline is null ? string.Empty
                     : TimeZoneInfo.ConvertTime(deadline.DueAt, zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                Interval = session?.Rrule is { } rule ? IntervalOf(rule) : "1",
+                SkipDates = session is null ? string.Empty
+                    : string.Join('\n', session.Exdates.Order().Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))),
+                ShowFrom = l.PublishAt is { } show ? Day(TimeZoneInfo.ConvertTime(show, zone)) : string.Empty,
+                TakeDownAfter = TakeDownText(l, session, zone),
                 Version = row.Version.ToString(CultureInfo.InvariantCulture),
             };
 
@@ -253,6 +258,239 @@ public sealed class ListingEditor(
         {
             return SaveOutcome.Refused(Phrase.Of("editor.refused.concurrent_save"));
         }
+    }
+
+    /// <summary>
+    /// Seasonal clone: a new draft with everything the original says, its schedule moved so the
+    /// first session falls on <paramref name="startsOn"/>. Sessions, skipped days, deadlines and
+    /// the show and take-down days all move by the same number of days.
+    /// </summary>
+    /// <returns>The new draft's id, or the reason there is none.</returns>
+    public async Task<(Guid? ListingId, Phrase? Problem)> CloneAsync(
+        OrganisationId organisation,
+        Guid listingId,
+        DateOnly startsOn,
+        string? seasonLabel,
+        UserId actor,
+        CancellationToken cancellationToken = default)
+    {
+        string? label = string.IsNullOrWhiteSpace(seasonLabel) ? null : seasonLabel.Trim();
+        if (label is { Length: > 60 })
+        {
+            return (null, Phrase.Of("editor.error.too_long", ("max", 60), ("length", label.Length)));
+        }
+
+        return await db.InTransactionAsync<(Guid?, Phrase?)>(async ct =>
+        {
+            ListingRecord? original = await db.Listings.AsNoTracking().FirstOrDefaultAsync(l => l.Id == listingId, ct).ConfigureAwait(false);
+            if (original is null || original.OrgId != organisation.Value)
+            {
+                return (null, Phrase.Of("editor.refused.not_this_organisation"));
+            }
+
+            List<ListingSessionRecord> sessions = await db.Sessions.AsNoTracking()
+                .Where(s => s.ListingId == listingId && !s.IsCancelled).OrderBy(s => s.StartsOn).ToListAsync(ct).ConfigureAwait(false);
+            int shift = sessions.Count > 0 ? startsOn.DayNumber - sessions[0].StartsOn.DayNumber : 0;
+            TimeZoneInfo zone = TimeZoneInfo.FindSystemTimeZoneById(Zone);
+            DateTimeOffset? Move(DateTimeOffset? instant) => instant is { } at ? Shift(at, shift, zone) : null;
+
+            Guid id = UuidV7.NewId();
+            ListingRecord copy = new()
+            {
+                Id = id,
+                TenantId = original.TenantId,
+                OrgId = original.OrgId,
+                Kind = original.Kind,
+                Slug = await UniqueSlugAsync(label is null ? original.Title : $"{original.Title} {label}", ct).ConfigureAwait(false),
+                Title = original.Title,
+                Summary = original.Summary,
+                Description = original.Description,
+                PrimaryLanguage = original.PrimaryLanguage,
+                Status = ListingStatus.Draft.ToDbValue(),
+                AgeMin = original.AgeMin,
+                AgeMax = original.AgeMax,
+                GradeMin = original.GradeMin,
+                GradeMax = original.GradeMax,
+                AudienceNote = original.AudienceNote,
+                Modality = original.Modality,
+                VirtualUrl = original.VirtualUrl,
+                IsDropIn = original.IsDropIn,
+                MealsProvided = original.MealsProvided,
+                TransportProvided = original.TransportProvided,
+                TransportNote = original.TransportNote,
+                CostModel = original.CostModel,
+                CostCentsMin = original.CostCentsMin,
+                CostCentsMax = original.CostCentsMax,
+                SlidingScaleNote = original.SlidingScaleNote,
+                RegistrationMode = original.RegistrationMode,
+                ExternalUrl = original.ExternalUrl,
+                CapacityTotal = original.CapacityTotal,
+                WaitlistEnabled = original.WaitlistEnabled,
+                PublishAt = Move(original.PublishAt),
+                ExpiresAt = Move(original.ExpiresAt),
+                ClonedFromId = original.Id,
+                SeasonLabel = label ?? original.SeasonLabel,
+                HeroMediaId = original.HeroMediaId,
+                ContactEmail = original.ContactEmail,
+                ContactPhone = original.ContactPhone,
+                AccessibilityNote = original.AccessibilityNote,
+                CreatedBy = actor.Value,
+            };
+            db.Listings.Add(copy);
+
+            db.ListingSites.AddRange((await db.ListingSites.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
+                .Select(x => new ListingSiteRecord { ListingId = id, SiteId = x.SiteId }));
+            db.ListingTerms.AddRange((await db.ListingTerms.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
+                .Select(x => new ListingTermRecord { ListingId = id, TermId = x.TermId, IsPrimary = x.IsPrimary }));
+            db.ListingAccommodations.AddRange((await db.ListingAccommodations.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
+                .Select(x => new ListingAccommodationRecord { ListingId = id, TermId = x.TermId }));
+            db.ListingLanguages.AddRange((await db.ListingLanguages.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
+                .Select(x => new ListingLanguageRecord { ListingId = id, LanguageCode = x.LanguageCode }));
+            db.ListingTranslations.AddRange((await db.ListingTranslations.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
+                .Select(x => new ListingTranslationRecord
+                {
+                    ListingId = id,
+                    Locale = x.Locale,
+                    Title = x.Title,
+                    Summary = x.Summary,
+                    Description = x.Description,
+                    TranslationSource = x.TranslationSource,
+                    TranslatedAt = x.TranslatedAt,
+                    TranslatedBy = x.TranslatedBy,
+                    ReviewedAt = x.ReviewedAt,
+                }));
+            db.ListingDeadlines.AddRange((await db.ListingDeadlines.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
+                .Select(x => new ListingDeadlineRecord { Id = UuidV7.NewId(), ListingId = id, DeadlineKind = x.DeadlineKind, DueAt = Shift(x.DueAt, shift, zone), Label = x.Label }));
+            db.Sessions.AddRange(sessions.Select(s => new ListingSessionRecord
+            {
+                Id = UuidV7.NewId(),
+                TenantId = s.TenantId,
+                ListingId = id,
+                SiteId = s.SiteId,
+                Label = s.Label,
+                Timezone = s.Timezone,
+                StartsOn = AlignedStart(s.Rrule, s.StartsOn.AddDays(shift)),
+                EndsOn = s.EndsOn?.AddDays(shift),
+                StartTime = s.StartTime,
+                EndTime = s.EndTime,
+                Rrule = s.Rrule,
+                Exdates = [.. s.Exdates.Select(d => d.AddDays(shift))],
+                IsAllDay = s.IsAllDay,
+            }));
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await db.ScheduleProjectionAsync(tenant.TenantId, id, ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.cloned",
+                ActorId = actor,
+                ActorOrgId = organisation,
+                SubjectKind = "listing",
+                SubjectIds = [id, original.Id],
+                Detail = new Dictionary<string, string> { ["shift_days"] = shift.ToString(CultureInfo.InvariantCulture) },
+            }, ct).ConfigureAwait(false);
+            return (id, null);
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes an import's valid rows as one operation: a row whose external id this organisation
+    /// already imported updates that listing, any other row creates a draft. A listing waiting
+    /// for review, or past editing, is left alone and reported.
+    /// </summary>
+    /// <remarks>
+    /// The rows must already have passed <see cref="ListingFormParser"/>, and their sites and terms
+    /// must be this organisation's and this tenant's: the importer resolves names and codes to ids
+    /// only from those lists.
+    /// </remarks>
+    public Task<ImportOutcome> ImportAsync(
+        OrganisationId organisation,
+        string source,
+        IReadOnlyList<(string ExternalId, ParsedListing Listing)> rows,
+        UserId actor,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        if (source is not ("csv_import" or "hsds_import"))
+        {
+            throw new ArgumentException("An import is either a CSV or an HSDS import.", nameof(source));
+        }
+
+        return db.InTransactionAsync(async ct =>
+        {
+            string[] ids = [.. rows.Select(r => r.ExternalId)];
+            Dictionary<string, ListingRecord> existing = await db.Listings
+                .Where(l => l.OrgId == organisation.Value && l.Source == source && l.SourceRecordId != null && ids.Contains(l.SourceRecordId))
+                .ToDictionaryAsync(l => l.SourceRecordId!, StringComparer.Ordinal, ct).ConfigureAwait(false);
+
+            List<Guid> created = [];
+            List<Guid> updated = [];
+            List<string> skipped = [];
+            foreach ((string externalId, ParsedListing parsed) in rows)
+            {
+                if (existing.TryGetValue(externalId, out ListingRecord? listing))
+                {
+                    if (!IsEditable(ParseStatus(listing.Status)))
+                    {
+                        skipped.Add(externalId);
+                        continue;
+                    }
+
+                    updated.Add(listing.Id);
+                    Apply(listing, parsed);
+                }
+                else
+                {
+                    listing = new ListingRecord
+                    {
+                        Id = UuidV7.NewId(),
+                        TenantId = tenant.TenantId.Value,
+                        OrgId = organisation.Value,
+                        Kind = parsed.Kind.ToDbValue(),
+                        Slug = await UniqueSlugAsync(parsed.Title, ct).ConfigureAwait(false),
+                        Title = parsed.Title,
+                        Summary = parsed.Summary,
+                        Status = ListingStatus.Draft.ToDbValue(),
+                        Source = source,
+                        SourceRecordId = externalId,
+                        CreatedBy = actor.Value,
+                    };
+                    Apply(listing, parsed);
+                    db.Listings.Add(listing);
+                    created.Add(listing.Id);
+
+                    // Written now: a slug picked for this row must not be picked again for a
+                    // later row in the same file, and its children reference it.
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+
+                await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+            }
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            foreach (Guid id in created.Concat(updated))
+            {
+                await db.ScheduleProjectionAsync(tenant.TenantId, id, ct).ConfigureAwait(false);
+            }
+
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.import_applied",
+                ActorId = actor,
+                ActorOrgId = organisation,
+                SubjectKind = "listing",
+                SubjectIds = [.. created, .. updated],
+                Detail = new Dictionary<string, string>
+                {
+                    ["source"] = source,
+                    ["created"] = created.Count.ToString(CultureInfo.InvariantCulture),
+                    ["updated"] = updated.Count.ToString(CultureInfo.InvariantCulture),
+                    ["skipped"] = skipped.Count.ToString(CultureInfo.InvariantCulture),
+                },
+            }, ct).ConfigureAwait(false);
+
+            return new ImportOutcome(created.Count, updated.Count, skipped);
+        }, cancellationToken);
     }
 
     /// <summary>Moves a listing between states, enforcing <see cref="ListingLifecycle"/>.</summary>
@@ -494,11 +732,23 @@ public sealed class ListingEditor(
         listing.ContactPhone = p.ContactPhone;
         listing.AccessibilityNote = p.AccessibilityNote;
 
-        // An event stops being listed the day after it ends.
+        // An event stops being listed the day after it ends, or sooner if the provider says so.
         TimeZoneInfo zone = TimeZoneInfo.FindSystemTimeZoneById(Zone);
-        listing.ExpiresAt = p.Kind == ListingKind.Event && p.EndsOn is { } last
-            ? Local(zone, last.AddDays(1), TimeOnly.MinValue)
-            : null;
+        listing.PublishAt = p.ShowFrom is { } show ? Local(zone, show, TimeOnly.MinValue) : null;
+        listing.ExpiresAt = LastShown(p) is { } last ? Local(zone, last.AddDays(1), TimeOnly.MinValue) : null;
+    }
+
+    /// <summary>The last day a listing is in search: the take-down day, or an event's last day, whichever is sooner.</summary>
+    private static DateOnly? LastShown(ParsedListing p)
+    {
+        DateOnly? eventEnd = p.Kind == ListingKind.Event ? p.EndsOn : null;
+        return (p.TakeDownAfter, eventEnd) switch
+        {
+            ({ } t, { } e) => t < e ? t : e,
+            ({ } t, null) => t,
+            (null, { } e) => e,
+            _ => null,
+        };
     }
 
     private async Task ReplaceChildrenAsync(ListingRecord listing, ParsedListing p, CancellationToken ct)
@@ -544,6 +794,7 @@ public sealed class ListingEditor(
         session.StartTime = p.StartTime;
         session.EndTime = p.EndTime;
         session.Rrule = p.Rrule;
+        session.Exdates = [.. p.SkipDates];
         session.IsAllDay = false;
     }
 
@@ -619,6 +870,48 @@ public sealed class ListingEditor(
         ? (c % 100 == 0 ? (c / 100).ToString(CultureInfo.InvariantCulture) : (c / 100m).ToString("0.00", CultureInfo.InvariantCulture))
         : string.Empty;
 
+    /// <summary>The same wall-clock time, <paramref name="days"/> later, so 23:59 stays 23:59 across a clock change.</summary>
+    private static DateTimeOffset Shift(DateTimeOffset instant, int days, TimeZoneInfo zone)
+    {
+        DateTime local = TimeZoneInfo.ConvertTime(instant, zone).DateTime.AddDays(days);
+        return OccurrenceExpander.ToUtc(local, zone);
+    }
+
+    /// <summary>
+    /// A weekly rule's first session must fall on one of its days, or RFC 5545 makes the start
+    /// an extra session. A shift of other than whole weeks can break that, so the clone's start
+    /// moves forward to the first matching day, as the editor's does.
+    /// </summary>
+    private static DateOnly AlignedStart(string? rrule, DateOnly startsOn)
+    {
+        List<string> days = rrule is null ? [] : DaysOf(rrule);
+        return days.Count == 0 ? startsOn : days.Select(d => ListingFormParser.NextOrSame(startsOn, d)).Min();
+    }
+
+    private static string Day(DateTimeOffset local) => local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The take-down day as the provider typed it. An event's own end-of-run expiry is not a
+    /// take-down the provider chose, so it shows as empty.
+    /// </summary>
+    private static string TakeDownText(ListingRecord l, ListingSessionRecord? session, TimeZoneInfo zone)
+    {
+        if (l.ExpiresAt is not { } expires)
+        {
+            return string.Empty;
+        }
+
+        DateOnly last = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(expires, zone).DateTime).AddDays(-1);
+        bool eventEnd = l.Kind == ListingKind.Event.ToDbValue() && session?.EndsOn == last;
+        return eventEnd ? string.Empty : last.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static string IntervalOf(string rrule)
+    {
+        int at = rrule.IndexOf("INTERVAL=", StringComparison.Ordinal);
+        return at < 0 ? "1" : rrule[(at + 9)..].Split(';')[0];
+    }
+
     private static List<string> DaysOf(string rrule)
     {
         int at = rrule.IndexOf("BYDAY=", StringComparison.Ordinal);
@@ -631,3 +924,6 @@ public sealed class ListingEditor(
         return [.. list.Split(',', StringSplitOptions.RemoveEmptyEntries)];
     }
 }
+
+/// <summary>What an applied import did. Skipped rows are named by their external id.</summary>
+public sealed record ImportOutcome(int Created, int Updated, IReadOnlyList<string> Skipped);

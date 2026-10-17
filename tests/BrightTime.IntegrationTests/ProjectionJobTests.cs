@@ -1,4 +1,6 @@
 using BrightTime.Infrastructure.Jobs;
+using BrightTime.Modules.Directory.Contracts.Messages;
+using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Opportunities.Projection;
@@ -137,6 +139,93 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
             [("k", $"{ProjectListingHandler.JobType}:{s.Listing:N}")])).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task A_listing_set_to_show_later_stays_hidden_and_its_projection_waits_for_the_moment()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedListingAsync(DayOfWeek.Friday);
+        DateTimeOffset showAt = DateTimeOffset.UtcNow.AddHours(1);
+        await ChangeAndScheduleAsync(s, l => l.PublishAt = showAt);
+
+        await DrainAsync();
+
+        (await IsPublishedAsync(s.Listing)).ShouldBeFalse("approved, but not yet shown");
+        string key = $"{ProjectListingHandler.JobType}:{s.Listing:N}:at:{showAt.ToUnixTimeSeconds()}";
+        await using (NpgsqlConnection connection = await Sql.OpenAsync(Cs, Ct))
+        {
+            (await Sql.ScalarAsync<bool>(connection, null,
+                "select state = 'ready' and abs(extract(epoch from run_after - @at)) < 2 from platform.job where unique_key = @k",
+                [("k", key), ("at", showAt.AddSeconds(1))])).ShouldBeTrue();
+
+            // The moment comes: the listing's time has passed, and so has the job's.
+            await Sql.ExecAsync(connection, null,
+                """
+                update opportunity.listing set publish_at = now() - interval '1 minute' where id = @l;
+                update platform.job set run_after = now() where unique_key = @k;
+                """, [("l", s.Listing), ("k", key)]);
+        }
+
+        await DrainAsync();
+
+        (await IsPublishedAsync(s.Listing)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_listing_leaves_search_when_its_take_down_moment_comes()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedListingAsync(DayOfWeek.Friday);
+        DateTimeOffset downAt = DateTimeOffset.UtcNow.AddHours(2);
+        await ChangeAndScheduleAsync(s, l => l.ExpiresAt = downAt);
+        await DrainAsync();
+        (await IsPublishedAsync(s.Listing)).ShouldBeTrue();
+
+        string key = $"{ProjectListingHandler.JobType}:{s.Listing:N}:at:{downAt.ToUnixTimeSeconds()}";
+        await using (NpgsqlConnection connection = await Sql.OpenAsync(Cs, Ct))
+        {
+            await Sql.ExecAsync(connection, null,
+                """
+                update opportunity.listing set expires_at = now() - interval '1 minute' where id = @l;
+                update platform.job set run_after = now() where unique_key = @k;
+                """, [("l", s.Listing), ("k", key)]);
+        }
+
+        await DrainAsync();
+
+        // Before, nothing re-projected an expired listing, and it stayed findable.
+        (await IsPublishedAsync(s.Listing)).ShouldBeFalse();
+        (await SearchAsync(s.Tenant, "robotics", null)).Items.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Closing_a_site_reprojects_the_listings_held_there()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedListingAsync(DayOfWeek.Friday);
+        await DrainAsync();
+        (await SiteRowsAsync(s)).ShouldBe(1);
+
+        await using (AsyncServiceScope scope = TestHost.AppScope(Cs, s.Tenant))
+        {
+            DirectoryDbContext db = scope.ServiceProvider.GetRequiredService<DirectoryDbContext>();
+            await db.InTransactionAsync(async ct =>
+            {
+                await db.Database.ExecuteSqlAsync($"update directory.site set is_active = false where id = {s.Site}", ct);
+                return await db.EnqueueJobAsync(new JobRequest
+                {
+                    JobType = SiteChangedJob.JobType,
+                    TenantId = new TenantId(s.Tenant),
+                    Payload = new SiteChangedJob.Payload(s.Site),
+                    UniqueKey = SiteChangedJob.UniqueKey(s.Site),
+                }, ct);
+            }, Ct);
+        }
+
+        await DrainAsync();
+
+        (await SiteRowsAsync(s)).ShouldBe(0, "a closed site is no longer where the listing is found");
+    }
+
     // ---- helpers ----------------------------------------------------------------------
 
     private async Task DrainAsync()
@@ -264,6 +353,20 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
             "select count(*) from opportunity.listing_occurrence where listing_id = @l and starts_at < now() - interval '1 day'",
             [("l", listing)]);
         return (count, onDay, past);
+    }
+
+    private async Task<bool> IsPublishedAsync(Guid listing)
+    {
+        await using NpgsqlConnection connection = await Sql.OpenAsync(Cs, Ct);
+        return await Sql.ScalarAsync<bool>(connection, null,
+            "select bool_or(is_published) from opportunity.listing_search where listing_id = @l", [("l", listing)]);
+    }
+
+    private async Task<long> SiteRowsAsync(Seeded s)
+    {
+        await using NpgsqlConnection connection = await Sql.OpenAsync(Cs, Ct);
+        return await Sql.ScalarAsync<long>(connection, null,
+            "select count(*) from opportunity.listing_search where listing_id = @l and site_id = @s", [("l", s.Listing), ("s", s.Site)]);
     }
 
     private async Task<string[]> FacetsAsync(Guid listing)

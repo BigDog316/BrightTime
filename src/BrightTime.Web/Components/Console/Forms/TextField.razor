@@ -1,0 +1,43 @@
+@* One labelled input with its hint and error, wired for screen readers. *@
+<div class="field @(Width is null ? "" : "field-" + Width)">
+    <label for="@Name">@Label</label>
+    @if (Hint is not null)
+    {
+        <p class="hint" id="hint-@Name">@Hint</p>
+    }
+    @if (Rows is { } rows)
+    {
+        <textarea id="@Name" name="@Name" rows="@rows" maxlength="@Max" autocomplete="@Autocomplete"
+                  aria-invalid="@Errors.Invalid(Name)" aria-describedby="@Errors.DescribedBy(Name, Hint is null ? null : "hint-" + Name)">@Value</textarea>
+    }
+    else
+    {
+        <input id="@Name" name="@Name" type="@Type" value="@Value" maxlength="@Max" autocomplete="@Autocomplete" required="@Required"
+               aria-invalid="@Errors.Invalid(Name)" aria-describedby="@Errors.DescribedBy(Name, Hint is null ? null : "hint-" + Name)" />
+    }
+    <FieldError Name="@Name" Errors="@Errors" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public string? Hint { get; set; }
+
+    [Parameter] public string Type { get; set; } = "text";
+
+    [Parameter] public int? Max { get; set; }
+
+    [Parameter] public int? Rows { get; set; }
+
+    [Parameter] public string? Width { get; set; }
+
+    [Parameter] public string? Autocomplete { get; set; }
+
+    [Parameter] public bool Required { get; set; }
+
+    [Parameter, EditorRequired] public FieldErrors Errors { get; set; } = FieldErrors.None;
+}

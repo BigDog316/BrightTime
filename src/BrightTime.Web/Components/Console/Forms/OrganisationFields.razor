@@ -1,0 +1,41 @@
+@* An organisation's public details: on the application and on the profile page. *@
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.SharedKernel.Primitives
+
+<TextField Name="DisplayName" Label="@T["provider.org.display_name"]" Value="@Form.DisplayName" Hint="@T["provider.org.display_name_hint"]" Max="ProviderForms.MaxName" Autocomplete="organization" Errors="@Errors" />
+<TextField Name="LegalName" Label="@T["provider.org.legal_name"]" Value="@Form.LegalName" Hint="@T["provider.org.legal_name_hint"]" Max="ProviderForms.MaxName" Errors="@Errors" />
+<div class="field">
+    <label for="Kind">@T["provider.org.kind"]</label>
+    <select id="Kind" name="Kind" aria-invalid="@Errors.Invalid("Kind")" aria-describedby="@Errors.DescribedBy("Kind")">
+        @foreach (string kind in ProviderForms.Kinds)
+        {
+            <option value="@kind" selected="@(Form.Kind == kind)">@T["organisation.kind." + kind]</option>
+        }
+    </select>
+    <FieldError Name="Kind" Errors="@Errors" />
+</div>
+<TextField Name="Mission" Label="@T["provider.org.mission"]" Value="@Form.Mission" Hint="@T["provider.org.mission_hint"]" Rows="4" Max="ProviderForms.MaxMission" Errors="@Errors" />
+<TextField Name="WebsiteUrl" Label="@T["provider.org.website"]" Value="@Form.WebsiteUrl" Type="url" Hint="@T["provider.org.website_hint"]" Errors="@Errors" />
+<div class="field-row">
+    <TextField Name="PublicEmail" Label="@T["provider.org.public_email"]" Value="@Form.PublicEmail" Type="email" Errors="@Errors" />
+    <TextField Name="PublicPhone" Label="@T["provider.org.public_phone"]" Value="@Form.PublicPhone" Type="tel" Width="short" Max="40" Errors="@Errors" />
+</div>
+<div id="Languages" class="field">
+    <p class="label">@T["provider.org.languages"]</p>
+    <div class="radio-row">
+        @foreach (Locale l in Locale.Supported)
+        {
+            <label class="check">
+                <input type="checkbox" name="Languages" value="@l.Code" checked="@Form.Languages.Contains(l.Code)" />
+                @l.NativeName
+            </label>
+        }
+    </div>
+    <FieldError Name="Languages" Errors="@Errors" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public OrganisationForm Form { get; set; } = new();
+
+    [Parameter, EditorRequired] public FieldErrors Errors { get; set; } = FieldErrors.None;
+}

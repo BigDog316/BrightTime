@@ -4,10 +4,12 @@ using BrightTime.Abstractions.Messaging;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Messaging;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Directory.Provider;
 using BrightTime.Modules.Directory.Review;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.Modules.Opportunities.Editing;
+using BrightTime.Modules.Opportunities.Import;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
 using BrightTime.Web.Auditing;
@@ -102,6 +104,7 @@ public static class ConsoleServices
             services.AddSingleton(sp => new PasswordAccounts(
                 sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             services.AddScoped<BrightTimePrincipalFactory>();
+            services.AddSingleton(sp => new AccountProvisioning(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
 
             // WebAuthn's relying party is the tenant's own address, as for reset links: the
             // browser checks each passkey against it, so a phishing site cannot use one. Per
@@ -144,8 +147,8 @@ public static class ConsoleServices
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
         if (canSignIn)
         {
-            services.AddSingleton<PasswordResetDispatcher>();
-            services.AddHostedService(sp => sp.GetRequiredService<PasswordResetDispatcher>());
+            services.AddSingleton<AccountMailDispatcher>();
+            services.AddHostedService(sp => sp.GetRequiredService<AccountMailDispatcher>());
         }
 
         // T21: every authentication route is rate limited per client address, on top of the
@@ -189,7 +192,12 @@ public static class ConsoleServices
         if (hasDatabase)
         {
             services.AddScoped<ListingEditor>();
+            services.AddScoped<ListingImporter>();
             services.AddScoped<OrganisationReview>();
+            services.AddScoped<OrganisationApplications>();
+            services.AddScoped<OrganisationSettings>();
+            services.AddScoped<SiteEditor>();
+            services.AddScoped<StaffDirectory>();
         }
 
         return services;
@@ -264,6 +272,9 @@ public static class ConsoleServices
         PasskeyEndpoints.RegisterOptionsPath, PasskeyEndpoints.RegisterPath,
         ExternalSignIn.StartPath, ExternalSignIn.LinkPath,
         StepUp.ConfirmPage, StepUp.PasskeyOptionsPath, StepUp.PasskeyPath,
+
+        // Not sign-in, but public, and it makes accounts and sends email: limited the same way.
+        "/providers/apply",
     ];
 
     private static bool IsAuthenticationPath(PathString path) =>

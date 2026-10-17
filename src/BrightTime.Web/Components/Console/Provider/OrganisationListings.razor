@@ -4,6 +4,7 @@
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.Modules.Opportunities.Editing
 @using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Components.Console.Forms
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inherits ConsoleComponent
@@ -20,6 +21,12 @@ else if (_name is not null)
 
     <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
     <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="listings" Role="@(RoleIn(new OrganisationId(OrgId)) ?? "")" />
+
+    @if (Applied == "1")
+    {
+        <p class="notice success" role="status">@T["apply.received"]</p>
+    }
 
     @if (_status != OrganisationStatus.Approved)
     {
@@ -56,6 +63,8 @@ else if (_name is not null)
 
 @code {
     [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "applied")] public string? Applied { get; set; }
 
     private string? _name;
     private OrganisationStatus _status;

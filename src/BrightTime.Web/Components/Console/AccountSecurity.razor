@@ -9,19 +9,19 @@
 @attribute [Authorize(Policy = BrightTime.Web.Auth.StepUp.Policy)]
 @inherits ConsoleComponent
 
-<PageTitle>Sign-in and security · BrightTime</PageTitle>
+<PageTitle>@T["account.security.title"] · BrightTime</PageTitle>
 
-<h1>Sign-in and security</h1>
+<h1>@T["account.security.title"]</h1>
 
 @if (!Availability.CanSignIn)
 {
-    <p>Accounts are not available on this site.</p>
+    <p>@T["account.unavailable"]</p>
 }
 else
 {
     @if (Added == "1")
     {
-        <p class="notice success" role="status">Passkey added. Next time, choose "Sign in with a passkey".</p>
+        <p class="notice success" role="status">@T["account.passkey.added"]</p>
     }
     @if (_message is not null)
     {
@@ -29,15 +29,12 @@ else
     }
 
     <section aria-labelledby="passkeys-heading">
-        <h2 id="passkeys-heading">Passkeys</h2>
-        <p>
-            A passkey signs you in with your fingerprint, face or device PIN instead of a password. It can't be
-            phished or reused on another site.
-        </p>
+        <h2 id="passkeys-heading">@T["account.passkey.heading"]</h2>
+        <p>@T["account.passkey.explain"]</p>
 
         @if (_passkeys.Count == 0)
         {
-            <p>You have no passkeys yet.</p>
+            <p>@T["account.passkey.none"]</p>
         }
         else
         {
@@ -48,12 +45,17 @@ else
                         <span>
                             <strong>@p.Name</strong>
                             <span class="note">
-                                Added @Local(p.CreatedAt)@(p.LastUsedAt is { } used ? $" · last used {Local(used)}" : " · not used yet")@(p.IsBackedUp ? " · synced" : "")
+                                @T.Format("account.passkey.added_on", ("date", T.DateShort(p.CreatedAt)))
+                                · @(p.LastUsedAt is { } used ? T.Format("account.passkey.last_used", ("date", T.DateShort(used))) : T["account.passkey.not_used"])
+                                @if (p.IsBackedUp)
+                                {
+                                    <text> · @T["account.passkey.synced"]</text>
+                                }
                             </span>
                         </span>
                         <form method="post" @formname="@($"revoke-{p.Id:N}")" @onsubmit="() => RevokeAsync(p.Id)">
                             <AntiforgeryToken />
-                            <button type="submit" class="secondary-button">Remove<span class="visually-hidden"> @p.Name</span></button>
+                            <button type="submit" class="secondary-button">@T["account.passkey.remove"]<span class="visually-hidden"> @p.Name</span></button>
                         </form>
                     </li>
                 }
@@ -63,24 +65,24 @@ else
         <div class="needs-webauthn">
             <div class="editor sign-in">
                 <div class="field">
-                    <label for="passkey-name">Name for the new passkey</label>
-                    <p class="hint" id="passkey-name-hint">So you can tell them apart, like "Work laptop".</p>
+                    <label for="passkey-name">@T["account.passkey.name_label"]</label>
+                    <p class="hint" id="passkey-name-hint">@T["account.passkey.name_hint"]</p>
                     <input id="passkey-name" type="text" maxlength="@Passkeys.MaxNameLength" aria-describedby="passkey-name-hint" />
                 </div>
             </div>
             <p class="notice error" id="passkey-error" role="alert" tabindex="-1" hidden></p>
             @* The script reads the antiforgery token from the page. *@
             <AntiforgeryToken />
-            <button type="button" data-passkey-action="register">Add a passkey</button>
+            <button type="button" data-passkey-action="register">@T["account.passkey.add"]</button>
         </div>
-        <noscript><p class="note">Adding a passkey needs JavaScript, which is off in this browser.</p></noscript>
+        <noscript><p class="note">@T["account.passkey.needs_script"]</p></noscript>
     </section>
 
     @if (Providers.Count > 0)
     {
         <section aria-labelledby="external-heading">
-            <h2 id="external-heading">Connected accounts</h2>
-            <p>Connect an account you already use, and sign in with it next time. Connecting never shares your BrightTime information with it.</p>
+            <h2 id="external-heading">@T["account.external.heading"]</h2>
+            <p>@T["account.external.explain"]</p>
             @if (ExternalMessage is { } externalMessage)
             {
                 <p class="notice" role="status">@externalMessage</p>
@@ -92,21 +94,21 @@ else
                     <li>
                         <span>
                             <strong>@provider.DisplayName</strong>
-                            <span class="note">@(connected is null ? "Not connected" : $"Connected {Local(connected.LinkedAt)}")</span>
+                            <span class="note">@(connected is null ? T["account.external.not_connected"] : T.Format("account.external.connected_on", ("date", T.DateShort(connected.LinkedAt))))</span>
                         </span>
                         @if (connected is null)
                         {
                             <form method="post" action="@BrightTime.Web.Auth.ExternalSignIn.LinkPath">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="provider" value="@key" />
-                                <button type="submit" class="secondary-button">Connect<span class="visually-hidden"> @provider.DisplayName</span></button>
+                                <button type="submit" class="secondary-button">@T["account.external.connect"]<span class="visually-hidden"> @provider.DisplayName</span></button>
                             </form>
                         }
                         else
                         {
                             <form method="post" @formname="@($"disconnect-{key}")" @onsubmit="() => DisconnectAsync(connected.Issuer)">
                                 <AntiforgeryToken />
-                                <button type="submit" class="secondary-button">Disconnect<span class="visually-hidden"> @provider.DisplayName</span></button>
+                                <button type="submit" class="secondary-button">@T["account.external.disconnect"]<span class="visually-hidden"> @provider.DisplayName</span></button>
                             </form>
                         }
                     </li>
@@ -116,8 +118,8 @@ else
     }
 
     <section aria-labelledby="password-heading">
-        <h2 id="password-heading">Password</h2>
-        <p>To set or change your password, <a href="/account/forgot">we'll email you a link</a>.</p>
+        <h2 id="password-heading">@T["account.field.password"]</h2>
+        <p>@T["account.security.password"] <a href="/account/forgot">@T["account.security.password_link"]</a></p>
     </section>
 }
 
@@ -134,10 +136,10 @@ else
 
     private string? ExternalMessage => External switch
     {
-        "connected" => "Connected. You can now sign in with it.",
-        "already" => "Your account is already connected to that provider. Disconnect it first to connect a different account.",
-        "in_use" => "That account is already connected to a different BrightTime account.",
-        "wrong_session" => "The connection was started by a different sign-in, so nothing was connected. Try again.",
+        "connected" => T["account.external.done"],
+        "already" => T["account.external.already"],
+        "in_use" => T["account.external.in_use"],
+        "wrong_session" => T["account.external.wrong_session"],
         _ => null,
     };
 
@@ -149,7 +151,7 @@ else
             Get<AuditTrail>().Record(AuthAudit.Allowed(AuthAudit.ExternalDisconnected, Actor, detail: new Dictionary<string, string> { ["issuer"] = issuer }));
         }
 
-        _message = removed ? "Disconnected. It can no longer sign in to this account." : "That account was already disconnected.";
+        _message = T[removed ? "account.external.disconnected" : "account.external.already_disconnected"];
         _external = await Get<ExternalLogins>().ListAsync(Tenant.TenantId, Actor);
     }
 
@@ -173,10 +175,7 @@ else
             Get<AuditTrail>().Record(AuthAudit.Allowed(AuthAudit.PasskeyRemoved, Actor, detail: new Dictionary<string, string> { ["passkey"] = id.ToString("N") }));
         }
 
-        _message = removed ? "Passkey removed. It can no longer sign in to this account." : "That passkey was already removed.";
+        _message = T[removed ? "account.passkey.removed" : "account.passkey.already_removed"];
         _passkeys = await Get<Passkeys>().ListAsync(Tenant.TenantId, Actor);
     }
-
-    private string Local(DateTimeOffset at) =>
-        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("MMM d, yyyy", Tenant.Locale.ToCulture());
 }

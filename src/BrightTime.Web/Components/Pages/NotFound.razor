@@ -1,5 +1,8 @@
-﻿@page "/not-found"
+@page "/not-found"
 @layout MainLayout
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>@T["site.not_found.title"] · BrightTime</PageTitle>
+
+<h1>@T["site.not_found.title"]</h1>
+<p>@T["site.not_found.body"]</p>
+<p><a href="/search">@T["home.find"]</a></p>

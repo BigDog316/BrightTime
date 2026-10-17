@@ -79,6 +79,10 @@ base64-encoded (`openssl rand -base64 32`). It keys the hashes of client address
 agents. Development makes one up per run, so hashes there match only within a run. Organisers
 browse the log at `/organiser/audit`. The Jobs host keeps its partitions ahead.
 
+The site speaks the six launch languages: add `?lang=es` (or `zh-Hans`, `bn`, `ht`, `ar`) to
+any page, or use the language links in the header. An organiser can change any sentence, in
+any language, at `/organiser/wording`.
+
 The tenant comes from the host (decision D18). The seed's primary domain is
 `kettle.localhost`, with `kettle.brighttime.test` as an alias, and browsers send
 `*.localhost` to this machine.

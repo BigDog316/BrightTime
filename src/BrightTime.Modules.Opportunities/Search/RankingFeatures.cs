@@ -1,3 +1,5 @@
+using BrightTime.SharedKernel.Text;
+
 namespace BrightTime.Modules.Opportunities.Search;
 
 /// <summary>
@@ -64,37 +66,37 @@ public static class RelevanceScorer
     }
 
     /// <summary>
-    /// The factors that moved the score, in plain terms, for the result card.
-    /// The interface renders these, so a family can see why a listing was shown.
+    /// The factors that moved the score, for the result card, so a family can see why a listing
+    /// was shown. Phrases, which the interface renders in the reader's language.
     /// </summary>
-    public static IReadOnlyList<string> Explain(RankingFeatures features)
+    public static IReadOnlyList<Phrase> Explain(RankingFeatures features)
     {
         ArgumentNullException.ThrowIfNull(features);
 
-        List<string> reasons = [];
+        List<Phrase> reasons = [];
 
         if (features.TextRank > 0)
         {
-            reasons.Add("matches your search");
+            reasons.Add(Phrase.Of("finder.reason.matches_search"));
         }
 
         if (features.DistanceMetres is { } metres)
         {
             reasons.Add(metres < 1000
-                ? $"{metres:0} m away"
-                : $"{metres / 1000:0.0} km away");
+                ? Phrase.Of("finder.reason.metres_away", ("metres", (int)Math.Round(metres)))
+                : Phrase.Of("finder.reason.km_away", ("km", Math.Round((decimal)metres / 1000m, 1))));
         }
 
         if (features.DaysUntilStart is { } days)
         {
-            reasons.Add(days < 1 ? "starts today" : $"starts in {Math.Ceiling(days):0} days");
+            reasons.Add(days < 1
+                ? Phrase.Of("finder.reason.starts_today")
+                : Phrase.Of("finder.reason.starts_in_days", ("days", (int)Math.Ceiling(days))));
         }
 
         if (features.InterestOverlap > 0)
         {
-            reasons.Add(features.InterestOverlap == 1
-                ? "matches one of your interests"
-                : $"matches {features.InterestOverlap} of your interests");
+            reasons.Add(Phrase.Of("finder.reason.matches_interests", ("count", features.InterestOverlap)));
         }
 
         return reasons;

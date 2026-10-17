@@ -6,6 +6,7 @@ using BrightTime.Web.Auditing;
 using BrightTime.Web.Auth;
 using BrightTime.Web.Components;
 using BrightTime.Web.Composition;
+using BrightTime.Web.Localisation;
 using BrightTime.Web.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.Services.AddBrightTimeFinder(builder.Configuration);
 builder.Services.AddBrightTimeTenancy(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment);
+builder.Services.AddBrightTimeLocalisation(builder.Configuration);
 
 var app = builder.Build();
 
@@ -42,6 +44,9 @@ app.UseMiddleware<TenantRequestMiddleware>();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<ActorMiddleware>();
+
+// After the actor, whose own language is one of the choices; before anything renders a word.
+app.UseMiddleware<LocaleMiddleware>();
 app.UseAuthorization();
 
 // After the actor is known; flushes the request's audit events before its response starts.

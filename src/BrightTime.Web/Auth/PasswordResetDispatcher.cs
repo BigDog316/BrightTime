@@ -21,13 +21,17 @@ public sealed partial class PasswordResetDispatcher(
     IServiceScopeFactory scopes,
     ILogger<PasswordResetDispatcher> logger) : BackgroundService
 {
-    private readonly Channel<(TenantId Tenant, string Email, Uri SiteUrl)> _requests =
-        Channel.CreateBounded<(TenantId, string, Uri)>(new BoundedChannelOptions(1_000) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true });
+    private readonly Channel<(TenantId Tenant, string Email, Uri SiteUrl, Locale PageLocale)> _requests =
+        Channel.CreateBounded<(TenantId, string, Uri, Locale)>(new BoundedChannelOptions(1_000) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true });
 
-    /// <summary>Queues a reset. <paramref name="siteUrl"/> is the tenant's own address, from <see cref="Tenancy.SiteContext"/>.</summary>
-    public void Request(TenantId tenant, string email, Uri siteUrl)
+    /// <summary>
+    /// Queues a reset. <paramref name="siteUrl"/> is the tenant's own address, from
+    /// <see cref="Tenancy.SiteContext"/>; <paramref name="pageLocale"/> is the language the form
+    /// was in, used when the account has no language of its own.
+    /// </summary>
+    public void Request(TenantId tenant, string email, Uri siteUrl, Locale pageLocale)
     {
-        if (!_requests.Writer.TryWrite((tenant, email, siteUrl)))
+        if (!_requests.Writer.TryWrite((tenant, email, siteUrl, pageLocale)))
         {
             LogDropped(logger);
         }
@@ -35,7 +39,7 @@ public sealed partial class PasswordResetDispatcher(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach ((TenantId tenant, string email, Uri siteUrl) in _requests.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+        await foreach ((TenantId tenant, string email, Uri siteUrl, Locale pageLocale) in _requests.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
         {
             try
             {
@@ -47,13 +51,18 @@ public sealed partial class PasswordResetDispatcher(
                     continue;
                 }
 
+                // In the account's own language when it has one; otherwise the form's.
+                Locale locale = Locale.TryFromCode(reset.Locale, out Locale own) ? own : pageLocale;
+                var context = scope.ServiceProvider.GetRequiredService<Infrastructure.Tenancy.TenantContext>();
+                context.SetTenant(tenant, TimeZoneInfo.Utc, locale);
+                Localisation.Text text = scope.ServiceProvider.GetRequiredService<Localisation.Text>();
+                await text.LoadAsync(stoppingToken).ConfigureAwait(false);
+
                 DeliveryReceipt receipt = await scope.ServiceProvider.GetRequiredService<IEmailSender>()
-                    .SendAsync(Compose(reset, siteUrl), stoppingToken).ConfigureAwait(false);
+                    .SendAsync(Compose(reset, siteUrl, text), stoppingToken).ConfigureAwait(false);
 
                 // Recorded only when there was an account: a request for an unknown address
                 // leaves no trace, so the audit log is no list of addresses people typed.
-                var context = scope.ServiceProvider.GetRequiredService<Infrastructure.Tenancy.TenantContext>();
-                context.SetTenant(tenant, TimeZoneInfo.Utc, Locale.Default);
 
                 // The actor stays anonymous: whoever asked was not signed in. The request's
                 // address is gone by now, so this row has no client hashes.
@@ -75,31 +84,39 @@ public sealed partial class PasswordResetDispatcher(
         }
     }
 
-    private static EmailMessage Compose(PasswordResetRequest reset, Uri baseUrl)
+    private static EmailMessage Compose(PasswordResetRequest reset, Uri baseUrl, Localisation.Text t)
     {
         string link = new Uri(baseUrl, $"/account/reset?token={Uri.EscapeDataString(reset.Token)}").AbsoluteUri;
         int minutes = (int)PasswordAccounts.ResetLifetime.TotalMinutes;
 
-        // English until the interface is localised; the template set is per locale later.
+        string asked = t.Format("email.reset.asked", ("email", reset.Email));
+        string useIt = t.Format("email.reset.use_link", ("minutes", minutes));
+        string notYou = t["email.reset.not_you"];
+
         string text =
             $"""
-             Someone asked to reset the password for the BrightTime account {reset.Email}.
+             {asked}
 
-             If it was you, open this link within {minutes} minutes to choose a new password:
+             {useIt}
 
              {link}
 
-             If it wasn't you, you can ignore this email. Your password has not changed.
-             """;
-        string html =
-            $"""
-             <p>Someone asked to reset the password for the BrightTime account {WebUtility.HtmlEncode(reset.Email)}.</p>
-             <p>If it was you, use this link within {minutes} minutes to choose a new password:</p>
-             <p><a href="{WebUtility.HtmlEncode(link)}">Choose a new password</a></p>
-             <p>If it wasn't you, you can ignore this email. Your password has not changed.</p>
+             {notYou}
              """;
 
-        return new EmailMessage(reset.Email, "Reset your BrightTime password", html, text, Locale.Resolve(reset.Locale));
+        // Every value encoded; the direction set for Arabic, since mail clients do not guess.
+        Locale locale = t.Locale;
+        string html =
+            $"""
+             <div lang="{locale.Code}" dir="{locale.Direction}">
+             <p>{WebUtility.HtmlEncode(asked)}</p>
+             <p>{WebUtility.HtmlEncode(useIt)}</p>
+             <p><a href="{WebUtility.HtmlEncode(link)}">{WebUtility.HtmlEncode(t["email.reset.button"])}</a></p>
+             <p>{WebUtility.HtmlEncode(notYou)}</p>
+             </div>
+             """;
+
+        return new EmailMessage(reset.Email, t["email.reset.subject"], html, text, locale);
     }
 
     [LoggerMessage(EventId = 3001, Level = LogLevel.Error, Message = "The password reset queue is full; a request was dropped.")]

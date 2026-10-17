@@ -1,5 +1,6 @@
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Editing;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Tests;
 
@@ -29,7 +30,7 @@ public sealed class ListingFormParserTests
     [Fact]
     public void A_complete_form_parses_and_is_trimmed()
     {
-        (ParsedListing? listing, IReadOnlyDictionary<string, string[]> errors) = ListingFormParser.Parse(Valid());
+        (ParsedListing? listing, IReadOnlyDictionary<string, Phrase[]> errors) = ListingFormParser.Parse(Valid());
 
         errors.ShouldBeEmpty();
         listing.ShouldNotBeNull();
@@ -67,7 +68,7 @@ public sealed class ListingFormParserTests
         form.SiteIds.Clear();
         form.CostModel = "fixed";
 
-        (ParsedListing? listing, IReadOnlyDictionary<string, string[]> errors) = ListingFormParser.Parse(form);
+        (ParsedListing? listing, IReadOnlyDictionary<string, Phrase[]> errors) = ListingFormParser.Parse(form);
 
         listing.ShouldBeNull();
         errors.Keys.ShouldBe(["Title", "SiteIds", "EndTime", "CostMin"]);

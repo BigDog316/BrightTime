@@ -1,6 +1,7 @@
 using System.Globalization;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Primitives;
 using Npgsql;
 
 namespace BrightTime.Modules.Platform.Tenancy;
@@ -12,9 +13,19 @@ public sealed record TenantSite(
     string Status,
     string TimeZone,
     string DefaultLocale,
-    string PrimaryHost)
+    string PrimaryHost,
+    IReadOnlyList<string>? Locales = null)
 {
     public bool IsActive => Status == "active";
+
+    /// <summary>
+    /// The locales the tenant publishes in (<c>platform.tenant_locale</c>), in its own order.
+    /// A tenant with none configured offers every supported locale.
+    /// </summary>
+    public IReadOnlyList<Locale> EnabledLocales { get; } =
+        Locales is { Count: > 0 } codes
+            ? [.. codes.Select(c => Locale.TryFromCode(c, out Locale l) ? l : null).OfType<Locale>().Distinct()]
+            : Locale.Supported;
 }
 
 /// <summary>What a request's host resolved to.</summary>
@@ -89,7 +100,8 @@ public sealed class SqlTenantLookup(NpgsqlDataSource dataSource) : ITenantLookup
         await using NpgsqlCommand command = new(
             """
             select t.display_name, t.status, t.timezone, t.default_locale,
-                   (select d.host::text from platform.tenant_domain d where d.tenant_id = t.id and d.is_primary)
+                   (select d.host::text from platform.tenant_domain d where d.tenant_id = t.id and d.is_primary),
+                   (select array_agg(l.locale order by l.sort_order, l.locale) from platform.tenant_locale l where l.tenant_id = t.id)
               from platform.tenant t
              where t.id = @id
             """, connection, tx);
@@ -102,9 +114,10 @@ public sealed class SqlTenantLookup(NpgsqlDataSource dataSource) : ITenantLookup
 
         // A tenant with no primary domain cannot be reached by host, and has no address of its own.
         string? primary = await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4);
+        string[]? locales = await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? null : await reader.GetFieldValueAsync<string[]>(5, ct).ConfigureAwait(false);
         return primary is null
             ? null
-            : new TenantSite(tenant, reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), primary);
+            : new TenantSite(tenant, reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), primary, locales);
     }
 }
 

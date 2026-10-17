@@ -7,33 +7,33 @@
 @attribute [Authorize(Policy = ConsoleServices.AuditPolicy)]
 @inherits ConsoleComponent
 
-<PageTitle>Audit log · BrightTime</PageTitle>
+<PageTitle>@T["site.nav.audit"] · BrightTime</PageTitle>
 
-<h1>Audit log</h1>
-<p class="hint">Sign-ins, account changes and every decision about organisations and listings, newest first. Nothing here can be edited or removed.</p>
+<h1>@T["site.nav.audit"]</h1>
+<p class="hint">@T["audit.intro"]</p>
 
 @if (!Availability.IsAvailable)
 {
-    <p>The audit log needs the database, which this site is not using.</p>
+    <p>@T["audit.no_database"]</p>
 }
 else
 {
-    <form method="get" action="/organiser/audit" class="filters" role="search" aria-label="Filter the audit log">
-        <label>Person (email) <input type="email" name="actor" value="@ActorEmail" autocomplete="off" /></label>
-        <label>Action starts with <input type="text" name="action" value="@Action" placeholder="auth." /></label>
-        <label>Subject id <input type="text" name="subject" value="@Subject" inputmode="text" /></label>
-        <label>Outcome
+    <form method="get" action="/organiser/audit" class="filters" role="search" aria-label="@T["audit.filter_label"]">
+        <label>@T["audit.filter.person"] <input type="email" name="actor" value="@ActorEmail" autocomplete="off" /></label>
+        <label>@T["audit.filter.action"] <input type="text" name="action" value="@Action" placeholder="auth." /></label>
+        <label>@T["audit.filter.subject"] <input type="text" name="subject" value="@Subject" inputmode="text" /></label>
+        <label>@T["audit.col.outcome"]
             <select name="outcome">
-                <option value="" selected="@string.IsNullOrEmpty(Outcome)">Any</option>
+                <option value="" selected="@string.IsNullOrEmpty(Outcome)">@T["audit.outcome.any"]</option>
                 @foreach (string o in Outcomes)
                 {
-                    <option value="@o" selected="@(Outcome == o)">@o</option>
+                    <option value="@o" selected="@(Outcome == o)">@T["audit.outcome." + o]</option>
                 }
             </select>
         </label>
-        <label>From <input type="date" name="from" value="@From" /></label>
-        <label>To <input type="date" name="to" value="@To" /></label>
-        <button type="submit">Filter</button>
+        <label>@T["audit.filter.from"] <input type="date" name="from" value="@From" /></label>
+        <label>@T["audit.filter.to"] <input type="date" name="to" value="@To" /></label>
+        <button type="submit">@T["audit.filter.submit"]</button>
     </form>
 
     @if (_problems.Count > 0)
@@ -47,14 +47,14 @@ else
     }
     else if (_page.Rows.Count == 0)
     {
-        <p>No events match.</p>
+        <p>@T["audit.none"]</p>
     }
     else
     {
         <table class="queue audit">
-            <caption class="visually-hidden">Audit events, newest first</caption>
+            <caption class="visually-hidden">@T["audit.caption"]</caption>
             <thead>
-                <tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th><th scope="col">Outcome</th><th scope="col">Subject</th><th scope="col">Detail</th></tr>
+                <tr><th scope="col">@T["audit.col.when"]</th><th scope="col">@T["audit.col.who"]</th><th scope="col">@T["audit.col.action"]</th><th scope="col">@T["audit.col.outcome"]</th><th scope="col">@T["audit.col.subject"]</th><th scope="col">@T["audit.col.detail"]</th></tr>
             </thead>
             <tbody>
                 @foreach (AuditRow row in _page.Rows)
@@ -63,7 +63,7 @@ else
                         <td><time datetime="@row.OccurredAt.ToString("O", CultureInfo.InvariantCulture)">@When(row.OccurredAt)</time></td>
                         <td>@Who(row)</td>
                         <td><code>@row.Action</code></td>
-                        <td>@row.Outcome</td>
+                        <td>@T["audit.outcome." + row.Outcome]</td>
                         <td>
                             @if (row.SubjectKind is not null)
                             {
@@ -74,14 +74,14 @@ else
                                 }
                                 @if (row.SubjectCount > 3)
                                 {
-                                    <span> and @(row.SubjectCount - 3) more</span>
+                                    <span> @T.Format("audit.more_subjects", ("count", row.SubjectCount - 3))</span>
                                 }
                             }
                         </td>
                         <td>
                             @if (row.Reason is not null)
                             {
-                                <div>Reason: @row.Reason</div>
+                                <div>@T.Format("audit.reason", ("reason", row.Reason))</div>
                             }
                             @foreach ((string key, string value) in row.Detail.OrderBy(d => d.Key, StringComparer.Ordinal))
                             {
@@ -97,14 +97,14 @@ else
             </tbody>
         </table>
 
-        <nav aria-label="Audit log pages" class="pager">
+        <nav aria-label="@T["audit.pages"]" class="pager">
             @if (!string.IsNullOrEmpty(Before))
             {
-                <a href="@Link(before: string.Empty)">Newest</a>
+                <a href="@Link(before: string.Empty)">@T["audit.newest"]</a>
             }
             @if (_page.Older is { } older)
             {
-                <a href="@Link(before: older)">Older</a>
+                <a href="@Link(before: older)">@T["audit.older"]</a>
             }
         </nav>
     }
@@ -144,8 +144,8 @@ else
         {
             ActionPrefix = string.IsNullOrWhiteSpace(Action) ? null : Action.Trim(),
             Outcome = Outcomes.Contains(Outcome) ? Outcome : null,
-            From = Day(From, "From"),
-            Until = Day(To, "To")?.AddDays(1),
+            From = Day(From, T["audit.filter.from"]),
+            Until = Day(To, T["audit.filter.to"])?.AddDays(1),
         };
 
         if (!string.IsNullOrWhiteSpace(ActorEmail))
@@ -162,7 +162,7 @@ else
             }
             else
             {
-                _problems.Add("The subject id isn't a valid id.");
+                _problems.Add(T["audit.bad_subject"]);
             }
         }
 
@@ -196,7 +196,7 @@ else
 
         if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day))
         {
-            _problems.Add($"{label} isn't a date.");
+            _problems.Add(T.Format("audit.bad_date", ("field", label)));
             return null;
         }
 
@@ -207,10 +207,11 @@ else
 
     private string Who(AuditRow row) => row.ActorId is { } id
         ? _emails.TryGetValue(id, out string? email) ? email : id.ToString()
-        : row.ActorKind == "anonymous" ? "Not signed in" : row.ActorKind;
+        : T.Has("audit.actor." + row.ActorKind) ? T["audit.actor." + row.ActorKind] : row.ActorKind;
 
+    /// <summary>To the second: two events in the same minute must be told apart.</summary>
     private string When(DateTimeOffset at) =>
-        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("MMM d, yyyy h:mm:ss tt", Tenant.Locale.ToCulture());
+        T.Format("format.date_time", ("date", T.DateShort(at)), ("time", TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("T", T.Culture)));
 
     private string Link(string? subject = null, string? before = null)
     {

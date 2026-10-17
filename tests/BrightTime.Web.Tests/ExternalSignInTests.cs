@@ -180,7 +180,7 @@ public sealed class ExternalSignInTests(ConsoleFixture db)
         Browser browser, string subject, string? email = null, bool wrongKey = false, string? wrongIssuer = null, string? wrongNonce = null)
     {
         await browser.GetAsync("/sign-in");
-        browser.Html.ShouldContain($"Sign in with {FakeOidcProvider.DisplayName}");
+        browser.Html.ShouldContain($"Sign in with \u2068{FakeOidcProvider.DisplayName}\u2069");
         HttpResponseMessage start = await browser.PostAsync(ExternalSignIn.StartPath, null, ("provider", FakeOidcProvider.Key));
         start.StatusCode.ShouldBe(HttpStatusCode.Redirect, browser.Html);
         start.Headers.Location!.GetLeftPart(UriPartial.Path).ShouldBe(FakeOidcProvider.Issuer + "/authorize");

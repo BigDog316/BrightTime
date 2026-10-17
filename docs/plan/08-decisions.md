@@ -322,7 +322,7 @@ single-tenant install. Sample data always serves the fictional tenant. `Finder:T
 gone. External OIDC providers are still deployment-wide; per-tenant providers can now key on
 the resolved tenant.
 
-### D19 — Audit rows are written by the operation, not by an EF interceptor (**proposed 2026-10-17; implemented, reversible**)
+### D19 — Audit rows are written by the operation, not by an EF interceptor (**accepted 2026-10-17**)
 
 The architecture sketch had an `AuditInterceptor`. An interceptor sees rows and commands, not
 operations: a roster read is one query, a listing save is a dozen statements, and neither knows
@@ -348,6 +348,32 @@ writes it.
 
 Reversible: an interceptor could be added later for a "nothing touched a youth table
 unaudited" cross-check. It would add to these rows, not replace them.
+
+### D20 — Interface strings are JSON catalogues with ICU plurals, not .resx (**proposed 2026-10-17; implemented, reversible**)
+
+The plan asked for "the `en` resource file" without saying which format. These are flat JSON
+files, one per locale, using a subset of ICU MessageFormat.
+
+- **Why not .resx:**
+  - It has no plural forms, and Arabic needs six. `IStringLocalizer` would leave plurals to
+    `if (n == 1)` in every page, which is wrong in five of the six languages.
+  - Translation tools (Crowdin, Weblate, Lokalise) read flat JSON with ICU directly.
+  - A tenant override has to be checked against the shipped string's arguments, which needs
+    the template parsed. Here it is.
+- **What it costs:** about 500 lines of parser, catalogue and service (`BrightTime.Web/Localisation`),
+  tested on their own. Apostrophes are ordinary characters, unlike ICU, which quotes with them
+  and turns "don't" into a silent bug.
+- **Rules CI enforces:**
+  - every locale has exactly English's keys;
+  - the same arguments, and the plural forms its language needs;
+  - every key the code uses exists, and every key exists because the code uses it;
+  - every module error has an entry;
+  - no arrows that flip in Arabic;
+  - reading level for youth-facing text;
+  - logical-only CSS.
+
+Reversible: the catalogue sits behind `Text`, so a move to `IStringLocalizer` with a
+MessageFormat library would change one service, not the pages.
 
 ## Open questions
 
@@ -443,3 +469,15 @@ the schema is `text`), one was a real runtime bug (`youth_capability.is_under_13
 which the naming convention wrote as `is_under13`), and two were spelling. All four
 module contexts now match exactly. Tables no context maps yet are not checked;
 a table that is mapped must be mapped completely.
+
+**Q13 — Who reviews the translations?** All five non-English catalogues (about 560 strings
+each) were drafted by machine on 2026-10-17. Their files say so (`@@review`), and the pages
+are fully wired. Machine drafts are not fit to launch for a youth audience:
+- Haitian Creole and Bengali are the weakest.
+- The legal and safety copy that comes in M2 must not ship unreviewed in any language.
+
+I propose that native-speaker review of each locale is a launch gate, tracked by the
+`@@review` line. Does the county have translators, or should we budget for a vendor? The
+listing content (D6) is a separate question: providers write it, and machine translations are
+already marked as such on the page.
+

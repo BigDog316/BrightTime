@@ -8,14 +8,14 @@
 
 @if (Forbidden)
 {
-    <h1>You can't preview this listing</h1>
+    <h1>@T["editor.preview.denied"]</h1>
 }
 else if (_listing is { } listing)
 {
-    <PageTitle>Preview: @listing.Title · BrightTime</PageTitle>
+    <PageTitle>@T.Format("editor.preview.title", ("title", listing.Title)) · BrightTime</PageTitle>
     <p class="notice" role="note">
-        Preview. This is how the listing will look to families once it is published.
-        <a href="/provider/orgs/@OrgId/listings/@ListingId">Back to the editor</a>
+        @T["editor.preview.explain"]
+        <a href="/provider/orgs/@OrgId/listings/@ListingId">@T["editor.preview.back"]</a>
     </p>
     <ListingView Listing="listing" ShowPublicLinks="false" />
 }

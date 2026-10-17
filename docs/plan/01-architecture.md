@@ -209,6 +209,7 @@ nginx (TLS, HSTS, brotli, static cache)
         ├─ RateLimiting                   per tenant, per client, stricter for anonymous + public API
         ├─ DbConnectionInterceptor        set_config('brighttime.tenant_id', …, true)
         │                                 set_config('brighttime.actor_id',  …, true)
+        ├─ LocaleMiddleware               the request's language; the tenant's wording loaded (D20)
         ├─ AuditFlushMiddleware           writes the request's audit_event rows before the response (D19)
         ├─ Authorization                  policy handlers (see 04-roles-and-permissions.md)
         └─ Endpoint
@@ -254,7 +255,59 @@ phone on a weak connection.
   images, and skips the font download.
 - Server-rendered pages carry `Cache-Control: public, max-age=60,
   stale-while-revalidate=600` for anonymous requests; the tenant is part of the
-  cache key via `Vary: Host`.
+  cache key via `Vary: Host`, and the language via `Vary: Accept-Language, Cookie`.
+
+## Localisation
+
+*Implemented in M1 (D20).*
+
+- **Catalogue:**
+  - One flat JSON file per locale in `src/BrightTime.Web/Localisation/Strings`, embedded in the
+    assembly.
+  - Keys are stable names (`finder.results.count`), never the English, so overrides and
+    translations survive edits to the English.
+  - Values use a subset of ICU MessageFormat: `{name}`, `plural` with CLDR categories and
+    `=N`, and `select`.
+  - The six locales' CLDR plural rules are in `SharedKernel/Text/PluralRules.cs`. Arabic uses
+    all six forms, Chinese and Haitian Creole one.
+- **Modules say phrases, not sentences.** A module returns a `Phrase` (key plus arguments), and
+  an `Error` carries arguments for its `error.{code}` entry. Only the host chooses a language.
+  A status inside a sentence is itself a phrase, so "unpublished" is translated too.
+- **Order of lookup:** the tenant's override for the locale, then the catalogue for the locale,
+  then English. A gap falls back to English at run time, but CI fails on any gap.
+- **Choosing the language:**
+  1. `?lang=`, which is remembered in a preference cookie;
+  2. that cookie;
+  3. the account's own language;
+  4. `Accept-Language`, by quality;
+  5. the tenant's default.
+
+  Each step skips locales the tenant has not enabled (`platform.tenant_locale`). Every page
+  has a language list in the header: links, each named in its own language. Responses carry
+  `Vary: Accept-Language, Cookie`.
+- **Dates and numbers:** each locale states its own date patterns (`Locale.Dates`). ICU has no
+  Haitian Creole data, so its culture is built in `Locale.ToCulture()` with Kreyòl names on
+  French conventions. Money keeps the dollar sign in every language.
+- **Right to left:**
+  - `dir` is set on `<html>`, and on provider text whose language differs.
+  - The stylesheets use only logical properties, and a test fails on `left`, `right` or
+    `margin-left`.
+  - Names inside sentences get Unicode isolates (U+2068/U+2069), the catalogue's equivalent
+    of `<bdi>`.
+- **Encoding:** Razor writes every script as itself (`UnicodeRanges.All`). The default encoder
+  emits a numeric entity for each non-Latin letter, which makes an Arabic or Bengali page
+  several times larger on a slow connection.
+- **Overrides:**
+  - `platform.resource_override` per tenant, locale and key, edited at `/organiser/wording`
+    (needs `tenant.settings`).
+  - A value must keep the English string's arguments and the plural forms its language needs.
+  - Every change is audited.
+  - Each instance caches overrides for 5 minutes, and a change clears the cache at once on the
+    instance that made it.
+- **Reading level:** CI holds every youth-facing English string of ten or more words, and the
+  youth-facing text as a whole, to Flesch-Kincaid grade 8. Youth-facing means the site, finder,
+  listing, account and email strings; the consoles are exempt.
+- **Email** is written in the account's own language, or the form's when the account has none.
 
 ## Mobile sharing model
 

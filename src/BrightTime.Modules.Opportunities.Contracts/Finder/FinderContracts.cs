@@ -1,5 +1,6 @@
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Paging;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Contracts;
 
@@ -16,7 +17,7 @@ public sealed record FinderItem(
     DateTimeOffset? NextStartAt,
     double? DistanceMetres,
     double Score,
-    IReadOnlyList<string> Reasons,
+    IReadOnlyList<Phrase> Reasons,
     string SortValue);
 
 /// <summary>A page of finder results. <see cref="NextCursor"/> is null on the last page.</summary>

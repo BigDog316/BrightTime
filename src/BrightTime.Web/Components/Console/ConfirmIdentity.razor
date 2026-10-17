@@ -8,28 +8,25 @@
 @attribute [Authorize]
 @inherits ConsoleComponent
 
-<PageTitle>Confirm it's you · BrightTime</PageTitle>
+<PageTitle>@T["account.confirm.title"] · BrightTime</PageTitle>
 
-<h1>Confirm it's you</h1>
+<h1>@T["account.confirm.title"]</h1>
 
-<p>
-    You're signed in as <strong>@User.Identity?.Name</strong>. This next step changes how your account is protected,
-    so we need to check it's really you first.
-</p>
+<p>@T.Format("account.confirm.explain", ("name", Localisation.Text.Name(User.Identity?.Name ?? "")))</p>
 
 @if (_failed)
 {
     <p class="notice error" role="alert" id="confirm-error">
-        That password isn't right. After five wrong tries the account is locked for 15 minutes.
+        @T.Format("account.confirm.failed", ("tries", PasswordAccounts.MaxFailedAttempts), ("minutes", (int)PasswordAccounts.LockoutDuration.TotalMinutes))
     </p>
 }
 
 @if (_hasPasskeys)
 {
     <section class="needs-webauthn" aria-labelledby="confirm-passkey-heading">
-        <h2 id="confirm-passkey-heading" class="visually-hidden">Confirm with a passkey</h2>
+        <h2 id="confirm-passkey-heading" class="visually-hidden">@T["account.confirm.with_passkey"]</h2>
         <p class="notice error" id="passkey-error" role="alert" tabindex="-1" hidden></p>
-        <button type="button" data-passkey-action="confirm" data-return-url="@ReturnUrl">Confirm with a passkey</button>
+        <button type="button" data-passkey-action="confirm" data-return-url="@ReturnUrl">@T["account.confirm.with_passkey"]</button>
     </section>
 }
 
@@ -37,35 +34,32 @@
 {
     @if (_hasPasskeys)
     {
-        <p class="or-divider needs-webauthn">Or use your password:</p>
+        <p class="or-divider needs-webauthn">@T["account.confirm.or_password"]</p>
     }
     <form method="post" class="editor sign-in" @formname="confirm-password" @onsubmit="ConfirmPasswordAsync">
         <AntiforgeryToken />
         @* For password managers: which account this password is for. *@
         <input type="email" name="username" autocomplete="username" value="@User.Identity?.Name" hidden readonly />
         <div class="field">
-            <label for="password">Password</label>
+            <label for="password">@T["account.field.password"]</label>
             <input id="password" name="password" type="password" autocomplete="current-password" required
                    aria-describedby="@(_failed ? "confirm-error" : null)" />
         </div>
         <div class="actions">
-            <button type="submit">Confirm</button>
+            <button type="submit">@T["account.confirm.submit"]</button>
         </div>
     </form>
 }
 else if (!_hasPasskeys)
 {
-    <p>
-        Your account has no password or passkey to confirm with. <a href="/account/forgot">Set a password</a> (we'll email
-        you a link), then come back here.
-    </p>
+    <p>@T["account.confirm.nothing"] <a href="/account/forgot">@T["account.confirm.set_password"]</a></p>
 }
 
 @if (Availability.DevelopmentSignIn)
 {
     <form method="post" @formname="confirm-development" @onsubmit="ConfirmDevelopmentAsync">
         <AntiforgeryToken />
-        <p class="note">Development site: <button type="submit" class="link-button">confirm without a password</button>.</p>
+        <p class="note">@T["dev.sign_in.note"] <button type="submit" class="link-button">@T["dev.confirm"]</button></p>
     </form>
 }
 

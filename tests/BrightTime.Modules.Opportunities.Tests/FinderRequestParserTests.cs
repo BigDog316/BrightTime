@@ -2,6 +2,7 @@ using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Search;
 using BrightTime.SharedKernel.Paging;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Tests;
 
@@ -89,7 +90,7 @@ public sealed class FinderRequestParserTests
         FinderRequestParse parse = Parse(("kind", "program"), ("kind", "bogus"), ("kind", "JOB"));
 
         parse.Query!.Kinds!.ShouldBe(["program", "job"]);
-        parse.Notices.ShouldContain(n => n.Contains("'bogus'", StringComparison.Ordinal));
+        parse.Notices.ShouldContain(Phrase.Of("finder.notice.unknown_kind", ("kind", "bogus")));
     }
 
     [Theory]
@@ -111,7 +112,7 @@ public sealed class FinderRequestParserTests
 
         parse.IsValid.ShouldBeTrue();
         parse.Query!.After.ShouldBeNull();
-        parse.Notices.ShouldContain(n => n.Contains("expired", StringComparison.Ordinal));
+        parse.Notices.ShouldContain(Phrase.Of("finder.notice.cursor_expired"));
     }
 
     [Fact]

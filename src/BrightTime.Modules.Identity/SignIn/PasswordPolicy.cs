@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Identity.SignIn;
 
@@ -31,35 +32,35 @@ public static class PasswordPolicy
         "student", "school", "children", "volunteer", "community", "brighttime", "kettlecounty",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Messages for whatever is wrong with the password; empty when it is acceptable.</summary>
-    public static IReadOnlyList<string> Check(string? password, string? email)
+    /// <summary>Whatever is wrong with the password, as phrases; empty when it is acceptable.</summary>
+    public static IReadOnlyList<Phrase> Check(string? password, string? email)
     {
         if (string.IsNullOrEmpty(password))
         {
-            return ["Enter a password."];
+            return [Phrase.Of("account.password.required")];
         }
 
-        List<string> problems = [];
+        List<Phrase> problems = [];
         if (password.Length < MinimumLength)
         {
-            problems.Add($"Use at least {MinimumLength} characters. A few unrelated words make a long password that is easy to remember.");
+            problems.Add(Phrase.Of("account.password.too_short", ("min", MinimumLength)));
         }
 
         if (password.Length > MaximumLength)
         {
-            problems.Add($"Use at most {MaximumLength} characters.");
+            problems.Add(Phrase.Of("account.password.too_long", ("max", MaximumLength)));
         }
 
         string folded = password.Trim();
         if (Common.Contains(folded) || Common.Contains(StripTrailingDigits(folded)) || folded.Distinct().Count() <= 2)
         {
-            problems.Add("That password is too common. Choose something less predictable.");
+            problems.Add(Phrase.Of("account.password.too_common"));
         }
 
         string? local = email?.Split('@')[0];
         if (local is { Length: >= 4 } && folded.Contains(local, StringComparison.OrdinalIgnoreCase))
         {
-            problems.Add("Don't build your password from your email address.");
+            problems.Add(Phrase.Of("account.password.from_email"));
         }
 
         return problems;

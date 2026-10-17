@@ -11,22 +11,22 @@
 
 @if (_listing is { } listing && _detail is { } detail)
 {
-    <PageTitle>Review: @detail.Title · BrightTime</PageTitle>
+    <PageTitle>@T.Format("organiser.review.title", ("title", detail.Title)) · BrightTime</PageTitle>
 
-    <p class="eyebrow"><a href="/organiser/review">Review queue</a></p>
-    <h1>Review: @detail.Title</h1>
+    <p class="eyebrow"><a href="/organiser/review">@T["site.nav.review"]</a></p>
+    <h1>@T.Format("organiser.review.title", ("title", detail.Title))</h1>
 
     <dl class="facts review-facts">
-        <dt>Organisation</dt>
-        <dd>@_orgName (@_orgStatus.ToDbValue().Replace('_', ' '))</dd>
-        <dt>Status</dt>
-        <dd>@listing.Status.ToDbValue().Replace('_', ' ')@(listing.ChangedSinceReview ? ", changed since it was last reviewed" : "")</dd>
-        <dt>Last changed</dt>
-        <dd>@Local(listing.UpdatedAt)</dd>
+        <dt>@T["organiser.col.organisation"]</dt>
+        <dd><bdi>@_orgName</bdi> (@T[BrightTime.Modules.Directory.Vetting.OrganisationVetting.StatusPhrase(_orgStatus)])</dd>
+        <dt>@T["organiser.col.status"]</dt>
+        <dd>@T[ListingLifecycle.StatusPhrase(listing.Status)]@(listing.ChangedSinceReview ? T["organiser.review.changed_since"] : "")</dd>
+        <dt>@T["organiser.review.last_changed"]</dt>
+        <dd>@T.DateTime(listing.UpdatedAt)</dd>
         @if (listing.ReviewNote is { Length: > 0 } note)
         {
-            <dt>Last note to the provider</dt>
-            <dd>@note</dd>
+            <dt>@T["organiser.review.last_note"]</dt>
+            <dd dir="auto">@note</dd>
         }
     </dl>
 
@@ -37,23 +37,21 @@
 
     @if (_orgStatus != OrganisationStatus.Approved && listing.Status == ListingStatus.PendingReview)
     {
-        <p class="notice">
-            The organisation is not approved yet, so this listing cannot be published. You can still send it back with a note.
-        </p>
+        <p class="notice">@T["organiser.review.org_not_approved"]</p>
     }
 
     <section class="review-actions" aria-labelledby="decide-heading">
-        <h2 id="decide-heading">Decision</h2>
+        <h2 id="decide-heading">@T["organiser.decision"]</h2>
 
         @switch (listing.Status)
         {
             case ListingStatus.PendingReview:
                 <form method="post" @formname="publish" @onsubmit="PublishAsync">
                     <AntiforgeryToken />
-                    <button type="submit">Approve and publish</button>
+                    <button type="submit">@T["organiser.review.publish"]</button>
                 </form>
-                @ReasonForm("changes", "Request changes", "What should the provider change?", ListingStatus.ChangesRequested, "changes_requested")
-                @ReasonForm("reject", "Reject", "Why is it rejected? The provider sees this; they will need to start a new listing.", ListingStatus.Rejected, "rejected")
+                @ReasonForm("changes", T["organiser.request_changes"], T["organiser.review.changes_reason"], ListingStatus.ChangesRequested, "changes_requested")
+                @ReasonForm("reject", T["organiser.reject"], T["organiser.review.reject_reason"], ListingStatus.Rejected, "rejected")
                 break;
 
             case ListingStatus.Published:
@@ -61,27 +59,27 @@
                 {
                     <form method="post" @formname="reviewed" @onsubmit="MarkReviewedAsync">
                         <AntiforgeryToken />
-                        <button type="submit">The changes are fine</button>
+                        <button type="submit">@T["organiser.review.changes_fine"]</button>
                     </form>
                 }
-                @ReasonForm("unpublish", "Unpublish", "Why is it coming down? The provider sees this.", ListingStatus.Unpublished, "unpublished")
+                @ReasonForm("unpublish", T["editor.unpublish.submit"], T["organiser.review.unpublish_reason"], ListingStatus.Unpublished, "unpublished")
                 break;
 
             case ListingStatus.Unpublished:
                 <form method="post" @formname="republish" @onsubmit="PublishAsync">
                     <AntiforgeryToken />
-                    <button type="submit">Publish again</button>
+                    <button type="submit">@T["organiser.review.republish"]</button>
                 </form>
                 break;
 
             default:
-                <p>There is nothing to decide on a listing that is @listing.Status.ToDbValue().Replace('_', ' ').</p>
+                <p>@T.Format("organiser.review.nothing_to_decide", ("status", T[ListingLifecycle.StatusPhrase(listing.Status)]))</p>
                 break;
         }
     </section>
 
-    <section class="review-preview" aria-label="How families will see it">
-        <h2>How families will see it</h2>
+    <section class="review-preview" aria-labelledby="preview-heading">
+        <h2 id="preview-heading">@T["organiser.review.as_families_see"]</h2>
         <div class="preview-frame">
             <ListingView Listing="detail" ShowPublicLinks="false" />
         </div>
@@ -133,11 +131,11 @@
 
         if (reasonField is not null && result.Error!.Code == "listing.reason_required")
         {
-            _reasonErrors[reasonField] = result.Error.Message;
+            _reasonErrors[reasonField] = T.Error(result.Error);
         }
         else
         {
-            _problem = result.Error!.Message;
+            _problem = T.Error(result.Error!);
         }
     }
 
@@ -152,7 +150,7 @@
             return;
         }
 
-        _problem = result.Error!.Message;
+        _problem = T.Error(result.Error!);
     }
 
     private RenderFragment ReasonForm(string formName, string button, string label, ListingStatus to, string done) => __builder =>
@@ -172,7 +170,4 @@
             <button type="submit" class="secondary-button">@button</button>
         </form>
     };
-
-    private string Local(DateTimeOffset at) =>
-        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("MMM d, yyyy, h:mm tt", Tenant.Locale.ToCulture());
 }

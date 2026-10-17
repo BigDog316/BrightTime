@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.SharedKernel.Primitives;
 
@@ -35,19 +36,33 @@ public enum ErrorKind
 }
 
 /// <summary>A failure with a stable code, a human-readable message, and optional per-field detail.</summary>
-public sealed record Error(ErrorKind Kind, string Code, string Message, IReadOnlyDictionary<string, string[]>? Details = null)
+/// <remarks>
+/// <see cref="Message"/> is English for logs and API consumers. A person is shown
+/// <see cref="Phrase"/>, the catalogue entry <c>error.{Code}</c> filled from
+/// <see cref="Arguments"/>, in their own language.
+/// </remarks>
+public sealed record Error(
+    ErrorKind Kind,
+    string Code,
+    string Message,
+    IReadOnlyDictionary<string, Phrase[]>? Details = null,
+    IReadOnlyDictionary<string, object>? Arguments = null)
 {
-    public static Error Validation(string code, string message, IReadOnlyDictionary<string, string[]>? details = null) =>
-        new(ErrorKind.Validation, code, message, details);
+    public Phrase Phrase => new("error." + Code, Arguments);
+
+    public static Error Validation(string code, string message, IReadOnlyDictionary<string, Phrase[]>? details = null, IReadOnlyDictionary<string, object>? arguments = null) =>
+        new(ErrorKind.Validation, code, message, details, arguments);
 
     public static Error NotFound(string code, string message) => new(ErrorKind.NotFound, code, message);
 
-    public static Error Forbidden(string code, string message) => new(ErrorKind.Forbidden, code, message);
+    public static Error Forbidden(string code, string message, IReadOnlyDictionary<string, object>? arguments = null) =>
+        new(ErrorKind.Forbidden, code, message, null, arguments);
 
-    public static Error Conflict(string code, string message) => new(ErrorKind.Conflict, code, message);
+    public static Error Conflict(string code, string message, IReadOnlyDictionary<string, object>? arguments = null) =>
+        new(ErrorKind.Conflict, code, message, null, arguments);
 
-    public static Error Precondition(string code, string message) =>
-        new(ErrorKind.PreconditionFailed, code, message);
+    public static Error Precondition(string code, string message, IReadOnlyDictionary<string, object>? arguments = null) =>
+        new(ErrorKind.PreconditionFailed, code, message, null, arguments);
 }
 
 /// <summary>A result with no value.</summary>

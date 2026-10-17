@@ -22,8 +22,8 @@ namespace BrightTime.Web.Tenancy;
 /// traffic runs on one host, which is what a passkey's relying party needs.</item>
 /// </list>
 /// <para>
-/// The locale comes from <c>?lang=</c> when it names a supported locale, otherwise from
-/// <c>Accept-Language</c>, otherwise the tenant's default.
+/// The tenant's default locale is set here, and <see cref="Localisation.LocaleMiddleware"/>
+/// settles the request's own once the account is known.
 /// </para>
 /// </remarks>
 public sealed class TenantRequestMiddleware(
@@ -32,8 +32,6 @@ public sealed class TenantRequestMiddleware(
     IOptions<TenancyOptions> tenancyOptions,
     IOptions<AuthOptions> authOptions)
 {
-    public const string LanguageParameter = "lang";
-
     public async Task InvokeAsync(HttpContext context, TenantContext tenant, SiteContext site)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -44,7 +42,7 @@ public sealed class TenantRequestMiddleware(
         {
             // Sample data has one fictional tenant and no database to ask.
             site.Set(null, authOptions.Value.PublicBaseUrl);
-            tenant.SetTenant(new TenantId(KettleCatalogue.TenantId), Zone(finderOptions.Value.TimeZone), ResolveLocale(context, Locale.Default));
+            tenant.SetTenant(new TenantId(KettleCatalogue.TenantId), Zone(finderOptions.Value.TimeZone), Locale.Default);
             await next(context).ConfigureAwait(false);
             return;
         }
@@ -92,7 +90,7 @@ public sealed class TenantRequestMiddleware(
 
         site.Set(found, baseUrl);
         Locale fallback = Locale.TryFromCode(found.DefaultLocale, out Locale tenantDefault) ? tenantDefault : Locale.Default;
-        tenant.SetTenant(found.TenantId, Zone(found.TimeZone), ResolveLocale(context, fallback));
+        tenant.SetTenant(found.TenantId, Zone(found.TimeZone), fallback);
 
         await next(context).ConfigureAwait(false);
     }
@@ -103,19 +101,6 @@ public sealed class TenantRequestMiddleware(
         ArgumentNullException.ThrowIfNull(site);
         ArgumentNullException.ThrowIfNull(tenancy);
         return new UriBuilder(tenancy.PublicScheme, site.PrimaryHost, tenancy.PublicPort ?? -1, "/").Uri;
-    }
-
-    internal static Locale ResolveLocale(HttpContext context, Locale tenantDefault)
-    {
-        string? requested = context.Request.Query[LanguageParameter].ToString();
-        if (!string.IsNullOrEmpty(requested) && Locale.TryFromCode(requested, out Locale fromQuery))
-        {
-            return fromQuery;
-        }
-
-        string? acceptLanguage = context.Request.Headers.AcceptLanguage.ToString();
-        string? first = acceptLanguage?.Split(',')[0].Split(';')[0].Trim();
-        return string.IsNullOrEmpty(first) ? tenantDefault : Locale.Resolve(first);
     }
 
     private static async Task RefuseAsync(HttpContext context, int status, string message)

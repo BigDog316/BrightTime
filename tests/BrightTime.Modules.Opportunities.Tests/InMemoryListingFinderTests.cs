@@ -3,6 +3,7 @@ using BrightTime.Modules.Opportunities.Search;
 using BrightTime.Modules.Opportunities.Search.Sample;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Paging;
+using BrightTime.SharedKernel.Text;
 using BrightTime.SharedKernel.Time;
 
 namespace BrightTime.Modules.Opportunities.Tests;
@@ -128,7 +129,7 @@ public sealed class InMemoryListingFinderTests
         FinderPage page = await Run(Query(q => { q.Text = "robotics"; q.PageSizeValue = 50; }));
 
         page.Items.ShouldAllBe(i => i.Reasons.Count > 0);
-        page.Items[0].Reasons.ShouldContain("matches your search");
+        page.Items[0].Reasons.ShouldContain(Phrase.Of("finder.reason.matches_search"));
     }
 
     [Fact]

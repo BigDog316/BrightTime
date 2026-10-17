@@ -28,6 +28,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     public DbSet<TenantLocale> TenantLocales => Set<TenantLocale>();
 
+    public DbSet<ResourceOverride> ResourceOverrides => Set<ResourceOverride>();
+
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
@@ -67,6 +69,12 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
         {
             b.ToTable("tenant_locale");
             b.HasKey(l => new { l.TenantId, l.Locale });
+        });
+
+        modelBuilder.Entity<ResourceOverride>(b =>
+        {
+            b.ToTable("resource_override");
+            b.HasKey(o => new { o.TenantId, o.Locale, o.Key });
         });
 
         modelBuilder.Entity<AuditEvent>(b =>

@@ -1,5 +1,6 @@
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Directory.Vetting;
 
@@ -115,7 +116,8 @@ public static class OrganisationVetting
         {
             return Error.Conflict(
                 "organisation.no_change",
-                $"The organisation is already {Words(to)}.");
+                $"The organisation is already {Words(to)}.",
+                Args(("status", to)));
         }
 
         if (!Allowed.TryGetValue(from, out (OrganisationStatus To, Mover By)[]? transitions)
@@ -123,7 +125,8 @@ public static class OrganisationVetting
         {
             return Error.Conflict(
                 "organisation.terminal_state",
-                $"An organisation that is {Words(from)} cannot change state. It must apply again.");
+                $"An organisation that is {Words(from)} cannot change state. It must apply again.",
+                Args(("status", from)));
         }
 
         (OrganisationStatus To, Mover By)[] matching = [.. transitions.Where(t => t.To == to)];
@@ -132,7 +135,8 @@ public static class OrganisationVetting
         {
             return Error.Conflict(
                 "organisation.invalid_transition",
-                $"An organisation cannot go from {Words(from)} to {Words(to)}.");
+                $"An organisation cannot go from {Words(from)} to {Words(to)}.",
+                Args(("from", from), ("to", to)));
         }
 
         if (!matching.Any(t => t.By == by))
@@ -141,7 +145,8 @@ public static class OrganisationVetting
                 "organisation.wrong_mover",
                 by == Mover.Provider
                     ? $"Only a network organiser can move an organisation to {Words(to)}."
-                    : $"Only the organisation itself can move to {Words(to)}.");
+                    : $"Only the organisation itself can move to {Words(to)}.",
+                Args(("status", to), ("by", by == Mover.Provider ? "provider" : "organiser")));
         }
 
         return RequirementsFor(to, context);
@@ -155,7 +160,8 @@ public static class OrganisationVetting
             when string.IsNullOrWhiteSpace(context.Reason) =>
             Error.Validation(
                 "organisation.reason_required",
-                $"Moving an organisation to {Words(to)} needs a reason the provider can read."),
+                $"Moving an organisation to {Words(to)} needs a reason the provider can read.",
+                arguments: Args(("status", to))),
 
         _ => Result.Success(),
     };
@@ -192,6 +198,20 @@ public static class OrganisationVetting
         }
 
         return Result.Success();
+    }
+
+    /// <summary>A status as a phrase, to render in the reader's language: <c>organisation.status.under_review</c>.</summary>
+    public static Phrase StatusPhrase(OrganisationStatus status) => Phrase.Of("organisation.status." + status.ToDbValue());
+
+    private static Dictionary<string, object> Args(params ReadOnlySpan<(string Name, object Value)> values)
+    {
+        Dictionary<string, object> args = new(StringComparer.Ordinal);
+        foreach ((string name, object value) in values)
+        {
+            args[name] = value is OrganisationStatus s ? StatusPhrase(s) : value;
+        }
+
+        return args;
     }
 
     /// <summary>The transitions available right now, for rendering the organiser's action buttons.</summary>

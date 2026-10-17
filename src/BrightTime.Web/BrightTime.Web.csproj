@@ -13,6 +13,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The interface strings. WithCulture=false: a file named zh-Hans.json is a catalogue, not a satellite resource. -->
+    <EmbeddedResource Include="Localisation/Strings/*.json" WithCulture="false" LogicalName="BrightTime.Strings.%(Filename)%(Extension)" />
+    <Content Remove="Localisation/Strings/*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
     <ProjectReference Include="../BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />

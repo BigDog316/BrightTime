@@ -3,6 +3,7 @@ using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Domain;
 using BrightTime.Modules.Opportunities.Search;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Editing;
 
@@ -92,14 +93,14 @@ public static class ListingFormParser
         ["sites"] = nameof(ListingForm.SiteIds),
     };
 
-    public static (ParsedListing? Listing, IReadOnlyDictionary<string, string[]> Errors) Parse(ListingForm form)
+    public static (ParsedListing? Listing, IReadOnlyDictionary<string, Phrase[]> Errors) Parse(ListingForm form)
     {
         ArgumentNullException.ThrowIfNull(form);
 
-        Dictionary<string, List<string>> errors = new(StringComparer.Ordinal);
-        void Add(string field, string message)
+        Dictionary<string, List<Phrase>> errors = new(StringComparer.Ordinal);
+        void Add(string field, Phrase message)
         {
-            if (!errors.TryGetValue(field, out List<string>? list))
+            if (!errors.TryGetValue(field, out List<Phrase>? list))
             {
                 errors[field] = list = [];
             }
@@ -129,13 +130,13 @@ public static class ListingFormParser
 
         if (!Locale.TryFromCode(form.PrimaryLanguage, out _))
         {
-            Add(nameof(form.PrimaryLanguage), "Choose the language this listing is written in.");
+            Add(nameof(form.PrimaryLanguage), Phrase.Of("editor.error.primary_language"));
         }
 
         string[] languages = [.. form.Languages.Where(l => !string.IsNullOrWhiteSpace(l)).Distinct(StringComparer.Ordinal)];
         if (languages.Any(l => !Locale.TryFromCode(l, out _)))
         {
-            Add(nameof(form.Languages), "One of the languages is not one this site supports.");
+            Add(nameof(form.Languages), Phrase.Of("editor.error.languages"));
         }
 
         short? ageMin = Small(form.AgeMin, nameof(form.AgeMin), Add);
@@ -150,7 +151,7 @@ public static class ListingFormParser
 
         if (!string.IsNullOrWhiteSpace(form.ContactEmail) && !LooksLikeEmail(form.ContactEmail))
         {
-            Add(nameof(form.ContactEmail), "Enter an email address like name@example.org.");
+            Add(nameof(form.ContactEmail), Phrase.Of("editor.error.email"));
         }
 
         // The schedule: one session, weekly on chosen days or a single date.
@@ -160,13 +161,13 @@ public static class ListingFormParser
         TimeOnly? endTime = Time(form.EndTime, nameof(form.EndTime), Add);
         if (startTime is { } st && endTime is { } et && et <= st)
         {
-            Add(nameof(form.EndTime), "The session must end after it starts.");
+            Add(nameof(form.EndTime), Phrase.Of("editor.error.end_after_start"));
         }
 
         bool weekly = form.Repeats == "weekly";
         if (form.Repeats is not ("weekly" or "once"))
         {
-            Add(nameof(form.Repeats), "Choose weekly or a single date.");
+            Add(nameof(form.Repeats), Phrase.Of("editor.error.repeats"));
         }
 
         string[] days = [.. DayCodes.Where(d => form.Days.Contains(d, StringComparer.Ordinal))];
@@ -175,12 +176,12 @@ public static class ListingFormParser
         {
             if (days.Length == 0)
             {
-                Add(nameof(form.Days), "Choose at least one day of the week.");
+                Add(nameof(form.Days), Phrase.Of("editor.error.days"));
             }
 
             if (endsOn is null && form.EndsOn.Length == 0 && kind != ListingKind.Resource)
             {
-                Add(nameof(form.EndsOn), "Give a last date, so the schedule ends. Only drop-in resources run without one.");
+                Add(nameof(form.EndsOn), Phrase.Of("editor.error.ends_on_required"));
             }
 
             rrule = "FREQ=WEEKLY;BYDAY=" + string.Join(',', days);
@@ -194,11 +195,11 @@ public static class ListingFormParser
         {
             if (e < s)
             {
-                Add(nameof(form.EndsOn), "The last date cannot be before the first.");
+                Add(nameof(form.EndsOn), Phrase.Of("editor.error.ends_before_starts"));
             }
             else if (e.DayNumber - s.DayNumber > MaxSeasonDays)
             {
-                Add(nameof(form.EndsOn), $"A season can run at most {MaxSeasonDays} days. Check the year.");
+                Add(nameof(form.EndsOn), Phrase.Of("editor.error.season_too_long", ("days", MaxSeasonDays)));
             }
         }
 
@@ -214,7 +215,7 @@ public static class ListingFormParser
         {
             if (!DeadlineKinds.Contains(deadlineKind, StringComparer.Ordinal))
             {
-                Add(nameof(form.DeadlineKind), "Choose a kind of deadline.");
+                Add(nameof(form.DeadlineKind), Phrase.Of("editor.error.deadline_kind"));
             }
 
             deadlineOn = Date(form.DeadlineOn, nameof(form.DeadlineOn), Add, required: true);
@@ -242,10 +243,10 @@ public static class ListingFormParser
         });
         if (rules.Error?.Details is { } details)
         {
-            foreach ((string key, string[] messages) in details)
+            foreach ((string key, Phrase[] messages) in details)
             {
                 string field = FormKeys.TryGetValue(key, out string? mapped) ? mapped : char.ToUpperInvariant(key[0]) + key[1..];
-                foreach (string message in messages)
+                foreach (Phrase message in messages)
                 {
                     // A field that failed to parse already says so; do not add a second message.
                     if (!errors.ContainsKey(field))
@@ -258,7 +259,7 @@ public static class ListingFormParser
 
         if (form.TermIds.Count == 0)
         {
-            Add(nameof(form.TermIds), "Choose at least one category, so families can find this by topic.");
+            Add(nameof(form.TermIds), Phrase.Of("editor.error.categories"));
         }
 
         if (errors.Count > 0 || startsOn is null || startTime is null || endTime is null)
@@ -307,7 +308,7 @@ public static class ListingFormParser
             Rrule = rrule,
             DeadlineKind = deadlineKind,
             DeadlineOn = deadlineOn,
-        }, new Dictionary<string, string[]>(StringComparer.Ordinal));
+        }, new Dictionary<string, Phrase[]>(StringComparer.Ordinal));
     }
 
     /// <summary>The next few sessions the schedule produces, for the editor's preview.</summary>
@@ -320,7 +321,7 @@ public static class ListingFormParser
         return [.. OccurrenceExpander.Expand(rule, from, from.AddDays(MaxSeasonDays)).Take(count)];
     }
 
-    private static T Enum<T>(string value, string field, Func<T, string> toDb, Action<string, string> add) where T : struct, System.Enum
+    private static T Enum<T>(string value, string field, Func<T, string> toDb, Action<string, Phrase> add) where T : struct, System.Enum
     {
         foreach (T candidate in System.Enum.GetValues<T>())
         {
@@ -330,19 +331,19 @@ public static class ListingFormParser
             }
         }
 
-        add(field, "Choose one of the options.");
+        add(field, Phrase.Of("editor.error.choose_option"));
         return default;
     }
 
-    private static void Length(string? value, int max, string field, Action<string, string> add)
+    private static void Length(string? value, int max, string field, Action<string, Phrase> add)
     {
         if (value is { } v && v.Length > max)
         {
-            add(field, $"Keep this to {max} characters or fewer; it is {v.Length}.");
+            add(field, Phrase.Of("editor.error.too_long", ("max", max), ("length", v.Length)));
         }
     }
 
-    private static short? Small(string value, string field, Action<string, string> add)
+    private static short? Small(string value, string field, Action<string, Phrase> add)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -354,11 +355,11 @@ public static class ListingFormParser
             return n;
         }
 
-        add(field, "Enter a whole number.");
+        add(field, Phrase.Of("editor.error.whole_number"));
         return null;
     }
 
-    private static int? Whole(string value, string field, Action<string, string> add)
+    private static int? Whole(string value, string field, Action<string, Phrase> add)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -370,12 +371,12 @@ public static class ListingFormParser
             return n;
         }
 
-        add(field, "Enter a whole number.");
+        add(field, Phrase.Of("editor.error.whole_number"));
         return null;
     }
 
     /// <summary>Dollars to cents. "$1,250.50" is accepted; more than two decimal places is not.</summary>
-    private static int? Cents(string value, string field, Action<string, string> add)
+    private static int? Cents(string value, string field, Action<string, Phrase> add)
     {
         string trimmed = value.Trim().TrimStart('$').Replace(",", string.Empty, StringComparison.Ordinal);
         if (trimmed.Length == 0)
@@ -389,17 +390,17 @@ public static class ListingFormParser
             return (int)(dollars * 100m);
         }
 
-        add(field, "Enter an amount in dollars, like 120 or 120.50.");
+        add(field, Phrase.Of("editor.error.dollars"));
         return null;
     }
 
-    private static DateOnly? Date(string value, string field, Action<string, string> add, bool required)
+    private static DateOnly? Date(string value, string field, Action<string, Phrase> add, bool required)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             if (required)
             {
-                add(field, "Enter a date.");
+                add(field, Phrase.Of("editor.error.date_required"));
             }
 
             return null;
@@ -410,18 +411,18 @@ public static class ListingFormParser
             return d;
         }
 
-        add(field, "Enter a date as year-month-day, like 2026-11-02.");
+        add(field, Phrase.Of("editor.error.date_format"));
         return null;
     }
 
-    private static TimeOnly? Time(string value, string field, Action<string, string> add)
+    private static TimeOnly? Time(string value, string field, Action<string, Phrase> add)
     {
         if (TimeOnly.TryParseExact(value.Trim(), ["HH:mm", "HH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly t))
         {
             return t;
         }
 
-        add(field, string.IsNullOrWhiteSpace(value) ? "Enter a time." : "Enter a time like 15:30.");
+        add(field, Phrase.Of(string.IsNullOrWhiteSpace(value) ? "editor.error.time_required" : "editor.error.time_format"));
         return null;
     }
 

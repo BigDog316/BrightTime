@@ -8,100 +8,113 @@
    this, so what is approved is exactly what is published. *@
 <article class="listing-detail" aria-labelledby="listing-title">
     <header>
-        <p class="eyebrow">@KindLabel(l.Kind)</p>
+        <p class="eyebrow">@T["listing.kind." + l.Kind.ToDbValue()]</p>
         <h1 id="listing-title" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Title</h1>
-        <p class="byline">From <bdi>@l.OrganisationName</bdi></p>
+        <p class="byline">@T.Format("listing.byline", ("organisation", Org))</p>
         <p class="lead" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Summary</p>
         @if (l.IsMachineTranslated)
         {
-            <p class="note">Translated automatically from @EnglishLanguageName(l.PrimaryLanguage). It may contain mistakes.</p>
+            <p class="note">@T.Format("listing.machine_translated", ("language", LanguageInPage(l.PrimaryLanguage)))</p>
         }
     </header>
 
     <section aria-labelledby="glance-heading">
-        <h2 id="glance-heading">At a glance</h2>
+        <h2 id="glance-heading">@T["listing.glance"]</h2>
         <dl class="facts">
             @if (AgeLabel(l) is { } ages)
             {
-                <dt>Ages</dt>
+                <dt>@T["listing.fact.ages"]</dt>
                 <dd>@ages</dd>
             }
             @if (GradeLabel(l) is { } grades)
             {
-                <dt>Grades</dt>
+                <dt>@T["listing.fact.grades"]</dt>
                 <dd>@grades</dd>
             }
-            <dt>Price</dt>
+            <dt>@T["listing.fact.price"]</dt>
             <dd>
                 @PriceLabel(l)
                 @if (l.SlidingScaleNote is { Length: > 0 } note)
                 {
-                    <span class="note">@note</span>
+                    <span class="note" dir="auto">@note</span>
                 }
             </dd>
-            <dt>Where</dt>
-            <dd>@ModalityLabel(l.Modality)</dd>
+            <dt>@T["listing.fact.where"]</dt>
+            <dd>@T["listing.modality." + l.Modality.ToDbValue()]</dd>
             @if (l.Languages.Count > 0)
             {
-                <dt>Languages</dt>
-                <dd>@string.Join(", ", l.Languages.Select(LanguageName))</dd>
+                <dt>@T["listing.fact.languages"]</dt>
+                <dd>
+                    @for (int i = 0; i < l.Languages.Count; i++)
+                    {
+                        @* Each language in its own name and script, as a speaker looks for it. *@
+                        <span lang="@l.Languages[i]" dir="auto">@LanguageName(l.Languages[i])</span>@(i < l.Languages.Count - 1 ? T["format.list_separator"] : "")
+                    }
+                </dd>
             }
             @if (l.Categories.Count > 0)
             {
-                <dt>Topics</dt>
-                <dd>@string.Join(", ", l.Categories)</dd>
+                <dt>@T["listing.fact.topics"]</dt>
+                <dd>@string.Join(T["format.list_separator"], l.Categories)</dd>
             }
             @if (l.MealsProvided)
             {
-                <dt>Food</dt>
-                <dd>A meal or snack is provided.</dd>
+                <dt>@T["listing.fact.food"]</dt>
+                <dd>@T["listing.meals_provided"]</dd>
             }
             @if (l.TransportProvided || l.TransportNote is { Length: > 0 })
             {
-                <dt>Getting there</dt>
-                <dd>@(l.TransportNote is { Length: > 0 } t ? t : "Transport is provided.")</dd>
+                <dt>@T["listing.fact.getting_there"]</dt>
+                @if (l.TransportNote is { Length: > 0 } transport)
+                {
+                    <dd dir="auto">@transport</dd>
+                }
+                else
+                {
+                    <dd>@T["listing.transport_provided"]</dd>
+                }
             }
         </dl>
     </section>
 
     <section aria-labelledby="register-heading" class="register">
-        <h2 id="register-heading">@RegisterHeading(l)</h2>
+        <h2 id="register-heading">@T[IsJob ? "listing.register.heading_apply" : "listing.register.heading_join"]</h2>
         @switch (l.RegistrationMode)
         {
             case RegistrationMode.External when SafeLink(l.ExternalUrl) is { } url:
                 @* No target="_blank": the visitor decides whether to open a new tab. *@
                 <p>
                     <a class="button" href="@url" rel="external noopener noreferrer">
-                        @RegisterAction(l)<span class="visually-hidden"> (opens the provider's website)</span>
+                        @T[IsJob ? "listing.register.apply" : "listing.register.register"]<span class="visually-hidden"> @T["listing.register.opens_provider_site"]</span>
                     </a>
                 </p>
-                <p class="note">You will register on @l.OrganisationName's own website.</p>
+                <p class="note">@T.Format("listing.register.on_provider_site", ("organisation", Org))</p>
                 break;
 
             case RegistrationMode.External:
-                <p>Contact @l.OrganisationName to @(l.Kind == ListingKind.Job ? "apply" : "register").</p>
+                <p>@T.Format(IsJob ? "listing.register.contact_to_apply" : "listing.register.contact_to_register", ("organisation", Org))</p>
                 break;
 
             case RegistrationMode.Builtin:
             case RegistrationMode.WaitlistOnly:
                 @* Built-in registration is a later milestone; say so rather than show a dead button. *@
-                <p>Registration through BrightTime opens soon. Until then, contact @l.OrganisationName to save a place.</p>
+                <p>@T.Format("listing.register.builtin_soon", ("organisation", Org))</p>
                 break;
 
             default:
-                <p>No registration needed. @(l.IsDropIn ? "Just come along." : "")</p>
+                <p>@T["listing.register.none"]@(l.IsDropIn ? " " + T["listing.register.just_come"] : "")</p>
                 break;
         }
 
         @if (l.Deadlines.Count > 0)
         {
-            <h3>Dates to remember</h3>
+            <h3>@T["listing.deadlines"]</h3>
             <ul class="deadlines">
                 @foreach (ListingDeadlineView d in l.Deadlines)
                 {
                     <li>
-                        <strong>@(d.Label ?? DeadlineLabel(d.Kind))</strong>:
-                        <time datetime="@d.DueAt.ToString("O", CultureInfo.InvariantCulture)">@LocalDate(d.DueAt)</time>
+                        <strong dir="auto">@(d.Label ?? DeadlineLabel(d.Kind))</strong>:
+                        <time datetime="@d.DueAt.ToString("O", CultureInfo.InvariantCulture)">@T.Date(d.DueAt)</time>
                     </li>
                 }
             </ul>
@@ -109,25 +122,26 @@
 
         @if (l.ContactEmail is { Length: > 0 } || l.ContactPhone is { Length: > 0 })
         {
-            <h3>Questions</h3>
+            <h3>@T["listing.questions"]</h3>
             <ul class="contact">
                 @if (l.ContactEmail is { Length: > 0 } email)
                 {
-                    <li><a href="mailto:@email">@email</a></li>
+                    <li><a href="mailto:@email" dir="ltr">@email</a></li>
                 }
                 @if (l.ContactPhone is { Length: > 0 } phone)
                 {
-                    <li><a href="tel:@PhoneHref(phone)">@phone</a></li>
+                    @* Telephone numbers read left to right in every script. *@
+                    <li><a href="tel:@PhoneHref(phone)" dir="ltr">@phone</a></li>
                 }
             </ul>
         }
     </section>
 
     <section aria-labelledby="schedule-heading">
-        <h2 id="schedule-heading">Upcoming sessions</h2>
+        <h2 id="schedule-heading">@T["listing.sessions"]</h2>
         @if (l.Upcoming.Count == 0)
         {
-            <p>No upcoming sessions are scheduled. Check back later, or contact @l.OrganisationName.</p>
+            <p>@T.Format("listing.sessions.none", ("organisation", Org))</p>
         }
         else
         {
@@ -139,10 +153,10 @@
                     </li>
                 }
             </ol>
-            <p class="note">Times are local time.</p>
+            <p class="note">@T["listing.sessions.local_time"]</p>
             @if (ShowPublicLinks)
             {
-                <p><a class="calendar-link" href="@CalendarHref" download>Add these sessions to your calendar</a></p>
+                <p><a class="calendar-link" href="@CalendarHref" download>@T["listing.sessions.calendar"]</a></p>
             }
         }
     </section>
@@ -150,7 +164,7 @@
     @if (l.Places.Count > 0)
     {
         <section aria-labelledby="places-heading">
-            <h2 id="places-heading">@(l.Places.Count == 1 ? "Location" : "Locations")</h2>
+            <h2 id="places-heading">@T.Format("listing.places", ("count", l.Places.Count))</h2>
             <ul class="places">
                 @foreach (ListingPlace p in l.Places)
                 {
@@ -158,7 +172,7 @@
                         <p class="place-name" dir="auto">@p.Name</p>
                         @if (p.IsAddressPublic)
                         {
-                            <address>
+                            <address dir="auto">
                                 @foreach (string line in AddressLines(p))
                                 {
                                     @line<br />
@@ -168,7 +182,12 @@
                         else
                         {
                             <p>
-                                @(p.NeighbourhoodName is { } hood ? $"In the {hood} area. " : "")The exact address is shared once you register.
+                                @if (p.NeighbourhoodName is { } hood)
+                                {
+                                    @T.Format("listing.places.area", ("area", Localisation.Text.Name(hood)))
+                                    @(" ")
+                                }
+                                @T["listing.places.address_after_registering"]
                             </p>
                         }
                         @if (p.TransitNote is { Length: > 0 } transit)
@@ -177,7 +196,7 @@
                         }
                         @if (p.IsWheelchairAccessible == true)
                         {
-                            <p class="note">Wheelchair accessible.</p>
+                            <p class="note">@T["listing.places.wheelchair"]</p>
                         }
                     </li>
                 }
@@ -188,7 +207,7 @@
     @if (l.Accommodations.Count > 0 || l.AccessibilityNote is { Length: > 0 })
     {
         <section aria-labelledby="access-heading">
-            <h2 id="access-heading">Accessibility and support</h2>
+            <h2 id="access-heading">@T["listing.access"]</h2>
             @if (l.Accommodations.Count > 0)
             {
                 <ul>
@@ -208,7 +227,7 @@
     @if (l.Description is { Length: > 0 } description)
     {
         <section aria-labelledby="about-heading">
-            <h2 id="about-heading">About</h2>
+            <h2 id="about-heading">@T["listing.about"]</h2>
             @* Plain text from the provider, split into paragraphs and encoded. Never markup.
                dir="auto": the provider may write in a different language from the page's. *@
             @foreach (string paragraph in Paragraphs(description))
@@ -220,7 +239,7 @@
 
     @if (ShowPublicLinks)
     {
-        <p class="back"><a href="@SearchHref">Back to search</a></p>
+        <p class="back"><a href="@SearchHref">@T["listing.back_to_search"]</a></p>
     }
 </article>
 
@@ -237,6 +256,11 @@
     // Short, because the markup reads it on almost every line.
     private ListingDetail l => Listing;
 
+    private bool IsJob => l.Kind == ListingKind.Job;
+
+    /// <summary>The organisation's name, isolated for use inside a sentence.</summary>
+    private string Org => Localisation.Text.Name(l.OrganisationName);
+
     /// <summary>
     /// A lang attribute only where the content's language differs from the page's, so screen
     /// readers switch voice for it and browsers pick the right fonts and hyphenation.
@@ -250,91 +274,56 @@
 
     private string CalendarHref => $"/listings/{Uri.EscapeDataString(Listing.Slug)}/calendar.ics";
 
-    private CultureInfo Culture => Tenant.Locale.ToCulture();
-
     private string LocalRange(ListingTime t)
     {
         DateTimeOffset start = TimeZoneInfo.ConvertTime(t.StartsAt, Tenant.TimeZone);
         DateTimeOffset end = TimeZoneInfo.ConvertTime(t.EndsAt, Tenant.TimeZone);
-        string day = start.ToString("dddd, MMMM d", Culture);
         return start.Date == end.Date
-            ? $"{day}, {start.ToString("t", Culture)} – {end.ToString("t", Culture)}"
-            : $"{day}, {start.ToString("t", Culture)} – {end.ToString("dddd, MMMM d, t", Culture)}";
+            ? T.Format("format.date_time", ("date", T.DayLong(t.StartsAt)), ("time", T.Range(T.Time(t.StartsAt), T.Time(t.EndsAt))))
+            : T.Range(
+                T.Format("format.date_time", ("date", T.DayLong(t.StartsAt)), ("time", T.Time(t.StartsAt))),
+                T.Format("format.date_time", ("date", T.DayLong(t.EndsAt)), ("time", T.Time(t.EndsAt))));
     }
-
-    private string LocalDate(DateTimeOffset at) =>
-        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("dddd, MMMM d, yyyy", Culture);
-
-    private string FormatMoney(int cents) => new Money(cents).Format(Tenant.Locale);
 
     private string PriceLabel(ListingDetail l) => l.CostModel switch
     {
-        CostModel.Free => "Free",
-        CostModel.Fixed when l.CostCentsMin is { } c => FormatMoney(c),
+        CostModel.Free => T["listing.price.free"],
+        CostModel.Fixed when l.CostCentsMin is { } c => T.Money(c),
         CostModel.SlidingScale when l.CostCentsMin is { } min && l.CostCentsMax is { } max =>
-            $"{FormatMoney(min)} to {FormatMoney(max)}, on a sliding scale",
-        CostModel.StipendPaid => "This is a paid position",
-        _ => "Price varies. Contact the provider for details.",
+            T.Format("listing.price.sliding", ("min", T.Money(min)), ("max", T.Money(max))),
+        CostModel.StipendPaid => T["listing.price.paid"],
+        _ => T["listing.price.varies"],
     };
 
-    private static string? AgeLabel(ListingDetail l) => (l.AgeMin, l.AgeMax) switch
+    private string? AgeLabel(ListingDetail l) => (l.AgeMin, l.AgeMax) switch
     {
-        ({ } min, { } max) => $"{min} to {max}",
-        ({ } min, null) => $"{min} and up",
-        (null, { } max) => $"Up to {max}",
+        ({ } min, { } max) => T.Format("listing.ages.range", ("min", min), ("max", max)),
+        ({ } min, null) => T.Format("listing.ages.from", ("min", min)),
+        (null, { } max) => T.Format("listing.ages.up_to", ("max", max)),
         _ => null,
     };
 
-    private static string? GradeLabel(ListingDetail l) => (l.GradeMin, l.GradeMax) switch
+    private string? GradeLabel(ListingDetail l) => (l.GradeMin, l.GradeMax) switch
     {
-        ({ } min, { } max) => $"{Grade(min)} to {Grade(max)}",
-        ({ } min, null) => $"{Grade(min)} and up",
-        (null, { } max) => $"Up to {Grade(max)}",
+        ({ } min, { } max) => T.Format("listing.grades.range", ("min", Grade(min)), ("max", Grade(max))),
+        ({ } min, null) => T.Format("listing.grades.from", ("min", Grade(min))),
+        (null, { } max) => T.Format("listing.grades.up_to", ("max", Grade(max))),
         _ => null,
     };
 
     /// <summary>The schema stores pre-K as -1 and kindergarten as 0.</summary>
-    private static string Grade(int grade) => grade switch
+    private string Grade(int grade) => grade switch
     {
-        -1 => "pre-K",
-        0 => "kindergarten",
-        _ => $"grade {grade}",
+        -1 => T["listing.grade.pre_k"],
+        0 => T["listing.grade.kindergarten"],
+        _ => T.Format("listing.grade.number", ("grade", grade)),
     };
-
-    private static string ModalityLabel(Modality m) => m switch
-    {
-        Modality.Virtual => "Online",
-        Modality.Hybrid => "In person and online",
-        _ => "In person",
-    };
-
-    private static string KindLabel(ListingKind kind) => kind switch
-    {
-        ListingKind.Program => "Program",
-        ListingKind.Event => "Event",
-        ListingKind.Job => "Job or internship",
-        _ => "Drop-in resource",
-    };
-
-    private static string RegisterHeading(ListingDetail l) => l.Kind == ListingKind.Job ? "How to apply" : "How to join";
-
-    private static string RegisterAction(ListingDetail l) => l.Kind == ListingKind.Job ? "Apply" : "Register";
 
     /// <summary>The kinds in <c>ck_listing_deadline_kind</c>; the provider's own label wins when set.</summary>
-    private static string DeadlineLabel(string kind) => kind switch
-    {
-        "application" => "Application deadline",
-        "registration" => "Registration deadline",
-        "audition" => "Audition date",
-        "early_bird" => "Early-bird price ends",
-        "scholarship" => "Scholarship deadline",
-        "document_submission" => "Documents due",
-        _ => "Deadline",
-    };
+    private string DeadlineLabel(string kind) => T.Has("listing.deadline." + kind) ? T["listing.deadline." + kind] : T["listing.deadline.other"];
 
-    /// <summary>For a sentence in the (still English-only) interface text.</summary>
-    private static string EnglishLanguageName(string code) =>
-        Locale.TryFromCode(code, out Locale supported) ? supported.EnglishName : code;
+    /// <summary>A language named in the page's own language: "translated from Spanish" in an English page.</summary>
+    private string LanguageInPage(string code) => T.Has("language." + code) ? T["language." + code] : LanguageName(code);
 
     /// <summary>The language's own name for itself, which is how a speaker looks for it.</summary>
     private static string LanguageName(string code)

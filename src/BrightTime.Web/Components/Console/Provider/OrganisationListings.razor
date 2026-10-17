@@ -10,45 +10,42 @@
 
 @if (Forbidden)
 {
-    <PageTitle>Not allowed · BrightTime</PageTitle>
-    <h1>You can't manage this organisation's listings</h1>
-    <p>Only its staff can. <a href="/provider">Go to your organisations</a>.</p>
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.listings.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
 }
 else if (_name is not null)
 {
-    <PageTitle>@_name listings · BrightTime</PageTitle>
+    <PageTitle>@T.Format("provider.listings.title", ("organisation", _name)) · BrightTime</PageTitle>
 
-    <p class="eyebrow"><a href="/provider">Your organisations</a></p>
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
     <h1>@_name</h1>
 
     @if (_status != OrganisationStatus.Approved)
     {
-        <p class="notice">
-            This organisation is <strong>@Words(_status.ToDbValue())</strong>. You can draft listings and
-            submit them, but none can be published until the organisation is approved.
-        </p>
+        <p class="notice">@T.Format("provider.listings.not_approved", ("status", T[BrightTime.Modules.Directory.Vetting.OrganisationVetting.StatusPhrase(_status)]))</p>
     }
 
-    <p><a class="button" href="/provider/orgs/@OrgId/listings/new">New listing</a></p>
+    <p><a class="button" href="/provider/orgs/@OrgId/listings/new">@T["editor.new"]</a></p>
 
     @if (_rows.Count == 0)
     {
-        <p>No listings yet.</p>
+        <p>@T["provider.listings.none"]</p>
     }
 
     @foreach (var group in _rows.GroupBy(r => r.Status).OrderBy(g => Order(g.Key)))
     {
         <section aria-labelledby="status-@group.Key">
-            <h2 id="status-@group.Key">@Heading(group.Key) <span class="count">(@group.Count())</span></h2>
+            <h2 id="status-@group.Key">@T["provider.listings.group." + group.Key.ToDbValue()] <span class="count">(@group.Count())</span></h2>
             <ul class="card-list">
                 @foreach (ListingRow row in group)
                 {
                     <li>
                         <a href="/provider/orgs/@OrgId/listings/@row.Id">@row.Title</a>
-                        <span class="note">@Words(row.Kind.ToDbValue()) · updated @row.UpdatedAt.ToString("MMM d, yyyy", Tenant.Locale.ToCulture())</span>
+                        <span class="note">@T["listing.kind." + row.Kind.ToDbValue()] · @T.Format("provider.listings.updated", ("date", T.DateShort(row.UpdatedAt)))</span>
                         @if (row.ReviewNote is { Length: > 0 } note && row.Status is ListingStatus.ChangesRequested or ListingStatus.Rejected or ListingStatus.Unpublished)
                         {
-                            <p class="review-note"><strong>Organiser's note:</strong> @note</p>
+                            <p class="review-note"><strong>@T["provider.listings.organiser_note"]</strong> <span dir="auto">@note</span></p>
                         }
                     </li>
                 }
@@ -103,16 +100,4 @@ else if (_name is not null)
         _ => 6,
     };
 
-    private static string Heading(ListingStatus s) => s switch
-    {
-        ListingStatus.ChangesRequested => "Changes requested",
-        ListingStatus.Draft => "Drafts",
-        ListingStatus.PendingReview => "Waiting for review",
-        ListingStatus.Published => "Published",
-        ListingStatus.Unpublished => "Unpublished",
-        ListingStatus.Rejected => "Rejected",
-        _ => "Archived",
-    };
-
-    private static string Words(string dbValue) => dbValue.Replace('_', ' ');
 }

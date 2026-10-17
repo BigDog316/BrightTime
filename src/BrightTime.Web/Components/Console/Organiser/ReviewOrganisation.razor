@@ -11,9 +11,9 @@
 
 @if (_org is { } o)
 {
-    <PageTitle>Review: @o.DisplayName · BrightTime</PageTitle>
+    <PageTitle>@T.Format("organiser.review.title", ("title", o.DisplayName)) · BrightTime</PageTitle>
 
-    <p class="eyebrow"><a href="/organiser/review">Review queue</a></p>
+    <p class="eyebrow"><a href="/organiser/review">@T["site.nav.review"]</a></p>
     <h1>@o.DisplayName</h1>
 
     @if (_problem is not null)
@@ -22,52 +22,52 @@
     }
 
     <dl class="facts review-facts">
-        <dt>Status</dt><dd>@Words(o.Status)</dd>
-        <dt>Legal name</dt><dd>@o.LegalName</dd>
-        <dt>Kind</dt><dd>@o.Kind.Replace('_', ' ')</dd>
+        <dt>@T["organiser.col.status"]</dt><dd>@T[BrightTime.Modules.Directory.Vetting.OrganisationVetting.StatusPhrase(o.Status)]</dd>
+        <dt>@T["organiser.org.legal_name"]</dt><dd dir="auto">@o.LegalName</dd>
+        <dt>@T["organiser.org.kind"]</dt><dd>@(T.Has("organisation.kind." + o.Kind) ? T["organisation.kind." + o.Kind] : o.Kind.Replace('_', ' '))</dd>
         @if (o.WebsiteUrl is { } site)
         {
             @* Shown as text, not a link: an applicant's URL is unvetted. *@
-            <dt>Website</dt><dd><code>@site</code></dd>
+            <dt>@T["organiser.org.website"]</dt><dd><code dir="ltr">@site</code></dd>
         }
         @if (o.PublicEmail is { } email)
         {
-            <dt>Email</dt><dd>@email</dd>
+            <dt>@T["account.field.email"]</dt><dd dir="ltr">@email</dd>
         }
         @if (o.PublicPhone is { } phone)
         {
-            <dt>Phone</dt><dd>@phone</dd>
+            <dt>@T["editor.field.contact_phone"]</dt><dd dir="ltr">@phone</dd>
         }
-        <dt>Languages</dt><dd>@string.Join(", ", o.LanguagesServed)</dd>
-        <dt>Applied</dt><dd>@Local(o.SubmittedAt)</dd>
-        <dt>Active owners</dt><dd>@o.ActiveOwners</dd>
-        <dt>Sites</dt>
+        <dt>@T["listing.fact.languages"]</dt><dd>@string.Join(T["format.list_separator"], o.LanguagesServed.Select(c => T.Has("language." + c) ? T["language." + c] : c))</dd>
+        <dt>@T["organiser.col.applied"]</dt><dd>@Local(o.SubmittedAt)</dd>
+        <dt>@T["organiser.org.active_owners"]</dt><dd>@T.Number(o.ActiveOwners)</dd>
+        <dt>@T["editor.field.sites"]</dt>
         <dd>
             @if (o.Sites.Count == 0)
             {
-                <span>None. An organisation needs a site before it can be approved.</span>
+                <span>@T["organiser.org.no_sites"]</span>
             }
             else
             {
-                <ul>@foreach (string s in o.Sites) { <li>@s</li> }</ul>
+                <ul>@foreach (string s in o.Sites) { <li dir="auto">@s</li> }</ul>
             }
         </dd>
     </dl>
 
     @if (o.Mission is { Length: > 0 } mission)
     {
-        <h2>What they do</h2>
+        <h2>@T["organiser.org.mission"]</h2>
         <p dir="auto">@mission</p>
     }
 
     <section class="review-actions" aria-labelledby="decide-heading">
-        <h2 id="decide-heading">Decision</h2>
+        <h2 id="decide-heading">@T["organiser.decision"]</h2>
         @if (o.Status == OrganisationStatus.Applied)
         {
             <form method="post" @formname="start" @onsubmit="StartReviewAsync">
                 <AntiforgeryToken />
-                <button type="submit" class="secondary-button">Start review</button>
-                <span class="hint">Marks it as under review, so other organisers know someone has it.</span>
+                <button type="submit" class="secondary-button">@T["organiser.org.start_review"]</button>
+                <span class="hint">@T["organiser.org.start_review_hint"]</span>
             </form>
         }
         @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.Suspended
@@ -75,36 +75,36 @@
         {
             <form method="post" @formname="approve" @onsubmit="ApproveAsync">
                 <AntiforgeryToken />
-                <button type="submit">@(o.Status == OrganisationStatus.Suspended ? "Reinstate" : "Approve")</button>
+                <button type="submit">@T[o.Status == OrganisationStatus.Suspended ? "organiser.org.reinstate" : "organiser.org.approve"]</button>
             </form>
         }
         @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview)
         {
-            @ReasonForm("changes", "Request changes", "What should the organisation change or send?")
+            @ReasonForm("changes", T["organiser.request_changes"], T["organiser.org.changes_reason"])
         }
         @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.ChangesRequested or OrganisationStatus.Suspended)
         {
-            @ReasonForm("reject", "Reject", "Why is the application rejected? The organisation sees this.")
+            @ReasonForm("reject", T["organiser.reject"], T["organiser.org.reject_reason"])
         }
         @if (o.Status == OrganisationStatus.Approved && User.HasPermission(Permissions.Organisations.Suspend))
         {
-            @ReasonForm("suspend", "Suspend", "Why is it suspended? The organisation sees this.")
+            @ReasonForm("suspend", T["organiser.org.suspend"], T["organiser.org.suspend_reason"])
         }
     </section>
 
     @if (o.History.Count > 0)
     {
         <section aria-labelledby="history-heading">
-            <h2 id="history-heading">History</h2>
+            <h2 id="history-heading">@T["organiser.org.history"]</h2>
             <ol class="history">
                 @foreach (VettingHistoryRow h in o.History)
                 {
                     <li>
                         <time datetime="@h.OccurredAt.ToString("O")">@Local(h.OccurredAt)</time>:
-                        @(h.From?.Replace('_', ' ') ?? "new") → @h.To.Replace('_', ' ')
+                        @T.Format("organiser.org.history_move", ("from", h.From is null ? T["organiser.org.new"] : StatusWord(h.From)), ("to", StatusWord(h.To)))
                         @if (h.Note is { Length: > 0 } note)
                         {
-                            <span>: “@note”</span>
+                            <span>: <q dir="auto">@note</q></span>
                         }
                     </li>
                 }
@@ -151,7 +151,7 @@
 
     private Task Refuse()
     {
-        _problem = "Your account cannot make that decision.";
+        _problem = T["organiser.org.not_allowed"];
         HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
         return Task.CompletedTask;
     }
@@ -170,11 +170,11 @@
 
         if (reasonForm is not null && result.Error!.Code == "organisation.reason_required")
         {
-            _reasonErrors[reasonForm] = result.Error.Message;
+            _reasonErrors[reasonForm] = T.Error(result.Error);
         }
         else
         {
-            _problem = result.Error!.Message;
+            _problem = T.Error(result.Error!);
         }
     }
 
@@ -202,9 +202,11 @@
         </form>
     };
 
-    private string Local(DateTimeOffset? at) => at is { } t
-        ? TimeZoneInfo.ConvertTime(t, Tenant.TimeZone).ToString("MMM d, yyyy, h:mm tt", Tenant.Locale.ToCulture())
-        : "";
+    private string Local(DateTimeOffset? at) => at is { } t ? T.DateTime(t) : "";
 
-    private static string Words(OrganisationStatus s) => s.ToDbValue().Replace('_', ' ');
+    /// <summary>A status as the history stores it (a database value), in the reader's language.</summary>
+    private string StatusWord(string dbValue) =>
+        OrganisationStatusExtensions.TryFromDbValue(dbValue, out OrganisationStatus status)
+            ? T[BrightTime.Modules.Directory.Vetting.OrganisationVetting.StatusPhrase(status)]
+            : dbValue.Replace('_', ' ');
 }

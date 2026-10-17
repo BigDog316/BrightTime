@@ -89,7 +89,7 @@ main {
 .skip-link {
     background: var(--bt-surface);
     color: var(--bt-accent);
-    left: 1rem;
+    inset-inline-start: 1rem;
     padding: 0.5rem 0.75rem;
     position: absolute;
     top: -3rem;
@@ -451,6 +451,26 @@ a.button:hover {
 .eyebrow a,
 .status-line a {
     color: var(--bt-accent);
+}
+
+/* The language list: one line of links, each in its own script, wrapping on a narrow screen. */
+.language-picker ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.language-picker a {
+    font-size: 0.9rem;
+}
+
+.language-picker a[aria-current="true"] {
+    color: var(--bt-ink);
+    font-weight: 700;
+    text-decoration: none;
 }
 
 .signed-in-as {

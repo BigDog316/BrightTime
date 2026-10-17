@@ -1,4 +1,5 @@
 using BrightTime.Modules.Identity.SignIn;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Identity.Tests;
 
@@ -18,7 +19,7 @@ public sealed class PasswordPolicyTests
     [InlineData("elevenchars")]
     public void Fewer_than_twelve_characters_is_refused(string password)
     {
-        PasswordPolicy.Check(password, null).ShouldContain(p => p.Contains("at least 12", StringComparison.Ordinal));
+        PasswordPolicy.Check(password, null).ShouldContain(Phrase.Of("account.password.too_short", ("min", 12)));
     }
 
     [Theory]
@@ -29,14 +30,14 @@ public sealed class PasswordPolicyTests
     [InlineData("abababababababab")]
     public void A_common_or_trivial_password_is_refused(string password)
     {
-        PasswordPolicy.Check(password, null).ShouldContain(p => p.Contains("too common", StringComparison.Ordinal));
+        PasswordPolicy.Check(password, null).ShouldContain(Phrase.Of("account.password.too_common"));
     }
 
     [Fact]
     public void A_password_built_from_the_email_is_refused()
     {
         PasswordPolicy.Check("mariagonzalez2026!", "mariagonzalez@example.org")
-            .ShouldContain(p => p.Contains("email", StringComparison.Ordinal));
+            .ShouldContain(Phrase.Of("account.password.from_email"));
     }
 
     [Fact]

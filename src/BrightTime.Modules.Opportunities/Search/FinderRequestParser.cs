@@ -2,14 +2,15 @@ using System.Globalization;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Paging;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Search;
 
 /// <summary>The outcome of reading a finder URL. Either a query to run, or the fields that need fixing.</summary>
 public sealed record FinderRequestParse(
     SearchQuery? Query,
-    IReadOnlyDictionary<string, string> FieldErrors,
-    IReadOnlyList<string> Notices)
+    IReadOnlyDictionary<string, Phrase> FieldErrors,
+    IReadOnlyList<Phrase> Notices)
 {
     public bool IsValid => Query is not null && FieldErrors.Count == 0;
 }
@@ -52,13 +53,13 @@ public static class FinderRequestParser
         ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(locale);
 
-        Dictionary<string, string> errors = new(StringComparer.Ordinal);
-        List<string> notices = [];
+        Dictionary<string, Phrase> errors = new(StringComparer.Ordinal);
+        List<Phrase> notices = [];
 
         string? text = FirstValue(values, TextKey)?.Trim();
         if (text is { Length: > MaxTextLength })
         {
-            errors[TextKey] = $"Keep the search to {MaxTextLength} characters.";
+            errors[TextKey] = Phrase.Of("finder.error.text_too_long", ("max", MaxTextLength));
         }
 
         List<string> allFacets = [];
@@ -71,7 +72,7 @@ public static class FinderRequestParser
             }
             else
             {
-                notices.Add($"'{kind}' is not a kind of listing, so it was ignored.");
+                notices.Add(Phrase.Of("finder.notice.unknown_kind", ("kind", kind.Length > 40 ? kind[..40] : kind)));
             }
         }
 
@@ -85,7 +86,7 @@ public static class FinderRequestParser
             }
             else
             {
-                errors[AgeKey] = $"Enter an age from {ListingFacets.MinAge} to {ListingFacets.MaxAge}.";
+                errors[AgeKey] = Phrase.Of("finder.error.age_range", ("min", ListingFacets.MinAge), ("max", ListingFacets.MaxAge));
             }
         }
 
@@ -102,7 +103,7 @@ public static class FinderRequestParser
             }
             else
             {
-                errors[MaxDollarsKey] = $"Enter a price from $0 to ${MaxDollars:N0}.";
+                errors[MaxDollarsKey] = Phrase.Of("finder.error.price_range", ("max", MaxDollars));
             }
         }
 
@@ -116,7 +117,7 @@ public static class FinderRequestParser
             }
             else
             {
-                errors[SortKey] = "Choose relevance, soonest, nearest or newest.";
+                errors[SortKey] = Phrase.Of("finder.error.sort");
             }
         }
 
@@ -131,7 +132,7 @@ public static class FinderRequestParser
             else
             {
                 // A stale or edited link. Start over rather than fail the page.
-                notices.Add("That page link has expired, so you are back at the first page.");
+                notices.Add(Phrase.Of("finder.notice.cursor_expired"));
             }
         }
 

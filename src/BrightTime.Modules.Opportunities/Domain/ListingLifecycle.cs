@@ -1,5 +1,6 @@
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Domain;
 
@@ -83,14 +84,15 @@ public static class ListingLifecycle
 
         if (from == to)
         {
-            return Error.Conflict("listing.no_change", $"The listing is already {Words(to)}.");
+            return Error.Conflict("listing.no_change", $"The listing is already {Words(to)}.", Args(("status", to)));
         }
 
         if (!Allowed.TryGetValue(from, out (ListingStatus To, Mover By)[]? transitions) || transitions.Length == 0)
         {
             return Error.Conflict(
                 "listing.terminal_state",
-                $"A listing that is {Words(from)} cannot change state. Clone it to start again.");
+                $"A listing that is {Words(from)} cannot change state. Clone it to start again.",
+                Args(("status", from)));
         }
 
         (ListingStatus To, Mover By)[] matching = [.. transitions.Where(t => t.To == to)];
@@ -98,7 +100,8 @@ public static class ListingLifecycle
         {
             return Error.Conflict(
                 "listing.invalid_transition",
-                $"A listing cannot go from {Words(from)} to {Words(to)}.");
+                $"A listing cannot go from {Words(from)} to {Words(to)}.",
+                Args(("from", from), ("to", to)));
         }
 
         if (!matching.Any(t => t.By == by))
@@ -107,7 +110,8 @@ public static class ListingLifecycle
                 "listing.wrong_mover",
                 by == Mover.Provider
                     ? $"Only a network organiser can move a listing to {Words(to)}."
-                    : $"Only the owning organisation can move a listing to {Words(to)}.");
+                    : $"Only the owning organisation can move a listing to {Words(to)}.",
+                Args(("status", to), ("by", by == Mover.Provider ? "provider" : "organiser")));
         }
 
         return RequirementsFor(to, context);
@@ -120,7 +124,7 @@ public static class ListingLifecycle
             case ListingStatus.PendingReview:
                 return context.PassesValidation
                     ? Result.Success()
-                    : Error.Validation("listing.not_ready", "Fix the highlighted fields before submitting for review.");
+                    : Error.Validation("listing.not_ready", "Fix the highlighted fields before submitting for review.", arguments: Args(("stage", "submit")));
 
             case ListingStatus.Published:
                 if (!context.OrganisationApproved)
@@ -132,13 +136,13 @@ public static class ListingLifecycle
 
                 return context.PassesValidation
                     ? Result.Success()
-                    : Error.Validation("listing.not_ready", "This listing no longer passes validation and cannot be published.");
+                    : Error.Validation("listing.not_ready", "This listing no longer passes validation and cannot be published.", arguments: Args(("stage", "publish")));
 
             case ListingStatus.Rejected:
             case ListingStatus.ChangesRequested:
             case ListingStatus.Unpublished:
                 return string.IsNullOrWhiteSpace(context.Reason)
-                    ? Error.Validation("listing.reason_required", $"Moving a listing to {Words(to)} needs a reason the provider can read.")
+                    ? Error.Validation("listing.reason_required", $"Moving a listing to {Words(to)} needs a reason the provider can read.", arguments: Args(("status", to)))
                     : Result.Success();
 
             default:
@@ -148,4 +152,18 @@ public static class ListingLifecycle
 
     /// <summary>A status as a person reads it: "changes requested", not "changes_requested".</summary>
     private static string Words(ListingStatus status) => status.ToDbValue().Replace('_', ' ');
+
+    /// <summary>A status as a phrase, to render in the reader's language: <c>listing.status.changes_requested</c>.</summary>
+    public static Phrase StatusPhrase(ListingStatus status) => Phrase.Of("listing.status." + status.ToDbValue());
+
+    private static Dictionary<string, object> Args(params ReadOnlySpan<(string Name, object Value)> values)
+    {
+        Dictionary<string, object> args = new(StringComparer.Ordinal);
+        foreach ((string name, object value) in values)
+        {
+            args[name] = value is ListingStatus s ? StatusPhrase(s) : value;
+        }
+
+        return args;
+    }
 }

@@ -1,0 +1,234 @@
+@page "/organiser/wording"
+@using BrightTime.Modules.Platform.Localisation
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using BrightTime.Web.Tenancy
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.WordingPolicy)]
+@inherits ConsoleComponent
+
+<PageTitle>@T["wording.title"] · BrightTime</PageTitle>
+
+<h1>@T["wording.title"]</h1>
+<p class="hint">@T["wording.intro"]</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["wording.no_database"]</p>
+}
+else
+{
+    @if (Saved is "set" or "cleared")
+    {
+        <p class="notice success" role="status">@T["wording.saved_" + Saved]</p>
+    }
+
+    <form method="get" action="/organiser/wording" class="filters" role="search" aria-label="@T["wording.search_label"]">
+        <label>@T["site.language"]
+            <select name="locale">
+                @foreach (Locale l in Languages)
+                {
+                    <option value="@l.Code" selected="@(l == Target)" lang="@l.Code">@l.NativeName</option>
+                }
+            </select>
+        </label>
+        <label>@T["wording.search"] <input type="search" name="q" value="@Q" maxlength="200" /></label>
+        <button type="submit">@T["audit.filter.submit"]</button>
+    </form>
+
+    @if (Key is { } key && Catalogue.Has(key))
+    {
+        <section class="editor" aria-labelledby="edit-heading">
+            <h2 id="edit-heading"><code>@key</code></h2>
+            <dl class="facts">
+                <dt>@T["language.en"]</dt>
+                <dd lang="en" dir="ltr">@Source(Locale.English, key)</dd>
+                @if (Target != Locale.English)
+                {
+                    <dt>@T["wording.shipped"]</dt>
+                    <dd lang="@Target.Code" dir="@Target.Direction">@Source(Target, key)</dd>
+                }
+                @if (Current(key) is { } existing)
+                {
+                    <dt>@T["wording.current_override"]</dt>
+                    <dd lang="@Target.Code" dir="@Target.Direction">@existing.Value</dd>
+                }
+            </dl>
+
+            @if (_problems.Count > 0)
+            {
+                <ul class="notice error" role="alert" id="override-problems">
+                    @foreach (string p in _problems)
+                    {
+                        <li>@p</li>
+                    }
+                </ul>
+            }
+
+            <form method="post" @formname="set-override" @onsubmit="SetAsync">
+                <AntiforgeryToken />
+                <input type="hidden" name="key" value="@key" />
+                <input type="hidden" name="locale" value="@Target.Code" />
+                <div class="field">
+                    <label for="value">@T.Format("wording.your_wording", ("language", Target.NativeName))</label>
+                    <p class="hint" id="value-hint">@T["wording.placeholders_hint"]</p>
+                    <textarea id="value" name="value" rows="4" maxlength="@ResourceOverrides.MaxValueLength" lang="@Target.Code" dir="@Target.Direction"
+                              aria-describedby="value-hint @(_problems.Count > 0 ? "override-problems" : null)">@(_draft ?? Current(key)?.Value ?? Source(Target, key))</textarea>
+                </div>
+                <div class="actions">
+                    <button type="submit">@T["wording.save"]</button>
+                    <a class="secondary" href="@ListHref">@T["form.cancel"]</a>
+                </div>
+            </form>
+            @if (Current(key) is not null)
+            {
+                <form method="post" @formname="clear-override" @onsubmit="ClearAsync">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="key" value="@key" />
+                    <input type="hidden" name="locale" value="@Target.Code" />
+                    <button type="submit" class="secondary-button">@T["wording.reset"]</button>
+                </form>
+            }
+        </section>
+    }
+
+    <section aria-labelledby="list-heading">
+        <h2 id="list-heading">@T[string.IsNullOrWhiteSpace(Q) ? "wording.overridden" : "wording.matches"]</h2>
+        @if (Rows.Count == 0)
+        {
+            <p>@T[string.IsNullOrWhiteSpace(Q) ? "wording.none_overridden" : "wording.no_matches"]</p>
+        }
+        else
+        {
+            <table class="queue">
+                <thead><tr><th scope="col">@T["wording.col.key"]</th><th scope="col">@T["wording.col.text"]</th></tr></thead>
+                <tbody>
+                    @foreach (string row in Rows)
+                    {
+                        <tr>
+                            <td><a href="@EditHref(row)"><code>@row</code></a></td>
+                            <td lang="@Target.Code" dir="@Target.Direction">
+                                @(Current(row)?.Value ?? Source(Target, row))
+                                @if (Current(row) is not null)
+                                {
+                                    <span class="note"> · @T["wording.overridden_mark"]</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_truncated)
+            {
+                <p class="hint">@T.Format("wording.more", ("count", MaxRows))</p>
+            }
+        }
+    </section>
+}
+
+@code {
+    private const int MaxRows = 100;
+
+    [SupplyParameterFromQuery(Name = "locale")] public string? LocaleCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    [SupplyParameterFromQuery(Name = "key")] public string? Key { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    [Inject] private Catalogue Catalogue { get; set; } = default!;
+
+    [Inject] private SiteContext Site { get; set; } = default!;
+
+    private IReadOnlyList<WordingOverride> _overrides = [];
+    private readonly List<string> _problems = [];
+    private string? _draft;
+    private bool _truncated;
+
+    private IReadOnlyList<Locale> Languages => Site.Site?.EnabledLocales ?? Locale.Supported;
+
+    private Locale Target => Locale.TryFromCode(IsPost ? FormValue("locale") : LocaleCode, out Locale l) && Languages.Contains(l) ? l : T.Locale;
+
+    private string ListHref => Navigation.GetUriWithQueryParameters("/organiser/wording", new Dictionary<string, object?> { ["locale"] = Target.Code, ["q"] = Q });
+
+    private string EditHref(string key) =>
+        Navigation.GetUriWithQueryParameters("/organiser/wording", new Dictionary<string, object?> { ["locale"] = Target.Code, ["q"] = Q, ["key"] = key });
+
+    /// <summary>With no search, the keys this tenant has changed; with one, every key or text that contains it.</summary>
+    private IReadOnlyList<string> Rows
+    {
+        get
+        {
+            IEnumerable<string> keys = string.IsNullOrWhiteSpace(Q)
+                ? _overrides.Where(o => o.Locale == Target.Code).Select(o => o.Key)
+                : Catalogue.Keys.Where(k => Matches(k, Q.Trim()));
+            List<string> rows = [.. keys.Take(MaxRows + 1)];
+            _truncated = rows.Count > MaxRows;
+            return rows.Count > MaxRows ? rows[..MaxRows] : rows;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.IsAvailable)
+        {
+            if (IsPost && FormValue("key") is { Length: > 0 } posted)
+            {
+                Key = posted;
+            }
+
+            _overrides = await Get<ResourceOverrides>().ListAsync(HttpContext.RequestAborted);
+        }
+    }
+
+    private bool Matches(string key, string q) =>
+        key.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || Source(Locale.English, key).Contains(q, StringComparison.OrdinalIgnoreCase)
+        || Source(Target, key).Contains(q, StringComparison.OrdinalIgnoreCase)
+        || Current(key)?.Value.Contains(q, StringComparison.OrdinalIgnoreCase) == true;
+
+    private string Source(Locale locale, string key) =>
+        Catalogue.TryGet(locale.Code, key, out _, out string source) ? source : string.Empty;
+
+    private WordingOverride? Current(string key) => _overrides.FirstOrDefault(o => o.Key == key && o.Locale == Target.Code);
+
+    private async Task SetAsync()
+    {
+        string key = FormValue("key");
+        string value = FormValue("value").Trim();
+        _draft = value;
+        if (!Catalogue.Has(key))
+        {
+            _problems.Add(T["wording.unknown_key"]);
+            return;
+        }
+
+        if (value.Length == 0 || value.Length > ResourceOverrides.MaxValueLength)
+        {
+            _problems.Add(T.Format("wording.length", ("max", ResourceOverrides.MaxValueLength)));
+            return;
+        }
+
+        // The same placeholders and plural forms as the shipped text, or the sentence breaks.
+        _problems.AddRange(Catalogue.Check(Target, key, value));
+        if (_problems.Count > 0)
+        {
+            return;
+        }
+
+        await Get<ResourceOverrides>().SetAsync(Target.Code, key, value, Actor, HttpContext.RequestAborted);
+        Get<IWordingOverrides>().Invalidate(Tenant.TenantId);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters("/organiser/wording",
+            new Dictionary<string, object?> { ["locale"] = Target.Code, ["key"] = key, ["saved"] = "set" }));
+    }
+
+    private async Task ClearAsync()
+    {
+        string key = FormValue("key");
+        await Get<ResourceOverrides>().ClearAsync(Target.Code, key, Actor, HttpContext.RequestAborted);
+        Get<IWordingOverrides>().Invalidate(Tenant.TenantId);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters("/organiser/wording",
+            new Dictionary<string, object?> { ["locale"] = Target.Code, ["key"] = key, ["saved"] = "cleared" }));
+    }
+}

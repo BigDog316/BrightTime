@@ -5,18 +5,15 @@
 
 @if (_accounts is { } accounts)
 {
-    <PageTitle>Development sign-in · BrightTime</PageTitle>
+    <PageTitle>@T["dev.title"] · BrightTime</PageTitle>
 
-    <h1>Development sign-in</h1>
-    <p class="note">
-        Seeded accounts, signed in without a password. This page exists only in the Development
-        environment with <code>Auth:DevelopmentSignIn</code> set (decision D14).
-    </p>
+    <h1>@T["dev.title"]</h1>
+    <p class="note">@T["dev.explain"] <code>Auth:DevelopmentSignIn</code></p>
 
-    <h2>Organisers</h2>
+    <h2>@T["dev.organisers"]</h2>
     @AccountList(accounts.Where(a => a.Roles.Contains(BrightTimeRoles.NetworkOrganiser)))
 
-    <h2>Provider staff</h2>
+    <h2>@T["dev.provider_staff"]</h2>
     @AccountList(accounts.Where(a => !a.Roles.Contains(BrightTimeRoles.NetworkOrganiser)))
 }
 

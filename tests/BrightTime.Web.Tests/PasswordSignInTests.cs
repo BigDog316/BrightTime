@@ -106,12 +106,12 @@ public sealed partial class PasswordSignInTests(ConsoleFixture db)
         for (int i = 0; i < 5; i++)
         {
             await SignInAsync(browser, email, "not the password at all");
-            browser.Html.ShouldContain("don't match an account that can sign in");
+            browser.Html.ShouldContain("don&#x27;t match an account that can sign in");
         }
 
         HttpResponseMessage right = await SignInAsync(browser, email, NewPassword);
         right.StatusCode.ShouldBe(HttpStatusCode.OK, "locked: the right password is refused too");
-        browser.Html.ShouldContain("don't match an account that can sign in", Case.Sensitive, "and the message is the same as for a wrong one");
+        browser.Html.ShouldContain("don&#x27;t match an account that can sign in", Case.Sensitive, "and the message is the same as for a wrong one");
 
         (await db.ScalarAsync<bool>(
             "select lockout_end > now() from identity.app_user where id = @id",

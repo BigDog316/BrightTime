@@ -1,5 +1,6 @@
 using System.Reflection;
 using BrightTime.Modules.Opportunities.Search;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Tests;
 
@@ -73,19 +74,22 @@ public sealed class RankingTests
     [Fact]
     public void The_explanation_names_only_the_factors_that_applied()
     {
-        IReadOnlyList<string> reasons = RelevanceScorer.Explain(
+        IReadOnlyList<Phrase> reasons = RelevanceScorer.Explain(
             Features(text: 0.4, distance: 1200, days: 9, interest: 2));
 
-        reasons.ShouldContain("matches your search");
-        reasons.ShouldContain("1.2 km away");
-        reasons.ShouldContain("starts in 9 days");
-        reasons.ShouldContain("matches 2 of your interests");
+        reasons.ShouldBe(
+        [
+            Phrase.Of("finder.reason.matches_search"),
+            Phrase.Of("finder.reason.km_away", ("km", 1.2m)),
+            Phrase.Of("finder.reason.starts_in_days", ("days", 9)),
+            Phrase.Of("finder.reason.matches_interests", ("count", 2)),
+        ]);
     }
 
     [Fact]
     public void The_explanation_says_nothing_about_factors_that_did_not_apply()
     {
-        IReadOnlyList<string> reasons = RelevanceScorer.Explain(Features());
+        IReadOnlyList<Phrase> reasons = RelevanceScorer.Explain(Features());
 
         reasons.ShouldBeEmpty();
     }

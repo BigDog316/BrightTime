@@ -1,6 +1,7 @@
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Domain;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 using static BrightTime.Modules.Opportunities.Domain.ListingLifecycle;
 
 namespace BrightTime.Modules.Opportunities.Tests;
@@ -98,5 +99,14 @@ public sealed class ListingLifecycleTests
 
         result.Error!.Message.ShouldContain("changes requested");
         result.Error.Message.ShouldNotContain("_");
+    }
+
+    [Fact]
+    public void A_status_in_a_message_is_a_phrase_the_reader_sees_in_their_language()
+    {
+        Result result = CanTransition(ListingStatus.PendingReview, ListingStatus.ChangesRequested, Mover.Organiser, Ready);
+
+        result.Error!.Phrase.Key.ShouldBe("error.listing.reason_required");
+        result.Error.Phrase.Arguments["status"].ShouldBe(Phrase.Of("listing.status.changes_requested"));
     }
 }

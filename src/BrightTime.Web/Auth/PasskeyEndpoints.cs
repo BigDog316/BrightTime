@@ -8,6 +8,7 @@ using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
 using BrightTime.Web.Auditing;
+using BrightTime.Web.Localisation;
 using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -58,7 +59,7 @@ public static class PasskeyEndpoints
             return Results.Content(options.ToJson(), "application/json");
         }).RequireAuthorization(StepUp.Policy);
 
-        endpoints.MapPost(RegisterPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, AuditTrail audit) =>
+        endpoints.MapPost(RegisterPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, AuditTrail audit, Text text) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false) || http.User.GetUserId() is not { } user)
             {
@@ -70,14 +71,14 @@ public static class PasskeyEndpoints
             AuthenticatorAttestationRawResponse? response = Deserialize<AuthenticatorAttestationRawResponse>(credential);
             if (remembered is null || response is null)
             {
-                return Problem("That request has expired. Try adding the passkey again.");
+                return Problem(text["account.passkey.expired_add"]);
             }
 
             Result result = await passkeys.CompleteRegistrationAsync(
                 tenant.TenantId, new UserId(user), CredentialCreateOptions.FromJson(remembered), response, name, http.RequestAborted).ConfigureAwait(false);
             if (!result.IsSuccess)
             {
-                return Problem(result.Error!.Message);
+                return Problem(text.Error(result.Error!));
             }
 
             audit.Record(AuthAudit.Allowed(AuthAudit.PasskeyAdded, new UserId(user)));
@@ -103,7 +104,8 @@ public static class PasskeyEndpoints
             ITenantContext tenant,
             BrightTimePrincipalFactory factory,
             IClock clock,
-            AuditTrail audit) =>
+            AuditTrail audit,
+            Text text) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false))
             {
@@ -115,7 +117,7 @@ public static class PasskeyEndpoints
             AuthenticatorAssertionRawResponse? response = Deserialize<AuthenticatorAssertionRawResponse>(credential);
             if (remembered is null || response is null)
             {
-                return Problem("That sign-in request has expired. Try again.");
+                return Problem(text["account.passkey.expired_sign_in"]);
             }
 
             UserId? user = await passkeys.CompleteSignInAsync(
@@ -126,7 +128,7 @@ public static class PasskeyEndpoints
             if (principal is null)
             {
                 audit.Record(AuthAudit.Refused(AuthAudit.SignIn, user, "passkey_rejected", AuthenticationMethods.Passkey));
-                return Problem("That passkey didn't sign you in. It may have been removed, or the account may be inactive.");
+                return Problem(text["account.passkey.sign_in_failed"]);
             }
 
             audit.Record(AuthAudit.Allowed(AuthAudit.SignIn, user, AuthenticationMethods.Passkey));

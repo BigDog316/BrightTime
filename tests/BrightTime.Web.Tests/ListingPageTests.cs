@@ -45,13 +45,14 @@ public sealed class ListingPageTests : IClassFixture<WebApplicationFactory<Progr
         string html = await GetAsync("/listings/robotics-club");
 
         html.ShouldContain("<h1 id=\"listing-title\" dir=\"auto\">Robotics club</h1>");
-        html.ShouldContain("From <bdi>Kettle Youth Collective</bdi>");
+        // The name is wrapped in Unicode isolates, so its direction cannot reorder the sentence.
+        html.ShouldContain("From \u2068Kettle Youth Collective\u2069");
         html.ShouldContain("<title>Robotics club · BrightTime</title>");
         html.ShouldContain("<meta name=\"description\" content=\"Build and program robots with a team every week.\"");
 
         // The hand-off is a plain link that tells a screen-reader user where it goes.
         html.ShouldContain("href=\"https://example.org/kettle-youth/robotics\" rel=\"external noopener noreferrer\"");
-        html.ShouldContain("(opens the provider's website)");
+        html.ShouldContain("(opens the provider&#x27;s website)");
         html.ShouldNotContain("target=\"_blank\"");
     }
 
@@ -69,9 +70,10 @@ public sealed class ListingPageTests : IClassFixture<WebApplicationFactory<Progr
     {
         string html = await GetAsync("/listings/youth-orchestra");
 
-        html.ShouldContain("In the Westside area. The exact address is shared once you register.");
+        html.ShouldContain("In the \u2068Westside\u2069 area.");
+        html.ShouldContain("The exact address is shared once you register.");
         html.ShouldNotContain("18 Linden Lane");
-        html.ShouldNotContain("<address>");
+        html.ShouldNotContain("<address");
     }
 
     [Fact]
@@ -79,7 +81,7 @@ public sealed class ListingPageTests : IClassFixture<WebApplicationFactory<Progr
     {
         string html = await GetAsync("/listings/robotics-club");
 
-        html.ShouldContain("<address>");
+        html.ShouldContain("<address dir=\"auto\">");
         html.ShouldContain("40 Orchard Hill Road");
     }
 
@@ -107,7 +109,7 @@ public sealed class ListingPageTests : IClassFixture<WebApplicationFactory<Progr
         string html = await GetAsync("/listings/youth-orchestra");
 
         html.ShouldContain("Dates to remember");
-        html.ShouldContain("<strong>Registration closes</strong>");
+        html.ShouldContain("<strong dir=\"auto\">Registration closes</strong>");
     }
 
     [Fact]
@@ -116,7 +118,9 @@ public sealed class ListingPageTests : IClassFixture<WebApplicationFactory<Progr
         string orchestra = await GetAsync("/listings/youth-orchestra");
         orchestra.ShouldContain("$120.00");
         orchestra.ShouldNotContain("¤");
-        (await GetAsync("/listings/teen-coding-lab")).ShouldContain("<dd>English, Espa&#xF1;ol</dd>");
+        // Each language in its own name, marked with its own language so a screen reader says it right.
+        string languages = await GetAsync("/listings/teen-coding-lab");
+        languages.ShouldContain("<span lang=\"en\" dir=\"auto\">English</span>, <span lang=\"es\" dir=\"auto\">Español</span>");
     }
 
     [Fact]
@@ -221,7 +225,7 @@ public sealed class ListingPageHostileContentTests : IClassFixture<WebApplicatio
         html.ShouldNotContain("javascript:");
         html.ShouldContain("&lt;img src=x onerror=alert(1)&gt;");
         html.ShouldContain("<p dir=\"auto\">Second paragraph</p>");
-        html.ShouldContain("Contact Org to register.");
+        html.ShouldContain("Contact \u2068Org\u2069 to register.");
     }
 
     private sealed class FixedListingDetails(ListingDetail listing) : IListingDetails

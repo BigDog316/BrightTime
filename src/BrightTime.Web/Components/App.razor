@@ -16,9 +16,23 @@
 
 <body>
     <Routes />
+    @* The passkey script's messages, in the page's language. Serialised, so it is data, never markup. *@
+    <script type="application/json" id="passkey-text">@((MarkupString)PasskeyText)</script>
     <ReconnectModal />
     <script src="@Assets["passkeys.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 
 </html>
+
+@code {
+    /// <summary>JSON with HTML-sensitive characters escaped (System.Text.Json's default encoder), so it cannot close the script element.</summary>
+    private string PasskeyText => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+    {
+        ["confirmNeeded"] = T["account.confirm.needed"],
+        ["tooMany"] = T["account.passkey.too_many"],
+        ["wentWrong"] = T["account.passkey.went_wrong"],
+        ["cancelled"] = T["account.passkey.cancelled"],
+        ["alreadyOnDevice"] = T["account.passkey.already_on_device"],
+    });
+}

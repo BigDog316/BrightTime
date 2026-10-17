@@ -10,45 +10,46 @@
 @using BrightTime.Modules.Platform.Contracts
 @using BrightTime.SharedKernel.Ids
 @using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Text
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inherits ConsoleComponent
 
 @if (Forbidden)
 {
-    <PageTitle>Not allowed · BrightTime</PageTitle>
-    <h1>You can't edit this organisation's listings</h1>
-    <p>Only its staff can. <a href="/provider">Go to your organisations</a>.</p>
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["editor.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
 }
 else if (_orgName is not null)
 {
-    <PageTitle>@(ListingId is null ? "New listing" : $"Edit {_title}") · BrightTime</PageTitle>
+    <PageTitle>@(ListingId is null ? T["editor.new"] : T.Format("editor.edit_title", ("title", _title ?? ""))) · BrightTime</PageTitle>
 
     <p class="eyebrow"><a href="/provider/orgs/@OrgId">@_orgName</a></p>
-    <h1>@(ListingId is null ? "New listing" : _title)</h1>
+    <h1>@(ListingId is null ? T["editor.new"] : _title)</h1>
 
     @if (_status is { } status)
     {
         <p class="status-line">
-            Status: <strong>@StatusLabel(status)</strong>
+            @T["editor.status"] <strong>@T[ListingLifecycle.StatusPhrase(status)]</strong>
             @if (status == ListingStatus.Published)
             {
-                <span> · <a href="/listings/@_slug">View it on the site</a></span>
+                <span> · <a href="/listings/@_slug">@T["editor.view_on_site"]</a></span>
             }
             else
             {
-                <span> · <a href="/provider/orgs/@OrgId/listings/@ListingId/preview">Preview as families will see it</a></span>
+                <span> · <a href="/provider/orgs/@OrgId/listings/@ListingId/preview">@T["editor.preview_link"]</a></span>
             }
         </p>
     }
 
     @if (Saved == "1")
     {
-        <p class="notice success" role="status">Saved.@(_status == ListingStatus.Published ? " The change is live, and the network organiser will review it." : "")</p>
+        <p class="notice success" role="status">@T[_status == ListingStatus.Published ? "editor.saved_live" : "editor.saved"]</p>
     }
     @if (Submitted == "1")
     {
-        <p class="notice success" role="status">Submitted. A network organiser will review it before it is published.</p>
+        <p class="notice success" role="status">@T["editor.submitted"]</p>
     }
     @if (_problem is not null)
     {
@@ -58,33 +59,33 @@ else if (_orgName is not null)
     @if (_reviewNote is { Length: > 0 } note && _status is ListingStatus.ChangesRequested or ListingStatus.Rejected or ListingStatus.Unpublished)
     {
         <section class="review-note" aria-labelledby="review-note-heading">
-            <h2 id="review-note-heading">The organiser's note</h2>
-            <p>@note</p>
+            <h2 id="review-note-heading">@T["editor.organiser_note"]</h2>
+            <p dir="auto">@note</p>
         </section>
     }
 
     @if (_status == ListingStatus.PendingReview)
     {
-        <p>This listing is waiting for a network organiser. To change it, withdraw it from review first.</p>
+        <p>@T["editor.pending"]</p>
         <form method="post" @formname="withdraw" @onsubmit="WithdrawAsync">
             <AntiforgeryToken />
-            <button type="submit" class="secondary-button">Withdraw from review</button>
+            <button type="submit" class="secondary-button">@T["editor.withdraw"]</button>
         </form>
     }
     else if (_status is { } s && !ListingEditor.IsEditable(s))
     {
-        <p>A @StatusLabel(s).ToLowerInvariant() listing can't be edited.</p>
+        <p>@T.Format("editor.not_editable", ("status", T[ListingLifecycle.StatusPhrase(s)]))</p>
     }
     else
     {
         @if (_errors.Count > 0)
         {
             <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1">
-                <h2 id="error-summary-heading">Check these fields</h2>
+                <h2 id="error-summary-heading">@T["form.check_fields"]</h2>
                 <ul>
                     @foreach (var (field, messages) in _errors)
                     {
-                        <li><a href="#@field">@messages[0]</a></li>
+                        <li><a href="#@field">@T[messages[0]]</a></li>
                     }
                 </ul>
             </section>
@@ -94,39 +95,40 @@ else if (_orgName is not null)
             <AntiforgeryToken />
             <input type="hidden" name="Version" value="@_form.Version" />
 
-            <nav class="editor-sections" aria-label="Sections">
-                <a href="#basics">Basics</a> · <a href="#audience">Audience</a> · <a href="#topics">Topics</a> ·
-                <a href="#where">Where</a> · <a href="#when">When</a> · <a href="#cost">Cost</a> ·
-                <a href="#registration">Registration</a> · <a href="#access">Access and support</a> · <a href="#contact">Contact</a>
+            <nav class="editor-sections" aria-label="@T["editor.sections"]">
+                @foreach (string part in Sections)
+                {
+                    <a href="#@part">@T["editor.section." + part]</a>@(part == Sections[^1] ? "" : " · ")
+                }
             </nav>
 
             <fieldset id="basics">
-                <legend>Basics</legend>
+                <legend>@T["editor.section.basics"]</legend>
                 <div class="field">
-                    <label for="Kind">Kind of listing</label>
+                    <label for="Kind">@T["finder.field.kind"]</label>
                     <select id="Kind" name="Kind" aria-invalid="@Invalid("Kind")" aria-describedby="@Described("Kind")">
-                        @foreach (var (value, label) in Kinds)
+                        @foreach (string value in Kinds)
                         {
-                            <option value="@value" selected="@(_form.Kind == value)">@label</option>
+                            <option value="@value" selected="@(_form.Kind == value)">@T["listing.kind." + value]</option>
                         }
                     </select>
                     @Error("Kind")
                 </div>
-                @Text("Title", "Title", _form.Title, hint: "Short and plain: what it is, not who runs it.", max: ListingFormParser.MaxTitle)
-                @Text("Summary", "One-sentence summary", _form.Summary, hint: "Shown in search results.", max: ListingFormParser.MaxSummary)
+                @Field("Title", T["editor.field.title"], _form.Title, hint: T["editor.field.title_hint"], max: ListingFormParser.MaxTitle)
+                @Field("Summary", T["editor.field.summary"], _form.Summary, hint: T["editor.field.summary_hint"], max: ListingFormParser.MaxSummary)
                 <div class="field">
-                    <label for="Description">Description</label>
-                    <p class="hint" id="hint-Description">Plain text. Leave a blank line between paragraphs.</p>
+                    <label for="Description">@T["editor.field.description"]</label>
+                    <p class="hint" id="hint-Description">@T["editor.field.description_hint"]</p>
                     <textarea id="Description" name="Description" rows="8" maxlength="@ListingFormParser.MaxDescription"
                               aria-invalid="@Invalid("Description")" aria-describedby="hint-Description @Described("Description")">@_form.Description</textarea>
                     @Error("Description")
                 </div>
                 <div class="field">
-                    <label for="PrimaryLanguage">Written in</label>
+                    <label for="PrimaryLanguage">@T["editor.field.primary_language"]</label>
                     <select id="PrimaryLanguage" name="PrimaryLanguage">
                         @foreach (Locale l in Locale.Supported)
                         {
-                            <option value="@l.Code" selected="@(_form.PrimaryLanguage == l.Code)">@l.NativeName (@l.EnglishName)</option>
+                            <option value="@l.Code" selected="@(_form.PrimaryLanguage == l.Code)">@l.NativeName (@T["language." + l.Code])</option>
                         }
                     </select>
                     @Error("PrimaryLanguage")
@@ -134,20 +136,20 @@ else if (_orgName is not null)
             </fieldset>
 
             <fieldset id="audience">
-                <legend>Audience</legend>
+                <legend>@T["editor.section.audience"]</legend>
                 <div class="field-row">
-                    @Text("AgeMin", "Youngest age", _form.AgeMin, type: "number", width: "short")
-                    @Text("AgeMax", "Oldest age", _form.AgeMax, type: "number", width: "short")
+                    @Field("AgeMin", T["editor.field.age_min"], _form.AgeMin, type: "number", width: "short")
+                    @Field("AgeMax", T["editor.field.age_max"], _form.AgeMax, type: "number", width: "short")
                 </div>
                 <div class="field-row">
-                    @Text("GradeMin", "Lowest grade", _form.GradeMin, hint: "-1 for pre-K, 0 for kindergarten.", type: "number", width: "short")
-                    @Text("GradeMax", "Highest grade", _form.GradeMax, type: "number", width: "short")
+                    @Field("GradeMin", T["editor.field.grade_min"], _form.GradeMin, hint: T["editor.field.grade_min_hint"], type: "number", width: "short")
+                    @Field("GradeMax", T["editor.field.grade_max"], _form.GradeMax, type: "number", width: "short")
                 </div>
             </fieldset>
 
             <fieldset id="topics">
-                <legend>Topics</legend>
-                <p class="hint">Choose at least one category. Interests help families who search by what they enjoy.</p>
+                <legend>@T["editor.section.topics"]</legend>
+                <p class="hint">@T["editor.topics_hint"]</p>
                 <div id="TermIds">
                     @foreach (VocabularyTerm category in _categories)
                     {
@@ -166,18 +168,18 @@ else if (_orgName is not null)
             </fieldset>
 
             <fieldset id="where">
-                <legend>Where</legend>
+                <legend>@T["editor.section.where"]</legend>
                 <div id="Modality" class="radio-row">
-                    @Radio("Modality", "in_person", "In person", _form.Modality)
-                    @Radio("Modality", "virtual", "Online", _form.Modality)
-                    @Radio("Modality", "hybrid", "Both", _form.Modality)
+                    @Radio("Modality", "in_person", T["editor.option.modality.in_person"], _form.Modality)
+                    @Radio("Modality", "virtual", T["editor.option.modality.virtual"], _form.Modality)
+                    @Radio("Modality", "hybrid", T["editor.option.modality.hybrid"], _form.Modality)
                 </div>
                 @Error("Modality")
                 <div id="SiteIds" class="field">
-                    <p class="label">Sites</p>
+                    <p class="label">@T["editor.field.sites"]</p>
                     @if (_sites.Count == 0)
                     {
-                        <p class="hint">This organisation has no active sites. Add one before listing something in person.</p>
+                        <p class="hint">@T["editor.no_sites"]</p>
                     }
                     @foreach (SiteSummary site in _sites)
                     {
@@ -185,42 +187,42 @@ else if (_orgName is not null)
                     }
                     @Error("SiteIds")
                 </div>
-                @Text("VirtualUrl", "Link to join online", _form.VirtualUrl, hint: "Only for online or hybrid listings.", type: "url")
+                @Field("VirtualUrl", T["editor.field.virtual_url"], _form.VirtualUrl, hint: T["editor.field.virtual_url_hint"], type: "url")
             </fieldset>
 
             <fieldset id="when">
-                <legend>When</legend>
+                <legend>@T["editor.section.when"]</legend>
                 <div id="Repeats" class="radio-row">
-                    @Radio("Repeats", "weekly", "Every week", _form.Repeats)
-                    @Radio("Repeats", "once", "One date", _form.Repeats)
+                    @Radio("Repeats", "weekly", T["editor.option.repeats.weekly"], _form.Repeats)
+                    @Radio("Repeats", "once", T["editor.option.repeats.once"], _form.Repeats)
                 </div>
                 <div id="Days" class="field">
-                    <p class="label">Days (for weekly)</p>
+                    <p class="label">@T["editor.field.days"]</p>
                     <div class="radio-row">
-                        @foreach (var (code, label) in Days)
+                        @foreach (var (code, day) in Days)
                         {
-                            @Check("Days", code, label, _form.Days.Contains(code))
+                            @Check("Days", code, T.Culture.DateTimeFormat.GetAbbreviatedDayName(day), _form.Days.Contains(code))
                         }
                     </div>
                     @Error("Days")
                 </div>
                 <div class="field-row">
-                    @Text("StartsOn", "First date", _form.StartsOn, type: "date")
-                    @Text("EndsOn", "Last date", _form.EndsOn, hint: "For weekly sessions.", type: "date")
+                    @Field("StartsOn", T["editor.field.starts_on"], _form.StartsOn, type: "date")
+                    @Field("EndsOn", T["editor.field.ends_on"], _form.EndsOn, hint: T["editor.field.ends_on_hint"], type: "date")
                 </div>
                 <div class="field-row">
-                    @Text("StartTime", "Starts at", _form.StartTime, type: "time")
-                    @Text("EndTime", "Ends at", _form.EndTime, type: "time")
+                    @Field("StartTime", T["editor.field.start_time"], _form.StartTime, type: "time")
+                    @Field("EndTime", T["editor.field.end_time"], _form.EndTime, type: "time")
                 </div>
-                <button type="submit" name="action" value="preview" class="secondary-button">Preview sessions</button>
+                <button type="submit" name="action" value="preview" class="secondary-button">@T["editor.preview_sessions"]</button>
                 @if (_preview is { } preview)
                 {
                     <div class="preview" role="status">
-                        <p>The next @preview.Count sessions:</p>
+                        <p>@T.Format("editor.preview_heading", ("count", preview.Count))</p>
                         <ol>
                             @foreach (Occurrence o in preview)
                             {
-                                <li>@Local(o.StartsAt, "dddd, MMMM d, yyyy, h:mm tt") to @Local(o.EndsAt, "h:mm tt")</li>
+                                <li>@T.Format("format.date_time", ("date", T.Date(o.StartsAt)), ("time", T.Range(T.Time(o.StartsAt), T.Time(o.EndsAt))))</li>
                             }
                         </ol>
                     </div>
@@ -228,50 +230,50 @@ else if (_orgName is not null)
             </fieldset>
 
             <fieldset id="cost">
-                <legend>Cost</legend>
+                <legend>@T["editor.section.cost"]</legend>
                 <div id="CostModel" class="radio-column">
-                    @Radio("CostModel", "free", "Free", _form.CostModel)
-                    @Radio("CostModel", "fixed", "A fixed price", _form.CostModel)
-                    @Radio("CostModel", "sliding_scale", "A sliding scale", _form.CostModel)
-                    @Radio("CostModel", "varies", "It varies", _form.CostModel)
-                    @Radio("CostModel", "stipend_paid", "Participants are paid (jobs)", _form.CostModel)
+                    @Radio("CostModel", "free", T["editor.option.cost_model.free"], _form.CostModel)
+                    @Radio("CostModel", "fixed", T["editor.option.cost_model.fixed"], _form.CostModel)
+                    @Radio("CostModel", "sliding_scale", T["editor.option.cost_model.sliding_scale"], _form.CostModel)
+                    @Radio("CostModel", "varies", T["editor.option.cost_model.varies"], _form.CostModel)
+                    @Radio("CostModel", "stipend_paid", T["editor.option.cost_model.stipend_paid"], _form.CostModel)
                 </div>
                 @Error("CostModel")
                 <div class="field-row">
-                    @Text("CostMin", "Price, or lowest price ($)", _form.CostMin, width: "short")
-                    @Text("CostMax", "Highest price ($)", _form.CostMax, hint: "Sliding scale only.", width: "short")
+                    @Field("CostMin", T["editor.field.cost_min"], _form.CostMin, width: "short")
+                    @Field("CostMax", T["editor.field.cost_max"], _form.CostMax, hint: T["editor.field.cost_max_hint"], width: "short")
                 </div>
-                @Text("SlidingScaleNote", "How the sliding scale works", _form.SlidingScaleNote, max: ListingFormParser.MaxNote)
+                @Field("SlidingScaleNote", T["editor.field.sliding_scale_note"], _form.SlidingScaleNote, max: ListingFormParser.MaxNote)
             </fieldset>
 
             <fieldset id="registration">
-                <legend>Registration</legend>
+                <legend>@T["editor.section.registration"]</legend>
                 <div id="RegistrationMode" class="radio-column">
-                    @Radio("RegistrationMode", "external", "On our own website", _form.RegistrationMode)
-                    @Radio("RegistrationMode", "builtin", "Through BrightTime (opens later this year)", _form.RegistrationMode)
-                    @Radio("RegistrationMode", "none", "No registration: drop in", _form.RegistrationMode)
+                    @Radio("RegistrationMode", "external", T["editor.option.registration_mode.external"], _form.RegistrationMode)
+                    @Radio("RegistrationMode", "builtin", T["editor.option.registration_mode.builtin"], _form.RegistrationMode)
+                    @Radio("RegistrationMode", "none", T["editor.option.registration_mode.none"], _form.RegistrationMode)
                 </div>
                 @Error("RegistrationMode")
-                @Text("ExternalUrl", "Registration link", _form.ExternalUrl, hint: "The page where families sign up.", type: "url")
-                @Text("Capacity", "Places available", _form.Capacity, hint: "Needed for registration through BrightTime.", type: "number", width: "short")
+                @Field("ExternalUrl", T["editor.field.external_url"], _form.ExternalUrl, hint: T["editor.field.external_url_hint"], type: "url")
+                @Field("Capacity", T["editor.field.capacity"], _form.Capacity, hint: T["editor.field.capacity_hint"], type: "number", width: "short")
                 <div class="field-row">
                     <div class="field">
-                        <label for="DeadlineKind">Deadline</label>
+                        <label for="DeadlineKind">@T["listing.deadline.other"]</label>
                         <select id="DeadlineKind" name="DeadlineKind" aria-invalid="@Invalid("DeadlineKind")">
-                            <option value="">None</option>
+                            <option value="">@T["editor.option.none"]</option>
                             @foreach (string kind in ListingFormParser.DeadlineKinds)
                             {
-                                <option value="@kind" selected="@(_form.DeadlineKind == kind)">@DeadlineLabel(kind)</option>
+                                <option value="@kind" selected="@(_form.DeadlineKind == kind)">@T["listing.deadline." + kind]</option>
                             }
                         </select>
                         @Error("DeadlineKind")
                     </div>
-                    @Text("DeadlineOn", "Deadline date", _form.DeadlineOn, type: "date")
+                    @Field("DeadlineOn", T["editor.field.deadline_on"], _form.DeadlineOn, type: "date")
                 </div>
             </fieldset>
 
             <fieldset id="access">
-                <legend>Access and support</legend>
+                <legend>@T["editor.section.access"]</legend>
                 <div id="AccommodationIds">
                     @foreach (VocabularyTerm a in _accommodations)
                     {
@@ -279,13 +281,13 @@ else if (_orgName is not null)
                     }
                 </div>
                 @Error("AccommodationIds")
-                @Text("AccessibilityNote", "Anything else about access", _form.AccessibilityNote, max: ListingFormParser.MaxNote)
-                @Check("MealsProvided", "true", "A meal or snack is provided", _form.MealsProvided)
-                @Check("TransportProvided", "true", "Transport is provided", _form.TransportProvided)
-                @Text("TransportNote", "Getting there", _form.TransportNote, max: ListingFormParser.MaxNote)
-                @Check("IsDropIn", "true", "Families can drop in without booking", _form.IsDropIn)
+                @Field("AccessibilityNote", T["editor.field.accessibility_note"], _form.AccessibilityNote, max: ListingFormParser.MaxNote)
+                @Check("MealsProvided", "true", T["editor.field.meals_provided"], _form.MealsProvided)
+                @Check("TransportProvided", "true", T["editor.field.transport_provided"], _form.TransportProvided)
+                @Field("TransportNote", T["editor.field.transport_note"], _form.TransportNote, max: ListingFormParser.MaxNote)
+                @Check("IsDropIn", "true", T["editor.field.is_drop_in"], _form.IsDropIn)
                 <div id="Languages" class="field">
-                    <p class="label">Languages spoken at the program</p>
+                    <p class="label">@T["editor.field.languages"]</p>
                     <div class="radio-row">
                         @foreach (Locale l in Locale.Supported)
                         {
@@ -297,18 +299,18 @@ else if (_orgName is not null)
             </fieldset>
 
             <fieldset id="contact">
-                <legend>Contact for families</legend>
-                @Text("ContactEmail", "Email", _form.ContactEmail, type: "email")
-                @Text("ContactPhone", "Phone", _form.ContactPhone, type: "tel", width: "short")
+                <legend>@T["editor.section.contact"]</legend>
+                @Field("ContactEmail", T["editor.field.contact_email"], _form.ContactEmail, type: "email")
+                @Field("ContactPhone", T["editor.field.contact_phone"], _form.ContactPhone, type: "tel", width: "short")
             </fieldset>
 
             <div class="actions">
-                <button type="submit" name="action" value="save">@(ListingId is null ? "Save draft" : "Save changes")</button>
+                <button type="submit" name="action" value="save">@T[ListingId is null ? "editor.save_draft" : "editor.save_changes"]</button>
                 @if (CanSubmit)
                 {
-                    <button type="submit" name="action" value="submit">Save and submit for review</button>
+                    <button type="submit" name="action" value="submit">@T["editor.save_submit"]</button>
                 }
-                <a href="/provider/orgs/@OrgId" class="secondary">Cancel</a>
+                <a href="/provider/orgs/@OrgId" class="secondary">@T["form.cancel"]</a>
             </div>
         </form>
 
@@ -316,13 +318,13 @@ else if (_orgName is not null)
         {
             <form method="post" class="danger-zone" @formname="unpublish" @onsubmit="UnpublishAsync">
                 <AntiforgeryToken />
-                <h2>Take it off the site</h2>
+                <h2>@T["editor.unpublish.heading"]</h2>
                 <div class="field">
-                    <label for="reason">Why? (the organiser sees this)</label>
+                    <label for="reason">@T["editor.unpublish.reason"]</label>
                     <textarea id="reason" name="reason" rows="2" aria-invalid="@Invalid("reason")" aria-describedby="@Described("reason")"></textarea>
                     @Error("reason")
                 </div>
-                <button type="submit" class="secondary-button">Unpublish</button>
+                <button type="submit" class="secondary-button">@T["editor.unpublish.submit"]</button>
             </form>
         }
     }
@@ -337,14 +339,18 @@ else if (_orgName is not null)
 
     [SupplyParameterFromQuery(Name = "submitted")] public string? Submitted { get; set; }
 
-    private static readonly (string Value, string Label)[] Kinds =
-        [("program", "Program"), ("event", "Event"), ("job", "Job or internship"), ("resource", "Drop-in resource")];
+    private static readonly string[] Kinds = ["program", "event", "job", "resource"];
 
-    private static readonly (string Code, string Label)[] Days =
-        [("MO", "Mon"), ("TU", "Tue"), ("WE", "Wed"), ("TH", "Thu"), ("FR", "Fri"), ("SA", "Sat"), ("SU", "Sun")];
+    private static readonly string[] Sections = ["basics", "audience", "topics", "where", "when", "cost", "registration", "access", "contact"];
+
+    private static readonly (string Code, DayOfWeek Day)[] Days =
+    [
+        ("MO", DayOfWeek.Monday), ("TU", DayOfWeek.Tuesday), ("WE", DayOfWeek.Wednesday), ("TH", DayOfWeek.Thursday),
+        ("FR", DayOfWeek.Friday), ("SA", DayOfWeek.Saturday), ("SU", DayOfWeek.Sunday),
+    ];
 
     private ListingForm _form = new();
-    private IReadOnlyDictionary<string, string[]> _errors = new Dictionary<string, string[]>();
+    private IReadOnlyDictionary<string, Phrase[]> _errors = new Dictionary<string, Phrase[]>();
     private string? _problem;
     private IReadOnlyList<Occurrence>? _preview;
 
@@ -443,7 +449,7 @@ else if (_orgName is not null)
         if (!outcome.Saved)
         {
             _errors = outcome.Errors;
-            _problem = outcome.Problem;
+            _problem = outcome.Problem is { } problem ? T[problem] : null;
             return;
         }
 
@@ -455,7 +461,7 @@ else if (_orgName is not null)
             {
                 // Saved but not submitted: show the reason against the saved version.
                 await LoadListingAsync(id, keepPostedForm: false);
-                _problem = "Saved, but not submitted: " + submitted.Error!.Message;
+                _problem = T.Format("editor.saved_not_submitted", ("reason", T.Error(submitted.Error!)));
                 return;
             }
 
@@ -471,7 +477,7 @@ else if (_orgName is not null)
         Result result = await Get<ListingEditor>().TransitionAsync(ListingId!.Value, ListingStatus.Draft, ListingLifecycle.Mover.Provider, Org, null, Actor);
         if (!result.IsSuccess)
         {
-            _problem = result.Error!.Message;
+            _problem = T.Error(result.Error!);
             return;
         }
 
@@ -484,15 +490,12 @@ else if (_orgName is not null)
         Result result = await Get<ListingEditor>().TransitionAsync(ListingId!.Value, ListingStatus.Unpublished, ListingLifecycle.Mover.Provider, Org, reason, Actor);
         if (!result.IsSuccess)
         {
-            _errors = new Dictionary<string, string[]> { ["reason"] = [result.Error!.Message] };
+            _errors = new Dictionary<string, Phrase[]> { ["reason"] = [result.Error!.Phrase] };
             return;
         }
 
         Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}");
     }
-
-    private string Local(DateTimeOffset at, string format) =>
-        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString(format, Tenant.Locale.ToCulture());
 
     private bool HasError(string field) => _errors.ContainsKey(field);
 
@@ -503,11 +506,11 @@ else if (_orgName is not null)
     private RenderFragment? Error(string field) => HasError(field)
         ? __builder =>
         {
-            <p class="field-error" id="err-@field">@string.Join(" ", _errors[field])</p>
+            <p class="field-error" id="err-@field">@T.Join(_errors[field])</p>
         }
         : null;
 
-    private RenderFragment Text(string name, string label, string value, string? hint = null, string type = "text", int? max = null, string? width = null) => __builder =>
+    private RenderFragment Field(string name, string label, string value, string? hint = null, string type = "text", int? max = null, string? width = null) => __builder =>
     {
         <div class="field @(width is null ? "" : "field-" + width)">
             <label for="@name">@label</label>
@@ -553,18 +556,4 @@ else if (_orgName is not null)
             _ => $"{a} {b}",
         };
 
-    private static string StatusLabel(ListingStatus s) => s.ToDbValue().Replace('_', ' ') switch
-    {
-        var t => char.ToUpperInvariant(t[0]) + t[1..],
-    };
-
-    private static string DeadlineLabel(string kind) => kind switch
-    {
-        "application" => "Application deadline",
-        "registration" => "Registration deadline",
-        "audition" => "Audition date",
-        "early_bird" => "Early-bird price ends",
-        "scholarship" => "Scholarship deadline",
-        _ => "Documents due",
-    };
 }

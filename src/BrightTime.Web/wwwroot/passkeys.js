@@ -25,6 +25,15 @@
         return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     };
 
+    // The page's words, in its language: a JSON block the server renders (App.razor).
+    const text = (key, fallback) => {
+        try {
+            return JSON.parse(document.getElementById("passkey-text")?.textContent ?? "{}")[key] ?? fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
     const antiforgeryToken = () =>
         document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? "";
 
@@ -39,12 +48,12 @@
         if (response.status === 403 && data.confirm) {
             // Step-up: confirm it's you, then come back.
             location.assign(data.confirm);
-            throw new Error("Confirm it's you to continue.");
+            throw new Error(text("confirmNeeded", "Confirm it's you to continue."));
         }
         if (!response.ok) {
             throw new Error(data.error ?? (response.status === 429
-                ? "Too many attempts. Wait a minute and try again."
-                : "Something went wrong. Try again."));
+                ? text("tooMany", "Too many attempts. Wait a minute and try again.")
+                : text("wentWrong", "Something went wrong. Try again.")));
         }
         return data;
     }
@@ -150,10 +159,10 @@
             // NotAllowedError covers both "cancelled" and "timed out": the browser will not
             // say which, deliberately.
             report(button, error?.name === "NotAllowedError"
-                ? "The passkey request was cancelled or timed out."
+                ? text("cancelled", "The passkey request was cancelled or timed out.")
                 : error?.name === "InvalidStateError"
-                    ? "This device already has a passkey for your account."
-                    : error?.message ?? "Something went wrong. Try again.");
+                    ? text("alreadyOnDevice", "This device already has a passkey for your account.")
+                    : error?.message ?? text("wentWrong", "Something went wrong. Try again."));
         } finally {
             button.disabled = false;
         }

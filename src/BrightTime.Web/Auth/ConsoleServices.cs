@@ -28,6 +28,7 @@ public static class ConsoleServices
     public const string ReviewPolicy = "console.review";
     public const string VetPolicy = "console.vet";
     public const string AuditPolicy = "console.audit";
+    public const string WordingPolicy = "console.wording";
 
     private const string AuthDataSourceKey = "auth";
 
@@ -73,6 +74,7 @@ public static class ConsoleServices
         services.AddAuthorizationBuilder()
             .AddPolicy(ReviewPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Listings.Review)))
             .AddPolicy(VetPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Organisations.Vet)))
+            .AddPolicy(WordingPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
             .AddPolicy(AuditPolicy, p => p.RequireAuthenticatedUser()
                 .RequireRole(BrightTimeRoles.TenantWideAudit)
                 .AddRequirements(new PermissionRequirement(Permissions.Audit.Read)))

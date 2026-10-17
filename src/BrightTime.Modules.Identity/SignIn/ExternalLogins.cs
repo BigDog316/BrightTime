@@ -79,7 +79,8 @@ public sealed class ExternalLogins(NpgsqlDataSource authDataSource, IClock clock
             existing.Parameters.Add(new NpgsqlParameter("issuer", issuer));
             if (await existing.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is > 0L)
             {
-                return Error.Conflict("external.already_connected", $"Your account is already connected to {displayName}. Disconnect it first to connect a different one.");
+                return Error.Conflict("external.already_connected", $"Your account is already connected to {displayName}. Disconnect it first to connect a different one.",
+                    new Dictionary<string, object> { ["provider"] = displayName });
             }
         }
 
@@ -100,7 +101,8 @@ public sealed class ExternalLogins(NpgsqlDataSource authDataSource, IClock clock
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             // Connected to some other account, possibly in another tenant; say no more than that.
-            return Error.Conflict("external.in_use", $"That {displayName} account is already connected to a different BrightTime account.");
+            return Error.Conflict("external.in_use", $"That {displayName} account is already connected to a different BrightTime account.",
+                new Dictionary<string, object> { ["provider"] = displayName });
         }
 
         await tx.CommitAsync(cancellationToken).ConfigureAwait(false);

@@ -48,4 +48,33 @@ public sealed class LocaleTests
             locale.ToCulture().ShouldNotBeNull();
         }
     }
+
+    [Fact]
+    public void Haitian_creole_dates_have_kreyol_names_and_french_conventions()
+    {
+        System.Globalization.CultureInfo ht = Locale.HaitianCreole.ToCulture();
+        DateTime saturday = new(2026, 10, 17, 15, 30, 0);
+
+        saturday.ToString(Locale.HaitianCreole.Dates.DayLong, ht).ShouldBe("samdi 17 oktòb");
+        saturday.ToString("t", ht).ShouldBe("15:30");
+        1234.5m.ToString("N1", ht).ShouldEndWith(",5");
+    }
+
+    [Theory]
+    [InlineData("en", "Saturday, October 17")]
+    [InlineData("es", "sábado, 17 de octubre")]
+    [InlineData("zh-Hans", "10月17日星期六")]
+    public void Each_locale_writes_a_day_in_its_own_order(string code, string expected)
+    {
+        Locale.TryFromCode(code, out Locale locale).ShouldBeTrue();
+        new DateTime(2026, 10, 17).ToString(locale.Dates.DayLong, locale.ToCulture()).ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData("fr-FR", false)]
+    [InlineData("zh-TW", true)]
+    [InlineData("es-MX", true)]
+    public void Resolving_says_when_nothing_matched(string tag, bool matched) =>
+        Locale.TryResolve(tag, out _).ShouldBe(matched);
 }
+

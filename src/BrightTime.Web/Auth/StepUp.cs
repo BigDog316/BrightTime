@@ -7,6 +7,7 @@ using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
 using BrightTime.Web.Auditing;
+using BrightTime.Web.Localisation;
 using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -75,7 +76,7 @@ public static class StepUp
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        endpoints.MapPost(PasskeyOptionsPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant) =>
+        endpoints.MapPost(PasskeyOptionsPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, Text text) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false) || http.User.GetUserId() is not { } user)
             {
@@ -85,7 +86,7 @@ public static class StepUp
             AssertionOptions options = await passkeys.BeginConfirmAsync(tenant.TenantId, new UserId(user), http.RequestAborted).ConfigureAwait(false);
             if (options.AllowCredentials.Count == 0)
             {
-                return Results.BadRequest(new { error = "This account has no passkeys." });
+                return Results.BadRequest(new { error = text["account.passkey.none_on_account"] });
             }
 
             http.Response.Cookies.Append(StateCookie, Protector(http, user).Protect(options.ToJson(), TimeSpan.FromMinutes(5)), new CookieOptions
@@ -99,7 +100,7 @@ public static class StepUp
             return Results.Content(options.ToJson(), "application/json");
         }).RequireAuthorization();
 
-        endpoints.MapPost(PasskeyPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, AuditTrail audit) =>
+        endpoints.MapPost(PasskeyPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, AuditTrail audit, Text text) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false) || http.User.GetUserId() is not { } user)
             {
@@ -120,7 +121,7 @@ public static class StepUp
             (AuthenticatorAssertionRawResponse? response, string? returnUrl) = await ReadAsync(http).ConfigureAwait(false);
             if (remembered is null || response is null)
             {
-                return Results.BadRequest(new { error = "That request has expired. Try again." });
+                return Results.BadRequest(new { error = text["account.passkey.expired_sign_in"] });
             }
 
             UserId? proved = await passkeys.CompleteSignInAsync(tenant.TenantId, AssertionOptions.FromJson(remembered), response, http.RequestAborted).ConfigureAwait(false);
@@ -129,7 +130,7 @@ public static class StepUp
             if (proved?.Value != user || !await ReissueAsync(http, AuthenticationMethods.Passkey).ConfigureAwait(false))
             {
                 audit.Record(AuthAudit.Refused(AuthAudit.StepUp, new UserId(user), "passkey_rejected", AuthenticationMethods.Passkey));
-                return Results.BadRequest(new { error = "That passkey didn't confirm it's you." });
+                return Results.BadRequest(new { error = text["account.confirm.passkey_failed"] });
             }
 
             audit.Record(AuthAudit.Allowed(AuthAudit.StepUp, new UserId(user), AuthenticationMethods.Passkey));
@@ -220,7 +221,7 @@ public sealed class StepUpResultHandler : IAuthorizationMiddlewareResultHandler
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsJsonAsync(
-                new { error = "Confirm it's you to continue.", confirm = StepUp.ConfirmPath(from) }).ConfigureAwait(false);
+                new { error = context.RequestServices.GetRequiredService<Text>()["account.confirm.needed"], confirm = StepUp.ConfirmPath(from) }).ConfigureAwait(false);
             return;
         }
 

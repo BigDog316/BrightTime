@@ -10,6 +10,7 @@ using BrightTime.Modules.Opportunities.Search;
 using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 using BrightTime.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,13 +32,13 @@ public sealed record EditableListing(
 }
 
 /// <summary>What a save did: the listing's id, or why nothing was written.</summary>
-public sealed record SaveOutcome(Guid? ListingId, IReadOnlyDictionary<string, string[]> Errors, string? Problem)
+public sealed record SaveOutcome(Guid? ListingId, IReadOnlyDictionary<string, Phrase[]> Errors, Phrase? Problem)
 {
     public bool Saved => ListingId is not null && Errors.Count == 0 && Problem is null;
 
-    internal static SaveOutcome Invalid(IReadOnlyDictionary<string, string[]> errors) => new(null, errors, null);
+    internal static SaveOutcome Invalid(IReadOnlyDictionary<string, Phrase[]> errors) => new(null, errors, null);
 
-    internal static SaveOutcome Refused(string problem) => new(null, new Dictionary<string, string[]>(), problem);
+    internal static SaveOutcome Refused(Phrase problem) => new(null, new Dictionary<string, Phrase[]>(), problem);
 }
 
 /// <summary>One row of a provider's listing list, or of the review queue.</summary>
@@ -170,13 +171,13 @@ public sealed class ListingEditor(
     {
         ArgumentNullException.ThrowIfNull(form);
 
-        (ParsedListing? parsed, IReadOnlyDictionary<string, string[]> errors) = ListingFormParser.Parse(form);
+        (ParsedListing? parsed, IReadOnlyDictionary<string, Phrase[]> errors) = ListingFormParser.Parse(form);
         if (parsed is null)
         {
             return SaveOutcome.Invalid(errors);
         }
 
-        Dictionary<string, string[]> references = await CheckReferencesAsync(organisation, parsed, cancellationToken).ConfigureAwait(false);
+        Dictionary<string, Phrase[]> references = await CheckReferencesAsync(organisation, parsed, cancellationToken).ConfigureAwait(false);
         if (references.Count > 0)
         {
             return SaveOutcome.Invalid(references);
@@ -193,21 +194,21 @@ public sealed class ListingEditor(
                     ListingRecord? existing = await db.Listings.FirstOrDefaultAsync(l => l.Id == id, ct).ConfigureAwait(false);
                     if (existing is null || existing.OrgId != organisation.Value)
                     {
-                        return SaveOutcome.Refused("That listing does not belong to this organisation.");
+                        return SaveOutcome.Refused(Phrase.Of("editor.refused.not_this_organisation"));
                     }
 
                     ListingStatus status = ParseStatus(existing.Status);
                     if (!IsEditable(status))
                     {
                         return SaveOutcome.Refused(status == ListingStatus.PendingReview
-                            ? "This listing is waiting for review. Withdraw it from review to edit it."
-                            : $"A listing that is {status.ToDbValue().Replace('_', ' ')} cannot be edited.");
+                            ? Phrase.Of("editor.refused.pending_review")
+                            : Phrase.Of("editor.refused.not_editable", ("status", ListingLifecycle.StatusPhrase(status))));
                     }
 
                     // Optimistic concurrency on xmin: the save fails if the row moved on.
                     if (!uint.TryParse(form.Version, NumberStyles.None, CultureInfo.InvariantCulture, out uint version))
                     {
-                        return SaveOutcome.Refused("The form is missing its version. Reload the listing and try again.");
+                        return SaveOutcome.Refused(Phrase.Of("editor.refused.missing_version"));
                     }
 
                     db.Entry(existing).Property<uint>("xmin").OriginalValue = version;
@@ -245,14 +246,12 @@ public sealed class ListingEditor(
                     Detail = new Dictionary<string, string> { ["status"] = listing.Status },
                 }, ct).ConfigureAwait(false);
 
-                return new SaveOutcome(listing.Id, new Dictionary<string, string[]>(), null);
+                return new SaveOutcome(listing.Id, new Dictionary<string, Phrase[]>(), null);
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
         {
-            return SaveOutcome.Refused(
-                "Someone else saved this listing after you opened it, so your changes were not saved. " +
-                "Reload it to see theirs, then make your changes again.");
+            return SaveOutcome.Refused(Phrase.Of("editor.refused.concurrent_save"));
         }
     }
 
@@ -424,16 +423,16 @@ public sealed class ListingEditor(
             : ListingFormParser.Preview(parsed, Zone, clock.TodayIn(TimeZoneInfo.FindSystemTimeZoneById(Zone)), count);
     }
 
-    private async Task<Dictionary<string, string[]>> CheckReferencesAsync(OrganisationId organisation, ParsedListing parsed, CancellationToken ct)
+    private async Task<Dictionary<string, Phrase[]>> CheckReferencesAsync(OrganisationId organisation, ParsedListing parsed, CancellationToken ct)
     {
-        Dictionary<string, string[]> errors = new(StringComparer.Ordinal);
+        Dictionary<string, Phrase[]> errors = new(StringComparer.Ordinal);
 
         if (parsed.SiteIds.Count > 0)
         {
             IReadOnlyList<SiteSummary> sites = await directory.GetSitesAsync(parsed.SiteIds, ct).ConfigureAwait(false);
             if (sites.Count != parsed.SiteIds.Count || sites.Any(s => s.OrganisationId != organisation || !s.IsActive))
             {
-                errors[nameof(ListingForm.SiteIds)] = ["Choose from this organisation's active sites."];
+                errors[nameof(ListingForm.SiteIds)] = [Phrase.Of("editor.error.sites_active")];
             }
         }
 
@@ -443,16 +442,16 @@ public sealed class ListingEditor(
 
         if (parsed.TermIds.Any(id => !byId.TryGetValue(id, out TermSummary? t) || t.Vocabulary is not ("category" or "interest")))
         {
-            errors[nameof(ListingForm.TermIds)] = ["Choose categories and interests from the list."];
+            errors[nameof(ListingForm.TermIds)] = [Phrase.Of("editor.error.terms_from_list")];
         }
         else if (!parsed.TermIds.Any(id => byId[id].Vocabulary == "category"))
         {
-            errors[nameof(ListingForm.TermIds)] = ["Choose at least one category, so families can find this by topic."];
+            errors[nameof(ListingForm.TermIds)] = [Phrase.Of("editor.error.categories")];
         }
 
         if (parsed.AccommodationIds.Any(id => !byId.TryGetValue(id, out TermSummary? t) || t.Vocabulary != "accommodation"))
         {
-            errors[nameof(ListingForm.AccommodationIds)] = ["Choose accommodations from the list."];
+            errors[nameof(ListingForm.AccommodationIds)] = [Phrase.Of("editor.error.accommodations_from_list")];
         }
 
         return errors;

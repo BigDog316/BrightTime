@@ -1,6 +1,7 @@
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Domain;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Tests;
 
@@ -19,7 +20,7 @@ public sealed class ListingValidatorTests
         SiteCount = 1,
     };
 
-    private static IReadOnlyDictionary<string, string[]> FieldErrors(ListingDraft draft)
+    private static IReadOnlyDictionary<string, Phrase[]> FieldErrors(ListingDraft draft)
     {
         Result result = ListingValidator.Validate(draft);
         result.IsSuccess.ShouldBeFalse();
@@ -33,7 +34,7 @@ public sealed class ListingValidatorTests
     [Fact]
     public void A_title_and_summary_are_required()
     {
-        IReadOnlyDictionary<string, string[]> errors = FieldErrors(Valid() with { Title = "  ", Summary = null });
+        IReadOnlyDictionary<string, Phrase[]> errors = FieldErrors(Valid() with { Title = "  ", Summary = null });
 
         errors.Keys.ShouldContain("title");
         errors.Keys.ShouldContain("summary");

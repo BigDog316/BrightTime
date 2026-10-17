@@ -10,19 +10,19 @@
 @using Microsoft.AspNetCore.Authentication.Cookies
 @inherits ConsoleComponent
 
-<PageTitle>Sign in · BrightTime</PageTitle>
+<PageTitle>@T["account.sign_in.title"] · BrightTime</PageTitle>
 
-<h1>Sign in</h1>
+<h1>@T["account.sign_in.title"]</h1>
 
 @if (!Availability.CanSignIn)
 {
-    <p>@(Availability.HasDatabase ? "Signing in is not available on this site yet." : "This site is running on sample data, which has no accounts.")</p>
+    <p>@T[Availability.HasDatabase ? "account.unavailable" : "account.sample_data"]</p>
 }
 else
 {
     @if (User.Identity?.IsAuthenticated == true && !IsPost)
     {
-        <p class="notice" role="status">You're signed in as @User.Identity.Name. <a href="/provider">Go to your organisations</a>, or sign in as someone else below.</p>
+        <p class="notice" role="status">@T.Format("account.sign_in.already", ("name", Localisation.Text.Name(User.Identity.Name ?? ""))) <a href="/provider">@T["provider.go_to_organisations"]</a></p>
     }
     @if (ExternalMessage is { } externalMessage)
     {
@@ -30,21 +30,21 @@ else
     }
     @if (Reset == "1")
     {
-        <p class="notice success" role="status">Your password has been changed. Sign in with the new one.</p>
+        <p class="notice success" role="status">@T["account.sign_in.password_changed"]</p>
     }
     @if (_failed)
     {
         @* One message for every failure, so it never says whether the email is registered (T21). *@
         <p class="notice error" role="alert" id="sign-in-error">
-            That email and password don't match an account that can sign in. After five wrong tries an account
-            is locked for 15 minutes. You can <a href="/account/forgot">reset your password</a>.
+            @T.Format("account.sign_in.failed", ("tries", BrightTime.Modules.Identity.SignIn.PasswordAccounts.MaxFailedAttempts), ("minutes", (int)BrightTime.Modules.Identity.SignIn.PasswordAccounts.LockoutDuration.TotalMinutes))
+            <a href="/account/forgot">@T["account.sign_in.reset_link"]</a>
         </p>
     }
 
     @if (Providers.Count > 0)
     {
         <section aria-labelledby="external-heading" class="external-providers">
-            <h2 id="external-heading" class="visually-hidden">Sign in with another account</h2>
+            <h2 id="external-heading" class="visually-hidden">@T["account.sign_in.external_heading"]</h2>
             @foreach (var (key, provider) in Providers)
             {
                 <form method="post" action="@BrightTime.Web.Auth.ExternalSignIn.StartPath">
@@ -54,39 +54,39 @@ else
                     {
                         <input type="hidden" name="returnUrl" value="@ReturnUrl" />
                     }
-                    <button type="submit" class="secondary-button">Sign in with @provider.DisplayName</button>
+                    <button type="submit" class="secondary-button">@T.Format("account.sign_in.with_provider", ("provider", Localisation.Text.Name(provider.DisplayName)))</button>
                 </form>
             }
         </section>
     }
 
     <section class="needs-webauthn" aria-labelledby="passkey-heading">
-        <h2 id="passkey-heading" class="visually-hidden">Sign in with a passkey</h2>
+        <h2 id="passkey-heading" class="visually-hidden">@T["account.sign_in.with_passkey"]</h2>
         <p class="notice error" id="passkey-error" role="alert" tabindex="-1" hidden></p>
-        <button type="button" data-passkey-action="sign-in" data-return-url="@ReturnUrl">Sign in with a passkey</button>
-        <p class="or-divider">Or use your email and password:</p>
+        <button type="button" data-passkey-action="sign-in" data-return-url="@ReturnUrl">@T["account.sign_in.with_passkey"]</button>
+        <p class="or-divider">@T["account.sign_in.or_password"]</p>
     </section>
 
     <form method="post" class="editor sign-in" @formname="sign-in" @onsubmit="SignInAsync">
         <AntiforgeryToken />
         <div class="field">
-            <label for="email">Email</label>
+            <label for="email">@T["account.field.email"]</label>
             <input id="email" name="email" type="email" autocomplete="username" required value="@_email"
                    aria-describedby="@(_failed ? "sign-in-error" : null)" />
         </div>
         <div class="field">
-            <label for="password">Password</label>
+            <label for="password">@T["account.field.password"]</label>
             <input id="password" name="password" type="password" autocomplete="current-password" required />
         </div>
         <div class="actions">
-            <button type="submit">Sign in</button>
-            <a class="secondary" href="/account/forgot">Forgot your password?</a>
+            <button type="submit">@T["account.sign_in.submit"]</button>
+            <a class="secondary" href="/account/forgot">@T["account.sign_in.forgot"]</a>
         </div>
     </form>
 
     @if (Availability.DevelopmentSignIn)
     {
-        <p class="note">Development site: you can also <a href="@DevHref">sign in as a seeded account</a>.</p>
+        <p class="note">@T["dev.sign_in.note"] <a href="@DevHref">@T["dev.sign_in.link"]</a></p>
     }
 }
 
@@ -106,14 +106,14 @@ else
     private string? ExternalMessage => External switch
     {
         // Says nothing about whether a BrightTime account exists for that person (D17, T21).
-        "unconnected" => $"That {ProviderName} account isn't connected to a BrightTime account here. Sign in another way, then connect it from Sign-in and security.",
-        "cancelled" => "Signing in with the other account was cancelled.",
-        "failed" => "Signing in with the other account didn't work. Try again, or sign in another way.",
+        "unconnected" => T.Format("account.external.unconnected", ("provider", Localisation.Text.Name(ProviderName))),
+        "cancelled" => T["account.external.cancelled"],
+        "failed" => T["account.external.failed"],
         _ => null,
     };
 
     private string ProviderName =>
-        ExternalProvider is not null && Providers.TryGetValue(ExternalProvider, out ExternalProviderOptions? p) ? p.DisplayName : "external";
+        ExternalProvider is not null && Providers.TryGetValue(ExternalProvider, out ExternalProviderOptions? p) ? p.DisplayName : T["account.external.other_provider"];
 
     private string? _email;
     private bool _failed;

@@ -83,7 +83,10 @@ create table resource_override (
   value     text not null,
   updated_at timestamptz not null default now(),
   updated_by uuid,
-  constraint pk_resource_override primary key (tenant_id, locale, key)
+  constraint pk_resource_override primary key (tenant_id, locale, key),
+  constraint ck_resource_override_locale check (locale ~ '^[a-z]{2}(-[A-Za-z0-9]{2,8})*$'),
+  constraint ck_resource_override_key check (key ~ '^[a-z0-9_]+(\.[a-z0-9_]+)+$'),
+  constraint ck_resource_override_value check (length(value) between 1 and 4000)
 );
 
 -- ---------------------------------------------------------------------

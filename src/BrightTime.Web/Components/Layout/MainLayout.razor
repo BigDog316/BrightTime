@@ -1,27 +1,50 @@
 @inherits LayoutComponentBase
 @using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Tenancy
+@inject NavigationManager Navigation
+@inject SiteContext Site
 
-<a class="skip-link" href="#main">Skip to main content</a>
+<a class="skip-link" href="#main">@T["site.skip_to_content"]</a>
 
 <header class="site-header">
     <a class="brand" href="/search">BrightTime</a>
     @if (HttpContext?.User is { Identity.IsAuthenticated: true } user)
     {
-        <nav aria-label="Console">
-            <a href="/provider">Your organisations</a>
+        <nav aria-label="@T["site.nav.console"]">
+            <a href="/provider">@T["site.nav.organisations"]</a>
             @if (user.HasPermission(Permissions.Listings.Review))
             {
-                <a href="/organiser/review">Review queue</a>
+                <a href="/organiser/review">@T["site.nav.review"]</a>
             }
             @if (user.HasPermission(Permissions.Audit.Read) && BrightTimeRoles.TenantWideAudit.Any(user.IsInRole))
             {
-                <a href="/organiser/audit">Audit log</a>
+                <a href="/organiser/audit">@T["site.nav.audit"]</a>
             }
-            <a href="/account/security" class="signed-in-as" aria-label="Sign-in and security for @user.Identity!.Name">@user.Identity!.Name</a>
+            @if (user.HasPermission(Permissions.Tenant.Settings))
+            {
+                <a href="/organiser/wording">@T["site.nav.wording"]</a>
+            }
+            <a href="/account/security" class="signed-in-as" aria-label="@T.Format("site.nav.security_for", ("name", user.Identity!.Name ?? ""))">@user.Identity!.Name</a>
             <form method="post" action="/sign-out" class="inline-form">
                 <AntiforgeryToken />
-                <button type="submit" class="link-button">Sign out</button>
+                <button type="submit" class="link-button">@T["site.nav.sign_out"]</button>
             </form>
+        </nav>
+    }
+    @if (Languages.Count > 1)
+    {
+        @* Links, not a select: they work without JavaScript, and each is named in its own language. *@
+        <nav aria-label="@T["site.language"]" class="language-picker">
+            <ul>
+                @foreach (Locale locale in Languages)
+                {
+                    <li>
+                        <a href="@LanguageHref(locale)" lang="@locale.Code" hreflang="@locale.Code" dir="@locale.Direction"
+                           aria-current="@(locale == T.Locale ? "true" : null)">@locale.NativeName</a>
+                    </li>
+                }
+            </ul>
         </nav>
     }
 </header>
@@ -31,11 +54,17 @@
 </main>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    @T["site.error.unhandled"]
+    <a href="." class="reload">@T["site.error.reload"]</a>
+    <span class="dismiss" role="button" aria-label="@T["site.error.dismiss"]">🗙</span>
 </div>
 
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private IReadOnlyList<Locale> Languages => Site.Site?.EnabledLocales ?? Locale.Supported;
+
+    /// <summary>This page in another language: the same path and query, with lang set.</summary>
+    private string LanguageHref(Locale locale) =>
+        new Uri(Navigation.GetUriWithQueryParameter(LocaleSelection.QueryParameter, locale.Code)).PathAndQuery;
 }

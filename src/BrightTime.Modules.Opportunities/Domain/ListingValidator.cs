@@ -1,6 +1,7 @@
 using System.Globalization;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 
 namespace BrightTime.Modules.Opportunities.Domain;
 
@@ -25,53 +26,53 @@ public static class ListingValidator
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        Dictionary<string, string[]> errors = new(StringComparer.Ordinal);
+        Dictionary<string, Phrase[]> errors = new(StringComparer.Ordinal);
 
-        void Add(string field, string message)
+        void Add(string field, Phrase message)
         {
-            errors[field] = errors.TryGetValue(field, out string[]? existing)
+            errors[field] = errors.TryGetValue(field, out Phrase[]? existing)
                 ? [.. existing, message]
                 : [message];
         }
 
         if (string.IsNullOrWhiteSpace(draft.Title))
         {
-            Add("title", "A listing needs a title.");
+            Add("title", Phrase.Of("editor.error.title_required"));
         }
 
         if (string.IsNullOrWhiteSpace(draft.Summary))
         {
-            Add("summary", "A listing needs a one-sentence summary.");
+            Add("summary", Phrase.Of("editor.error.summary_required"));
         }
 
         if (draft.AgeMin is { } ageMin && (ageMin < 0 || ageMin > MaxAge))
         {
-            Add("ageMin", $"Age must be between 0 and {MaxAge}.");
+            Add("ageMin", Phrase.Of("editor.error.age_range", ("max", MaxAge)));
         }
 
         if (draft.AgeMax is { } ageMax && (ageMax < 0 || ageMax > MaxAge))
         {
-            Add("ageMax", $"Age must be between 0 and {MaxAge}.");
+            Add("ageMax", Phrase.Of("editor.error.age_range", ("max", MaxAge)));
         }
 
         if (draft.AgeMin is { } lo && draft.AgeMax is { } hi && lo > hi)
         {
-            Add("ageMax", "The maximum age cannot be below the minimum.");
+            Add("ageMax", Phrase.Of("editor.error.age_order"));
         }
 
         if (draft.GradeMin is { } gMin && (gMin < MinGrade || gMin > MaxGrade))
         {
-            Add("gradeMin", "Grade must be between pre-K (-1) and 12.");
+            Add("gradeMin", Phrase.Of("editor.error.grade_range"));
         }
 
         if (draft.GradeMax is { } gMax && (gMax < MinGrade || gMax > MaxGrade))
         {
-            Add("gradeMax", "Grade must be between pre-K (-1) and 12.");
+            Add("gradeMax", Phrase.Of("editor.error.grade_range"));
         }
 
         if (draft.GradeMin is { } gLo && draft.GradeMax is { } gHi && gLo > gHi)
         {
-            Add("gradeMax", "The highest grade cannot be below the lowest.");
+            Add("gradeMax", Phrase.Of("editor.error.grade_order"));
         }
 
         ValidateCost(draft, Add);
@@ -79,23 +80,23 @@ public static class ListingValidator
 
         if (draft.Modality != Modality.InPerson && !IsHttpUrl(draft.VirtualUrl))
         {
-            Add("virtualUrl", "A virtual or hybrid listing needs a web link to join.");
+            Add("virtualUrl", Phrase.Of("editor.error.virtual_url"));
         }
 
         if (draft.Kind == ListingKind.Job && draft.CostModel is not (CostModel.Free or CostModel.StipendPaid))
         {
-            Add("costModel", "A job is either unpaid or paid through a stipend; choose one of those.");
+            Add("costModel", Phrase.Of("editor.error.job_cost"));
         }
 
         if (draft.Kind == ListingKind.Resource && draft.RegistrationMode != RegistrationMode.None)
         {
-            Add("registrationMode", "A resource is drop-in: it has no registration.");
+            Add("registrationMode", Phrase.Of("editor.error.resource_registration"));
         }
 
         bool hasPlace = draft.SiteCount > 0 || draft.Modality != Modality.InPerson;
         if (!hasPlace)
         {
-            Add("sites", "An in-person listing needs at least one site.");
+            Add("sites", Phrase.Of("editor.error.sites_required"));
         }
 
         return errors.Count == 0
@@ -103,14 +104,14 @@ public static class ListingValidator
             : Error.Validation("listing.invalid", "Some fields need attention.", errors.AsReadOnly());
     }
 
-    private static void ValidateCost(ListingDraft draft, Action<string, string> add)
+    private static void ValidateCost(ListingDraft draft, Action<string, Phrase> add)
     {
         switch (draft.CostModel)
         {
             case CostModel.Free:
                 if (draft.CostCentsMin is not null || draft.CostCentsMax is not null)
                 {
-                    add("costCentsMin", "A free listing has no price.");
+                    add("costCentsMin", Phrase.Of("editor.error.free_has_price"));
                 }
 
                 break;
@@ -118,11 +119,11 @@ public static class ListingValidator
             case CostModel.Fixed:
                 if (draft.CostCentsMin is not { } fixedAmount || draft.CostCentsMax is not null)
                 {
-                    add("costCentsMin", "A fixed-price listing has one price.");
+                    add("costCentsMin", Phrase.Of("editor.error.fixed_one_price"));
                 }
                 else if (fixedAmount < 0)
                 {
-                    add("costCentsMin", "A price cannot be negative.");
+                    add("costCentsMin", Phrase.Of("editor.error.price_negative"));
                 }
 
                 break;
@@ -130,32 +131,32 @@ public static class ListingValidator
             case CostModel.SlidingScale:
                 if (draft.CostCentsMin is not { } low || draft.CostCentsMax is not { } high)
                 {
-                    add("costCentsMin", "A sliding-scale listing needs both a lowest and a highest price.");
+                    add("costCentsMin", Phrase.Of("editor.error.sliding_both"));
                 }
                 else if (high < low || low < 0)
                 {
-                    add("costCentsMax", "The highest price must be at least the lowest, and both must be non-negative.");
+                    add("costCentsMax", Phrase.Of("editor.error.sliding_order"));
                 }
 
                 break;
         }
     }
 
-    private static void ValidateRegistration(ListingDraft draft, Action<string, string> add)
+    private static void ValidateRegistration(ListingDraft draft, Action<string, Phrase> add)
     {
         if (draft.RegistrationMode == RegistrationMode.External && !IsHttpUrl(draft.ExternalUrl))
         {
-            add("externalUrl", "External registration needs a web link to the provider's registration page.");
+            add("externalUrl", Phrase.Of("editor.error.external_url"));
         }
 
         if (draft.RegistrationMode == RegistrationMode.Builtin && draft.CapacityTotal is not > 0)
         {
-            add("capacityTotal", "Built-in registration needs a capacity greater than zero.");
+            add("capacityTotal", Phrase.Of("editor.error.builtin_capacity"));
         }
 
         if (draft.CapacityTotal is { } capacity && capacity <= 0)
         {
-            add("capacityTotal", "Capacity must be greater than zero.");
+            add("capacityTotal", Phrase.Of("editor.error.capacity_positive"));
         }
     }
 

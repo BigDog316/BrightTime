@@ -5,6 +5,7 @@ using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Text;
 using BrightTime.SharedKernel.Time;
 using Npgsql;
 
@@ -212,7 +213,7 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
 
         if (PasswordPolicy.Check(newPassword, email) is { Count: > 0 } problems)
         {
-            return Error.Validation("password.weak", problems[0]);
+            return Error.Validation("password.weak", problems[0].Key, new Dictionary<string, Phrase[]> { ["password"] = [.. problems] });
         }
 
         // Proving control of the inbox also confirms the address.

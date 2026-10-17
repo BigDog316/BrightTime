@@ -6,17 +6,17 @@
 @attribute [Authorize]
 @inherits ConsoleComponent
 
-<PageTitle>Your organisations · BrightTime</PageTitle>
+<PageTitle>@T["site.nav.organisations"] · BrightTime</PageTitle>
 
-<h1>Your organisations</h1>
+<h1>@T["site.nav.organisations"]</h1>
 
 @if (!Availability.IsAvailable)
 {
-    <p>The provider console needs the database, which this site is not using.</p>
+    <p>@T["provider.no_database"]</p>
 }
 else if (_organisations.Count == 0)
 {
-    <p>Your account is not a member of any organisation yet. Ask an organisation's owner to invite you.</p>
+    <p>@T["provider.no_organisations"]</p>
 }
 else
 {
@@ -25,7 +25,7 @@ else
         {
             <li>
                 <a href="/provider/orgs/@id.Value">@name</a>
-                <span class="note">Your role: @role · Organisation status: @status.ToDbValue().Replace('_', ' ')</span>
+                <span class="note">@T.Format("provider.membership", ("role", T["organisation.role." + role]), ("status", T[BrightTime.Modules.Directory.Vetting.OrganisationVetting.StatusPhrase(status)]))</span>
             </li>
         }
     </ul>
@@ -33,7 +33,7 @@ else
 
 @if (User.HasPermission(Permissions.Listings.Review))
 {
-    <p><a href="/organiser/review">Go to the review queue</a></p>
+    <p><a href="/organiser/review">@T["provider.go_to_review"]</a></p>
 }
 
 @code {

@@ -7,13 +7,13 @@
 @inject IListingFinder Finder
 @inject ITenantContext Tenant
 
-<PageTitle>Find something to do · BrightTime</PageTitle>
+<PageTitle>@T["finder.title"] · BrightTime</PageTitle>
 
-<h1>Find something to do</h1>
+<h1>@T["finder.title"]</h1>
 
 @* The form is a plain GET: it works with JavaScript off, and every filter lives in the URL. *@
 <form method="get" action="/search" role="search" class="finder-form" aria-labelledby="filters-heading">
-    <h2 id="filters-heading" class="visually-hidden">Filters</h2>
+    <h2 id="filters-heading" class="visually-hidden">@T["finder.filters"]</h2>
 
     @if (Lang is not null)
     {
@@ -21,33 +21,33 @@
     }
 
     <div class="field">
-        <label for="q">What are you looking for?</label>
+        <label for="q">@T["finder.field.text"]</label>
         <input id="q" name="q" type="search" maxlength="200" value="@Q"
                aria-invalid="@InvalidMarker("q")" aria-describedby="@DescribedBy("q")" />
         @FieldError("q")
     </div>
 
     <fieldset class="field">
-        <legend>Kind of listing</legend>
-        @foreach (var (value, label) in KindOptions)
+        <legend>@T["finder.field.kind"]</legend>
+        @foreach (string value in KindOptions)
         {
             <label class="check">
                 <input type="checkbox" name="kind" value="@value" checked="@IsKindChecked(value)" />
-                @label
+                @T["finder.kind_filter." + value]
             </label>
         }
     </fieldset>
 
     <div class="field-row">
         <div class="field">
-            <label for="age">Age</label>
+            <label for="age">@T["finder.field.age"]</label>
             <input id="age" name="age" type="number" min="0" max="30" inputmode="numeric" value="@Age"
                    aria-invalid="@InvalidMarker("age")" aria-describedby="@DescribedBy("age")" />
             @FieldError("age")
         </div>
 
         <div class="field">
-            <label for="maxDollars">Highest price (dollars)</label>
+            <label for="maxDollars">@T["finder.field.max_price"]</label>
             <input id="maxDollars" name="maxDollars" type="number" min="0" max="100000" inputmode="numeric" value="@MaxDollars"
                    aria-invalid="@InvalidMarker("maxDollars")" aria-describedby="@DescribedBy("maxDollars")" />
             @FieldError("maxDollars")
@@ -56,34 +56,34 @@
 
     <label class="check">
         <input type="checkbox" name="free" value="1" checked="@IsFreeChecked" />
-        Free only
+        @T["finder.field.free"]
     </label>
 
     <div class="field">
-        <label for="sort">Sort by</label>
+        <label for="sort">@T["finder.field.sort"]</label>
         <select id="sort" name="sort" aria-invalid="@InvalidMarker("sort")" aria-describedby="@DescribedBy("sort")">
-            @foreach (var (value, label) in SortOptions)
+            @foreach (string value in SortOptions)
             {
-                <option value="@value" selected="@(Sort == value)">@label</option>
+                <option value="@value" selected="@(Sort == value)">@T["finder.sort." + value]</option>
             }
         </select>
         @FieldError("sort")
     </div>
 
     <div class="actions">
-        <button type="submit">Search</button>
-        <a href="@ClearHref" class="secondary">Clear filters</a>
+        <button type="submit">@T["finder.search"]</button>
+        <a href="@ClearHref" class="secondary">@T["finder.clear"]</a>
     </div>
 </form>
 
 @if (Parse is { FieldErrors.Count: > 0 } errored)
 {
     <section class="error-summary" aria-labelledby="error-summary-heading">
-        <h2 id="error-summary-heading">Check these fields</h2>
+        <h2 id="error-summary-heading">@T["form.check_fields"]</h2>
         <ul>
             @foreach (var (field, message) in errored.FieldErrors)
             {
-                <li><a href="#@field">@message</a></li>
+                <li><a href="#@field">@T[message]</a></li>
             }
         </ul>
     </section>
@@ -92,9 +92,9 @@
 @if (Parse is { Notices.Count: > 0 } notices)
 {
     <ul class="notices">
-        @foreach (string notice in notices.Notices)
+        @foreach (BrightTime.SharedKernel.Text.Phrase notice in notices.Notices)
         {
-            <li>@notice</li>
+            <li>@T[notice]</li>
         }
     </ul>
 }
@@ -106,7 +106,7 @@
 
         @if (_page.Items.Count == 0)
         {
-            <p class="empty">No listings match these filters. Try removing one.</p>
+            <p class="empty">@T["finder.results.none"]</p>
         }
         else
         {
@@ -123,16 +123,16 @@
                                 @if (item.NextStartAt is { } start)
                                 {
                                     <span aria-hidden="true">·</span>
-                                    <time datetime="@start.ToString("O")">Next: @LocalStart(start)</time>
+                                    <time datetime="@start.ToString("O")">@T.Format("finder.results.next", ("when", T.DayTime(start)))</time>
                                 }
                             </p>
                             <p dir="auto">@item.Summary</p>
                             @if (item.Reasons.Count > 0)
                             {
-                                <ul class="reasons" aria-label="Why this was shown">
-                                    @foreach (string reason in item.Reasons)
+                                <ul class="reasons" aria-label="@T["finder.results.why"]">
+                                    @foreach (BrightTime.SharedKernel.Text.Phrase reason in item.Reasons)
                                     {
-                                        <li>@reason</li>
+                                        <li>@T[reason]</li>
                                     }
                                 </ul>
                             }
@@ -143,8 +143,8 @@
 
             @if (_page.NextCursor is { } cursor)
             {
-                <nav class="pager" aria-label="Pages">
-                    <a rel="next" href="@NextHref(cursor)">Show more results</a>
+                <nav class="pager" aria-label="@T["finder.results.pages"]">
+                    <a rel="next" href="@NextHref(cursor)">@T["finder.results.more"]</a>
                 </nav>
             }
         }
@@ -172,21 +172,9 @@
 
     private FinderPage _page = FinderPage.Empty;
 
-    private static readonly (string Value, string Label)[] KindOptions =
-    [
-        ("program", "Programs"),
-        ("event", "Events"),
-        ("job", "Jobs and internships"),
-        ("resource", "Drop-in resources"),
-    ];
+    private static readonly string[] KindOptions = ["program", "event", "job", "resource"];
 
-    private static readonly (string Value, string Label)[] SortOptions =
-    [
-        ("relevance", "Best match"),
-        ("soonest", "Starts soonest"),
-        ("nearest", "Nearest"),
-        ("newest", "Newest"),
-    ];
+    private static readonly string[] SortOptions = ["relevance", "soonest", "nearest", "newest"];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -284,7 +272,7 @@
             builder.OpenElement(0, "p");
             builder.AddAttribute(1, "class", "field-error");
             builder.AddAttribute(2, "id", $"err-{field}");
-            builder.AddContent(3, Parse!.FieldErrors[field]);
+            builder.AddContent(3, T[Parse!.FieldErrors[field]]);
             builder.CloseElement();
         })
         : null;
@@ -293,38 +281,20 @@
     {
         get
         {
-            int count = _page.Items.Count;
-            string noun = count == 1 ? "listing" : "listings";
             // "Showing" only when the results are a later page of a longer list. A stale
             // cursor restarts at page one, so the heading must describe what is shown.
             bool isLaterPage = Parse?.Query?.After is not null;
-            return _page.NextCursor is null && !isLaterPage
-                ? $"{count} {noun}"
-                : $"Showing {count} {noun}";
+            return T.Format(_page.NextCursor is null && !isLaterPage ? "finder.results.count" : "finder.results.showing",
+                ("count", _page.Items.Count));
         }
     }
 
-    private string LocalStart(DateTimeOffset start)
-    {
-        TimeZoneInfo zone = ZoneFor(Tenant);
-        DateTimeOffset local = TimeZoneInfo.ConvertTime(start, zone);
-        return local.ToString("ddd, MMM d · h:mm tt", Tenant.Locale.ToCulture());
-    }
-
-    private static TimeZoneInfo ZoneFor(ITenantContext tenant) => tenant.TimeZone;
-
     private string PriceLabel(FinderItem item) =>
         item.IsFree
-            ? "Free"
+            ? T["listing.price.free"]
             : item.CostCents > 0
-                ? $"From {new BrightTime.SharedKernel.Primitives.Money(item.CostCents).Format(Tenant.Locale)}"
-                : "Price varies, see details";
+                ? T.Format("finder.results.price_from", ("price", T.Money(item.CostCents)))
+                : T["finder.results.price_varies"];
 
-    private static string KindLabel(ListingKind kind) => kind switch
-    {
-        ListingKind.Program => "Program",
-        ListingKind.Event => "Event",
-        ListingKind.Job => "Job",
-        _ => "Drop-in resource",
-    };
+    private string KindLabel(ListingKind kind) => T["listing.kind." + kind.ToDbValue()];
 }

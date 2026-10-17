@@ -43,18 +43,18 @@ public sealed class SearchPageTests : IClassFixture<WebApplicationFactory<Progra
     {
         string html = await GetAsync("/search");
 
-        html.ShouldContain("<h3>Robotics club</h3>");
+        html.ShouldContain(">Robotics club</a></h3>");
         html.ShouldContain("<ol class=\"listing-list\">");
     }
 
     [Fact]
     public async Task Each_filter_narrows_the_results()
     {
-        (await GetAsync("/search?q=robotics")).ShouldContain("<h3>Robotics club</h3>");
-        (await GetAsync("/search?q=robotics")).ShouldNotContain("<h3>Youth orchestra</h3>");
+        (await GetAsync("/search?q=robotics")).ShouldContain(">Robotics club</a></h3>");
+        (await GetAsync("/search?q=robotics")).ShouldNotContain(">Youth orchestra</a></h3>");
 
-        (await GetAsync("/search?free=1")).ShouldNotContain("<h3>Youth orchestra</h3>");
-        (await GetAsync("/search?kind=job")).ShouldContain("<h3>Summer camp counsellor (paid)</h3>");
+        (await GetAsync("/search?free=1")).ShouldNotContain(">Youth orchestra</a></h3>");
+        (await GetAsync("/search?kind=job")).ShouldContain(">Summer camp counsellor (paid)</a></h3>");
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class SearchPageTests : IClassFixture<WebApplicationFactory<Progra
         string html = await GetAsync("/search?after=garbage!!");
 
         html.ShouldContain("That page link has expired");
-        html.ShouldContain("<h3>Robotics club</h3>");
+        html.ShouldContain(">Robotics club</a></h3>");
     }
 
     [Fact]

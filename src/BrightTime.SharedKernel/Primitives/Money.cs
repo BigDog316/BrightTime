@@ -54,11 +54,26 @@ public readonly record struct Money(int Cents, string Currency = "USD") : ICompa
         }
     }
 
+    /// <summary>
+    /// The amount in the reader's number style, in this money's currency.
+    /// </summary>
+    /// <remarks>
+    /// Locales are neutral cultures ("es", not "es-US"), and a neutral culture has no
+    /// currency: formatting with it prints the generic sign, "¤120.00". The currency is a
+    /// property of the money, not of the reader's language, so the symbol is set here and
+    /// only the separators and pattern come from the locale.
+    /// </remarks>
     public string Format(Locale locale)
     {
         ArgumentNullException.ThrowIfNull(locale);
-        return (Cents / 100m).ToString("C", locale.ToCulture());
+
+        var format = (NumberFormatInfo)locale.ToCulture().NumberFormat.Clone();
+        format.CurrencySymbol = Symbol(Currency);
+        return (Cents / 100m).ToString("C", format);
     }
+
+    private static string Symbol(string currency) =>
+        string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase) ? "$" : currency.ToUpperInvariant();
 
     public override string ToString() =>
         string.Create(CultureInfo.InvariantCulture, $"{Cents / 100m:0.00} {Currency}");

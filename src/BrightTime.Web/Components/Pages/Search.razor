@@ -115,7 +115,7 @@
                 {
                     <li class="listing">
                         <article>
-                            <h3>@item.Title</h3>
+                            <h3 dir="auto"><a href="@ListingHref(item)">@item.Title</a></h3>
                             <p class="meta">
                                 <span>@KindLabel(item.Kind)</span>
                                 <span aria-hidden="true">·</span>
@@ -126,7 +126,7 @@
                                     <time datetime="@start.ToString("O")">Next: @LocalStart(start)</time>
                                 }
                             </p>
-                            <p>@item.Summary</p>
+                            <p dir="auto">@item.Summary</p>
                             @if (item.Reasons.Count > 0)
                             {
                                 <ul class="reasons" aria-label="Why this was shown">
@@ -235,6 +235,9 @@
 
         return values;
     }
+
+    private string ListingHref(FinderItem item) =>
+        $"/listings/{Uri.EscapeDataString(item.Slug)}" + (Lang is null ? "" : $"?lang={Uri.EscapeDataString(Lang)}");
 
     private string ClearHref => Lang is null ? "/search" : $"/search?lang={Uri.EscapeDataString(Lang)}";
 

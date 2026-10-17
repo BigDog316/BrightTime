@@ -169,7 +169,9 @@ public sealed class DirectoryQueries(DirectoryDbContext db, IClock clock) : IDir
             showAddress ? site.AddressLine2 : null,
             showAddress ? site.Locality : null,
             showAddress ? site.PostalCode : null,
-            site.TransitNote,
+            // A transit note is directions: "bus 9 to Linden Lane" locates a private site as
+            // well as its street line would, so it is withheld with the address.
+            showAddress ? site.TransitNote : null,
             site.IsWheelchairAccessible,
             site.IsActive);
     }

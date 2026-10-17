@@ -235,8 +235,37 @@ convenience under the same two conditions. Seeded accounts have no password unti
 the reset flow.
 
 *Update (passkeys implemented).* A signed-in person adds passkeys at `/account/security` and
-signs in with one from `/sign-in`, through the same factory. External OIDC is the remaining
-piece of this decision.
+signs in with one from `/sign-in`, through the same factory. External OIDC followed; see D17.
+
+### D17 — External sign-in signs in; it never creates or matches accounts (**decided by me, review it**)
+
+Any number of OpenID Connect providers can be configured under `Auth:External:<name>`
+(Google, Microsoft Entra for a district, and so on). Each is an authorization-code flow with
+PKCE. ASP.NET Core's handler checks state, nonce, signature, issuer, audience and lifetime.
+The rules around it:
+
+- **An external account signs in only to the BrightTime account it was connected to.** It
+  is identified by the validated issuer plus subject, the pair the provider promises never
+  to reuse.
+- **Email is never used.** Not to find an account and not to connect one. A provider's email
+  claim can be unverified, or recycled when a domain changes hands. Matching on it would let
+  whoever holds that address at the provider take the account, which is the usual takeover
+  path in external sign-in. A test signs in externally with an existing person's email
+  and shows that nothing connects.
+- **Connecting needs the person signed in already**, from Sign-in and security. They prove
+  both accounts, and the flow is finished only for the session that started it.
+- **No sign-up through a provider.** An unconnected external account creates nothing and is
+  told to sign in another way and connect. Self-registration is its own design (guardian and
+  youth registration with consent is M2).
+- **One BrightTime account per external account per deployment.** That is
+  `pk_app_user_login`, global across tenants, consistent with the one-identity-per-tenant
+  default (Q-level note above). A person who is staff in two tenants connects their Google
+  account in one of them.
+- **Query response mode**, not form_post: the return from the provider is then a top-level
+  GET, so the correlation and nonce cookies stay SameSite=Lax.
+
+Providers are deployment-wide configuration for now. Per-tenant providers, such as each
+district's own Entra, arrive with host-based tenant resolution.
 
 ### D15 — Edits to a published listing go live and are reviewed after (**decided by me, review it**)
 

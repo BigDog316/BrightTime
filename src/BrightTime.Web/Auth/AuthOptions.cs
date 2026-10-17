@@ -32,4 +32,25 @@ public sealed class AuthOptions
 
     /// <summary>Sign-in, forgot-password and reset submissions allowed per client address per minute.</summary>
     public int SignInAttemptsPerMinute { get; set; } = 10;
+
+    /// <summary>
+    /// External OpenID Connect providers, keyed by a short name (a-z, 0-9, hyphen) used in
+    /// their callback path. Decision D17: they sign in to accounts already connected to them,
+    /// and never create or connect one by themselves.
+    /// </summary>
+    public Dictionary<string, ExternalProviderOptions> External { get; init; } = new(StringComparer.Ordinal);
+}
+
+/// <summary>One external OpenID Connect provider.</summary>
+public sealed class ExternalProviderOptions
+{
+    /// <summary>What people see: "Sign in with Google".</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>The issuer's https address; its discovery document is read from here.</summary>
+    public Uri? Authority { get; set; }
+
+    public string ClientId { get; set; } = string.Empty;
+
+    public string? ClientSecret { get; set; }
 }

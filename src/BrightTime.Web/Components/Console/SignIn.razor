@@ -21,6 +21,10 @@ else
     {
         <p class="notice" role="status">You're signed in as @User.Identity.Name. <a href="/provider">Go to your organisations</a>, or sign in as someone else below.</p>
     }
+    @if (ExternalMessage is { } externalMessage)
+    {
+        <p class="notice error" role="alert">@externalMessage</p>
+    }
     @if (Reset == "1")
     {
         <p class="notice success" role="status">Your password has been changed. Sign in with the new one.</p>
@@ -32,6 +36,25 @@ else
             That email and password don't match an account that can sign in. After five wrong tries an account
             is locked for 15 minutes. You can <a href="/account/forgot">reset your password</a>.
         </p>
+    }
+
+    @if (Providers.Count > 0)
+    {
+        <section aria-labelledby="external-heading" class="external-providers">
+            <h2 id="external-heading" class="visually-hidden">Sign in with another account</h2>
+            @foreach (var (key, provider) in Providers)
+            {
+                <form method="post" action="@BrightTime.Web.Auth.ExternalSignIn.StartPath">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="provider" value="@key" />
+                    @if (ReturnUrl is not null)
+                    {
+                        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                    }
+                    <button type="submit" class="secondary-button">Sign in with @provider.DisplayName</button>
+                </form>
+            }
+        </section>
     }
 
     <section class="needs-webauthn" aria-labelledby="passkey-heading">
@@ -68,6 +91,26 @@ else
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
 
     [SupplyParameterFromQuery(Name = "reset")] public string? Reset { get; set; }
+
+    [SupplyParameterFromQuery(Name = "external")] public string? External { get; set; }
+
+    [SupplyParameterFromQuery(Name = "provider")] public string? ExternalProvider { get; set; }
+
+    [Inject] private Microsoft.Extensions.Options.IOptions<AuthOptions> AuthSettings { get; set; } = default!;
+
+    private IReadOnlyDictionary<string, ExternalProviderOptions> Providers => AuthSettings.Value.External;
+
+    private string? ExternalMessage => External switch
+    {
+        // Says nothing about whether a BrightTime account exists for that person (D17, T21).
+        "unconnected" => $"That {ProviderName} account isn't connected to a BrightTime account here. Sign in another way, then connect it from Sign-in and security.",
+        "cancelled" => "Signing in with the other account was cancelled.",
+        "failed" => "Signing in with the other account didn't work. Try again, or sign in another way.",
+        _ => null,
+    };
+
+    private string ProviderName =>
+        ExternalProvider is not null && Providers.TryGetValue(ExternalProvider, out ExternalProviderOptions? p) ? p.DisplayName : "external";
 
     private string? _email;
     private bool _failed;

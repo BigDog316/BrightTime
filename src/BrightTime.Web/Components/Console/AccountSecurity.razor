@@ -73,6 +73,45 @@ else
         <noscript><p class="note">Adding a passkey needs JavaScript, which is off in this browser.</p></noscript>
     </section>
 
+    @if (Providers.Count > 0)
+    {
+        <section aria-labelledby="external-heading">
+            <h2 id="external-heading">Connected accounts</h2>
+            <p>Connect an account you already use, and sign in with it next time. Connecting never shares your BrightTime information with it.</p>
+            @if (ExternalMessage is { } externalMessage)
+            {
+                <p class="notice" role="status">@externalMessage</p>
+            }
+            <ul class="passkey-list">
+                @foreach (var (key, provider) in Providers)
+                {
+                    ExternalLoginSummary? connected = _external.FirstOrDefault(e => e.DisplayName == provider.DisplayName);
+                    <li>
+                        <span>
+                            <strong>@provider.DisplayName</strong>
+                            <span class="note">@(connected is null ? "Not connected" : $"Connected {Local(connected.LinkedAt)}")</span>
+                        </span>
+                        @if (connected is null)
+                        {
+                            <form method="post" action="@BrightTime.Web.Auth.ExternalSignIn.LinkPath">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="provider" value="@key" />
+                                <button type="submit" class="secondary-button">Connect<span class="visually-hidden"> @provider.DisplayName</span></button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form method="post" @formname="@($"disconnect-{key}")" @onsubmit="() => DisconnectAsync(connected.Issuer)">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary-button">Disconnect<span class="visually-hidden"> @provider.DisplayName</span></button>
+                            </form>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
     <section aria-labelledby="password-heading">
         <h2 id="password-heading">Password</h2>
         <p>To set or change your password, <a href="/account/forgot">we'll email you a link</a>.</p>
@@ -82,6 +121,30 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "added")] public string? Added { get; set; }
 
+    [SupplyParameterFromQuery(Name = "external")] public string? External { get; set; }
+
+    [Inject] private Microsoft.Extensions.Options.IOptions<BrightTime.Web.Auth.AuthOptions> AuthSettings { get; set; } = default!;
+
+    private IReadOnlyDictionary<string, BrightTime.Web.Auth.ExternalProviderOptions> Providers => AuthSettings.Value.External;
+
+    private IReadOnlyList<ExternalLoginSummary> _external = [];
+
+    private string? ExternalMessage => External switch
+    {
+        "connected" => "Connected. You can now sign in with it.",
+        "already" => "Your account is already connected to that provider. Disconnect it first to connect a different account.",
+        "in_use" => "That account is already connected to a different BrightTime account.",
+        "wrong_session" => "The connection was started by a different sign-in, so nothing was connected. Try again.",
+        _ => null,
+    };
+
+    private async Task DisconnectAsync(string issuer)
+    {
+        bool removed = await Get<ExternalLogins>().UnlinkAsync(Tenant.TenantId, Actor, issuer);
+        _message = removed ? "Disconnected. It can no longer sign in to this account." : "That account was already disconnected.";
+        _external = await Get<ExternalLogins>().ListAsync(Tenant.TenantId, Actor);
+    }
+
     private IReadOnlyList<PasskeySummary> _passkeys = [];
     private string? _message;
 
@@ -90,6 +153,7 @@ else
         if (Availability.CanSignIn)
         {
             _passkeys = await Get<Passkeys>().ListAsync(Tenant.TenantId, Actor);
+            _external = await Get<ExternalLogins>().ListAsync(Tenant.TenantId, Actor);
         }
     }
 

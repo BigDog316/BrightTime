@@ -21,6 +21,11 @@ namespace BrightTime.Web.Tests;
 /// The logins mirror production's split: the web login is a member of brighttime_app and
 /// brighttime_finder, and sign-in reads accounts as brighttime_auth. Roles are cluster-wide,
 /// so they are created if absent and never altered otherwise.
+/// <para>
+/// Every console, password, passkey and external sign-in test shares this one database, and
+/// several change the account they use (a password, a lockout, a suspension). So each test
+/// uses a seeded organisation's account that no other test uses; check before reusing one.
+/// </para>
 /// </remarks>
 public sealed partial class ConsoleFixture : IAsyncLifetime
 {
@@ -32,6 +37,9 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
 
     /// <summary>The configured site address. Reset links must use it whatever Host a request claims.</summary>
     public const string PublicBaseUrl = "https://kettle.brighttime.test/";
+
+    /// <summary>The external identity provider the app is configured with.</summary>
+    public FakeOidcProvider Idp { get; } = new();
 
     /// <summary>Every email the app sends, instead of sending it.</summary>
     public CapturedMail Mail { get; } = new();
@@ -75,7 +83,24 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
             b.UseSetting("Auth:DevelopmentSignIn", "true");
             b.UseSetting("Auth:PublicBaseUrl", PublicBaseUrl);
             b.UseSetting("Auth:SignInAttemptsPerMinute", "1000");
-            b.ConfigureTestServices(s => s.AddSingleton<IEmailSender>(Mail));
+            b.UseSetting($"Auth:External:{FakeOidcProvider.Key}:DisplayName", FakeOidcProvider.DisplayName);
+            b.UseSetting($"Auth:External:{FakeOidcProvider.Key}:Authority", FakeOidcProvider.Issuer);
+            b.UseSetting($"Auth:External:{FakeOidcProvider.Key}:ClientId", FakeOidcProvider.ClientId);
+            b.UseSetting($"Auth:External:{FakeOidcProvider.Key}:ClientSecret", "test-only-secret");
+            b.ConfigureTestServices(s =>
+            {
+                s.AddSingleton<IEmailSender>(Mail);
+
+                // The fake provider stands in for discovery and the back channel; everything
+                // else about the handler is as configured for production.
+                s.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(
+                    Auth.ExternalSignIn.SchemeFor(FakeOidcProvider.Key), o =>
+                    {
+                        o.Configuration = Idp.Configuration;
+                        o.ConfigurationManager = new Microsoft.IdentityModel.Protocols.StaticConfigurationManager<Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfiguration>(Idp.Configuration);
+                        o.Backchannel = new HttpClient(Idp, disposeHandler: false);
+                    });
+            });
         });
     }
 
@@ -90,6 +115,8 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
         {
             await _root.DisposeAsync();
         }
+
+        Idp.Dispose();
     }
 
     public Browser NewBrowser() => new(Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));

@@ -64,6 +64,7 @@ app.MapBrightTimeSignIn();
 if (app.Services.GetRequiredService<ConsoleAvailability>().CanSignIn)
 {
     app.MapBrightTimePasskeys();
+    app.MapExternalSignIn();
 }
 
 app.MapRazorComponents<App>()

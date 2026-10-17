@@ -46,7 +46,8 @@ public static class ConsoleServices
         bool devSignIn = canSignIn && auth.DevelopmentSignIn && environment.IsDevelopment();
         services.AddSingleton(new ConsoleAvailability(hasDatabase, canSignIn, devSignIn));
 
-        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        AuthenticationBuilder authentication = services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme);
+        authentication
             .AddCookie(options =>
             {
                 options.Cookie.Name = "brighttime.session";
@@ -95,6 +96,9 @@ public static class ConsoleServices
                 Origins = new HashSet<string>(StringComparer.Ordinal) { origin },
                 TimestampDriftTolerance = 300_000,
             }));
+            services.AddSingleton(sp => new ExternalLogins(
+                sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
+            ExternalSignIn.AddProviders(authentication, auth, environment);
             services.AddSingleton(sp => new Passkeys(
                 sp.GetRequiredService<IFido2>(), sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
 
@@ -203,6 +207,7 @@ public static class ConsoleServices
         "/sign-in", "/account/forgot", "/account/reset", "/dev/sign-in/as",
         PasskeyEndpoints.SignInOptionsPath, PasskeyEndpoints.SignInPath,
         PasskeyEndpoints.RegisterOptionsPath, PasskeyEndpoints.RegisterPath,
+        ExternalSignIn.StartPath, ExternalSignIn.LinkPath,
     ];
 
     private static bool IsAuthenticationPath(PathString path) =>

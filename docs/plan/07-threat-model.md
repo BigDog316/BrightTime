@@ -270,6 +270,16 @@ timing difference.
   guessed. Inactive and child accounts are still refused.
 - **Endpoints:** antiforgery token in a header, and rate limited with the other sign-in
   routes.
+*Implemented for external OIDC sign-in (decision D17):*
+- **Protocol:** authorization code with PKCE. The handler validates state, nonce,
+  signature, issuer, audience and lifetime.
+- **Identity:** validated issuer plus subject only. Email never finds or connects an account.
+- **Connecting:** only from a signed-in session, and finished only by the session that
+  started it.
+- **Unconnected accounts:** sign in to nothing, and the message reveals nothing about
+  BrightTime accounts.
+- **Callback carried to another browser:** fails on the correlation cookie.
+
 - **Still open:**
   - behind nginx, rate limiting needs forwarded-headers configuration, or every client
     shares the proxy's address;

@@ -57,6 +57,16 @@ Seeded accounts have no password. Sign-in needs `Auth:ConnectionString` (a login
   `Email:Host`/`Email:Port` for mailpit.
 - **With a passkey:** once signed in, add one at `/account/security` (the address in the
   header). `localhost` works as a relying party, so this works locally.
+- **With another account (OIDC):** configure a provider, then connect it from
+  `/account/security` while signed in (decision D17):
+
+  ```json
+  "Auth": { "External": { "google": {
+    "DisplayName": "Google", "Authority": "https://accounts.google.com",
+    "ClientId": "…", "ClientSecret": "…" } } }
+  ```
+
+  Register `<site>/signin-oidc-google` as the redirect URI at the provider.
 - **Without one:** `/dev/sign-in` lists the seeded accounts and signs in as one. It exists
   only in the Development environment with `Auth:DevelopmentSignIn=true` (decision D14).
 

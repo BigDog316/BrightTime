@@ -1,10 +1,14 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text.RegularExpressions;
+using BrightTime.Abstractions.Messaging;
 using BrightTime.Seed;
 using BrightTime.Seed.Kettle;
 using BrightTime.SharedKernel.Time;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace BrightTime.Web.Tests;
@@ -25,6 +29,12 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
 
     private WebApplicationFactory<Program>? _root;
     private WebApplicationFactory<Program>? _factory;
+
+    /// <summary>The configured site address. Reset links must use it whatever Host a request claims.</summary>
+    public const string PublicBaseUrl = "https://kettle.brighttime.test/";
+
+    /// <summary>Every email the app sends, instead of sending it.</summary>
+    public CapturedMail Mail { get; } = new();
 
     public string? SuperuserConnection { get; } = Environment.GetEnvironmentVariable("BRIGHTTIME_TEST_CONNECTION");
 
@@ -63,6 +73,9 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
             b.UseSetting("Finder:ConnectionString", As("bt_web_login"));
             b.UseSetting("Auth:ConnectionString", As("bt_auth_login"));
             b.UseSetting("Auth:DevelopmentSignIn", "true");
+            b.UseSetting("Auth:PublicBaseUrl", PublicBaseUrl);
+            b.UseSetting("Auth:SignInAttemptsPerMinute", "1000");
+            b.ConfigureTestServices(s => s.AddSingleton<IEmailSender>(Mail));
         });
     }
 
@@ -123,6 +136,44 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
         await using NpgsqlCommand grants = new(
             "grant brighttime_app, brighttime_finder to bt_web_login; grant brighttime_auth to bt_auth_login;", connection);
         await grants.ExecuteNonQueryAsync(ct);
+    }
+}
+
+[CollectionDefinition(Name)]
+public sealed class ConsoleDatabase : ICollectionFixture<ConsoleFixture>
+{
+    public const string Name = "console";
+}
+
+/// <summary>Captures outgoing email so a test can read the link a person would click.</summary>
+public sealed class CapturedMail : IEmailSender
+{
+    private readonly ConcurrentQueue<EmailMessage> _sent = new();
+
+    public Task<DeliveryReceipt> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
+    {
+        _sent.Enqueue(message);
+        return Task.FromResult(new DeliveryReceipt(true, Guid.NewGuid().ToString("N")));
+    }
+
+    public IReadOnlyList<EmailMessage> To(string address) =>
+        [.. _sent.Where(m => string.Equals(m.To, address, StringComparison.OrdinalIgnoreCase))];
+
+    /// <summary>The newest message to an address, waiting briefly: mail is sent after the response.</summary>
+    public async Task<EmailMessage?> WaitForAsync(string address, int alreadySeen = 0)
+    {
+        for (int i = 0; i < 100; i++)
+        {
+            IReadOnlyList<EmailMessage> messages = To(address);
+            if (messages.Count > alreadySeen)
+            {
+                return messages[^1];
+            }
+
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+
+        return null;
     }
 }
 

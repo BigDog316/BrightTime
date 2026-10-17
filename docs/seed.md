@@ -49,13 +49,14 @@ dotnet run --project src/BrightTime.Seed -- --connection "Host=127.0.0.1;Port=54
 
 ## Signing in to the consoles
 
-Until Identity sign-in exists (decision D14), the seeded accounts are reached through
-`/dev/sign-in`. It is offered only in the Development environment, and only with:
+Seeded accounts have no password. Sign-in needs `Auth:ConnectionString` (a login in
+`brighttime_auth`) and `Auth:PublicBaseUrl` (the site's own address, used in reset links).
 
-- `Auth:DevelopmentSignIn=true`;
-- `Auth:ConnectionString` set to a login that is a member of `brighttime_auth`.
-
-Elsewhere the route does not exist.
+- **With a password:** use "Forgot your password?" on `/sign-in` to get a reset link.
+  Locally, set `Email:PickupDirectory` to a folder to receive it as a `.eml` file, or
+  `Email:Host`/`Email:Port` for mailpit.
+- **Without one:** `/dev/sign-in` lists the seeded accounts and signs in as one. It exists
+  only in the Development environment with `Auth:DevelopmentSignIn=true` (decision D14).
 
 To run the web app on the seed, set `Finder:Mode=Sql`,
 `Finder:TenantId=0196c3e8-0000-7000-8000-00000000f001`, and a `Finder:ConnectionString`

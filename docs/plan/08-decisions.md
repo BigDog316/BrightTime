@@ -228,6 +228,12 @@ a seam instead:
 
 Identity sign-in replaces `/dev/sign-in` and calls the same factory.
 
+*Update (password sign-in implemented).* `/sign-in` now takes an email and password, and
+`/account/forgot` and `/account/reset` set or reset one by emailed link; both call the same
+factory. See T21 in the threat model for the controls. `/dev/sign-in` stays as a development
+convenience under the same two conditions. Seeded accounts have no password until they use
+the reset flow. Passkeys and external OIDC are the next pieces of this decision.
+
 ### D15 — Edits to a published listing go live and are reviewed after (**decided by me, review it**)
 
 `ListingLifecycle` gates first publication (a provider submits, an organiser publishes) but

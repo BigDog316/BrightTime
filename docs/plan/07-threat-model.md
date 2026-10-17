@@ -235,6 +235,31 @@ for consent grants, guardian-link verification and youth-record export; rate
 limiting on every auth route; no account enumeration in any response or
 timing difference.
 
+*Implemented for passwords (web):*
+- **Hashing:** Argon2id at the OWASP minimum (19 MiB, t=2, p=1), in PHC format.
+  Weaker hashes are upgraded at the next sign-in.
+- **Lockout:** five failures lock the account for 15 minutes. The count is kept under
+  `FOR UPDATE`, so parallel guesses can't race it.
+- **No enumeration:** unknown email, wrong password, locked, inactive and child accounts
+  get the same message after the same Argon2 work. "Forgot password" queues the address
+  and answers at once; the account lookup, token and email happen after the response.
+- **Reset tokens:** 256 random bits, stored as SHA-256 with a 60-minute expiry. They are
+  single-use, one per account, and resending is throttled. A reset changes the security
+  stamp, which ends existing sessions at their next revalidation (at most 5 minutes).
+- **Reset links:** built from `Auth:PublicBaseUrl`, never the Host header. The reset page
+  sends no Referer.
+- **Rate limiting:** a fixed window per client address on every sign-in route.
+- **Password policy:** NIST 800-63B. At least 12 characters, no composition rules, and a
+  common-password check. The breached-password check against the HIBP range API is
+  available behind `Auth:CheckBreachedPasswords`, off by default because it is an
+  outbound call.
+- **Still open:**
+  - behind nginx, rate limiting needs forwarded-headers configuration, or every client
+    shares the proxy's address;
+  - step-up authentication;
+  - passkeys;
+  - the mobile token flow.
+
 ### T22 — Availability as a safety issue
 Enrollment deadlines and summer registration windows mean an outage has real
 consequences for families. Controls: the public finder is static-SSR and

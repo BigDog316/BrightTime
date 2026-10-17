@@ -15,7 +15,8 @@ namespace BrightTime.Web.Tests;
 /// The provider console and the review queue, through the real pipeline (cookies,
 /// antiforgery, authorisation, redirects) against a seeded database of their own.
 /// </summary>
-public sealed class ConsoleTests(ConsoleFixture db) : IClassFixture<ConsoleFixture>
+[Collection(ConsoleDatabase.Name)]
+public sealed class ConsoleTests(ConsoleFixture db)
 {
     private const string Organiser = KettleAccounts.OrganiserEmail;
 

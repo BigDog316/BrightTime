@@ -1,4 +1,7 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
+using BrightTime.Abstractions.Messaging;
+using BrightTime.Infrastructure.Messaging;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Review;
 using BrightTime.Modules.Identity.Authorization;
@@ -68,10 +71,56 @@ public static class ConsoleServices
 
         if (canSignIn)
         {
+            if (auth.PublicBaseUrl is not { IsAbsoluteUri: true } baseUrl
+                || (baseUrl.Scheme != Uri.UriSchemeHttps && !environment.IsDevelopment()))
+            {
+                throw new InvalidOperationException(
+                    "Auth:PublicBaseUrl must be the site's absolute https address when sign-in is enabled; reset links are built from it.");
+            }
+
             services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth.ConnectionString!));
             services.AddSingleton(sp => new AccountReader(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
+            services.AddSingleton(sp => new PasswordAccounts(
+                sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             services.AddScoped<BrightTimePrincipalFactory>();
+
+            if (auth.CheckBreachedPasswords)
+            {
+                services.AddHttpClient<IBreachedPasswordCheck, PwnedPasswordsCheck>(c =>
+                {
+                    c.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
+                    c.Timeout = TimeSpan.FromSeconds(3);
+                    c.DefaultRequestHeaders.Add("Add-Padding", "true");
+                });
+            }
+            else
+            {
+                services.AddSingleton<IBreachedPasswordCheck, NoBreachedPasswordCheck>();
+            }
         }
+
+        services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        if (canSignIn)
+        {
+            services.AddSingleton<PasswordResetDispatcher>();
+            services.AddHostedService(sp => sp.GetRequiredService<PasswordResetDispatcher>());
+        }
+
+        // T21: every authentication route is rate limited per client address, on top of the
+        // per-account lockout, so guessing across many accounts is slowed too.
+        int perMinute = Math.Max(1, auth.SignInAttemptsPerMinute);
+        services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
+                HttpMethods.IsPost(http.Request.Method) && IsAuthenticationPath(http.Request.Path)
+                    ? RateLimitPartition.GetFixedWindowLimiter(
+                        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        _ => new FixedWindowRateLimiterOptions { PermitLimit = perMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })
+                    : RateLimitPartition.GetNoLimiter("unlimited"));
+        });
 
         if (hasDatabase)
         {
@@ -134,6 +183,11 @@ public static class ConsoleServices
 
         return endpoints;
     }
+
+    private static readonly string[] AuthenticationPaths = ["/sign-in", "/account/forgot", "/account/reset", "/dev/sign-in/as"];
+
+    private static bool IsAuthenticationPath(PathString path) =>
+        AuthenticationPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase));
 
     private static async Task<bool> IsValidPostAsync(HttpContext http, IAntiforgery antiforgery)
     {

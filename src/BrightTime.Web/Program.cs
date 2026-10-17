@@ -31,6 +31,7 @@ app.UseHttpsRedirection();
 app.UseMiddleware<TenantRequestMiddleware>();
 
 // After the tenant: the cookie validator rebuilds claims from the tenant's database.
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<ActorMiddleware>();
 app.UseAuthorization();

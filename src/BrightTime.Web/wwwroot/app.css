@@ -546,6 +546,7 @@ button.secondary-button {
 .editor input[type="text"],
 .editor input[type="url"],
 .editor input[type="email"],
+.editor input[type="password"],
 .editor input[type="tel"],
 .editor input[type="date"],
 .editor input[type="time"],
@@ -561,6 +562,10 @@ button.secondary-button {
     min-height: 2.75rem;
     padding: 0.4rem 0.6rem;
     width: 100%;
+}
+
+.editor.sign-in {
+    max-width: 26rem;
 }
 
 .editor .field-short input {

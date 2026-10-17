@@ -16,4 +16,20 @@ public sealed class AuthOptions
     /// anywhere else the route is not mapped at all.
     /// </summary>
     public bool DevelopmentSignIn { get; set; }
+
+    /// <summary>
+    /// The site's own address, for links in email. Required for password reset. Links are
+    /// never built from the request's Host header: a forged Host would put a reset token in
+    /// a link to someone else's server.
+    /// </summary>
+    public Uri? PublicBaseUrl { get; set; }
+
+    /// <summary>
+    /// Check new passwords against Have I Been Pwned's range API (T21). Only a five-character
+    /// hash prefix leaves the server. Off unless set, because it is an outbound call.
+    /// </summary>
+    public bool CheckBreachedPasswords { get; set; }
+
+    /// <summary>Sign-in, forgot-password and reset submissions allowed per client address per minute.</summary>
+    public int SignInAttemptsPerMinute { get; set; } = 10;
 }

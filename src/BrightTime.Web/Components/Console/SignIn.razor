@@ -1,27 +1,90 @@
 @page "/sign-in"
+@using System.Security.Claims
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
 @inherits ConsoleComponent
 
 <PageTitle>Sign in · BrightTime</PageTitle>
 
 <h1>Sign in</h1>
 
-@if (Availability.DevelopmentSignIn)
+@if (!Availability.CanSignIn)
 {
-    <p>This is a development site. Choose a seeded account to sign in as.</p>
-    <p><a class="button" href="@DevHref">Choose an account</a></p>
-}
-else if (!Availability.HasDatabase)
-{
-    <p>This site is running on sample data, which has no accounts. The provider and organiser consoles need the database.</p>
+    <p>@(Availability.HasDatabase ? "Signing in is not available on this site yet." : "This site is running on sample data, which has no accounts.")</p>
 }
 else
 {
-    @* Decision D14: sign-in with a password, passkey or single sign-on comes with Identity. *@
-    <p>Signing in is not available on this site yet.</p>
+    @if (Reset == "1")
+    {
+        <p class="notice success" role="status">Your password has been changed. Sign in with the new one.</p>
+    }
+    @if (_failed)
+    {
+        @* One message for every failure, so it never says whether the email is registered (T21). *@
+        <p class="notice error" role="alert" id="sign-in-error">
+            That email and password don't match an account that can sign in. After five wrong tries an account
+            is locked for 15 minutes. You can <a href="/account/forgot">reset your password</a>.
+        </p>
+    }
+
+    <form method="post" class="editor sign-in" @formname="sign-in" @onsubmit="SignInAsync">
+        <AntiforgeryToken />
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="username" required value="@_email"
+                   aria-describedby="@(_failed ? "sign-in-error" : null)" />
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="actions">
+            <button type="submit">Sign in</button>
+            <a class="secondary" href="/account/forgot">Forgot your password?</a>
+        </div>
+    </form>
+
+    @if (Availability.DevelopmentSignIn)
+    {
+        <p class="note">Development site: you can also <a href="@DevHref">sign in as a seeded account</a>.</p>
+    }
 }
 
 @code {
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
 
+    [SupplyParameterFromQuery(Name = "reset")] public string? Reset { get; set; }
+
+    private string? _email;
+    private bool _failed;
+
     private string DevHref => ReturnUrl is null ? "/dev/sign-in" : $"/dev/sign-in?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+
+    private async Task SignInAsync()
+    {
+        if (!Availability.CanSignIn)
+        {
+            return;
+        }
+
+        _email = FormValue("email").Trim();
+        string password = FormValue("password");
+
+        UserId? user = await Get<PasswordAccounts>().CheckPasswordAsync(Tenant.TenantId, _email, password, HttpContext.RequestAborted);
+        ClaimsPrincipal? principal = user is { } id
+            ? await Get<BrightTimePrincipalFactory>().CreateAsync(Tenant.TenantId, id, HttpContext.RequestAborted)
+            : null;
+
+        if (principal is null)
+        {
+            _failed = true;
+            return;
+        }
+
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+        Navigation.NavigateTo(ConsoleServices.LocalReturnPath(ReturnUrl, principal));
+    }
 }

@@ -13,7 +13,7 @@
             {
                 <a href="/organiser/review">Review queue</a>
             }
-            <span class="signed-in-as">@user.Identity!.Name</span>
+            <a href="/account/security" class="signed-in-as" aria-label="Sign-in and security for @user.Identity!.Name">@user.Identity!.Name</a>
             <form method="post" action="/sign-out" class="inline-form">
                 <AntiforgeryToken />
                 <button type="submit" class="link-button">Sign out</button>

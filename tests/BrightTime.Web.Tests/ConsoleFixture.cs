@@ -208,6 +208,20 @@ public sealed partial class Browser(HttpClient client) : IDisposable
         return response;
     }
 
+    /// <summary>Posts JSON as passkeys.js does: antiforgery token in a header, from the current page.</summary>
+    public async Task<HttpResponseMessage> PostJsonAsync(string path, System.Text.Json.Nodes.JsonNode body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(path, UriKind.Relative))
+        {
+            Content = new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("RequestVerificationToken", Token());
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        Html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        return response;
+    }
+
     public async Task SignInAsync(string email)
     {
         await GetAsync("/dev/sign-in");
@@ -215,11 +229,19 @@ public sealed partial class Browser(HttpClient client) : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Redirect, $"signing in as {email}");
     }
 
+    private string? _pageToken;
+
+    /// <summary>The token on the page in view. A JSON response replaces the body, not the page, as in a browser.</summary>
     private string Token()
     {
         Match match = TokenPattern().Match(Html);
-        match.Success.ShouldBeTrue("the current page has no antiforgery token");
-        return WebUtility.HtmlDecode(match.Groups[1].Value);
+        if (match.Success)
+        {
+            _pageToken = WebUtility.HtmlDecode(match.Groups[1].Value);
+        }
+
+        _pageToken.ShouldNotBeNull("the current page has no antiforgery token");
+        return _pageToken;
     }
 
     public void Dispose() => client.Dispose();

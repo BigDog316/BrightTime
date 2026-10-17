@@ -61,6 +61,10 @@ app.MapGet("/listings/{slug}/calendar.ics", async (
     return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), ListingCalendar.ContentType, $"{listing.Slug}.ics");
 });
 app.MapBrightTimeSignIn();
+if (app.Services.GetRequiredService<ConsoleAvailability>().CanSignIn)
+{
+    app.MapBrightTimePasskeys();
+}
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

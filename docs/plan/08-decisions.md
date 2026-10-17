@@ -232,7 +232,11 @@ Identity sign-in replaces `/dev/sign-in` and calls the same factory.
 `/account/forgot` and `/account/reset` set or reset one by emailed link; both call the same
 factory. See T21 in the threat model for the controls. `/dev/sign-in` stays as a development
 convenience under the same two conditions. Seeded accounts have no password until they use
-the reset flow. Passkeys and external OIDC are the next pieces of this decision.
+the reset flow.
+
+*Update (passkeys implemented).* A signed-in person adds passkeys at `/account/security` and
+signs in with one from `/sign-in`, through the same factory. External OIDC is the remaining
+piece of this decision.
 
 ### D15 — Edits to a published listing go live and are reviewed after (**decided by me, review it**)
 

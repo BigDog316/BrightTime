@@ -10,6 +10,7 @@ using BrightTime.Modules.Opportunities.Editing;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
 using BrightTime.Web.Composition;
+using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -83,6 +84,19 @@ public static class ConsoleServices
             services.AddSingleton(sp => new PasswordAccounts(
                 sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             services.AddScoped<BrightTimePrincipalFactory>();
+
+            // WebAuthn's relying party is the site's own address, as for reset links: the
+            // browser checks each passkey against it, so a phishing site cannot use one.
+            string origin = baseUrl.GetLeftPart(UriPartial.Authority);
+            services.AddSingleton<IFido2>(_ => new Fido2(new Fido2Configuration
+            {
+                RPID = baseUrl.Host,
+                RPName = "BrightTime",
+                Origins = new HashSet<string>(StringComparer.Ordinal) { origin },
+                TimestampDriftTolerance = 300_000,
+            }));
+            services.AddSingleton(sp => new Passkeys(
+                sp.GetRequiredService<IFido2>(), sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
 
             if (auth.CheckBreachedPasswords)
             {
@@ -184,7 +198,12 @@ public static class ConsoleServices
         return endpoints;
     }
 
-    private static readonly string[] AuthenticationPaths = ["/sign-in", "/account/forgot", "/account/reset", "/dev/sign-in/as"];
+    private static readonly string[] AuthenticationPaths =
+    [
+        "/sign-in", "/account/forgot", "/account/reset", "/dev/sign-in/as",
+        PasskeyEndpoints.SignInOptionsPath, PasskeyEndpoints.SignInPath,
+        PasskeyEndpoints.RegisterOptionsPath, PasskeyEndpoints.RegisterPath,
+    ];
 
     private static bool IsAuthenticationPath(PathString path) =>
         AuthenticationPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase));

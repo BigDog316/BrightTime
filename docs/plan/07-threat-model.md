@@ -253,11 +253,28 @@ timing difference.
   common-password check. The breached-password check against the HIBP range API is
   available behind `Auth:CheckBreachedPasswords`, off by default because it is an
   outbound call.
+*Implemented for passkeys (web):*
+- **Ceremonies:** WebAuthn with discoverable credentials and user verification required,
+  and no attestation. The user handle is the account id, never an email.
+- **Phishing resistance:** the relying-party id and origin come from
+  `Auth:PublicBaseUrl`, so a passkey can't be used on another site.
+- **Storage:** credentials live in `identity.user_credential`, accessed only as
+  `brighttime_auth`. Tenant isolation comes through the account's RLS.
+- **Challenges:** held in an encrypted, HttpOnly, SameSite=Strict cookie for five minutes.
+  The cookie is cleared on use, so an answer cannot be replayed.
+- **Registration binding:** registration options are bound to the account that requested
+  them.
+- **Cloned keys:** a signature counter that goes backwards is refused.
+- **Revocation:** a removed passkey is revoked, not deleted.
+- **Lockout:** passkey sign-in ignores password lockout, because a passkey cannot be
+  guessed. Inactive and child accounts are still refused.
+- **Endpoints:** antiforgery token in a header, and rate limited with the other sign-in
+  routes.
 - **Still open:**
   - behind nginx, rate limiting needs forwarded-headers configuration, or every client
     shares the proxy's address;
-  - step-up authentication;
-  - passkeys;
+  - step-up authentication for consent, guardian verification and export;
+  - passkeys for youth onboarding (M2);
   - the mobile token flow.
 
 ### T22 — Availability as a safety issue

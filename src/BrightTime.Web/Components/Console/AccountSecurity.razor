@@ -1,0 +1,105 @@
+@page "/account/security"
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.SharedKernel.Ids
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+<PageTitle>Sign-in and security · BrightTime</PageTitle>
+
+<h1>Sign-in and security</h1>
+
+@if (!Availability.CanSignIn)
+{
+    <p>Accounts are not available on this site.</p>
+}
+else
+{
+    @if (Added == "1")
+    {
+        <p class="notice success" role="status">Passkey added. Next time, choose "Sign in with a passkey".</p>
+    }
+    @if (_message is not null)
+    {
+        <p class="notice" role="status">@_message</p>
+    }
+
+    <section aria-labelledby="passkeys-heading">
+        <h2 id="passkeys-heading">Passkeys</h2>
+        <p>
+            A passkey signs you in with your fingerprint, face or device PIN instead of a password. It can't be
+            phished or reused on another site.
+        </p>
+
+        @if (_passkeys.Count == 0)
+        {
+            <p>You have no passkeys yet.</p>
+        }
+        else
+        {
+            <ul class="passkey-list">
+                @foreach (PasskeySummary p in _passkeys)
+                {
+                    <li>
+                        <span>
+                            <strong>@p.Name</strong>
+                            <span class="note">
+                                Added @Local(p.CreatedAt)@(p.LastUsedAt is { } used ? $" · last used {Local(used)}" : " · not used yet")@(p.IsBackedUp ? " · synced" : "")
+                            </span>
+                        </span>
+                        <form method="post" @formname="@($"revoke-{p.Id:N}")" @onsubmit="() => RevokeAsync(p.Id)">
+                            <AntiforgeryToken />
+                            <button type="submit" class="secondary-button">Remove<span class="visually-hidden"> @p.Name</span></button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+
+        <div class="needs-webauthn">
+            <div class="editor sign-in">
+                <div class="field">
+                    <label for="passkey-name">Name for the new passkey</label>
+                    <p class="hint" id="passkey-name-hint">So you can tell them apart, like "Work laptop".</p>
+                    <input id="passkey-name" type="text" maxlength="@Passkeys.MaxNameLength" aria-describedby="passkey-name-hint" />
+                </div>
+            </div>
+            <p class="notice error" id="passkey-error" role="alert" tabindex="-1" hidden></p>
+            @* The script reads the antiforgery token from the page. *@
+            <AntiforgeryToken />
+            <button type="button" data-passkey-action="register">Add a passkey</button>
+        </div>
+        <noscript><p class="note">Adding a passkey needs JavaScript, which is off in this browser.</p></noscript>
+    </section>
+
+    <section aria-labelledby="password-heading">
+        <h2 id="password-heading">Password</h2>
+        <p>To set or change your password, <a href="/account/forgot">we'll email you a link</a>.</p>
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "added")] public string? Added { get; set; }
+
+    private IReadOnlyList<PasskeySummary> _passkeys = [];
+    private string? _message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.CanSignIn)
+        {
+            _passkeys = await Get<Passkeys>().ListAsync(Tenant.TenantId, Actor);
+        }
+    }
+
+    private async Task RevokeAsync(Guid id)
+    {
+        bool removed = await Get<Passkeys>().RevokeAsync(Tenant.TenantId, Actor, id);
+        _message = removed ? "Passkey removed. It can no longer sign in to this account." : "That passkey was already removed.";
+        _passkeys = await Get<Passkeys>().ListAsync(Tenant.TenantId, Actor);
+    }
+
+    private string Local(DateTimeOffset at) =>
+        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("MMM d, yyyy", Tenant.Locale.ToCulture());
+}

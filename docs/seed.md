@@ -55,6 +55,8 @@ Seeded accounts have no password. Sign-in needs `Auth:ConnectionString` (a login
 - **With a password:** use "Forgot your password?" on `/sign-in` to get a reset link.
   Locally, set `Email:PickupDirectory` to a folder to receive it as a `.eml` file, or
   `Email:Host`/`Email:Port` for mailpit.
+- **With a passkey:** once signed in, add one at `/account/security` (the address in the
+  header). `localhost` works as a relying party, so this works locally.
 - **Without one:** `/dev/sign-in` lists the seeded accounts and signs in as one. It exists
   only in the Development environment with `Auth:DevelopmentSignIn=true` (decision D14).
 

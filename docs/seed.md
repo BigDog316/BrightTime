@@ -50,7 +50,7 @@ dotnet run --project src/BrightTime.Seed -- --connection "Host=127.0.0.1;Port=54
 ## Signing in to the consoles
 
 Seeded accounts have no password. Sign-in needs `Auth:ConnectionString` (a login in
-`brighttime_auth`) and `Auth:PublicBaseUrl` (the site's own address, used in reset links).
+`brighttime_auth`). Reset links use the tenant's own address, from its primary domain.
 
 - **With a password:** use "Forgot your password?" on `/sign-in` to get a reset link.
   Locally, set `Email:PickupDirectory` to a folder to receive it as a `.eml` file, or
@@ -70,10 +70,18 @@ Seeded accounts have no password. Sign-in needs `Auth:ConnectionString` (a login
 - **Without one:** `/dev/sign-in` lists the seeded accounts and signs in as one. It exists
   only in the Development environment with `Auth:DevelopmentSignIn=true` (decision D14).
 
-To run the web app on the seed, set `Finder:Mode=Sql`,
-`Finder:TenantId=0196c3e8-0000-7000-8000-00000000f001`, and a `Finder:ConnectionString`
-whose login is a member of both `brighttime_app` and `brighttime_finder` (decision D13).
-The consoles also need `Auth:ConnectionString`, as above. Approvals and edits are projected
+To run the web app on the seed, set `Finder:Mode=Sql` and a `Finder:ConnectionString` whose
+login is a member of both `brighttime_app` and `brighttime_finder` (decision D13). The
+consoles also need `Auth:ConnectionString`, as above.
+
+The tenant comes from the host (decision D18). The seed's primary domain is
+`kettle.localhost`, with `kettle.brighttime.test` as an alias, and browsers send
+`*.localhost` to this machine.
+
+- Locally, set `Tenancy:PublicScheme=http` and `Tenancy:PublicPort=5176`, then browse to
+  `http://kettle.localhost:5176`. Plain `localhost` is no tenant's address and gets a 404.
+- To ignore the host instead, set `Tenancy:Mode=Fixed`,
+  `Tenancy:TenantId=0196c3e8-0000-7000-8000-00000000f001` and an `Auth:PublicBaseUrl`. Approvals and edits are projected
 into search by the jobs host (`ConnectionStrings:Jobs`, a member of `brighttime_jobs`), so run
 it alongside.
 

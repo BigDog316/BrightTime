@@ -27,7 +27,7 @@ public sealed partial class StepUpTests(ConsoleFixture db) : IAsyncDisposable
         b.ConfigureServices(s => s.AddSingleton<SharedKernel.Time.IClock>(_clock)));
 
     private Browser NewBrowser() =>
-        new(App.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+        new(App.CreateClient(ConsoleFixture.ClientOptions()));
 
     private void RequireDatabase() =>
         Assert.SkipUnless(db.IsAvailable, "Set BRIGHTTIME_TEST_CONNECTION to a PostgreSQL 18 + PostGIS superuser connection.");
@@ -69,7 +69,7 @@ public sealed partial class StepUpTests(ConsoleFixture db) : IAsyncDisposable
         (back.IsAbsoluteUri ? back.PathAndQuery : back.ToString()).ShouldBe("/account/security");
         if (back.IsAbsoluteUri)
         {
-            back.Host.ShouldBe("localhost", "back to this site, never elsewhere");
+            back.Host.ShouldBe(ConsoleFixture.Host, "back to this site, never elsewhere");
         }
         (await browser.GetAsync("/account/security")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }

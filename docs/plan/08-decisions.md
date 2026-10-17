@@ -292,6 +292,31 @@ directly, and there is no circuit to hold per editor. The schedule preview is a
 server round trip ("Preview sessions") rather than live. Interactivity can be layered on
 where it earns its keep.
 
+### D18 — A request's tenant comes from its host (**decided by me, review it**)
+
+`Tenancy:Mode=Host` (the default with a database) resolves each request's tenant from
+`platform.tenant_domain`, before anything reads it.
+
+- **Normalised hosts:** lower case, no port, no trailing dot, internationalised names as
+  punycode. An IP-address host never resolves.
+- **Unknown host:** 404 with a generic body, so no tenant is named and no tenant page runs.
+- **Inactive tenant** (provisioning, suspended, archived): 503.
+- **Aliases:** a tenant's other domains redirect permanently (308, which keeps the method) to
+  its primary domain. Each tenant's real traffic then runs on one host, so a passkey's
+  relying party and a session cookie mean one thing.
+- **The tenant's address** is `{Tenancy:PublicScheme}://{primary domain}`, built from the
+  database and never from the Host header. It is used for reset links, the passkey relying
+  party (now per tenant, built per request) and calendar files. This replaces the single
+  `Auth:PublicBaseUrl`, which remains only for `Tenancy:Mode=Fixed`.
+- **Cache:** lookups are cached, 5 minutes when found and 30 seconds when not, with a bound
+  of 10,000 entries. A suspension takes up to five minutes to reach every instance, and a
+  flood of made-up hosts costs at most one query per host per half-minute.
+
+`Tenancy:Mode=Fixed` with `Tenancy:TenantId` serves one tenant regardless of host, for a
+single-tenant install. Sample data always serves the fictional tenant. `Finder:TenantId` is
+gone. External OIDC providers are still deployment-wide; per-tenant providers can now key on
+the resolved tenant.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

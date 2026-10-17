@@ -26,8 +26,6 @@ public static class FinderServices
         services.AddOptions<FinderOptions>()
             .Bind(configuration.GetSection(FinderOptions.SectionName))
             .ValidateDataAnnotations()
-            .Validate(o => o.Mode != FinderMode.Sql || o.TenantId != Guid.Empty,
-                "Finder:TenantId is required in Sql mode until host resolution is wired.")
             .Validate(o => o.Mode != FinderMode.Sql || !string.IsNullOrWhiteSpace(o.ConnectionString),
                 "Finder:ConnectionString is required in Sql mode.")
             .ValidateOnStart();

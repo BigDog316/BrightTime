@@ -45,7 +45,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
     public async Task Signing_in_without_an_antiforgery_token_is_refused()
     {
         RequireDatabase();
-        using HttpClient client = db.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using HttpClient client = db.Factory.CreateClient(ConsoleFixture.ClientOptions(cookies: false));
         using var form = new FormUrlEncodedContent([new("userId", SeedIds.For("user/" + Organiser).ToString())]);
 
         HttpResponseMessage response = await client.PostAsync(new Uri("/dev/sign-in/as", UriKind.Relative), form, TestContext.Current.CancellationToken);
@@ -239,7 +239,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
     {
         RequireDatabase();
         await using WebApplicationFactory<Program> production = db.Factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
-        using HttpClient client = production.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using HttpClient client = production.CreateClient(ConsoleFixture.ClientOptions(cookies: false));
 
         HttpResponseMessage page = await client.GetAsync(new Uri("/dev/sign-in", UriKind.Relative), TestContext.Current.CancellationToken);
         page.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -260,7 +260,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
 
         await using WebApplicationFactory<Program> app = db.Factory.WithWebHostBuilder(b =>
             b.ConfigureServices(s => s.AddSingleton<SharedKernel.Time.IClock>(clock)));
-        using Browser browser = new(app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+        using Browser browser = new(app.CreateClient(ConsoleFixture.ClientOptions()));
         await browser.SignInAsync(email);
         (await browser.GetAsync("/provider")).StatusCode.ShouldBe(HttpStatusCode.OK);
 

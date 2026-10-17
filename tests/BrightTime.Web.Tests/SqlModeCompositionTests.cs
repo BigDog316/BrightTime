@@ -26,7 +26,6 @@ public sealed class SqlModeCompositionTests : IClassFixture<WebApplicationFactor
         {
             builder.UseEnvironment("Production");
             builder.UseSetting("Finder:Mode", "Sql");
-            builder.UseSetting("Finder:TenantId", "0196c3e8-0000-7000-8000-00000000f001");
             builder.UseSetting("Finder:ConnectionString", "Host=127.0.0.1;Port=1;Database=none;Username=none");
         });
     }

@@ -153,7 +153,7 @@ public sealed class ExternalSignInTests(ConsoleFixture db)
     public async Task Starting_a_flow_needs_the_antiforgery_token_and_a_known_provider()
     {
         RequireDatabase();
-        using HttpClient raw = db.Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using HttpClient raw = db.Factory.CreateClient(ConsoleFixture.ClientOptions(cookies: false));
         using var form = new FormUrlEncodedContent([new("provider", FakeOidcProvider.Key)]);
         (await raw.PostAsync(new Uri(ExternalSignIn.StartPath, UriKind.Relative), form, TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);

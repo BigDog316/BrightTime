@@ -36,7 +36,18 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
     private WebApplicationFactory<Program>? _factory;
 
     /// <summary>The configured site address. Reset links must use it whatever Host a request claims.</summary>
-    public const string PublicBaseUrl = "https://kettle.brighttime.test/";
+    public const string PublicBaseUrl = "https://kettle.localhost/";
+
+    /// <summary>The tenant's primary domain, which every test request addresses, as a browser would.</summary>
+    public const string Host = "kettle.localhost";
+
+    /// <summary>Client options for the seeded tenant's host. Requests to any other host get a 404.</summary>
+    public static WebApplicationFactoryClientOptions ClientOptions(bool cookies = true) => new()
+    {
+        AllowAutoRedirect = false,
+        HandleCookies = cookies,
+        BaseAddress = new Uri("http://" + Host),
+    };
 
     /// <summary>The external identity provider the app is configured with.</summary>
     public FakeOidcProvider Idp { get; } = new();
@@ -77,11 +88,11 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
         {
             b.UseEnvironment("Development");
             b.UseSetting("Finder:Mode", "Sql");
-            b.UseSetting("Finder:TenantId", KettleSeed.TenantId.ToString());
+            b.UseSetting("Tenancy:Mode", "Host");
+            b.UseSetting("Tenancy:PublicScheme", "https");
             b.UseSetting("Finder:ConnectionString", As("bt_web_login"));
             b.UseSetting("Auth:ConnectionString", As("bt_auth_login"));
             b.UseSetting("Auth:DevelopmentSignIn", "true");
-            b.UseSetting("Auth:PublicBaseUrl", PublicBaseUrl);
             b.UseSetting("Auth:SignInAttemptsPerMinute", "1000");
             b.UseSetting($"Auth:External:{FakeOidcProvider.Key}:DisplayName", FakeOidcProvider.DisplayName);
             b.UseSetting($"Auth:External:{FakeOidcProvider.Key}:Authority", FakeOidcProvider.Issuer);
@@ -119,7 +130,7 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
         Idp.Dispose();
     }
 
-    public Browser NewBrowser() => new(Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+    public Browser NewBrowser() => new(Factory.CreateClient(ClientOptions()));
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Security", "CA2100:Review SQL queries for security vulnerabilities",

@@ -77,14 +77,22 @@ public sealed partial class PasswordSignInTests(ConsoleFixture db)
     {
         RequireDatabase();
         string email = Admin("cedar-run-nature-center");
-        using HttpClient client = db.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        using HttpClient client = db.Factory.CreateClient(ConsoleFixture.ClientOptions());
         client.DefaultRequestHeaders.Host = "attacker.example.net";
-        using var browser = new Browser(client);
+        int seen = db.Mail.To(email).Count;
 
+        // A host that is no tenant's never reaches the page, so no link can be made for it.
+        using HttpResponseMessage page = await client.GetAsync(new Uri("/account/forgot", UriKind.Relative), TestContext.Current.CancellationToken);
+        page.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        using var form = new FormUrlEncodedContent([new("email", email)]);
+        using HttpResponseMessage post = await client.PostAsync(new Uri("/account/forgot", UriKind.Relative), form, TestContext.Current.CancellationToken);
+        post.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // And on the tenant's own host, the link is the tenant's address from its domain record.
+        using Browser browser = db.NewBrowser();
         string link = await RequestResetAsync(browser, email);
-
         link.ShouldStartWith(ConsoleFixture.PublicBaseUrl);
-        link.ShouldNotContain("attacker");
+        db.Mail.To(email).Count.ShouldBe(seen + 1);
     }
 
     [Fact]
@@ -153,7 +161,7 @@ public sealed partial class PasswordSignInTests(ConsoleFixture db)
     {
         RequireDatabase();
         await using WebApplicationFactory<Program> strict = db.Factory.WithWebHostBuilder(b => b.UseSetting("Auth:SignInAttemptsPerMinute", "2"));
-        using var browser = new Browser(strict.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+        using var browser = new Browser(strict.CreateClient(ConsoleFixture.ClientOptions()));
 
         List<HttpStatusCode> statuses = [];
         for (int i = 0; i < 3; i++)
@@ -173,11 +181,11 @@ public sealed partial class PasswordSignInTests(ConsoleFixture db)
         await using WebApplicationFactory<Program> app = db.Factory.WithWebHostBuilder(b =>
             b.ConfigureServices(s => s.AddSingleton<SharedKernel.Time.IClock>(clock)));
 
-        using var signedIn = new Browser(app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+        using var signedIn = new Browser(app.CreateClient(ConsoleFixture.ClientOptions()));
         await signedIn.SignInAsync(email);
         (await signedIn.GetAsync("/provider")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        using var elsewhere = new Browser(app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+        using var elsewhere = new Browser(app.CreateClient(ConsoleFixture.ClientOptions()));
         await ResetAsync(elsewhere, await RequestResetAsync(elsewhere, email), NewPassword).ShouldBeAsync(HttpStatusCode.Redirect);
 
         clock.Shift = Auth.ConsoleServices.RevalidateAfter + TimeSpan.FromMinutes(1);

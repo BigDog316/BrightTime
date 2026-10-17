@@ -4,7 +4,6 @@ using BrightTime.Abstractions.Messaging;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
-using Microsoft.Extensions.Options;
 
 namespace BrightTime.Web.Auth;
 
@@ -20,15 +19,15 @@ namespace BrightTime.Web.Auth;
 /// </remarks>
 public sealed partial class PasswordResetDispatcher(
     IServiceScopeFactory scopes,
-    IOptions<AuthOptions> options,
     ILogger<PasswordResetDispatcher> logger) : BackgroundService
 {
-    private readonly Channel<(TenantId Tenant, string Email)> _requests =
-        Channel.CreateBounded<(TenantId, string)>(new BoundedChannelOptions(1_000) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true });
+    private readonly Channel<(TenantId Tenant, string Email, Uri SiteUrl)> _requests =
+        Channel.CreateBounded<(TenantId, string, Uri)>(new BoundedChannelOptions(1_000) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true });
 
-    public void Request(TenantId tenant, string email)
+    /// <summary>Queues a reset. <paramref name="siteUrl"/> is the tenant's own address, from <see cref="Tenancy.SiteContext"/>.</summary>
+    public void Request(TenantId tenant, string email, Uri siteUrl)
     {
-        if (!_requests.Writer.TryWrite((tenant, email)))
+        if (!_requests.Writer.TryWrite((tenant, email, siteUrl)))
         {
             LogDropped(logger);
         }
@@ -36,7 +35,7 @@ public sealed partial class PasswordResetDispatcher(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach ((TenantId tenant, string email) in _requests.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+        await foreach ((TenantId tenant, string email, Uri siteUrl) in _requests.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
         {
             try
             {
@@ -49,7 +48,7 @@ public sealed partial class PasswordResetDispatcher(
                 }
 
                 await scope.ServiceProvider.GetRequiredService<IEmailSender>()
-                    .SendAsync(Compose(reset), stoppingToken).ConfigureAwait(false);
+                    .SendAsync(Compose(reset, siteUrl), stoppingToken).ConfigureAwait(false);
             }
 #pragma warning disable CA1031 // One failed reset must not stop the dispatcher for everyone else.
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -60,9 +59,8 @@ public sealed partial class PasswordResetDispatcher(
         }
     }
 
-    private EmailMessage Compose(PasswordResetRequest reset)
+    private static EmailMessage Compose(PasswordResetRequest reset, Uri baseUrl)
     {
-        Uri baseUrl = options.Value.PublicBaseUrl ?? throw new InvalidOperationException("Auth:PublicBaseUrl is not set.");
         string link = new Uri(baseUrl, $"/account/reset?token={Uri.EscapeDataString(reset.Token)}").AbsoluteUri;
         int minutes = (int)PasswordAccounts.ResetLifetime.TotalMinutes;
 

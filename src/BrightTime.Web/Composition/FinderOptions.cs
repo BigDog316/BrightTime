@@ -8,8 +8,7 @@ namespace BrightTime.Web.Composition;
 /// <remarks>
 /// <see cref="FinderMode.Sample"/> runs on the fictional Kettle County catalogue and
 /// needs no database. It is the default only in development. <see cref="FinderMode.Sql"/>
-/// is the production path. Its tenant is set explicitly from configuration until host
-/// resolution is wired against a real database.
+/// is the production path. Its tenant comes from <c>Tenancy</c> (by host, by default).
 /// </remarks>
 public sealed class FinderOptions
 {
@@ -17,8 +16,6 @@ public sealed class FinderOptions
 
     public FinderMode Mode { get; set; } = FinderMode.Sql;
 
-    /// <summary>The tenant the SQL finder serves. Required in <see cref="FinderMode.Sql"/> until host resolution exists.</summary>
-    public Guid TenantId { get; set; }
 
     /// <summary>The tenant's timezone for "starts on" dates.</summary>
     [Required]

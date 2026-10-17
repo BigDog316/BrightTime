@@ -137,7 +137,7 @@ public sealed class PasskeyTests(ConsoleFixture db)
     public async Task Registering_needs_a_signed_in_account_and_the_antiforgery_header()
     {
         RequireDatabase();
-        using HttpClient anonymous = db.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using HttpClient anonymous = db.Factory.CreateClient(ConsoleFixture.ClientOptions(cookies: false));
         using var empty = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
         HttpResponseMessage noSession = await anonymous.PostAsync(new Uri(PasskeyEndpoints.RegisterOptionsPath, UriKind.Relative), empty, TestContext.Current.CancellationToken);
         noSession.StatusCode.ShouldBe(HttpStatusCode.Redirect);
@@ -145,7 +145,7 @@ public sealed class PasskeyTests(ConsoleFixture db)
 
         using Browser browser = db.NewBrowser();
         await browser.SignInAsync(Admin("quarry-hill-historical-society"));
-        using HttpClient raw = db.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        using HttpClient raw = db.Factory.CreateClient(ConsoleFixture.ClientOptions(cookies: false));
         using var noToken = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
         (await raw.PostAsync(new Uri(PasskeyEndpoints.SignInOptionsPath, UriKind.Relative), noToken, TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);

@@ -14,6 +14,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddClientNetwork(builder.Configuration);
 builder.Services.AddBrightTimeFinder(builder.Configuration);
+builder.Services.AddBrightTimeTenancy(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
@@ -50,6 +51,7 @@ app.MapStaticAssets();
 app.MapGet("/listings/{slug}/calendar.ics", async (
     string slug,
     HttpContext http,
+    SiteContext site,
     IListingDetails details,
     ITenantContext tenant,
     IClock clock,
@@ -61,7 +63,10 @@ app.MapGet("/listings/{slug}/calendar.ics", async (
         return Results.NotFound();
     }
 
-    Uri page = new($"{http.Request.Scheme}://{http.Request.Host}/listings/{Uri.EscapeDataString(listing.Slug)}");
+    // The tenant's own address, not the request's Host header. Sample data has no tenant
+    // address, so it falls back to the request, which is all a development machine has.
+    Uri origin = site.BaseUrl ?? new Uri($"{http.Request.Scheme}://{http.Request.Host}/");
+    Uri page = new(origin, $"/listings/{Uri.EscapeDataString(listing.Slug)}");
     string ics = ListingCalendar.ToIcs(listing, page, clock.UtcNow);
     return Results.File(System.Text.Encoding.UTF8.GetBytes(ics), ListingCalendar.ContentType, $"{listing.Slug}.ics");
 });

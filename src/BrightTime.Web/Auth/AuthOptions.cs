@@ -18,9 +18,10 @@ public sealed class AuthOptions
     public bool DevelopmentSignIn { get; set; }
 
     /// <summary>
-    /// The site's own address, for links in email. Required for password reset. Links are
-    /// never built from the request's Host header: a forged Host would put a reset token in
-    /// a link to someone else's server.
+    /// The site's own address, for a fixed tenant only (Tenancy:Mode=Fixed): resolved by host,
+    /// each tenant's address comes from its primary domain instead. Links are never built
+    /// from the request's Host header: a forged Host would put a reset token in a link to
+    /// someone else's server.
     /// </summary>
     public Uri? PublicBaseUrl { get; set; }
 

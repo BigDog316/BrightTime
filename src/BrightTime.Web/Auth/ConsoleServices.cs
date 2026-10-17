@@ -10,6 +10,7 @@ using BrightTime.Modules.Opportunities.Editing;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
 using BrightTime.Web.Composition;
+using BrightTime.Web.Tenancy;
 using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -41,6 +42,7 @@ public static class ConsoleServices
         AuthOptions auth = configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new();
         FinderOptions finder = configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>() ?? new();
 
+        TenancyOptions tenancy = configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new();
         bool hasDatabase = finder.Mode == FinderMode.Sql;
         bool canSignIn = hasDatabase && !string.IsNullOrWhiteSpace(auth.ConnectionString);
         bool devSignIn = canSignIn && auth.DevelopmentSignIn && environment.IsDevelopment();
@@ -77,11 +79,14 @@ public static class ConsoleServices
 
         if (canSignIn)
         {
-            if (auth.PublicBaseUrl is not { IsAbsoluteUri: true } baseUrl
-                || (baseUrl.Scheme != Uri.UriSchemeHttps && !environment.IsDevelopment()))
+            // By host, each tenant's address comes from its primary domain. A fixed tenant has
+            // no domain to ask, so its address is configured.
+            if (tenancy.Mode == TenancyMode.Fixed
+                && (auth.PublicBaseUrl is not { IsAbsoluteUri: true } fixedUrl
+                    || (fixedUrl.Scheme != Uri.UriSchemeHttps && !environment.IsDevelopment())))
             {
                 throw new InvalidOperationException(
-                    "Auth:PublicBaseUrl must be the site's absolute https address when sign-in is enabled; reset links are built from it.");
+                    "Auth:PublicBaseUrl must be the site's absolute https address when sign-in is enabled for a fixed tenant; reset links are built from it.");
             }
 
             services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth.ConnectionString!));
@@ -90,20 +95,25 @@ public static class ConsoleServices
                 sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             services.AddScoped<BrightTimePrincipalFactory>();
 
-            // WebAuthn's relying party is the site's own address, as for reset links: the
-            // browser checks each passkey against it, so a phishing site cannot use one.
-            string origin = baseUrl.GetLeftPart(UriPartial.Authority);
-            services.AddSingleton<IFido2>(_ => new Fido2(new Fido2Configuration
+            // WebAuthn's relying party is the tenant's own address, as for reset links: the
+            // browser checks each passkey against it, so a phishing site cannot use one. Per
+            // request, because each tenant is its own relying party.
+            services.AddScoped<IFido2>(sp =>
             {
-                RPID = baseUrl.Host,
-                RPName = "BrightTime",
-                Origins = new HashSet<string>(StringComparer.Ordinal) { origin },
-                TimestampDriftTolerance = 300_000,
-            }));
+                SiteContext site = sp.GetRequiredService<SiteContext>();
+                Uri siteUrl = site.BaseUrl ?? throw new InvalidOperationException("Passkeys need the tenant's address, and this request has none.");
+                return new Fido2(new Fido2Configuration
+                {
+                    RPID = siteUrl.Host,
+                    RPName = site.Site?.DisplayName ?? "BrightTime",
+                    Origins = new HashSet<string>(StringComparer.Ordinal) { siteUrl.GetLeftPart(UriPartial.Authority) },
+                    TimestampDriftTolerance = 300_000,
+                });
+            });
             services.AddSingleton(sp => new ExternalLogins(
                 sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             ExternalSignIn.AddProviders(authentication, auth, environment);
-            services.AddSingleton(sp => new Passkeys(
+            services.AddScoped(sp => new Passkeys(
                 sp.GetRequiredService<IFido2>(), sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
 
             if (auth.CheckBreachedPasswords)

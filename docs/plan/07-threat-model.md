@@ -246,8 +246,8 @@ timing difference.
 - **Reset tokens:** 256 random bits, stored as SHA-256 with a 60-minute expiry. They are
   single-use, one per account, and resending is throttled. A reset changes the security
   stamp, which ends existing sessions at their next revalidation (at most 5 minutes).
-- **Reset links:** built from `Auth:PublicBaseUrl`, never the Host header. The reset page
-  sends no Referer.
+- **Reset links:** built from the tenant's primary domain (D18), never the Host header. A
+  host that is no tenant's never reaches the reset page. The reset page sends no Referer.
 - **Rate limiting:** a fixed window per client address on every sign-in route.
 - **Password policy:** NIST 800-63B. At least 12 characters, no composition rules, and a
   common-password check. The breached-password check against the HIBP range API is
@@ -256,8 +256,8 @@ timing difference.
 *Implemented for passkeys (web):*
 - **Ceremonies:** WebAuthn with discoverable credentials and user verification required,
   and no attestation. The user handle is the account id, never an email.
-- **Phishing resistance:** the relying-party id and origin come from
-  `Auth:PublicBaseUrl`, so a passkey can't be used on another site.
+- **Phishing resistance:** the relying-party id and origin are the tenant's primary domain
+  (D18), so a passkey can't be used on another site or another tenant.
 - **Storage:** credentials live in `identity.user_credential`, accessed only as
   `brighttime_auth`. Tenant isolation comes through the account's RLS.
 - **Challenges:** held in an encrypted, HttpOnly, SameSite=Strict cookie for five minutes.

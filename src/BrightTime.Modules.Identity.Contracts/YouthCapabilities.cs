@@ -1,4 +1,5 @@
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Privacy;
 
 namespace BrightTime.Modules.Identity.Contracts;
 
@@ -12,6 +13,7 @@ namespace BrightTime.Modules.Identity.Contracts;
 /// row if it is violated, so a bug in the calculator becomes a constraint
 /// violation rather than a child posting in public.
 /// </remarks>
+[YouthData]
 public sealed record YouthCapabilities(
     UserId UserId,
     bool IsUnder13,

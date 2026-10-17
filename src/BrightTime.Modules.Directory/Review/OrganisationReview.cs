@@ -1,3 +1,4 @@
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Domain;
@@ -44,7 +45,7 @@ public sealed record OrganisationForReview(
 /// <c>organisation_vetting_event</c> in the same transaction as the status change, so the
 /// history and the state cannot disagree. The caller authorises the organiser.
 /// </remarks>
-public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext tenant, IClock clock)
+public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit)
 {
     private static readonly string[] Waiting =
         [OrganisationStatus.Applied.ToDbValue(), OrganisationStatus.UnderReview.ToDbValue()];
@@ -153,6 +154,15 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
             });
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "organisation.status_changed",
+                ActorId = actor,
+                SubjectKind = "organisation",
+                SubjectIds = [o.Id],
+                Reason = o.ReviewNote,
+                Detail = new Dictionary<string, string> { ["from"] = from.ToDbValue(), ["to"] = to.ToDbValue() },
+            }, ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 

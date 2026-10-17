@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using BrightTime.Abstractions.Messaging;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Messaging;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Review;
@@ -9,6 +10,7 @@ using BrightTime.Modules.Identity.SignIn;
 using BrightTime.Modules.Opportunities.Editing;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
+using BrightTime.Web.Auditing;
 using BrightTime.Web.Composition;
 using BrightTime.Web.Tenancy;
 using Fido2NetLib;
@@ -25,6 +27,7 @@ public static class ConsoleServices
 {
     public const string ReviewPolicy = "console.review";
     public const string VetPolicy = "console.vet";
+    public const string AuditPolicy = "console.audit";
 
     private const string AuthDataSourceKey = "auth";
 
@@ -70,6 +73,9 @@ public static class ConsoleServices
         services.AddAuthorizationBuilder()
             .AddPolicy(ReviewPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Listings.Review)))
             .AddPolicy(VetPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Organisations.Vet)))
+            .AddPolicy(AuditPolicy, p => p.RequireAuthenticatedUser()
+                .RequireRole(BrightTimeRoles.TenantWideAudit)
+                .AddRequirements(new PermissionRequirement(Permissions.Audit.Read)))
             .AddPolicy(StepUp.Policy, p => p.RequireAuthenticatedUser()
                 .AddRequirements(new RecentAuthenticationRequirement(TimeSpan.FromMinutes(Math.Max(1, auth.StepUpMinutes)))));
         services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
@@ -195,11 +201,16 @@ public static class ConsoleServices
         // Both endpoints validate the antiforgery token themselves and read the form after:
         // a bound [FromForm] parameter turns a missing token into a 500 rather than a 400, and
         // an endpoint with no form parameter is not validated by the middleware at all.
-        endpoints.MapPost("/sign-out", async (HttpContext http, IAntiforgery antiforgery) =>
+        endpoints.MapPost("/sign-out", async (HttpContext http, IAntiforgery antiforgery, AuditTrail audit) =>
         {
             if (!await IsValidPostAsync(http, antiforgery).ConfigureAwait(false))
             {
                 return Results.BadRequest();
+            }
+
+            if (http.User.GetUserId() is { } signedOut)
+            {
+                audit.Record(AuthAudit.Allowed(AuthAudit.SignOut, new UserId(signedOut)));
             }
 
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
@@ -213,7 +224,8 @@ public static class ConsoleServices
                 IAntiforgery antiforgery,
                 ITenantContext tenant,
                 BrightTimePrincipalFactory factory,
-                IClock clock) =>
+                IClock clock,
+                AuditTrail audit) =>
             {
                 if (!await IsValidPostAsync(http, antiforgery).ConfigureAwait(false))
                 {
@@ -234,6 +246,7 @@ public static class ConsoleServices
                     return Results.BadRequest("That account cannot sign in.");
                 }
 
+                audit.Record(AuthAudit.Allowed(AuthAudit.SignIn, new UserId(userId), AuthenticationMethods.Development));
                 await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal).ConfigureAwait(false);
                 return Results.LocalRedirect(LocalReturnPath(returnUrl, principal));
             });

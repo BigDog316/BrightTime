@@ -279,6 +279,30 @@ begin
 end
 $$;
 
+-- Audit partition upkeep runs as the table owner (SECURITY DEFINER), so only the worker may
+-- call it; the blanket function grant above would otherwise let the web app create tables.
+-- The blanket grants above reached the audit partitions too; take them back. Writes go through
+-- platform.audit_event, never a partition by name (see platform.seal_audit_partition).
+do $$
+declare
+  r record;
+begin
+  for r in
+    select c.relname from pg_inherits i
+    join pg_class c on c.oid = i.inhrelid
+    where i.inhparent = 'platform.audit_event'::regclass
+  loop
+    perform platform.seal_audit_partition(r.relname);
+  end loop;
+end
+$$;
+revoke execute on function platform.seal_audit_partition(text) from public, brighttime_app, brighttime_jobs;
+
+revoke execute on function platform.ensure_audit_partitions(int) from public, brighttime_app;
+revoke execute on function platform.audit_default_partition_rows() from public, brighttime_app;
+grant execute on function platform.ensure_audit_partitions(int) to brighttime_jobs;
+grant execute on function platform.audit_default_partition_rows() to brighttime_jobs;
+
 -- Append-only tables: take the grants away rather than relying on the
 -- trigger alone. Two independent controls.
 do $$

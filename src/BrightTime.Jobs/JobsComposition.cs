@@ -1,3 +1,4 @@
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Jobs;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
@@ -54,6 +55,8 @@ public static class JobsComposition
         services.Configure<JobRunnerOptions>(configuration.GetSection("Jobs"));
         services.AddSingleton<JobRunner>();
         services.AddHostedService(sp => sp.GetRequiredService<JobRunner>());
+        services.AddSingleton<AuditPartitionMaintenance>();
+        services.AddHostedService(sp => sp.GetRequiredService<AuditPartitionMaintenance>());
 
         services.AddListingProjection();
 

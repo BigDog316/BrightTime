@@ -1,11 +1,14 @@
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Privacy;
 
 namespace BrightTime.Modules.Identity.Contracts;
 
 /// <summary>A verified guardian-of relationship.</summary>
+[YouthData]
 public sealed record GuardianRelationship(UserId GuardianUserId, UserId ChildUserId, bool CanEnroll, bool CanViewActivity);
 
 /// <summary>A live grant of access to one young person's record.</summary>
+[YouthData]
 public sealed record YouthAccessGrantSummary(
     UserId YouthUserId,
     OrganisationId OrganisationId,

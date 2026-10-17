@@ -2,6 +2,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.SharedKernel.Time;
+using BrightTime.Web.Auditing;
 using BrightTime.Web.Auth;
 using BrightTime.Web.Components;
 using BrightTime.Web.Composition;
@@ -16,6 +17,7 @@ builder.Services.AddClientNetwork(builder.Configuration);
 builder.Services.AddBrightTimeFinder(builder.Configuration);
 builder.Services.AddBrightTimeTenancy(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
+builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
@@ -41,6 +43,9 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<ActorMiddleware>();
 app.UseAuthorization();
+
+// After the actor is known; flushes the request's audit events before its response starts.
+app.UseMiddleware<AuditFlushMiddleware>();
 
 app.UseAntiforgery();
 

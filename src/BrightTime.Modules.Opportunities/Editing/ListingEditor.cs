@@ -1,4 +1,5 @@
 using System.Globalization;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Opportunities.Contracts;
@@ -76,7 +77,8 @@ public sealed class ListingEditor(
     IDirectoryQueries directory,
     ITaxonomyQueries taxonomy,
     ITenantContext tenant,
-    IClock clock)
+    IClock clock,
+    IAuditWriter audit)
 {
     public const string Zone = "America/New_York";
 
@@ -185,6 +187,7 @@ public sealed class ListingEditor(
             return await db.InTransactionAsync(async ct =>
             {
                 ListingRecord listing;
+                string? from = null;
                 if (listingId is { } id)
                 {
                     ListingRecord? existing = await db.Listings.FirstOrDefaultAsync(l => l.Id == id, ct).ConfigureAwait(false);
@@ -209,6 +212,7 @@ public sealed class ListingEditor(
 
                     db.Entry(existing).Property<uint>("xmin").OriginalValue = version;
                     listing = existing;
+                    from = existing.Status;
                 }
                 else
                 {
@@ -231,6 +235,15 @@ public sealed class ListingEditor(
                 await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
                 await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);
+                await audit.RecordInTransactionAsync(db, new AuditAccess
+                {
+                    Action = from is null ? "listing.created" : "listing.updated",
+                    ActorId = actor,
+                    ActorOrgId = organisation,
+                    SubjectKind = "listing",
+                    SubjectIds = [listing.Id],
+                    Detail = new Dictionary<string, string> { ["status"] = listing.Status },
+                }, ct).ConfigureAwait(false);
 
                 return new SaveOutcome(listing.Id, new Dictionary<string, string[]>(), null);
             }, cancellationToken).ConfigureAwait(false);
@@ -326,6 +339,16 @@ public sealed class ListingEditor(
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.status_changed",
+                ActorId = actor,
+                ActorOrgId = mover == ListingLifecycle.Mover.Provider ? actingOrganisation : null,
+                SubjectKind = "listing",
+                SubjectIds = [listing.Id],
+                Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+                Detail = new Dictionary<string, string> { ["from"] = snapshot.Status, ["to"] = listing.Status },
+            }, ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -348,6 +371,13 @@ public sealed class ListingEditor(
             listing.ReviewedAt = clock.UtcNow;
             listing.ReviewedBy = actor.Value;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.reviewed",
+                ActorId = actor,
+                SubjectKind = "listing",
+                SubjectIds = [listing.Id],
+            }, ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 

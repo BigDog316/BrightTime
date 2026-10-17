@@ -13,6 +13,10 @@
             {
                 <a href="/organiser/review">Review queue</a>
             }
+            @if (user.HasPermission(Permissions.Audit.Read) && BrightTimeRoles.TenantWideAudit.Any(user.IsInRole))
+            {
+                <a href="/organiser/audit">Audit log</a>
+            }
             <a href="/account/security" class="signed-in-as" aria-label="Sign-in and security for @user.Identity!.Name">@user.Identity!.Name</a>
             <form method="post" action="/sign-out" class="inline-form">
                 <AntiforgeryToken />

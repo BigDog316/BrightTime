@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Text.RegularExpressions;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
+using BrightTime.Web.Auditing;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -145,7 +147,8 @@ public static partial class ExternalSignIn
             IOptions<AuthOptions> options,
             ExternalLogins logins,
             BrightTimePrincipalFactory factory,
-            IClock clock) =>
+            IClock clock,
+            AuditTrail audit) =>
         {
             AuthenticateResult external = await http.AuthenticateAsync(ExternalScheme).ConfigureAwait(false);
             await http.SignOutAsync(ExternalScheme).ConfigureAwait(false);
@@ -156,6 +159,7 @@ public static partial class ExternalSignIn
                 || !options.Value.External.TryGetValue(provider, out ExternalProviderOptions? settings)
                 || external.Principal.FindFirst("sub") is not { Value.Length: > 0 } sub)
             {
+                audit.Record(AuthAudit.Refused(AuthAudit.SignIn, null, "external_flow_failed", AuthenticationMethods.External));
                 return Results.LocalRedirect("/sign-in?external=failed");
             }
 
@@ -172,6 +176,9 @@ public static partial class ExternalSignIn
                 }
 
                 Result linked = await logins.LinkAsync(tenant.TenantId, new UserId(current), issuer, sub.Value, settings.DisplayName, http.RequestAborted).ConfigureAwait(false);
+                audit.Record(linked.IsSuccess
+                    ? AuthAudit.Allowed(AuthAudit.ExternalConnected, new UserId(current), detail: new Dictionary<string, string> { ["provider"] = provider })
+                    : AuthAudit.Refused(AuthAudit.ExternalConnected, new UserId(current), linked.Error!.Code));
                 return Results.LocalRedirect(linked.IsSuccess
                     ? "/account/security?external=connected"
                     : "/account/security?external=" + (linked.Error!.Code == "external.in_use" ? "in_use" : "already"));
@@ -183,9 +190,11 @@ public static partial class ExternalSignIn
                 : null;
             if (principal is null)
             {
+                audit.Record(AuthAudit.Refused(AuthAudit.SignIn, user, "external_account_not_connected", AuthenticationMethods.External));
                 return Results.LocalRedirect("/sign-in?external=unconnected&provider=" + Uri.EscapeDataString(provider));
             }
 
+            audit.Record(AuthAudit.Allowed(AuthAudit.SignIn, user, AuthenticationMethods.External, new Dictionary<string, string> { ["provider"] = provider }));
             await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal).ConfigureAwait(false);
             items.TryGetValue(ReturnItem, out string? returnUrl);
             return Results.LocalRedirect(ConsoleServices.LocalReturnPath(returnUrl, principal));

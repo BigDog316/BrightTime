@@ -1,0 +1,229 @@
+@page "/organiser/audit"
+@using System.Globalization
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.AuditPolicy)]
+@inherits ConsoleComponent
+
+<PageTitle>Audit log · BrightTime</PageTitle>
+
+<h1>Audit log</h1>
+<p class="hint">Sign-ins, account changes and every decision about organisations and listings, newest first. Nothing here can be edited or removed.</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>The audit log needs the database, which this site is not using.</p>
+}
+else
+{
+    <form method="get" action="/organiser/audit" class="filters" role="search" aria-label="Filter the audit log">
+        <label>Person (email) <input type="email" name="actor" value="@ActorEmail" autocomplete="off" /></label>
+        <label>Action starts with <input type="text" name="action" value="@Action" placeholder="auth." /></label>
+        <label>Subject id <input type="text" name="subject" value="@Subject" inputmode="text" /></label>
+        <label>Outcome
+            <select name="outcome">
+                <option value="" selected="@string.IsNullOrEmpty(Outcome)">Any</option>
+                @foreach (string o in Outcomes)
+                {
+                    <option value="@o" selected="@(Outcome == o)">@o</option>
+                }
+            </select>
+        </label>
+        <label>From <input type="date" name="from" value="@From" /></label>
+        <label>To <input type="date" name="to" value="@To" /></label>
+        <button type="submit">Filter</button>
+    </form>
+
+    @if (_problems.Count > 0)
+    {
+        <ul class="notice error" role="alert">
+            @foreach (string p in _problems)
+            {
+                <li>@p</li>
+            }
+        </ul>
+    }
+    else if (_page.Rows.Count == 0)
+    {
+        <p>No events match.</p>
+    }
+    else
+    {
+        <table class="queue audit">
+            <caption class="visually-hidden">Audit events, newest first</caption>
+            <thead>
+                <tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th><th scope="col">Outcome</th><th scope="col">Subject</th><th scope="col">Detail</th></tr>
+            </thead>
+            <tbody>
+                @foreach (AuditRow row in _page.Rows)
+                {
+                    <tr>
+                        <td><time datetime="@row.OccurredAt.ToString("O", CultureInfo.InvariantCulture)">@When(row.OccurredAt)</time></td>
+                        <td>@Who(row)</td>
+                        <td><code>@row.Action</code></td>
+                        <td>@row.Outcome</td>
+                        <td>
+                            @if (row.SubjectKind is not null)
+                            {
+                                <span>@row.SubjectKind</span>
+                                @foreach (Guid id in row.SubjectIds.Take(3))
+                                {
+                                    <a href="@Link(subject: id.ToString())" class="subject-id" title="@id">@id.ToString()[..8]</a>
+                                }
+                                @if (row.SubjectCount > 3)
+                                {
+                                    <span> and @(row.SubjectCount - 3) more</span>
+                                }
+                            }
+                        </td>
+                        <td>
+                            @if (row.Reason is not null)
+                            {
+                                <div>Reason: @row.Reason</div>
+                            }
+                            @foreach ((string key, string value) in row.Detail.OrderBy(d => d.Key, StringComparer.Ordinal))
+                            {
+                                <div><span class="detail-key">@key</span>: @value</div>
+                            }
+                            @if (row.Resource is not null)
+                            {
+                                <div class="hint">@row.Resource</div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <nav aria-label="Audit log pages" class="pager">
+            @if (!string.IsNullOrEmpty(Before))
+            {
+                <a href="@Link(before: string.Empty)">Newest</a>
+            }
+            @if (_page.Older is { } older)
+            {
+                <a href="@Link(before: older)">Older</a>
+            }
+        </nav>
+    }
+}
+
+@code {
+    private static readonly string[] Outcomes = [AuditOutcome.Allow, AuditOutcome.Deny, AuditOutcome.Error];
+
+    [SupplyParameterFromQuery(Name = "actor")] public string? ActorEmail { get; set; }
+
+    [SupplyParameterFromQuery(Name = "action")] public string? Action { get; set; }
+
+    [SupplyParameterFromQuery(Name = "subject")] public string? Subject { get; set; }
+
+    [SupplyParameterFromQuery(Name = "outcome")] public string? Outcome { get; set; }
+
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+
+    [SupplyParameterFromQuery(Name = "to")] public string? To { get; set; }
+
+    [SupplyParameterFromQuery(Name = "before")] public string? Before { get; set; }
+
+    private AuditPage _page = new([], null);
+    private IReadOnlyDictionary<Guid, string> _emails = new Dictionary<Guid, string>();
+    private readonly List<string> _problems = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            return;
+        }
+
+        CancellationToken ct = HttpContext.RequestAborted;
+        AccountReader accounts = Get<AccountReader>();
+        AuditFilter filter = new()
+        {
+            ActionPrefix = string.IsNullOrWhiteSpace(Action) ? null : Action.Trim(),
+            Outcome = Outcomes.Contains(Outcome) ? Outcome : null,
+            From = Day(From, "From"),
+            Until = Day(To, "To")?.AddDays(1),
+        };
+
+        if (!string.IsNullOrWhiteSpace(ActorEmail))
+        {
+            // An address with no account matches nothing, rather than everything.
+            filter = filter with { ActorId = (await accounts.FindByEmailAsync(Tenant.TenantId, ActorEmail, ct))?.Value ?? Guid.Empty };
+        }
+
+        if (!string.IsNullOrWhiteSpace(Subject))
+        {
+            if (Guid.TryParse(Subject.Trim(), out Guid subject))
+            {
+                filter = filter with { SubjectId = subject };
+            }
+            else
+            {
+                _problems.Add("The subject id isn't a valid id.");
+            }
+        }
+
+        if (_problems.Count > 0)
+        {
+            return;
+        }
+
+        _page = await Get<AuditLog>().SearchAsync(Tenant.TenantId, Actor, filter, Before, ct);
+        _emails = await accounts.EmailsAsync(
+            Tenant.TenantId, [.. _page.Rows.Where(r => r.ActorId is not null).Select(r => r.ActorId!.Value).Distinct()], ct);
+
+        // Reading the trail is itself on the trail: what was asked for, not what came back.
+        Dictionary<string, string> asked = new(StringComparer.Ordinal) { ["rows"] = _page.Rows.Count.ToString(CultureInfo.InvariantCulture) };
+        if (filter.ActorId is { } a) asked["actor"] = a.ToString();
+        if (filter.ActionPrefix is { } p) asked["action"] = p;
+        if (filter.SubjectId is { } s) asked["subject"] = s.ToString();
+        if (filter.Outcome is { } o) asked["outcome"] = o;
+        if (From is { Length: > 0 }) asked["from"] = From;
+        if (To is { Length: > 0 }) asked["to"] = To;
+        if (Before is { Length: > 0 }) asked["page"] = "older";
+        Get<AuditTrail>().Record(new AuditAccess { Action = "audit.searched", Detail = asked });
+    }
+
+    private DateTimeOffset? Day(string? value, string label)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day))
+        {
+            _problems.Add($"{label} isn't a date.");
+            return null;
+        }
+
+        // A day in the tenant's own zone, as the organiser means it.
+        DateTime local = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        return new DateTimeOffset(local, Tenant.TimeZone.GetUtcOffset(local));
+    }
+
+    private string Who(AuditRow row) => row.ActorId is { } id
+        ? _emails.TryGetValue(id, out string? email) ? email : id.ToString()
+        : row.ActorKind == "anonymous" ? "Not signed in" : row.ActorKind;
+
+    private string When(DateTimeOffset at) =>
+        TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).ToString("MMM d, yyyy h:mm:ss tt", Tenant.Locale.ToCulture());
+
+    private string Link(string? subject = null, string? before = null)
+    {
+        Dictionary<string, object?> query = new()
+        {
+            ["actor"] = ActorEmail,
+            ["action"] = Action,
+            ["subject"] = subject ?? Subject,
+            ["outcome"] = Outcome,
+            ["from"] = From,
+            ["to"] = To,
+            ["before"] = before is null ? (subject is null ? Before : null) : before.Length == 0 ? null : before,
+        };
+        return Navigation.GetUriWithQueryParameters("/organiser/audit", query);
+    }
+}

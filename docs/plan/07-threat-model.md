@@ -143,6 +143,41 @@ Audit is append-only by both grant revocation and trigger. Production
 database access is via a bastion with session recording; `brighttime_app`
 credentials are short-lived.
 
+*Implemented: the audit log (D11, D19).*
+- **Append-only, on every partition:**
+  - Postgres copies neither a statement trigger nor the parent's revoked grants to a
+    partition, so each partition is sealed separately (`platform.seal_audit_partition`).
+  - Each partition gets its own trigger refusing UPDATE, DELETE and TRUNCATE, which holds even
+    for the owner.
+  - No application role has any grant on a partition. Rows go in through
+    `platform.audit_event`.
+- **Partitions:**
+  - The worker creates them four months ahead, once at start and then daily.
+  - Only `brighttime_jobs` may call the upkeep functions.
+  - A row in the default partition is logged as critical.
+- **What is recorded today:**
+  - every sign-in and its refusals, with a reason the person is never shown;
+  - sign-out;
+  - password reset requested and completed;
+  - passkeys added and removed;
+  - external accounts connected and disconnected;
+  - step-up confirmations;
+  - organisation status changes;
+  - listing creates, edits, moves and reviews;
+  - each search of the audit log itself.
+- **Client details:** only keyed hashes of the client address and user agent. A typed address
+  with no account is never stored.
+- **Explorer:**
+  - `/organiser/audit` is for the roles whose `audit.read` is tenant-wide: organiser,
+    moderator and platform admin.
+  - The scoped forms for youth, guardians and provider admins come with the records they
+    cover (M2).
+- **Still open:**
+  - youth-record reads, which arrive with the youth-record endpoints (M2/M3);
+  - break-glass;
+  - organiser notification of break-glass;
+  - pseudonymising `subject_ids` on erasure.
+
 ### T11 — Prompt injection / content injection via listing or post text
 **Scenario:** an imported HSDS listing or a youth post contains text crafted
 to steer the screening model or a future LLM-assisted summariser.

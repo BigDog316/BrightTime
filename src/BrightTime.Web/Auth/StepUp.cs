@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using System.Text.Json;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
+using BrightTime.Web.Auditing;
 using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -97,7 +99,7 @@ public static class StepUp
             return Results.Content(options.ToJson(), "application/json");
         }).RequireAuthorization();
 
-        endpoints.MapPost(PasskeyPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant) =>
+        endpoints.MapPost(PasskeyPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, AuditTrail audit) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false) || http.User.GetUserId() is not { } user)
             {
@@ -126,8 +128,11 @@ public static class StepUp
             // The passkey must be this account's own: confirming as someone else proves nothing.
             if (proved?.Value != user || !await ReissueAsync(http, AuthenticationMethods.Passkey).ConfigureAwait(false))
             {
+                audit.Record(AuthAudit.Refused(AuthAudit.StepUp, new UserId(user), "passkey_rejected", AuthenticationMethods.Passkey));
                 return Results.BadRequest(new { error = "That passkey didn't confirm it's you." });
             }
+
+            audit.Record(AuthAudit.Allowed(AuthAudit.StepUp, new UserId(user), AuthenticationMethods.Passkey));
 
             return Results.Ok(new { redirect = ConsoleServices.LocalReturnPath(returnUrl, http.User) });
         }).RequireAuthorization();

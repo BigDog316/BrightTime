@@ -1,6 +1,8 @@
 @page "/account/confirm"
 @using BrightTime.Modules.Identity.Authorization
 @using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Web.Auditing
 @using BrightTime.Web.Auth
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
@@ -95,11 +97,15 @@ else if (!_hasPasskeys)
     private async Task ConfirmPasswordAsync()
     {
         bool confirmed = await Get<PasswordAccounts>().ConfirmPasswordAsync(Tenant.TenantId, Actor, FormValue("password"), HttpContext.RequestAborted);
+        AuditTrail audit = Get<AuditTrail>();
         if (!confirmed || !await StepUp.ReissueAsync(HttpContext, AuthenticationMethods.Password))
         {
+            audit.Record(AuthAudit.Refused(AuthAudit.StepUp, Actor, "wrong_password", AuthenticationMethods.Password));
             _failed = true;
             return;
         }
+
+        audit.Record(AuthAudit.Allowed(AuthAudit.StepUp, Actor, AuthenticationMethods.Password));
 
         Navigation.NavigateTo(ConsoleServices.LocalReturnPath(ReturnUrl, User));
     }
@@ -111,6 +117,8 @@ else if (!_hasPasskeys)
         {
             return;
         }
+
+        Get<AuditTrail>().Record(AuthAudit.Allowed(AuthAudit.StepUp, Actor, AuthenticationMethods.Development));
 
         Navigation.NavigateTo(ConsoleServices.LocalReturnPath(ReturnUrl, User));
     }

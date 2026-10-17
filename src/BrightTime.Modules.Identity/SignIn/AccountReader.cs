@@ -47,6 +47,62 @@ public sealed class AccountReader(NpgsqlDataSource authDataSource)
         return found.Count == 0 ? null : found[0];
     }
 
+    /// <summary>The account with this email, whatever its state, for filtering the audit log by person.</summary>
+    public async Task<UserId?> FindByEmailAsync(TenantId tenant, string email, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyDictionary<Guid, string> found = await LookupAsync(
+            tenant,
+            "select id, email::text from identity.app_user where normalized_email = upper(btrim(@email))",
+            new NpgsqlParameter("email", email),
+            cancellationToken).ConfigureAwait(false);
+        return found.Count == 0 ? null : new UserId(found.Keys.First());
+    }
+
+    /// <summary>
+    /// Email addresses for a page of audit rows, in one query. Deleted accounts are included:
+    /// the trail outlives the account, and erasure pseudonymises the address itself.
+    /// </summary>
+    public Task<IReadOnlyDictionary<Guid, string>> EmailsAsync(TenantId tenant, IReadOnlyCollection<Guid> users, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(users);
+        return users.Count == 0
+            ? Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>())
+            : LookupAsync(
+                tenant,
+                "select id, coalesce(email::text, user_name::text) from identity.app_user where id = any(@users)",
+                new NpgsqlParameter("users", users.ToArray()),
+                cancellationToken);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Both callers pass a constant query; the value is a bound parameter.")]
+    private async Task<IReadOnlyDictionary<Guid, string>> LookupAsync(TenantId tenant, string sql, NpgsqlParameter parameter, CancellationToken ct)
+    {
+        await using NpgsqlConnection connection = await authDataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using NpgsqlTransaction tx = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using (NpgsqlCommand set = new("select set_config(@key, @value, true)", connection, tx))
+        {
+            set.Parameters.Add(new NpgsqlParameter("key", SessionVariables.TenantId));
+            set.Parameters.Add(new NpgsqlParameter("value", tenant.Value.ToString("D", CultureInfo.InvariantCulture)));
+            await set.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        Dictionary<Guid, string> found = [];
+        await using (NpgsqlCommand command = new(sql, connection, tx))
+        {
+            command.Parameters.Add(parameter);
+            await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                found[reader.GetGuid(0)] = reader.GetString(1);
+            }
+        }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return found;
+    }
+
     /// <summary>
     /// Active adult accounts holding at least one of the named roles, for the development
     /// sign-in list. Never used on a production path.

@@ -1,6 +1,8 @@
 @page "/account/security"
 @using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Infrastructure.Auditing
 @using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Web.Auditing
 @using BrightTime.SharedKernel.Ids
 @using Microsoft.AspNetCore.Authorization
 @* Changing how the account signs in is a step-up action (T21): the page itself needs a recent confirmation. *@
@@ -142,6 +144,11 @@ else
     private async Task DisconnectAsync(string issuer)
     {
         bool removed = await Get<ExternalLogins>().UnlinkAsync(Tenant.TenantId, Actor, issuer);
+        if (removed)
+        {
+            Get<AuditTrail>().Record(AuthAudit.Allowed(AuthAudit.ExternalDisconnected, Actor, detail: new Dictionary<string, string> { ["issuer"] = issuer }));
+        }
+
         _message = removed ? "Disconnected. It can no longer sign in to this account." : "That account was already disconnected.";
         _external = await Get<ExternalLogins>().ListAsync(Tenant.TenantId, Actor);
     }
@@ -161,6 +168,11 @@ else
     private async Task RevokeAsync(Guid id)
     {
         bool removed = await Get<Passkeys>().RevokeAsync(Tenant.TenantId, Actor, id);
+        if (removed)
+        {
+            Get<AuditTrail>().Record(AuthAudit.Allowed(AuthAudit.PasskeyRemoved, Actor, detail: new Dictionary<string, string> { ["passkey"] = id.ToString("N") }));
+        }
+
         _message = removed ? "Passkey removed. It can no longer sign in to this account." : "That passkey was already removed.";
         _passkeys = await Get<Passkeys>().ListAsync(Tenant.TenantId, Actor);
     }

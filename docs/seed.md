@@ -74,6 +74,11 @@ To run the web app on the seed, set `Finder:Mode=Sql` and a `Finder:ConnectionSt
 login is a member of both `brighttime_app` and `brighttime_finder` (decision D13). The
 consoles also need `Auth:ConnectionString`, as above.
 
+The audit log needs `Audit:ClientHashKey` outside Development: 32 random bytes or more,
+base64-encoded (`openssl rand -base64 32`). It keys the hashes of client addresses and user
+agents. Development makes one up per run, so hashes there match only within a run. Organisers
+browse the log at `/organiser/audit`. The Jobs host keeps its partitions ahead.
+
 The tenant comes from the host (decision D18). The seed's primary domain is
 `kettle.localhost`, with `kettle.brighttime.test` as an alias, and browsers send
 `*.localhost` to this machine.

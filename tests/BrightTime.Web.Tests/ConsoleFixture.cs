@@ -57,7 +57,14 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
 
     public string? SuperuserConnection { get; } = Environment.GetEnvironmentVariable("BRIGHTTIME_TEST_CONNECTION");
 
+    /// <summary>The test deployment's client-hash key (base64), so a test can recompute a hash.</summary>
+    public const string AuditHashKey = "YnJpZ2h0dGltZS10ZXN0LW9ubHktYXVkaXQtaGFzaC1rZXkhIQ==";
+
     public bool IsAvailable => SuperuserConnection is not null;
+
+    /// <summary>The web host's own login, for tests that write as the application does.</summary>
+    public string WebLoginConnection =>
+        new NpgsqlConnectionStringBuilder(Connection) { Username = "bt_web_login", Password = Password }.ConnectionString;
 
     public string Connection => new NpgsqlConnectionStringBuilder(SuperuserConnection) { Database = DatabaseName }.ConnectionString;
 
@@ -89,6 +96,7 @@ public sealed partial class ConsoleFixture : IAsyncLifetime
             b.UseEnvironment("Development");
             b.UseSetting("Finder:Mode", "Sql");
             b.UseSetting("Tenancy:Mode", "Host");
+            b.UseSetting("Audit:ClientHashKey", AuditHashKey);
             b.UseSetting("Tenancy:PublicScheme", "https");
             b.UseSetting("Finder:ConnectionString", As("bt_web_login"));
             b.UseSetting("Auth:ConnectionString", As("bt_auth_login"));

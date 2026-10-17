@@ -10,6 +10,18 @@ using Npgsql;
 
 namespace BrightTime.Modules.Identity.SignIn;
 
+/// <summary>What a password check found. <see cref="Failure"/> is for the audit trail only.</summary>
+public sealed record PasswordCheckOutcome(UserId? SignedIn, UserId? Account, string? Failure)
+{
+    public const string NoAccount = "no_account";
+    public const string NotEligible = "account_not_eligible";
+    public const string Locked = "account_locked";
+    public const string WrongPassword = "wrong_password";
+    public const string LockoutStarted = "lockout_started";
+
+    internal static PasswordCheckOutcome Failed(UserId? account, string failure) => new(null, account, failure);
+}
+
 /// <summary>A reset link to send. The token is in the email only; the database holds its hash.</summary>
 public sealed record PasswordResetRequest(UserId UserId, string Email, string? Locale, string Token);
 
@@ -46,7 +58,14 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
     private const int RandomBytes = 32;
 
     /// <summary>The account the email and password belong to, or null for any failure at all.</summary>
-    public Task<UserId?> CheckPasswordAsync(TenantId tenant, string email, string password, CancellationToken cancellationToken = default) =>
+    public async Task<UserId?> CheckPasswordAsync(TenantId tenant, string email, string password, CancellationToken cancellationToken = default) =>
+        (await CheckPasswordWithOutcomeAsync(tenant, email, password, cancellationToken).ConfigureAwait(false)).SignedIn;
+
+    /// <summary>
+    /// The same check, saying what happened, for the audit trail. The person is still shown one
+    /// message whatever the outcome (T21); only the audit log tells them apart.
+    /// </summary>
+    public Task<PasswordCheckOutcome> CheckPasswordWithOutcomeAsync(TenantId tenant, string email, string password, CancellationToken cancellationToken = default) =>
         CheckAsync(tenant, (c, tx, ct) => FindByEmailAsync(c, tx, email, ct), password, cancellationToken);
 
     /// <summary>
@@ -54,7 +73,7 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
     /// toward the same lockout as sign-in, so a borrowed session cannot be used to guess it.
     /// </summary>
     public async Task<bool> ConfirmPasswordAsync(TenantId tenant, UserId user, string password, CancellationToken cancellationToken = default) =>
-        await CheckAsync(tenant, (c, tx, ct) => FindByIdAsync(c, tx, user.Value, ct), password, cancellationToken).ConfigureAwait(false) == user;
+        (await CheckAsync(tenant, (c, tx, ct) => FindByIdAsync(c, tx, user.Value, ct), password, cancellationToken).ConfigureAwait(false)).SignedIn == user;
 
     /// <summary>Whether the account has a password at all, so step-up knows what to offer.</summary>
     public async Task<bool> HasPasswordAsync(TenantId tenant, UserId user, CancellationToken cancellationToken = default)
@@ -65,7 +84,7 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
             "select password_hash is not null from identity.app_user where id = @id", cancellationToken, ("id", user.Value)).ConfigureAwait(false);
     }
 
-    private async Task<UserId?> CheckAsync(
+    private async Task<PasswordCheckOutcome> CheckAsync(
         TenantId tenant,
         Func<NpgsqlConnection, NpgsqlTransaction, CancellationToken, Task<Account?>> find,
         string password,
@@ -82,7 +101,10 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
         if (account is null || !account.CanSignIn || account.LockoutEnd > now)
         {
             Argon2PasswordHasher.VerifyAgainstNothing(password);
-            return null;
+            return account is null
+                ? PasswordCheckOutcome.Failed(null, PasswordCheckOutcome.NoAccount)
+                : PasswordCheckOutcome.Failed(new UserId(account.Id),
+                    account.LockoutEnd > now ? PasswordCheckOutcome.Locked : PasswordCheckOutcome.NotEligible);
         }
 
         PasswordCheck check = Argon2PasswordHasher.Verify(account.PasswordHash, password);
@@ -97,7 +119,8 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
                 ("end", lockNow ? now + LockoutDuration : (object)DBNull.Value),
                 ("id", account.Id)).ConfigureAwait(false);
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return null;
+            return PasswordCheckOutcome.Failed(new UserId(account.Id),
+                lockNow ? PasswordCheckOutcome.LockoutStarted : PasswordCheckOutcome.WrongPassword);
         }
 
         await ExecAsync(connection, tx,
@@ -112,7 +135,7 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
             ("rehash", check.NeedsRehash ? Argon2PasswordHasher.HashPassword(password) : (object)DBNull.Value),
             ("id", account.Id)).ConfigureAwait(false);
         await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return new UserId(account.Id);
+        return new PasswordCheckOutcome(new UserId(account.Id), new UserId(account.Id), null);
     }
 
     /// <summary>
@@ -159,7 +182,7 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
     }
 
     /// <summary>Sets a new password from a reset link. The link works once and ends every session.</summary>
-    public async Task<Result> ResetAsync(TenantId tenant, string token, string newPassword, CancellationToken cancellationToken = default)
+    public async Task<Result<UserId>> ResetAsync(TenantId tenant, string token, string newPassword, CancellationToken cancellationToken = default)
     {
         Error invalid = Error.Validation("password_reset.invalid", "This link has expired or has already been used. Ask for a new one.");
 
@@ -207,7 +230,7 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
             ("concurrency", Guid.NewGuid().ToString("N")),
             ("id", userId), ("provider", TokenProvider), ("name", ResetTokenName)).ConfigureAwait(false);
         await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return Result.Success();
+        return new UserId(userId);
     }
 
     private sealed record Account(

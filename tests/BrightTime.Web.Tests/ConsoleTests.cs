@@ -82,6 +82,25 @@ public sealed class ConsoleTests(ConsoleFixture db)
         (await db.ScalarAsync<long>(
             "select count(*) from platform.job where unique_key = @k and state = 'ready'",
             ("k", $"opportunities.project_listing:{id:N}"))).ShouldBe(1, "the worker is told to project it");
+
+        // Each change is on the audit trail, written in the change's own transaction.
+        Guid providerId = SeedIds.For("user/" + Admin(org));
+        (await db.ScalarAsync<long>(
+            "select count(*) from platform.audit_event where action = 'listing.created' and actor_id = @a and actor_org_id = @o and subject_ids = array[@id]",
+            ("a", providerId), ("o", org.Id), ("id", id))).ShouldBe(1);
+        (await db.ScalarAsync<long>(
+            """
+            select count(*) from platform.audit_event
+            where action = 'listing.status_changed' and subject_ids = array[@id]
+              and detail->>'to' = 'pending_review' and actor_org_id = @o
+            """, ("id", id), ("o", org.Id))).ShouldBe(1);
+        (await db.ScalarAsync<long>(
+            """
+            select count(*) from platform.audit_event
+            where action = 'listing.status_changed' and subject_ids = array[@id]
+              and detail->>'from' = 'pending_review' and detail->>'to' = 'published'
+              and actor_id = @a and actor_org_id is null
+            """, ("id", id), ("a", KettleAccounts.OrganiserId))).ShouldBe(1, "an organiser acts for the network, not an organisation");
     }
 
     [Fact]
@@ -232,6 +251,15 @@ public sealed class ConsoleTests(ConsoleFixture db)
         (await db.ScalarAsync<long>(
             "select count(*) from directory.organisation_vetting_event where org_id = @id and to_status = 'approved' and actor_id = @a",
             ("id", org.Id), ("a", KettleAccounts.OrganiserId))).ShouldBe(1);
+        (await db.ScalarAsync<long>(
+            """
+            select count(*) from platform.audit_event
+            where action = 'organisation.status_changed' and subject_kind = 'organisation' and subject_ids = array[@id]
+              and detail->>'to' = 'approved' and actor_id = @a
+            """, ("id", org.Id), ("a", KettleAccounts.OrganiserId))).ShouldBe(1);
+        (await db.ScalarAsync<long>(
+            "select count(*) from platform.audit_event where action = 'organisation.status_changed' and subject_ids = array[@id] and detail->>'to' = 'rejected'",
+            ("id", org.Id))).ShouldBe(0, "a refused decision changed nothing, so it left no change on the trail");
     }
 
     [Fact]

@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Text.Json;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
+using BrightTime.Web.Auditing;
 using Fido2NetLib;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -56,7 +58,7 @@ public static class PasskeyEndpoints
             return Results.Content(options.ToJson(), "application/json");
         }).RequireAuthorization(StepUp.Policy);
 
-        endpoints.MapPost(RegisterPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant) =>
+        endpoints.MapPost(RegisterPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys, ITenantContext tenant, AuditTrail audit) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false) || http.User.GetUserId() is not { } user)
             {
@@ -73,7 +75,13 @@ public static class PasskeyEndpoints
 
             Result result = await passkeys.CompleteRegistrationAsync(
                 tenant.TenantId, new UserId(user), CredentialCreateOptions.FromJson(remembered), response, name, http.RequestAborted).ConfigureAwait(false);
-            return result.IsSuccess ? Results.Ok(new { ok = true }) : Problem(result.Error!.Message);
+            if (!result.IsSuccess)
+            {
+                return Problem(result.Error!.Message);
+            }
+
+            audit.Record(AuthAudit.Allowed(AuthAudit.PasskeyAdded, new UserId(user)));
+            return Results.Ok(new { ok = true });
         }).RequireAuthorization(StepUp.Policy);
 
         endpoints.MapPost(SignInOptionsPath, async (HttpContext http, IAntiforgery antiforgery, Passkeys passkeys) =>
@@ -94,7 +102,8 @@ public static class PasskeyEndpoints
             Passkeys passkeys,
             ITenantContext tenant,
             BrightTimePrincipalFactory factory,
-            IClock clock) =>
+            IClock clock,
+            AuditTrail audit) =>
         {
             if (!await ValidAsync(http, antiforgery).ConfigureAwait(false))
             {
@@ -116,9 +125,11 @@ public static class PasskeyEndpoints
                 : null;
             if (principal is null)
             {
+                audit.Record(AuthAudit.Refused(AuthAudit.SignIn, user, "passkey_rejected", AuthenticationMethods.Passkey));
                 return Problem("That passkey didn't sign you in. It may have been removed, or the account may be inactive.");
             }
 
+            audit.Record(AuthAudit.Allowed(AuthAudit.SignIn, user, AuthenticationMethods.Passkey));
             await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal).ConfigureAwait(false);
             return Results.Ok(new { redirect = ConsoleServices.LocalReturnPath(returnUrl, principal) });
         });

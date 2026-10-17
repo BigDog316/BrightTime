@@ -31,7 +31,7 @@ src/
                                         IGeocoder, ITileProvider, IObjectStore, IScreeningService,
                                         IKeyVault, IFieldCipher
   BrightTime.Infrastructure/            EF base types, outbox dispatcher, job runner, tenant
-                                        interceptor, audit interceptor, encryption converters,
+                                        interceptor, audit trail and log, encryption converters,
                                         S3 store, SMTP/Twilio/FCM/Stripe adapters, Nominatim/
                                         Pelias geocoder, MapLibre tile proxy
 
@@ -209,7 +209,7 @@ nginx (TLS, HSTS, brotli, static cache)
         ├─ RateLimiting                   per tenant, per client, stricter for anonymous + public API
         ├─ DbConnectionInterceptor        set_config('brighttime.tenant_id', …, true)
         │                                 set_config('brighttime.actor_id',  …, true)
-        ├─ AuditInterceptor               one audit_event per operation touching youth records
+        ├─ AuditFlushMiddleware           writes the request's audit_event rows before the response (D19)
         ├─ Authorization                  policy handlers (see 04-roles-and-permissions.md)
         └─ Endpoint
 ```

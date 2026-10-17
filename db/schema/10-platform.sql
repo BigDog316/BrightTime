@@ -255,9 +255,33 @@ create table audit_event (
 -- a non-empty default partition raises a health-check alert.
 create table audit_event_default partition of audit_event default;
 
--- Partitions are created a quarter ahead by platform.ensure_audit_partitions().
+-- A partition is reachable by name, not only through audit_event, and two things on the parent
+-- do not reach it that way: a statement-level trigger is not cloned to partitions, and the
+-- schema-wide grants (and the owner's default privileges) give the application roles UPDATE and
+-- DELETE on every table, partitions included. So each partition gets its own append-only
+-- trigger and loses every grant: the roles write through the parent, which routes the row.
+create or replace function platform.seal_audit_partition(p_name text)
+  returns void language plpgsql
+  security definer set search_path = pg_catalog, platform as $fn$
+begin
+  if not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
+                  where c.relname = p_name and c.relnamespace = 'platform'::regnamespace
+                    and t.tgname = 'audit_partition_append_only') then
+    execute format(
+      'create trigger audit_partition_append_only before update or delete or truncate on platform.%I '
+      'for each statement execute function platform.deny_write()', p_name);
+  end if;
+  execute format('revoke all on platform.%I from public, brighttime_app, brighttime_jobs, brighttime_auth, brighttime_readonly, brighttime_finder', p_name);
+end
+$fn$;
+
+-- Partitions are created a quarter ahead by platform.ensure_audit_partitions(), which the
+-- jobs worker calls daily. SECURITY DEFINER because creating a table is the owner's right, not
+-- the worker's; execute is granted to brighttime_jobs alone (99-rls-and-grants.sql), and the
+-- function takes nothing but a month count.
 create or replace function platform.ensure_audit_partitions(p_months int default 4)
-  returns void language plpgsql as $fn$
+  returns void language plpgsql
+  security definer set search_path = pg_catalog, platform as $fn$
 declare
   v_start date := date_trunc('month', now())::date;
   v_i     int;
@@ -280,17 +304,28 @@ begin
       execute format('create index %I on platform.%I using gin (subject_ids)',
         'ix_' || v_name || '_subjects', v_name);
       execute format('alter table platform.%I enable row level security', v_name);
+      execute format('alter table platform.%I force row level security', v_name);
+      perform platform.seal_audit_partition(v_name);
     end if;
   end loop;
 end
+$fn$;
+
+-- Rows in the default partition mean a month arrived before its partition did; the worker
+-- raises an alarm. SECURITY DEFINER so it can count across tenants, returning only a number.
+create or replace function platform.audit_default_partition_rows()
+  returns bigint language sql stable
+  security definer set search_path = pg_catalog, platform as $fn$
+  select count(*) from platform.audit_event_default
 $fn$;
 select platform.ensure_audit_partitions(4);
 
 create index ix_audit_event_default_tenant on audit_event_default (tenant_id, occurred_at desc);
 
 create trigger audit_event_append_only
-  before update or delete on audit_event
+  before update or delete or truncate on audit_event
   for each statement execute function platform.deny_write();
+select platform.seal_audit_partition('audit_event_default');
 
 -- ---------------------------------------------------------------------
 -- Transactional outbox. Modules never call each other's tables; they

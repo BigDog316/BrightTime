@@ -322,6 +322,33 @@ single-tenant install. Sample data always serves the fictional tenant. `Finder:T
 gone. External OIDC providers are still deployment-wide; per-tenant providers can now key on
 the resolved tenant.
 
+### D19 — Audit rows are written by the operation, not by an EF interceptor (**proposed 2026-10-17; implemented, reversible**)
+
+The architecture sketch had an `AuditInterceptor`. An interceptor sees rows and commands, not
+operations: a roster read is one query, a listing save is a dozen statements, and neither knows
+why it ran. D11 asks for one row per operation, with its subjects and a reason, so the operation
+writes it.
+
+- **Changes:** `IAuditWriter.RecordInTransactionAsync` writes the row through the change's own
+  transaction. The change and its trace commit or roll back together. Organisation decisions
+  and listing saves, moves and reviews do this.
+- **Request events** (sign-in, sign-out, step-up, account security, explorer searches): these
+  are buffered per request. They are flushed in one transaction before the response starts,
+  so an audited read is on record before its data leaves. A failed flush fails the request.
+- **Background work** (the password-reset dispatcher) records and flushes in its own scope.
+- **The safety net stays:**
+  - The boot guard refuses to start when an endpoint can return a `[YouthData]` type without
+    `[YouthRecord]`.
+  - An attributed endpoint that records nothing writes an `error` row naming itself.
+- **Client details:** the address and user agent are stored only as HMAC-SHA256 under
+  `Audit:ClientHashKey`, a deployment secret that is required outside Development. A plain
+  hash of an IPv4 address is reversible by enumeration.
+- **Not recorded:** an address typed into sign-in or "forgot password" that has no account.
+  The audit log must not become a list of who tried which emails.
+
+Reversible: an interceptor could be added later for a "nothing touched a youth table
+unaudited" cross-check. It would add to these rows, not replace them.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

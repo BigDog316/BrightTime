@@ -47,8 +47,24 @@ public sealed partial class PasswordResetDispatcher(
                     continue;
                 }
 
-                await scope.ServiceProvider.GetRequiredService<IEmailSender>()
+                DeliveryReceipt receipt = await scope.ServiceProvider.GetRequiredService<IEmailSender>()
                     .SendAsync(Compose(reset, siteUrl), stoppingToken).ConfigureAwait(false);
+
+                // Recorded only when there was an account: a request for an unknown address
+                // leaves no trace, so the audit log is no list of addresses people typed.
+                var context = scope.ServiceProvider.GetRequiredService<Infrastructure.Tenancy.TenantContext>();
+                context.SetTenant(tenant, TimeZoneInfo.Utc, Locale.Default);
+
+                // The actor stays anonymous: whoever asked was not signed in. The request's
+                // address is gone by now, so this row has no client hashes.
+                Infrastructure.Auditing.AuditTrail audit = scope.ServiceProvider.GetRequiredService<Infrastructure.Auditing.AuditTrail>();
+                audit.Record(Auditing.AuthAudit.Allowed(Auditing.AuthAudit.ResetRequested, null,
+                    detail: new Dictionary<string, string> { ["email_sent"] = receipt.Accepted ? "true" : "false" }) with
+                {
+                    SubjectKind = "user",
+                    SubjectIds = [reset.UserId.Value],
+                });
+                await audit.FlushAsync(stoppingToken).ConfigureAwait(false);
             }
 #pragma warning disable CA1031 // One failed reset must not stop the dispatcher for everyone else.
             catch (Exception ex) when (ex is not OperationCanceledException)

@@ -23,6 +23,12 @@ public interface IAuditWriter
     /// <summary>Records an operation. Call once per operation, with every subject it touched.</summary>
     void Record(AuditAccess access);
 
+    /// <summary>
+    /// Writes one row inside <paramref name="db"/>'s open transaction, so a change and its
+    /// trace commit or roll back together.
+    /// </summary>
+    Task RecordInTransactionAsync(Persistence.BrightTimeDbContext db, AuditAccess access, CancellationToken cancellationToken = default);
+
     /// <summary>Persists everything buffered for this unit of work.</summary>
     Task FlushAsync(CancellationToken cancellationToken = default);
 
@@ -42,6 +48,12 @@ public sealed record AuditAccess
     public IReadOnlyCollection<Guid> SubjectIds { get; init; } = [];
 
     public OrganisationId? ActorOrgId { get; init; }
+
+    /// <summary>
+    /// The actor, when it is not the request's: a sign-in names the person signing in, who is
+    /// not yet the request's actor. Null means "whoever the request's actor is".
+    /// </summary>
+    public UserId? ActorId { get; init; }
 
     public string? Resource { get; init; }
 

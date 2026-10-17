@@ -3,6 +3,8 @@
 @using BrightTime.Modules.Identity.Authorization
 @using BrightTime.Modules.Identity.SignIn
 @using BrightTime.SharedKernel.Ids
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Web.Auditing
 @using BrightTime.Web.Auth
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
@@ -128,7 +130,9 @@ else
         _email = FormValue("email").Trim();
         string password = FormValue("password");
 
-        UserId? user = await Get<PasswordAccounts>().CheckPasswordAsync(Tenant.TenantId, _email, password, HttpContext.RequestAborted);
+        PasswordCheckOutcome outcome = await Get<PasswordAccounts>().CheckPasswordWithOutcomeAsync(Tenant.TenantId, _email, password, HttpContext.RequestAborted);
+        UserId? user = outcome.SignedIn;
+        AuditTrail audit = Get<AuditTrail>();
         ClaimsPrincipal? principal = user is { } id
             ? await Get<BrightTimePrincipalFactory>().CreateAsync(
                 Tenant.TenantId, id, new AuthenticationEvent(AuthenticationMethods.Password, Get<BrightTime.SharedKernel.Time.IClock>().UtcNow), HttpContext.RequestAborted)
@@ -136,10 +140,12 @@ else
 
         if (principal is null)
         {
+            audit.Record(AuthAudit.Refused(AuthAudit.SignIn, outcome.Account, outcome.Failure ?? "account_not_eligible", AuthenticationMethods.Password));
             _failed = true;
             return;
         }
 
+        audit.Record(AuthAudit.Allowed(AuthAudit.SignIn, user, AuthenticationMethods.Password));
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
         Navigation.NavigateTo(ConsoleServices.LocalReturnPath(ReturnUrl, principal));
     }

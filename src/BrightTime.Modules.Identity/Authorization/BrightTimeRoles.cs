@@ -132,6 +132,13 @@ public static class BrightTimeRoles
             ],
         };
 
+    /// <summary>
+    /// The roles whose <c>audit.read</c> is tenant-wide (● in the permission matrix). For a
+    /// youth, a guardian or a provider admin the same permission is scoped to their own
+    /// record, their children's or their organisation's, which the explorer does not serve.
+    /// </summary>
+    public static IReadOnlyList<string> TenantWideAudit { get; } = [NetworkOrganiser, Moderator, PlatformAdmin];
+
     public static IReadOnlyList<string> All { get; } =
         [.. DefaultPermissions.Keys];
 }

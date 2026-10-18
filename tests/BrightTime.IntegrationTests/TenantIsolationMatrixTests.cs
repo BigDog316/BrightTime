@@ -55,6 +55,8 @@ public sealed class TenantIsolationMatrixTests(DatabaseFixture database)
             ("the tenant is found from the request's host before it is known (D18); host names are public", ["brighttime_app", "brighttime_jobs", "brighttime_auth"], "r"),
         [("platform.job", "job_worker_claims")] =
             ("the worker claims every tenant's jobs and sets each job's tenant itself (D2); payloads carry ids only", ["brighttime_jobs"], "*"),
+        [("platform.outbox_message", "outbox_dispatch")] =
+            ("the dispatcher fans every tenant's messages out to jobs that carry the message's tenant (D27)", ["brighttime_jobs"], "*"),
     };
 
     /// <summary>Tables with no actor guard over them, whose rows the application must see all of under its tenant.</summary>

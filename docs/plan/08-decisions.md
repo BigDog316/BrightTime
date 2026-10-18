@@ -463,7 +463,7 @@ has to invite staff. Both start from an email address someone typed, which may n
 Rejected: requiring sign-up first. There is no registration in M1, and a sign-up form has the
 same enumeration problem.
 
-### D24 — Cross-module changes travel as jobs until the outbox has a dispatcher (**accepted 2026-10-17**)
+### D24 — Cross-module changes travel as jobs until the outbox has a dispatcher (**accepted 2026-10-17; superseded by D27**)
 
 The plan sends module events through `platform.outbox_message`, but nothing dispatches it
 yet. `IOutboxWriter` has no implementation. Provider management needs one such event:
@@ -520,6 +520,45 @@ policy and the checklist follows it.
   many each term has.
 - **Search:** renaming, retiring or restoring queues `platform.term_changed` (D24), which
   re-projects the listings tagged with the term, so search matches its current name.
+
+### D27 — The outbox: publish in the caller's transaction, deliver as one job per handler (**proposed 2026-10-18; implemented, reversible**)
+
+The outbox now has a dispatcher, and D24's three stopgap jobs are module messages:
+- `SiteChanged`, which replaces the unused `SiteLocationChanged`;
+- `OrganisationStatusChanged`, with `OrganisationApproved` and `OrganisationSuspended`
+  published as well where they apply;
+- `TaxonomyTermChanged`.
+
+- **Publishing:** `db.PublishAsync(tenant, message)` writes to `platform.outbox_message`
+  through the module context's own connection and transaction, as `EnqueueJobAsync` does
+  for jobs. That gives no change without its message and no message without its change.
+  - The plan's `IOutboxWriter`, which staged messages until "the unit of work commits",
+    was never implemented, and is removed. Our module contexts commit inside
+    `InTransactionAsync`, so an explicit write in that transaction is simpler and visibly
+    atomic.
+  - The tenant policy stops the application publishing for any tenant but its own.
+- **Dispatching:** in the jobs host, `OutboxDispatcher` claims unprocessed messages with
+  `FOR UPDATE SKIP LOCKED`. In the same transaction that marks a message processed, it
+  writes one `outbox.deliver` job per subscribed handler.
+  - Each handler then has the job runner's tenant scoping, retries, backoff and dead
+    letter, so one failing handler neither blocks the others nor makes them run twice.
+  - A delivery job carries the message id and the handler name, never the message's
+    content, keeping to the job table's ids-only rule.
+  - The jobs role reads every tenant's messages through a named policy,
+    `outbox_dispatch`, the same shape as `job_worker_claims`. The tenant matrix allows
+    exactly that.
+- **Guarantees:** delivery is at least once, so handlers are idempotent. Messages are
+  dispatched in the order they were written, but deliveries run in any order, so handlers
+  read current state and don't rely on order. The three reprojection handlers do both:
+  queueing a projection twice collapses into one.
+- **Handler names:** a handler is named by its type's full name. Renaming one strands
+  deliveries already queued for it, which fail until dead.
+- **Not done yet:**
+  - Processed messages are kept. Deleting them is a retention-policy number (Q4); I
+    propose 30 days after processing.
+  - Outbox lag on `/health/ready` comes with the health endpoints.
+  - Dispatch polls once a second when idle. LISTEN/NOTIFY would cut that, as for jobs,
+    and is a follow-up.
 
 ## Open questions
 

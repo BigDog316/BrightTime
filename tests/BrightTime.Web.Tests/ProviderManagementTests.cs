@@ -321,8 +321,8 @@ public sealed partial class ProviderManagementTests(ConsoleFixture db)
         Location(closed).ShouldBe(path);
         (await db.ScalarAsync<bool>("select is_active from directory.site where id = @s", ("s", site))).ShouldBeFalse();
         (await db.ScalarAsync<long>(
-            "select count(*) from platform.job where job_type = 'directory.site_changed' and unique_key = @k",
-            ("k", $"directory.site_changed:{site:N}"))).ShouldBe(1);
+            "select count(*) from platform.outbox_message where message_type = 'directory.site.changed' and payload->>'siteId' = @s and payload->>'isActive' = 'false'",
+            ("s", site.ToString()))).ShouldBe(1);
         (await db.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'site.deactivated' and @s = any(subject_ids)", ("s", site))).ShouldBe(1);
 
         await owner.GetAsync(path);

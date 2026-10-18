@@ -102,8 +102,12 @@ public sealed class OrganiserReviewTests(ConsoleFixture db)
         await organiser.GetAsync(path);
         HttpResponseMessage suspended = await organiser.PostAsync(path, "suspend", ("reason", "Complaint under investigation."));
         Location(suspended).ShouldBe("/organiser/review?done=suspended");
-        (await db.ScalarAsync<long>("select count(*) from platform.job where unique_key = @k",
-            ("k", $"directory.organisation_changed:{org.Id:N}"))).ShouldBe(1, "approval and suspension collapse into one waiting job");
+        (await db.ScalarAsync<string>(
+            """
+            select string_agg(message_type || ':' || coalesce(payload->>'to', ''), ',' order by id)
+              from platform.outbox_message where payload->'organisationId'->>'value' = @o
+            """, ("o", org.Id.ToString())))
+            .ShouldBe("directory.organisation.status_changed:Approved,directory.organisation.approved:,directory.organisation.status_changed:Suspended,directory.organisation.suspended:");
     }
 
     // ---- listing diff ----------------------------------------------------------------------
@@ -196,7 +200,9 @@ public sealed class OrganiserReviewTests(ConsoleFixture db)
         HttpResponseMessage renamed = await organiser.PostAsync(editPath, "term", ("Name_en", "Flying drones"), ("SortOrder", "5"));
         Location(renamed).ShouldBe("/organiser/taxonomy?vocabulary=skill&done=saved");
         (await db.ScalarAsync<string>("select name from platform.taxonomy_term_name where term_id = @t and locale = 'en'", ("t", term))).ShouldBe("Flying drones");
-        (await db.ScalarAsync<long>("select count(*) from platform.job where unique_key = @k", ("k", $"platform.term_changed:{term:N}"))).ShouldBe(1);
+        (await db.ScalarAsync<long>(
+            "select count(*) from platform.outbox_message where message_type = 'platform.taxonomy_term.changed' and payload->>'termId' = @t",
+            ("t", term.ToString()))).ShouldBe(1);
     }
 
     [Fact]

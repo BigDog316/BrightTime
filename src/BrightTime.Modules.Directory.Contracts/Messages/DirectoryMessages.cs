@@ -27,14 +27,33 @@ public sealed record OrganisationSuspended(
     public static string MessageType => "directory.organisation.suspended";
 }
 
-/// <summary>A site moved or was created, so the search projection needs its geography refreshed.</summary>
-public sealed record SiteLocationChanged(
+/// <summary>
+/// A site was edited, closed or reopened. Modules that copy a site's place or name (the
+/// listing search rows) refresh it. Not published for a new site: nothing is held there yet.
+/// </summary>
+public sealed record SiteChanged(
     OrganisationId OrganisationId,
     Guid SiteId,
     Guid? NeighbourhoodId,
+    bool IsActive,
     DateTimeOffset ChangedAt) : IModuleMessage
 {
-    public static string MessageType => "directory.site.location_changed";
+    public static string MessageType => "directory.site.changed";
+}
+
+/// <summary>
+/// An organisation's vetting status changed, by an organiser's decision or the provider's own
+/// move. Its listings are findable only while it is approved, so search re-projects them.
+/// <see cref="OrganisationApproved"/> and <see cref="OrganisationSuspended"/> are published as
+/// well where they apply, for the subscribers that care about those moves alone.
+/// </summary>
+public sealed record OrganisationStatusChanged(
+    OrganisationId OrganisationId,
+    OrganisationStatus From,
+    OrganisationStatus To,
+    DateTimeOffset ChangedAt) : IModuleMessage
+{
+    public static string MessageType => "directory.organisation.status_changed";
 }
 
 /// <summary>
@@ -61,35 +80,4 @@ public sealed record ClearanceLapsed(
     DateOnly LapsedOn) : IModuleMessage
 {
     public static string MessageType => "directory.clearance.lapsed";
-}
-
-/// <summary>
-/// The background job Directory queues when a site's address, neighbourhood, place or open
-/// state changes, so modules that copy site data (the listing search rows) refresh it.
-/// </summary>
-/// <remarks>
-/// A job rather than an <see cref="IModuleMessage"/> until the outbox has a dispatcher: the job
-/// is written in the same transaction as the change, which is the guarantee the outbox exists to
-/// give. Opportunities handles it.
-/// </remarks>
-public static class SiteChangedJob
-{
-    public const string JobType = "directory.site_changed";
-
-    public sealed record Payload(Guid SiteId);
-
-    public static string UniqueKey(Guid siteId) => $"{JobType}:{siteId:N}";
-}
-
-/// <summary>
-/// The background job Directory queues when an organisation's status changes (approved,
-/// suspended, reinstated, withdrawn), so its listings appear in or leave search (D24).
-/// </summary>
-public static class OrganisationChangedJob
-{
-    public const string JobType = "directory.organisation_changed";
-
-    public sealed record Payload(Guid OrganisationId);
-
-    public static string UniqueKey(Guid organisationId) => $"{JobType}:{organisationId:N}";
 }

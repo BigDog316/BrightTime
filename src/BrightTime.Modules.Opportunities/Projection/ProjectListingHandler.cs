@@ -1,5 +1,8 @@
 using BrightTime.Infrastructure.Jobs;
+using BrightTime.Infrastructure.Outbox;
+using BrightTime.Modules.Directory.Contracts.Messages;
 using BrightTime.Modules.Opportunities.Persistence;
+using BrightTime.Modules.Platform.Contracts.Messages;
 using BrightTime.SharedKernel.Ids;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -65,15 +68,18 @@ public static class ListingProjection
             RunAfter = at.AddSeconds(1),
         }, cancellationToken);
 
-    /// <summary>Registers the projection service and its job handler. Module contexts and queries are registered by the host.</summary>
+    /// <summary>
+    /// Registers the projection service, its job, and the module messages that re-project listings.
+    /// Module contexts and queries are registered by the host, and so is the outbox dispatch.
+    /// </summary>
     public static IServiceCollection AddListingProjection(this IServiceCollection services)
     {
         services.AddScoped<ListingSearchWriter>();
         services.AddScoped<ListingProjectionService>();
         services.AddJobHandler<ProjectListingHandler>();
-        services.AddJobHandler<SiteChangedHandler>();
-        services.AddJobHandler<OrganisationChangedHandler>();
-        services.AddJobHandler<TermChangedHandler>();
+        services.AddMessageHandler<SiteChanged, SiteChangedHandler>();
+        services.AddMessageHandler<OrganisationStatusChanged, OrganisationStatusChangedHandler>();
+        services.AddMessageHandler<TaxonomyTermChanged, TaxonomyTermChangedHandler>();
         return services;
     }
 }

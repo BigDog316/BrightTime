@@ -1,4 +1,6 @@
 using BrightTime.Infrastructure.Jobs;
+using BrightTime.Infrastructure.Outbox;
+using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Contracts.Messages;
 using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
@@ -211,13 +213,8 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
             await db.InTransactionAsync(async ct =>
             {
                 await db.Database.ExecuteSqlAsync($"update directory.site set is_active = false where id = {s.Site}", ct);
-                return await db.EnqueueJobAsync(new JobRequest
-                {
-                    JobType = SiteChangedJob.JobType,
-                    TenantId = new TenantId(s.Tenant),
-                    Payload = new SiteChangedJob.Payload(s.Site),
-                    UniqueKey = SiteChangedJob.UniqueKey(s.Site),
-                }, ct);
+                await db.PublishAsync(new TenantId(s.Tenant), new SiteChanged(new OrganisationId(s.Org), s.Site, s.Hood, false, DateTimeOffset.UtcNow), ct);
+                return 0;
             }, Ct);
         }
 
@@ -258,7 +255,7 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
         refused.MessageText.ShouldContain("append-only", Case.Insensitive);
     }
 
-    /// <summary>Changes the organisation as Directory would, and queues the job Directory queues with it (D24).</summary>
+    /// <summary>Changes the organisation as Directory would, and publishes what Directory publishes with it.</summary>
     private async Task ChangeOrganisationAsync(Seeded s, string set)
     {
         await using AsyncServiceScope scope = TestHost.AppScope(Cs, s.Tenant);
@@ -268,13 +265,9 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
 #pragma warning disable EF1002 // A fixed fragment from this test, not input.
             await db.Database.ExecuteSqlRawAsync($"update directory.organisation set {set} where id = @p0", [s.Org], ct);
 #pragma warning restore EF1002
-            return await db.EnqueueJobAsync(new JobRequest
-            {
-                JobType = OrganisationChangedJob.JobType,
-                TenantId = new TenantId(s.Tenant),
-                Payload = new OrganisationChangedJob.Payload(s.Org),
-                UniqueKey = OrganisationChangedJob.UniqueKey(s.Org),
-            }, ct);
+            await db.PublishAsync(new TenantId(s.Tenant),
+                new OrganisationStatusChanged(new OrganisationId(s.Org), OrganisationStatus.Approved, OrganisationStatus.Suspended, DateTimeOffset.UtcNow), ct);
+            return 0;
         }, Ct);
     }
 
@@ -283,7 +276,7 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
     private async Task DrainAsync()
     {
         await using ServiceProvider worker = TestHost.Worker(Cs, "default");
-        await worker.GetRequiredService<JobRunner>().DrainAsync(Ct);
+        await TestHost.DrainAsync(worker, Ct);
 
         // Every projection the tests scheduled must have succeeded; a failure would otherwise
         // only show up as a missing search row.

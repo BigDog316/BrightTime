@@ -90,6 +90,15 @@ create policy job_worker_claims on platform.job
   using (true)
   with check (true);
 
+-- The outbox dispatcher serves every tenant as the job worker does, so it must see every
+-- tenant's messages to fan them out. Permissive for brighttime_jobs only; the application role
+-- stays tenant-scoped and can publish only for its own tenant.
+create policy outbox_dispatch on platform.outbox_message
+  as permissive for all
+  to brighttime_jobs
+  using (true)
+  with check (true);
+
 -- platform.blind_index_key holds no tenant data and no key material.
 alter table platform.blind_index_key enable row level security;
 create policy blind_index_key_read on platform.blind_index_key

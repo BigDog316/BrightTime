@@ -1,4 +1,5 @@
 using BrightTime.Infrastructure.Jobs;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
@@ -62,6 +63,25 @@ internal static class TestHost
         return scope;
     }
 
+    /// <summary>
+    /// Dispatches the outbox and runs due jobs until neither has anything left, as the jobs host
+    /// does continuously: a delivery can queue a projection, which the next round runs.
+    /// </summary>
+    public static async Task DrainAsync(ServiceProvider worker, CancellationToken ct)
+    {
+        OutboxDispatcher outbox = worker.GetRequiredService<OutboxDispatcher>();
+        JobRunner runner = worker.GetRequiredService<JobRunner>();
+        for (int round = 0; round < 20; round++)
+        {
+            int dispatched = await outbox.DrainAsync(ct);
+            int ran = await runner.DrainAsync(ct);
+            if (dispatched == 0 && ran == 0)
+            {
+                return;
+            }
+        }
+    }
+
     /// <summary>The worker, as the jobs host builds it, on its own queue.</summary>
     public static ServiceProvider Worker(
         string superuserConnection,
@@ -81,6 +101,7 @@ internal static class TestHost
             LockDuration = TimeSpan.FromMinutes(5),
         }));
         services.AddSingleton<JobRunner>();
+        services.AddOutboxDispatch(runInBackground: false);
         services.AddListingProjection();
         extra?.Invoke(services);
 

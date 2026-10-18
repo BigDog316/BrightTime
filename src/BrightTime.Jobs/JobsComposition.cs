@@ -1,5 +1,6 @@
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Jobs;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
@@ -20,7 +21,8 @@ namespace BrightTime.Jobs;
 /// <remarks>
 /// The connection must log in as a role that is a member of <c>brighttime_jobs</c>. That role is
 /// subject to the tenant policy on every table, so each handler sees only its own job's tenant,
-/// except on <c>platform.job</c>, where <c>job_worker_claims</c> lets it claim across tenants.
+/// except on <c>platform.job</c> and <c>platform.outbox_message</c>, where <c>job_worker_claims</c>
+/// and <c>outbox_dispatch</c> let it claim and dispatch across tenants.
 /// </remarks>
 public static class JobsComposition
 {
@@ -55,6 +57,8 @@ public static class JobsComposition
         services.Configure<JobRunnerOptions>(configuration.GetSection("Jobs"));
         services.AddSingleton<JobRunner>();
         services.AddHostedService(sp => sp.GetRequiredService<JobRunner>());
+        services.Configure<OutboxOptions>(configuration.GetSection("Outbox"));
+        services.AddOutboxDispatch();
         services.AddSingleton<AuditPartitionMaintenance>();
         services.AddHostedService(sp => sp.GetRequiredService<AuditPartitionMaintenance>());
 

@@ -61,6 +61,8 @@ badges, no community, no dashboards beyond provider listing counts.
 - **Provider end to end:** covered by `ConsoleTests` and `ProviderManagementTests`.
 - **axe-core and the e2e run:** not started. They need Playwright and axe-core
   downloaded, which needs your approval.
+- **Outbox + job runner:** done. The dispatcher fans each message out to one delivery job
+  per handler (D27).
 - **`docker compose up`:** not verified. There's no container runtime here (Q11), and
   the compose and CI images are PostGIS 17-3.4 while only 18.6 / 3.6.4 has been
   verified.

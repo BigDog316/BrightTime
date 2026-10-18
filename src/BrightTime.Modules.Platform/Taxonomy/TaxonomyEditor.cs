@@ -1,14 +1,15 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using BrightTime.Infrastructure.Auditing;
-using BrightTime.Infrastructure.Jobs;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
-using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Contracts.Messages;
 using BrightTime.Modules.Platform.Domain;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Text;
+using BrightTime.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Platform.Taxonomy;
@@ -53,11 +54,11 @@ public sealed record TermSaveOutcome(Guid? TermId, IReadOnlyDictionary<string, P
 /// </para>
 /// <para>
 /// English is the fallback every page uses when a translation is missing, so every term must
-/// have an English name. A rename or a change of state queues <see cref="TermChangedJob"/>, so
+/// have an English name. A rename or a change of state publishes <see cref="TaxonomyTermChanged"/>, so
 /// listings tagged with the term are re-projected with its current name.
 /// </para>
 /// </remarks>
-public sealed partial class TaxonomyEditor(PlatformDbContext db, ITenantContext tenant, IAuditWriter audit)
+public sealed partial class TaxonomyEditor(PlatformDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit)
 {
     public const int MaxName = 80;
 
@@ -216,7 +217,7 @@ public sealed partial class TaxonomyEditor(PlatformDbContext db, ITenantContext 
 
             if (!created)
             {
-                await QueueChangedAsync(term.Id, ct).ConfigureAwait(false);
+                await PublishChangedAsync(term, ct).ConfigureAwait(false);
             }
 
             await audit.RecordInTransactionAsync(db, new AuditAccess
@@ -259,7 +260,7 @@ public sealed partial class TaxonomyEditor(PlatformDbContext db, ITenantContext 
 
             term.IsActive = active;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await QueueChangedAsync(term.Id, ct).ConfigureAwait(false);
+            await PublishChangedAsync(term, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
                 Action = active ? "taxonomy.term_restored" : "taxonomy.term_retired",
@@ -274,14 +275,8 @@ public sealed partial class TaxonomyEditor(PlatformDbContext db, ITenantContext 
     /// <summary>The form field for a locale's name.</summary>
     public static string NameField(string locale) => "Name_" + locale;
 
-    private Task<bool> QueueChangedAsync(Guid termId, CancellationToken ct) =>
-        db.EnqueueJobAsync(new JobRequest
-        {
-            JobType = TermChangedJob.JobType,
-            TenantId = tenant.TenantId,
-            Payload = new TermChangedJob.Payload(termId),
-            UniqueKey = TermChangedJob.UniqueKey(termId),
-        }, ct);
+    private Task PublishChangedAsync(TaxonomyTerm term, CancellationToken ct) =>
+        db.PublishAsync(tenant.TenantId, new TaxonomyTermChanged(term.Id, term.Vocabulary, term.Code, term.IsActive, clock.UtcNow), ct);
 
     private static TermRow Row(TaxonomyTerm t, IEnumerable<TaxonomyTermName> names) =>
         new(t.Id, t.Code, t.ParentId, t.SortOrder, t.IsActive, names.ToDictionary(n => n.Locale, n => n.Name, StringComparer.Ordinal));

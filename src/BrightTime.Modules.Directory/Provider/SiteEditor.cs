@@ -1,5 +1,5 @@
 using BrightTime.Infrastructure.Auditing;
-using BrightTime.Infrastructure.Jobs;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts.Messages;
 using BrightTime.Modules.Directory.Domain;
@@ -21,7 +21,7 @@ public sealed record SiteRow(Guid Id, string Name, string? AddressLine1, string?
 /// <remarks>
 /// A site is placed at its neighbourhood's centre with <c>locality</c> accuracy until a geocoder
 /// exists (Q7). Deactivating keeps the row, so listings and history still name it. An edit or a
-/// change of open state queues <see cref="SiteChangedJob"/> in the same transaction, so the
+/// change of open state publishes <see cref="SiteChanged"/> in the same transaction, so the
 /// listings at the site are re-projected with its new place, or without it.
 /// </remarks>
 public sealed class SiteEditor(DirectoryDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit)
@@ -106,7 +106,7 @@ public sealed class SiteEditor(DirectoryDbContext db, ITenantContext tenant, ICl
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             if (site is not null)
             {
-                await QueueSiteChangedAsync(entity.Id, ct).ConfigureAwait(false);
+                await PublishChangedAsync(entity, ct).ConfigureAwait(false);
             }
 
             await audit.RecordInTransactionAsync(db, new AuditAccess
@@ -136,7 +136,7 @@ public sealed class SiteEditor(DirectoryDbContext db, ITenantContext tenant, ICl
                 s.IsActive = active;
                 s.UpdatedAt = clock.UtcNow;
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
-                await QueueSiteChangedAsync(s.Id, ct).ConfigureAwait(false);
+                await PublishChangedAsync(s, ct).ConfigureAwait(false);
                 await audit.RecordInTransactionAsync(db, new AuditAccess
                 {
                     Action = active ? "site.reactivated" : "site.deactivated",
@@ -150,14 +150,9 @@ public sealed class SiteEditor(DirectoryDbContext db, ITenantContext tenant, ICl
             return true;
         }, cancellationToken);
 
-    private Task<bool> QueueSiteChangedAsync(Guid site, CancellationToken ct) =>
-        db.EnqueueJobAsync(new JobRequest
-        {
-            JobType = SiteChangedJob.JobType,
-            TenantId = tenant.TenantId,
-            Payload = new SiteChangedJob.Payload(site),
-            UniqueKey = SiteChangedJob.UniqueKey(site),
-        }, ct);
+    private Task PublishChangedAsync(Site site, CancellationToken ct) =>
+        db.PublishAsync(tenant.TenantId,
+            new SiteChanged(new OrganisationId(site.OrgId), site.Id, site.NeighbourhoodId, site.IsActive, clock.UtcNow), ct);
 
     internal static Site NewSite(Guid organisation, Guid tenantId, SiteForm form, Coordinate location)
     {

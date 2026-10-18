@@ -168,9 +168,10 @@ one, it subscribes to a contract message instead of taking a reference — e.g.
    interface, implemented in that module, registered in DI. Returns contract
    DTOs. No `DbContext` crosses a module line.
 2. **React to something** → the originating module writes a contract message
-   to `platform.outbox_message` in the same transaction as its state change;
-   the dispatcher fans it out in-process to `IMessageHandler<T>`. Same code
-   path works if a module later moves out of process.
+   to `platform.outbox_message` in the same transaction as its state change
+   (`db.PublishAsync`); the dispatcher fans it out to one delivery job per
+   `IModuleMessageHandler<T>`, registered with `AddMessageHandler` (D27). Same
+   code path works if a module later moves out of process.
 3. **Never** join across module schemas in application SQL. The one
    exception is the search projection, which is a module-owned read model
    fed by messages.

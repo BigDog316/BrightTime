@@ -122,7 +122,7 @@ public sealed class OrganisationSettings(DirectoryDbContext db, ITenantContext t
                 OccurredAt = now,
             });
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await db.QueueOrganisationChangedAsync(tenant.TenantId, o.Id, ct).ConfigureAwait(false);
+            await db.PublishStatusChangedAsync(tenant.TenantId, o, from, to, actor, now, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
                 Action = "organisation.status_changed",

@@ -81,16 +81,3 @@ public static class FeatureFlagKeys
     /// <summary>Approving an organisation needs a current certificate of insurance on the vetting checklist.</summary>
     public const string VettingInsuranceRequired = "vetting.insurance_required";
 }
-
-/// <summary>
-/// The background job Platform queues when a term is renamed, retired or restored, so the
-/// listings tagged with it are re-projected with its current name (D24).
-/// </summary>
-public static class TermChangedJob
-{
-    public const string JobType = "platform.term_changed";
-
-    public sealed record Payload(Guid TermId);
-
-    public static string UniqueKey(Guid termId) => $"{JobType}:{termId:N}";
-}

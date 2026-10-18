@@ -38,6 +38,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     public DbSet<TaxonomyTerm> TaxonomyTerms => Set<TaxonomyTerm>();
 
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+
     public DbSet<TaxonomyTermName> TaxonomyTermNames => Set<TaxonomyTermName>();
 
     public DbSet<NeighbourhoodName> NeighbourhoodNames => Set<NeighbourhoodName>();
@@ -101,6 +103,14 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             b.HasKey(j => j.Id);
             b.Property(j => j.Id).ValueGeneratedNever();
             b.Property(j => j.Payload).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<FeatureFlag>(b =>
+        {
+            b.ToTable("feature_flag");
+            b.HasKey(f => new { f.TenantId, f.Key });
+            b.Property(f => f.Rollout).HasColumnType("jsonb");
+            b.Property(f => f.UpdatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.Entity<TaxonomyTerm>(b =>

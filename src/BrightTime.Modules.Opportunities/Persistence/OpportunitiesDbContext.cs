@@ -38,6 +38,8 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<ListingTranslationRecord> ListingTranslations => Set<ListingTranslationRecord>();
 
+    public DbSet<ListingRevisionRecord> ListingRevisions => Set<ListingRevisionRecord>();
+
     public DbSet<CollectionRecord> Collections => Set<CollectionRecord>();
 
     public DbSet<CollectionItemRecord> CollectionItems => Set<CollectionItemRecord>();
@@ -103,6 +105,15 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
                 .IsRequired()
                 .ValueGeneratedOnAdd()
                 .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+        });
+
+        modelBuilder.Entity<ListingRevisionRecord>(b =>
+        {
+            b.ToTable("listing_revision");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).ValueGeneratedNever();
+            b.Property(r => r.Snapshot).HasColumnType("jsonb");
+            b.Property(r => r.CreatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.Entity<ListingSiteRecord>(b =>

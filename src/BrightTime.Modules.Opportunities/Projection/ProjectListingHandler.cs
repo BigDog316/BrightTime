@@ -72,6 +72,8 @@ public static class ListingProjection
         services.AddScoped<ListingProjectionService>();
         services.AddJobHandler<ProjectListingHandler>();
         services.AddJobHandler<SiteChangedHandler>();
+        services.AddJobHandler<OrganisationChangedHandler>();
+        services.AddJobHandler<TermChangedHandler>();
         return services;
     }
 }

@@ -106,6 +106,7 @@ internal static class TestHost
         services.AddScoped<PlatformQueries>();
         services.AddScoped<ITaxonomyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
+        services.AddScoped<IFeatureFlags>(sp => sp.GetRequiredService<PlatformQueries>());
         return services;
     }
 }

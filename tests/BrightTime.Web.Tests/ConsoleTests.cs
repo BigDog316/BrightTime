@@ -244,8 +244,13 @@ public sealed class ConsoleTests(ConsoleFixture db)
         await organiser.PostAsync(path, "reject", ("reason", ""));
         organiser.Html.ShouldContain("needs a reason the provider can read");
 
+        // Approval is judged on the checklist ticked on the same form.
         await organiser.GetAsync(path);
-        (await organiser.PostAsync(path, "approve")).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        (await organiser.PostAsync(path, "checklist", ("action", "approve"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        organiser.Html.ShouldContain("contact was verified");
+
+        await organiser.GetAsync(path);
+        (await organiser.PostAsync(path, "checklist", ("action", "approve"), ("ContactVerified", "true"))).StatusCode.ShouldBe(HttpStatusCode.Redirect);
 
         (await db.ScalarAsync<string>("select status from directory.organisation where id = @id", ("id", org.Id))).ShouldBe("approved");
         (await db.ScalarAsync<long>(

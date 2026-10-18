@@ -43,7 +43,7 @@ public sealed class SqlListingDetails(
                  && l.Status == published
                  && (l.PublishAt == null || l.PublishAt <= now)
                  && (l.ExpiresAt == null || l.ExpiresAt > now),
-            locale, cancellationToken).ConfigureAwait(false);
+            locale, publicView: true, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<ListingDetail?> GetForReviewAsync(
@@ -51,11 +51,12 @@ public sealed class SqlListingDetails(
         Guid listingId,
         string locale,
         CancellationToken cancellationToken = default) =>
-        ReadAsync(l => l.TenantId == tenant.Value && l.Id == listingId, locale, cancellationToken);
+        ReadAsync(l => l.TenantId == tenant.Value && l.Id == listingId, locale, publicView: false, cancellationToken);
 
     private async Task<ListingDetail?> ReadAsync(
         System.Linq.Expressions.Expression<Func<ListingRecord, bool>> which,
         string locale,
+        bool publicView,
         CancellationToken cancellationToken)
     {
         DateTimeOffset now = clock.UtcNow;
@@ -102,6 +103,13 @@ public sealed class SqlListingDetails(
         }
 
         ListingRecord l = loaded.Listing;
+
+        // The public page shows only an approved organisation's listings; review shows any.
+        if (publicView && await directory.GetStatusAsync(new OrganisationId(l.OrgId), cancellationToken).ConfigureAwait(false) != OrganisationStatus.Approved)
+        {
+            return null;
+        }
+
         ListingTranslationRecord? tr = loaded.Translation;
         string contentLanguage = tr?.Locale ?? l.PrimaryLanguage;
 

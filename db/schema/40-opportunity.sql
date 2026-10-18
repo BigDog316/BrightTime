@@ -133,6 +133,24 @@ create index ix_listing_url_recheck on listing (external_url_checked_at)
 create trigger listing_touch before update on listing
   for each row execute function platform.touch_updated_at();
 
+-- What a listing said when it was submitted and when an organiser reviewed it (D15), so a
+-- resubmission or a live edit is shown as a diff against what was last approved. The
+-- snapshot is the editor's form as JSON. Never edited; removed with its listing.
+create table listing_revision (
+  id          uuid primary key,
+  tenant_id   uuid not null references platform.tenant(id) on delete cascade,
+  listing_id  uuid not null references listing(id) on delete cascade,
+  kind        text not null,
+  status      text not null,
+  snapshot    jsonb not null,
+  created_at  timestamptz not null default now(),
+  created_by  uuid references identity.app_user(id),
+  constraint ck_listing_revision_kind check (kind in ('submitted','reviewed'))
+);
+create index ix_listing_revision_listing on listing_revision (listing_id, created_at desc);
+create trigger listing_revision_no_update before update on listing_revision
+  for each statement execute function platform.deny_write();
+
 create table listing_translation (
   listing_id   uuid not null references listing(id) on delete cascade,
   locale       text not null,

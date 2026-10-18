@@ -794,6 +794,86 @@ button.secondary-button {
     gap: 0.5rem;
 }
 
+/* ---- Organiser review ---------------------------------------------------- */
+
+.checklist label.check {
+    display: block;
+    margin-block: 0.35rem;
+}
+
+.checklist .checks {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+}
+
+.checklist .checks li {
+    padding-block: 0.25rem;
+    padding-inline-start: 1.5rem;
+    position: relative;
+}
+
+.checklist .checks li::before {
+    inset-inline-start: 0;
+    position: absolute;
+}
+
+.checklist .check-ok::before {
+    color: var(--bt-accent);
+    content: "\2713";
+}
+
+.checklist .check-missing::before {
+    color: var(--bt-error);
+    content: "\2717";
+}
+
+.checklist .check-missing {
+    color: var(--bt-error);
+}
+
+.checklist .check-info::before {
+    color: var(--bt-muted);
+    content: "\2022";
+}
+
+.diff {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.diff th,
+.diff td {
+    border-block-end: 1px solid var(--bt-line);
+    padding: 0.5rem;
+    text-align: start;
+    vertical-align: top;
+}
+
+.diff td.before,
+.diff li.removed {
+    text-decoration: line-through;
+    text-decoration-color: var(--bt-error);
+}
+
+.diff td.after,
+.diff li.added {
+    background: var(--bt-tint);
+}
+
+.diff-values {
+    margin: 0;
+    padding-inline-start: 1.25rem;
+}
+
+.queue tr.retired td {
+    color: var(--bt-muted);
+}
+
+.queue td.incomplete {
+    color: var(--bt-error);
+}
+
 .site-footer {
     border-block-start: 1px solid var(--bt-line);
     color: var(--bt-muted);

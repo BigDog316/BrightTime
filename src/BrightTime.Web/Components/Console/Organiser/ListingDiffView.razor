@@ -1,0 +1,189 @@
+@* What changed since an organiser last reviewed a listing (D15), field by field. *@
+@using System.Globalization
+@using BrightTime.Modules.Opportunities.Editing
+
+<section class="listing-diff" aria-labelledby="diff-heading">
+    <h2 id="diff-heading">@T["organiser.diff.heading"]</h2>
+    @if (Diff is null)
+    {
+        <p>@T["organiser.diff.never_reviewed"]</p>
+    }
+    else if (Diff.Changes.Count == 0)
+    {
+        <p>@T.Format("organiser.diff.no_changes", ("date", T.DateTime(Diff.ReviewedAt)))</p>
+    }
+    else
+    {
+        <p>@T.Format("organiser.diff.since", ("date", T.DateTime(Diff.ReviewedAt)), ("count", Diff.Changes.Count))</p>
+        <div class="table-scroll">
+            <table class="diff">
+                <thead>
+                    <tr>
+                        <th scope="col">@T["organiser.diff.field"]</th>
+                        <th scope="col">@T["organiser.diff.before"]</th>
+                        <th scope="col">@T["organiser.diff.after"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (FieldChange change in Diff.Changes)
+                    {
+                        <tr>
+                            <th scope="row">@Label(change.Field)</th>
+                            @if (change.IsList)
+                            {
+                                <td>@Values(change.Field, change.Before, change.Before.Except(change.After), "removed")</td>
+                                <td>@Values(change.Field, change.After, change.After.Except(change.Before), "added")</td>
+                            }
+                            else
+                            {
+                                <td class="before" dir="auto">@Value(change.Field, change.Before.FirstOrDefault() ?? "")</td>
+                                <td class="after" dir="auto">@Value(change.Field, change.After.FirstOrDefault() ?? "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>Null when the listing has never been reviewed.</summary>
+    [Parameter] public ReviewDiff? Diff { get; set; }
+
+    private static readonly Dictionary<string, string> Labels = new(StringComparer.Ordinal)
+    {
+        [nameof(ListingForm.Kind)] = "finder.field.kind",
+        [nameof(ListingForm.Title)] = "editor.field.title",
+        [nameof(ListingForm.Summary)] = "editor.field.summary",
+        [nameof(ListingForm.Description)] = "editor.field.description",
+        [nameof(ListingForm.PrimaryLanguage)] = "editor.field.primary_language",
+        [nameof(ListingForm.AgeMin)] = "editor.field.age_min",
+        [nameof(ListingForm.AgeMax)] = "editor.field.age_max",
+        [nameof(ListingForm.GradeMin)] = "editor.field.grade_min",
+        [nameof(ListingForm.GradeMax)] = "editor.field.grade_max",
+        [nameof(ListingForm.TermIds)] = "editor.section.topics",
+        [nameof(ListingForm.Modality)] = "organiser.diff.field.modality",
+        [nameof(ListingForm.SiteIds)] = "editor.field.sites",
+        [nameof(ListingForm.VirtualUrl)] = "editor.field.virtual_url",
+        [nameof(ListingForm.Repeats)] = "organiser.diff.field.repeats",
+        [nameof(ListingForm.Days)] = "editor.field.days",
+        [nameof(ListingForm.Interval)] = "editor.field.interval",
+        [nameof(ListingForm.StartsOn)] = "editor.field.starts_on",
+        [nameof(ListingForm.EndsOn)] = "editor.field.ends_on",
+        [nameof(ListingForm.StartTime)] = "editor.field.start_time",
+        [nameof(ListingForm.EndTime)] = "editor.field.end_time",
+        [nameof(ListingForm.SkipDates)] = "editor.field.skip_dates",
+        [nameof(ListingForm.ShowFrom)] = "editor.field.show_from",
+        [nameof(ListingForm.TakeDownAfter)] = "editor.field.take_down_after",
+        [nameof(ListingForm.CostModel)] = "organiser.diff.field.cost_model",
+        [nameof(ListingForm.CostMin)] = "editor.field.cost_min",
+        [nameof(ListingForm.CostMax)] = "editor.field.cost_max",
+        [nameof(ListingForm.SlidingScaleNote)] = "editor.field.sliding_scale_note",
+        [nameof(ListingForm.RegistrationMode)] = "organiser.diff.field.registration_mode",
+        [nameof(ListingForm.ExternalUrl)] = "editor.field.external_url",
+        [nameof(ListingForm.Capacity)] = "editor.field.capacity",
+        [nameof(ListingForm.DeadlineKind)] = "listing.deadline.other",
+        [nameof(ListingForm.DeadlineOn)] = "editor.field.deadline_on",
+        [nameof(ListingForm.AccommodationIds)] = "organiser.diff.field.accommodations",
+        [nameof(ListingForm.AccessibilityNote)] = "editor.field.accessibility_note",
+        [nameof(ListingForm.MealsProvided)] = "editor.field.meals_provided",
+        [nameof(ListingForm.TransportProvided)] = "editor.field.transport_provided",
+        [nameof(ListingForm.TransportNote)] = "editor.field.transport_note",
+        [nameof(ListingForm.IsDropIn)] = "editor.field.is_drop_in",
+        [nameof(ListingForm.Languages)] = "editor.field.languages",
+        [nameof(ListingForm.ContactEmail)] = "editor.field.contact_email",
+        [nameof(ListingForm.ContactPhone)] = "editor.field.contact_phone",
+    };
+
+    /// <summary>Fields whose values are codes with a translated word.</summary>
+    private static readonly Dictionary<string, string> CodePrefixes = new(StringComparer.Ordinal)
+    {
+        [nameof(ListingForm.Kind)] = "listing.kind.",
+        [nameof(ListingForm.Modality)] = "editor.option.modality.",
+        [nameof(ListingForm.Repeats)] = "editor.option.repeats.",
+        [nameof(ListingForm.CostModel)] = "editor.option.cost_model.",
+        [nameof(ListingForm.RegistrationMode)] = "editor.option.registration_mode.",
+        [nameof(ListingForm.DeadlineKind)] = "listing.deadline.",
+        [nameof(ListingForm.PrimaryLanguage)] = "language.",
+        [nameof(ListingForm.Languages)] = "language.",
+    };
+
+    private static readonly string[] Dates =
+    [
+        nameof(ListingForm.StartsOn), nameof(ListingForm.EndsOn), nameof(ListingForm.DeadlineOn),
+        nameof(ListingForm.ShowFrom), nameof(ListingForm.TakeDownAfter), nameof(ListingForm.SkipDates),
+    ];
+
+    private static readonly string[] Flags =
+        [nameof(ListingForm.MealsProvided), nameof(ListingForm.TransportProvided), nameof(ListingForm.IsDropIn)];
+
+    private string Label(string field) => Labels.TryGetValue(field, out string? key) ? T[key] : field;
+
+    private string Value(string field, string value)
+    {
+        if (value.Length == 0)
+        {
+            return T["organiser.diff.empty"];
+        }
+
+        if (Flags.Contains(field))
+        {
+            return T[value == "true" ? "organiser.diff.yes" : "organiser.diff.no"];
+        }
+
+        if (Dates.Contains(field) && DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly date))
+        {
+            return T.DateShort(date);
+        }
+
+        if (field == nameof(ListingForm.Interval) && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int weeks))
+        {
+            return T.Format("editor.option.interval", ("count", weeks));
+        }
+
+        if (field == nameof(ListingForm.Days) && Day(value) is { } day)
+        {
+            return T.Culture.DateTimeFormat.GetDayName(day);
+        }
+
+        return CodePrefixes.TryGetValue(field, out string? prefix) && T.Has(prefix + value) ? T[prefix + value] : value;
+    }
+
+    private RenderFragment Values(string field, IReadOnlyList<string> all, IEnumerable<string> marked, string markClass) => __builder =>
+    {
+        HashSet<string> changed = [.. marked];
+        if (all.Count == 0)
+        {
+            <span>@T["organiser.diff.empty"]</span>
+        }
+        else
+        {
+            <ul class="diff-values">
+                @foreach (string v in all)
+                {
+                    @if (changed.Contains(v))
+                    {
+                        <li class="@markClass" dir="auto"><strong>@Value(field, v)</strong> <span class="visually-hidden">(@T["organiser.diff." + markClass])</span></li>
+                    }
+                    else
+                    {
+                        <li dir="auto">@Value(field, v)</li>
+                    }
+                }
+            </ul>
+        }
+    };
+
+    private static DayOfWeek? Day(string code) => code switch
+    {
+        "MO" => DayOfWeek.Monday,
+        "TU" => DayOfWeek.Tuesday,
+        "WE" => DayOfWeek.Wednesday,
+        "TH" => DayOfWeek.Thursday,
+        "FR" => DayOfWeek.Friday,
+        "SA" => DayOfWeek.Saturday,
+        "SU" => DayOfWeek.Sunday,
+        _ => null,
+    };
+}

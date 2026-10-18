@@ -80,3 +80,16 @@ public static class SiteChangedJob
 
     public static string UniqueKey(Guid siteId) => $"{JobType}:{siteId:N}";
 }
+
+/// <summary>
+/// The background job Directory queues when an organisation's status changes (approved,
+/// suspended, reinstated, withdrawn), so its listings appear in or leave search (D24).
+/// </summary>
+public static class OrganisationChangedJob
+{
+    public const string JobType = "directory.organisation_changed";
+
+    public sealed record Payload(Guid OrganisationId);
+
+    public static string UniqueKey(Guid organisationId) => $"{JobType}:{organisationId:N}";
+}

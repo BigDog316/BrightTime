@@ -1,0 +1,142 @@
+@page "/organiser/taxonomy/{Vocabulary}/new"
+@page "/organiser/taxonomy/{Vocabulary}/{TermId:guid}"
+@using BrightTime.Modules.Platform.Taxonomy
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Auth
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.TaxonomyPolicy)]
+@inherits ConsoleComponent
+
+@if (_ready)
+{
+    <PageTitle>@(TermId is null ? T["taxonomy.add"] : T.Format("taxonomy.edit_title", ("name", _title ?? ""))) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/organiser/taxonomy?vocabulary=@Vocabulary">@T["taxonomy.vocabulary." + Vocabulary]</a></p>
+    <h1>@(TermId is null ? T["taxonomy.add"] : _title)</h1>
+
+    <ErrorSummary Errors="@_errors" />
+    <form method="post" class="editor" @formname="term" @onsubmit="SaveAsync" novalidate>
+        <AntiforgeryToken />
+        @if (TermId is null)
+        {
+            <TextField Name="Code" Label="@T["taxonomy.field.code"]" Value="@_form.Code" Hint="@T["taxonomy.field.code_hint"]" Max="40" Width="short" Errors="@_errors" />
+        }
+        else
+        {
+            <p><strong>@T["taxonomy.field.code"]</strong> <code>@_form.Code</code></p>
+            <p class="hint">@T["taxonomy.field.code_fixed"]</p>
+        }
+
+        @if (Vocabulary == "interest")
+        {
+            <div class="field">
+                <label for="ParentId">@T["taxonomy.field.parent"]</label>
+                <select id="ParentId" name="ParentId" aria-invalid="@_errors.Invalid("ParentId")" aria-describedby="@_errors.DescribedBy("ParentId")">
+                    <option value="">@T["taxonomy.field.choose_parent"]</option>
+                    @foreach (TermRow c in _categories.Where(c => c.IsActive))
+                    {
+                        <option value="@c.Id" selected="@(_form.ParentId == c.Id.ToString())">@c.Name(Tenant.Locale.Code)</option>
+                    }
+                </select>
+                <FieldError Name="ParentId" Errors="@_errors" />
+            </div>
+        }
+
+        <TextField Name="SortOrder" Label="@T["taxonomy.field.order"]" Value="@_form.SortOrder" Hint="@T["taxonomy.field.order_hint"]" Type="number" Width="short" Errors="@_errors" />
+
+        <fieldset>
+            <legend>@T["taxonomy.field.names"]</legend>
+            <p class="hint">@T["taxonomy.field.names_hint"]</p>
+            @foreach (string code in _locales)
+            {
+                Locale locale = Locale.TryFromCode(code, out Locale l) ? l : Locale.English;
+                string field = TaxonomyEditor.NameField(code);
+                <div class="field">
+                    <label for="@field">@locale.NativeName (@T["language." + locale.Code])</label>
+                    <input id="@field" name="@field" type="text" maxlength="@TaxonomyEditor.MaxName" lang="@locale.Code" dir="@locale.Direction"
+                           value="@(_form.Names.TryGetValue(code, out string? n) ? n : "")"
+                           aria-invalid="@_errors.Invalid(field)" aria-describedby="@_errors.DescribedBy(field)" />
+                    <FieldError Name="@field" Errors="@_errors" />
+                </div>
+            }
+        </fieldset>
+
+        <div class="actions">
+            <button type="submit">@T[TermId is null ? "taxonomy.create" : "editor.save_changes"]</button>
+            <a href="/organiser/taxonomy?vocabulary=@Vocabulary" class="secondary">@T["form.cancel"]</a>
+        </div>
+    </form>
+}
+
+@code {
+    [Parameter] public string Vocabulary { get; set; } = "";
+
+    [Parameter] public Guid? TermId { get; set; }
+
+    private bool _ready;
+    private string? _title;
+    private TermForm _form = new();
+    private FieldErrors _errors = FieldErrors.None;
+    private IReadOnlyList<string> _locales = [];
+    private IReadOnlyList<TermRow> _categories = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable || !TaxonomyEditor.IsManaged(Vocabulary))
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        TaxonomyEditor editor = Get<TaxonomyEditor>();
+        _locales = await editor.LocalesAsync();
+        if (Vocabulary == "interest")
+        {
+            _categories = await editor.ListAsync("category");
+        }
+
+        if (TermId is { } id)
+        {
+            TermRow? term = await editor.GetAsync(id);
+            if (term is null || (await editor.ListAsync(Vocabulary)).All(t => t.Id != id))
+            {
+                Navigation.NotFound();
+                return;
+            }
+
+            _title = term.Name(Tenant.Locale.Code);
+            _form = new TermForm
+            {
+                Code = term.Code,
+                ParentId = term.ParentId?.ToString() ?? "",
+                SortOrder = term.SortOrder.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Names = term.Names,
+            };
+        }
+
+        _ready = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        IFormCollection posted = HttpContext.Request.Form;
+        _form = new TermForm
+        {
+            Code = TermId is null ? posted["Code"].ToString() : _form.Code,
+            ParentId = posted["ParentId"].ToString(),
+            SortOrder = posted["SortOrder"].ToString(),
+            Names = _locales.ToDictionary(l => l, l => posted[TaxonomyEditor.NameField(l)].ToString(), StringComparer.Ordinal),
+        };
+
+        TermSaveOutcome outcome = await Get<TaxonomyEditor>().SaveAsync(Vocabulary, TermId, _form, Actor);
+        if (!outcome.Saved)
+        {
+            _errors = new FieldErrors(outcome.Errors);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/taxonomy?vocabulary={Vocabulary}&done=saved");
+    }
+}

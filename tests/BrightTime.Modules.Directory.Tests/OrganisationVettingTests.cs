@@ -11,6 +11,7 @@ public sealed class OrganisationVettingTests
     {
         HasSite = true,
         HasActiveOwner = true,
+        ContactVerified = true,
         HasCurrentInsurance = true,
         TenantRequiresInsurance = true,
         YouthFacingStaffCleared = true,
@@ -105,6 +106,13 @@ public sealed class OrganisationVettingTests
             OrganisationStatus.Applied, OrganisationStatus.Approved, Mover.Organiser,
             Approvable with { HasSite = false })
             .Error!.Code.ShouldBe("organisation.no_site");
+
+    [Fact]
+    public void Approval_needs_the_contact_verified_on_the_checklist() =>
+        CanTransition(
+            OrganisationStatus.UnderReview, OrganisationStatus.Approved, Mover.Organiser,
+            Approvable with { ContactVerified = false })
+            .Error!.Code.ShouldBe("organisation.contact_unverified");
 
     [Fact]
     public void Approval_needs_insurance_only_where_the_tenant_requires_it()

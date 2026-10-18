@@ -74,3 +74,26 @@ public sealed class ListingTranslationRecord
 
     public DateTimeOffset? ReviewedAt { get; set; }
 }
+
+/// <summary>A row of <c>opportunity.listing_revision</c>: the listing's form as it stood when submitted or reviewed.</summary>
+public sealed class ListingRevisionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    /// <summary>submitted or reviewed.</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>The listing's status once the move was made.</summary>
+    public required string Status { get; init; }
+
+    /// <summary>JSON: see <c>ListingRevisions</c>.</summary>
+    public required string Snapshot { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public Guid? CreatedBy { get; init; }
+}

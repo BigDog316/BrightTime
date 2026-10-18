@@ -72,3 +72,19 @@ public static class StudentPrivacyPack
 
     public const string CaliforniaSopipa = "ca-sopipa";
 }
+
+/// <summary>A row of <c>platform.feature_flag</c>.</summary>
+public sealed class FeatureFlag
+{
+    public Guid TenantId { get; init; }
+
+    public required string Key { get; init; }
+
+    public bool IsEnabled { get; set; }
+
+    public string Rollout { get; set; } = "{}";
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public Guid? UpdatedBy { get; set; }
+}

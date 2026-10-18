@@ -111,6 +111,21 @@ public sealed class ListingDetailsTests(DatabaseFixture database)
     }
 
     [Fact]
+    public async Task A_suspended_organisations_listing_is_not_found()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedAsync();
+        await ExecAsync(
+            """
+            update directory.organisation
+               set status = 'suspended', approved_at = null, suspended_at = now(), suspension_reason = 'Under investigation.'
+             where id = (select org_id from opportunity.listing where id = @l)
+            """, ("l", s.Listing));
+
+        (await ReadAsync(s.Tenant, s.Tenant, s.Slug)).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Another_tenant_cannot_read_it_even_by_naming_its_tenant()
     {
         Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
@@ -188,8 +203,8 @@ public sealed class ListingDetailsTests(DatabaseFixture database)
         await Sql.SeedTenantAsync(connection, tenant, "detail-" + tenant.ToString("N"));
         await Sql.ExecAsync(connection, null,
             """
-            insert into directory.organisation (id, tenant_id, legal_name, display_name, slug, org_kind)
-            values (@org, @t, 'Kettle Youth Collective Inc.', 'Kettle Youth Collective', @orgslug, 'nonprofit');
+            insert into directory.organisation (id, tenant_id, legal_name, display_name, slug, org_kind, status, approved_at)
+            values (@org, @t, 'Kettle Youth Collective Inc.', 'Kettle Youth Collective', @orgslug, 'nonprofit', 'approved', now());
             insert into platform.neighbourhood (id, tenant_id, code, kind) values (@hood, @t, @hoodcode, 'neighbourhood');
             insert into platform.neighbourhood_name (neighbourhood_id, locale, name) values (@hood, 'en', 'Westside');
 

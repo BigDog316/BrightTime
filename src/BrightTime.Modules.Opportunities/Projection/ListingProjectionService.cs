@@ -54,6 +54,10 @@ public sealed class ListingProjectionService(
         string organisationName = await directory
             .GetOrganisationNameAsync(new OrganisationId(snapshot.Listing.OrgId), cancellationToken).ConfigureAwait(false)
             ?? string.Empty;
+
+        // A suspended or withdrawn organisation's listings leave search with it.
+        bool organisationApproved = await directory
+            .GetStatusAsync(new OrganisationId(snapshot.Listing.OrgId), cancellationToken).ConfigureAwait(false) == OrganisationStatus.Approved;
         IReadOnlyList<TermSummary> terms = await taxonomy
             .GetTermsAsync([.. snapshot.TermIds, .. snapshot.AccommodationTermIds], TaxonomyLocale, cancellationToken)
             .ConfigureAwait(false);
@@ -65,7 +69,7 @@ public sealed class ListingProjectionService(
         {
             await ReplaceFutureOccurrencesAsync(snapshot, future, now, ct).ConfigureAwait(false);
 
-            ProjectionSource source = BuildSource(snapshot, sites, organisationName, terms, future, now);
+            ProjectionSource source = BuildSource(snapshot, sites, organisationName, organisationApproved, terms, future, now);
             IReadOnlyList<ListingSearchRow> rows = ListingSearchProjector.Project(source);
 
             string config = Locale.Resolve(snapshot.Listing.PrimaryLanguage).TextSearchConfig;
@@ -188,6 +192,7 @@ public sealed class ListingProjectionService(
         Snapshot snapshot,
         IReadOnlyList<SiteSummary> sites,
         string organisationName,
+        bool organisationApproved,
         IReadOnlyList<TermSummary> terms,
         List<(ListingSessionRecord Session, Occurrence Occurrence)> future,
         DateTimeOffset now)
@@ -208,7 +213,7 @@ public sealed class ListingProjectionService(
             ListingId = listing.Id,
             OrganisationId = listing.OrgId,
             OrganisationName = organisationName,
-            IsPublished = IsLive(listing, now),
+            IsPublished = organisationApproved && IsLive(listing, now),
             PublishedAt = listing.PublishedAt,
             Title = listing.Title,
             Slug = listing.Slug,

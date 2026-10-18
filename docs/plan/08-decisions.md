@@ -258,6 +258,15 @@ stays live while an edited revision is reviewed, which is what the review queue'
 side-by-side diff needs. That is a later slice: a revision table, editor changes and the diff
 view.
 
+*Revisions and the diff, 2026-10-17:*
+- `opportunity.listing_revision` stores the editor's form as JSON at each submission and
+  each organiser review: publish, request changes, reject, or "changes are fine".
+- The review page shows field by field what changed since the last review, for a
+  resubmission and for the "changed since review" lane.
+- Edits still go live (D15 as accepted). Keeping the published version live while an edit
+  waits for review is the remaining step. It now needs only the editor to write an edited
+  revision instead of the listing.
+
 ### D16 — Consoles are server-rendered forms, not interactive components (**accepted 2026-10-17**)
 
 The screen inventory marks the provider and organiser consoles "Interactive". They are
@@ -416,7 +425,7 @@ When accounts arrive (M2), signing in moves the cookie's ids into `saved_item`, 
 reminders use `listing_reminder` under the consent rules. The cookie path stays for people who
 never sign in.
 
-### D23 — Provider sign-up and invitations make adult accounts without saying who already has one (**proposed 2026-10-17; implemented, reversible**)
+### D23 — Provider sign-up and invitations make adult accounts without saying who already has one (**accepted 2026-10-17**)
 
 M1 has no registration, but the acceptance test starts with a provider applying, and an owner
 has to invite staff. Both start from an email address someone typed, which may not be theirs.
@@ -454,7 +463,7 @@ has to invite staff. Both start from an email address someone typed, which may n
 Rejected: requiring sign-up first. There is no registration in M1, and a sign-up form has the
 same enumeration problem.
 
-### D24 — Cross-module changes travel as jobs until the outbox has a dispatcher (**proposed 2026-10-17; implemented, reversible**)
+### D24 — Cross-module changes travel as jobs until the outbox has a dispatcher (**accepted 2026-10-17**)
 
 The plan sends module events through `platform.outbox_message`, but nothing dispatches it
 yet. `IOutboxWriter` has no implementation. Provider management needs one such event:
@@ -469,6 +478,48 @@ the site id.
 
 Moving to the outbox later means publishing `SiteLocationChanged` instead and subscribing
 the same handler. One call site changes.
+
+### D25 — Vetting is a checklist the organiser saves; approval needs the contact verified (**proposed 2026-10-17; implemented, reversible**)
+
+The screen inventory's "checklist, documents, decision with a reason".
+
+- **The checklist:** contact verified, website and public details checked, safeguarding
+  policy seen, and the expiry on the insurance certificate seen.
+  - It is saved as a vetting event that leaves the status unchanged, so vetting can take
+    days and the history shows what was checked and when.
+  - Approval records the checklist it was judged on.
+- **Approval needs, beyond an open site and an active owner:**
+  - the contact verified. An applicant's address proves nothing about the organisation it
+    names (D23), so someone must reach the owner through the organisation's public record.
+  - a current insurance certificate, where the tenant sets the flag
+    `vetting.insurance_required`. It is off by default; Kettle doesn't set it.
+- **Clearances:** the checklist shows how many staff and mentors have no current background
+  check, but doesn't block approval. Clearances can't yet be recorded in the console, and
+  which kinds a tenant requires is a tenant setting that doesn't exist yet. Both come with
+  roster access (M3), which is where clearances gate a person, not an organisation.
+- **Documents:** not uploaded yet. `organisation_document` needs media storage with virus
+  scanning, which isn't built. The organiser records what they saw instead.
+- **Suspension takes listings out of search:** a listing is live only while its
+  organisation is approved. Any status change queues `directory.organisation_changed` (D24),
+  which re-projects the organisation's listings, and the public listing page checks the
+  status directly.
+
+The contact check is my call for M1's acceptance test. Name the tenant's actual vetting
+policy and the checklist follows it.
+
+### D26 — Taxonomy codes are permanent; terms are retired, not deleted (**proposed 2026-10-17; implemented, reversible**)
+
+- **Codes:** a term's code is in facet values (`cat:stem`), links and saved searches, so it
+  never changes once made.
+- **Retiring:** a retired term leaves the editors' pickers and the finder's filters. Listings
+  already tagged keep its facet until they are re-tagged, and history still names it. A
+  category with active interests can't be retired, and an interest can't be restored under
+  a retired category.
+- **Names:** every term needs an English name, because every page falls back to English
+  when a translation is missing. The other languages are optional, and the list shows how
+  many each term has.
+- **Search:** renaming, retiring or restoring queues `platform.term_changed` (D24), which
+  re-projects the listings tagged with the term, so search matches its current name.
 
 ## Open questions
 

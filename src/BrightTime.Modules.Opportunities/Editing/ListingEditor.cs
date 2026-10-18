@@ -92,74 +92,87 @@ public sealed class ListingEditor(
     {
         return await db.InTransactionAsync(async ct =>
         {
-            var row = await db.Listings.AsNoTracking()
-                .Where(l => l.Id == listingId)
-                .Select(l => new { Listing = l, Version = EF.Property<uint>(l, "xmin") })
-                .FirstOrDefaultAsync(ct).ConfigureAwait(false);
-            if (row is null)
+            (ListingRecord Listing, ListingForm Form)? read = await ReadFormAsync(listingId, ct).ConfigureAwait(false);
+            if (read is not { } r)
             {
                 return null;
             }
 
-            ListingRecord l = row.Listing;
-            List<Guid> sites = await db.ListingSites.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.SiteId).ToListAsync(ct).ConfigureAwait(false);
-            List<Guid> terms = await db.ListingTerms.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.TermId).ToListAsync(ct).ConfigureAwait(false);
-            List<Guid> accommodations = await db.ListingAccommodations.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.TermId).ToListAsync(ct).ConfigureAwait(false);
-            List<string> languages = await db.ListingLanguages.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.LanguageCode).ToListAsync(ct).ConfigureAwait(false);
-            ListingSessionRecord? session = await db.Sessions.AsNoTracking().Where(s => s.ListingId == listingId && !s.IsCancelled).OrderBy(s => s.StartsOn).FirstOrDefaultAsync(ct).ConfigureAwait(false);
-            ListingDeadlineRecord? deadline = await db.ListingDeadlines.AsNoTracking().Where(d => d.ListingId == listingId).OrderBy(d => d.DueAt).FirstOrDefaultAsync(ct).ConfigureAwait(false);
-
-            TimeZoneInfo zone = TimeZoneInfo.FindSystemTimeZoneById(Zone);
-            var form = new ListingForm
-            {
-                Kind = l.Kind,
-                Title = l.Title,
-                Summary = l.Summary,
-                Description = l.Description ?? string.Empty,
-                PrimaryLanguage = l.PrimaryLanguage,
-                AgeMin = Text(l.AgeMin),
-                AgeMax = Text(l.AgeMax),
-                GradeMin = Text(l.GradeMin),
-                GradeMax = Text(l.GradeMax),
-                TermIds = terms,
-                AccommodationIds = accommodations,
-                Languages = languages,
-                Modality = l.Modality,
-                VirtualUrl = l.VirtualUrl ?? string.Empty,
-                SiteIds = sites,
-                CostModel = l.CostModel,
-                CostMin = Dollars(l.CostCentsMin),
-                CostMax = Dollars(l.CostCentsMax),
-                SlidingScaleNote = l.SlidingScaleNote ?? string.Empty,
-                RegistrationMode = l.RegistrationMode,
-                ExternalUrl = l.ExternalUrl ?? string.Empty,
-                Capacity = Text(l.CapacityTotal),
-                MealsProvided = l.MealsProvided,
-                TransportProvided = l.TransportProvided,
-                TransportNote = l.TransportNote ?? string.Empty,
-                IsDropIn = l.IsDropIn,
-                AccessibilityNote = l.AccessibilityNote ?? string.Empty,
-                ContactEmail = l.ContactEmail ?? string.Empty,
-                ContactPhone = l.ContactPhone ?? string.Empty,
-                Repeats = session?.Rrule is null && session is not null ? "once" : "weekly",
-                Days = session?.Rrule is { } rrule ? DaysOf(rrule) : [],
-                StartsOn = session?.StartsOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
-                EndsOn = session?.Rrule is not null ? session.EndsOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty : string.Empty,
-                StartTime = session?.StartTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
-                EndTime = session?.EndTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
-                DeadlineKind = deadline?.DeadlineKind ?? string.Empty,
-                DeadlineOn = deadline is null ? string.Empty
-                    : TimeZoneInfo.ConvertTime(deadline.DueAt, zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                Interval = session?.Rrule is { } rule ? IntervalOf(rule) : "1",
-                SkipDates = session is null ? string.Empty
-                    : string.Join('\n', session.Exdates.Order().Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))),
-                ShowFrom = l.PublishAt is { } show ? Day(TimeZoneInfo.ConvertTime(show, zone)) : string.Empty,
-                TakeDownAfter = TakeDownText(l, session, zone),
-                Version = row.Version.ToString(CultureInfo.InvariantCulture),
-            };
-
-            return new EditableListing(l.Id, new OrganisationId(l.OrgId), ParseStatus(l.Status), l.Slug, l.ReviewNote, l.UpdatedAt, l.ReviewedAt, form);
+            ListingRecord l = r.Listing;
+            return new EditableListing(l.Id, new OrganisationId(l.OrgId), ParseStatus(l.Status), l.Slug, l.ReviewNote, l.UpdatedAt, l.ReviewedAt, r.Form);
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The listing and its editor form, with the row version in the form. Runs inside the caller's transaction.</summary>
+    private async Task<(ListingRecord Listing, ListingForm Form)?> ReadFormAsync(Guid listingId, CancellationToken ct)
+    {
+        var row = await db.Listings.AsNoTracking()
+            .Where(l => l.Id == listingId)
+            .Select(l => new { Listing = l, Version = EF.Property<uint>(l, "xmin") })
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (row is null)
+        {
+            return null;
+        }
+
+        ListingRecord l = row.Listing;
+        List<Guid> sites = await db.ListingSites.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.SiteId).ToListAsync(ct).ConfigureAwait(false);
+        List<Guid> terms = await db.ListingTerms.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.TermId).ToListAsync(ct).ConfigureAwait(false);
+        List<Guid> accommodations = await db.ListingAccommodations.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.TermId).ToListAsync(ct).ConfigureAwait(false);
+        List<string> languages = await db.ListingLanguages.AsNoTracking().Where(x => x.ListingId == listingId).Select(x => x.LanguageCode).ToListAsync(ct).ConfigureAwait(false);
+        ListingSessionRecord? session = await db.Sessions.AsNoTracking().Where(s => s.ListingId == listingId && !s.IsCancelled).OrderBy(s => s.StartsOn).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        ListingDeadlineRecord? deadline = await db.ListingDeadlines.AsNoTracking().Where(d => d.ListingId == listingId).OrderBy(d => d.DueAt).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+
+        TimeZoneInfo zone = TimeZoneInfo.FindSystemTimeZoneById(Zone);
+        var form = new ListingForm
+        {
+            Kind = l.Kind,
+            Title = l.Title,
+            Summary = l.Summary,
+            Description = l.Description ?? string.Empty,
+            PrimaryLanguage = l.PrimaryLanguage,
+            AgeMin = Text(l.AgeMin),
+            AgeMax = Text(l.AgeMax),
+            GradeMin = Text(l.GradeMin),
+            GradeMax = Text(l.GradeMax),
+            TermIds = terms,
+            AccommodationIds = accommodations,
+            Languages = languages,
+            Modality = l.Modality,
+            VirtualUrl = l.VirtualUrl ?? string.Empty,
+            SiteIds = sites,
+            CostModel = l.CostModel,
+            CostMin = Dollars(l.CostCentsMin),
+            CostMax = Dollars(l.CostCentsMax),
+            SlidingScaleNote = l.SlidingScaleNote ?? string.Empty,
+            RegistrationMode = l.RegistrationMode,
+            ExternalUrl = l.ExternalUrl ?? string.Empty,
+            Capacity = Text(l.CapacityTotal),
+            MealsProvided = l.MealsProvided,
+            TransportProvided = l.TransportProvided,
+            TransportNote = l.TransportNote ?? string.Empty,
+            IsDropIn = l.IsDropIn,
+            AccessibilityNote = l.AccessibilityNote ?? string.Empty,
+            ContactEmail = l.ContactEmail ?? string.Empty,
+            ContactPhone = l.ContactPhone ?? string.Empty,
+            Repeats = session?.Rrule is null && session is not null ? "once" : "weekly",
+            Days = session?.Rrule is { } rrule ? DaysOf(rrule) : [],
+            StartsOn = session?.StartsOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            EndsOn = session?.Rrule is not null ? session.EndsOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty : string.Empty,
+            StartTime = session?.StartTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+            EndTime = session?.EndTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+            DeadlineKind = deadline?.DeadlineKind ?? string.Empty,
+            DeadlineOn = deadline is null ? string.Empty
+                : TimeZoneInfo.ConvertTime(deadline.DueAt, zone).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Interval = session?.Rrule is { } rule ? IntervalOf(rule) : "1",
+            SkipDates = session is null ? string.Empty
+                : string.Join('\n', session.Exdates.Order().Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))),
+            ShowFrom = l.PublishAt is { } show ? Day(TimeZoneInfo.ConvertTime(show, zone)) : string.Empty,
+            TakeDownAfter = TakeDownText(l, session, zone),
+            Version = row.Version.ToString(CultureInfo.InvariantCulture),
+        };
+
+        return (l, form);
     }
 
     /// <summary>
@@ -575,6 +588,17 @@ public sealed class ListingEditor(
             }
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            // D15: what was submitted, and what an organiser looked at, so the next review is a diff.
+            if (to == ListingStatus.PendingReview)
+            {
+                await RecordRevisionAsync(listing, ListingRevisions.Submitted, actor, ct).ConfigureAwait(false);
+            }
+            else if (mover == ListingLifecycle.Mover.Organiser && to is ListingStatus.Published or ListingStatus.ChangesRequested or ListingStatus.Rejected)
+            {
+                await RecordRevisionAsync(listing, ListingRevisions.Reviewed, actor, ct).ConfigureAwait(false);
+            }
+
             await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
@@ -608,6 +632,7 @@ public sealed class ListingEditor(
             listing.ReviewedAt = clock.UtcNow;
             listing.ReviewedBy = actor.Value;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await RecordRevisionAsync(listing, ListingRevisions.Reviewed, actor, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
                 Action = "listing.reviewed",
@@ -617,6 +642,88 @@ public sealed class ListingEditor(
             }, ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
+
+    /// <summary>
+    /// What changed since an organiser last reviewed the listing: for a resubmission after
+    /// changes were asked for, and for the "changed since review" lane (D15). Sites and terms
+    /// are named in <paramref name="locale"/>. Null when the listing was never reviewed.
+    /// </summary>
+    public Task<ReviewDiff?> DiffSinceReviewAsync(Guid listingId, string locale, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            ListingRevisionRecord? last = await db.ListingRevisions.AsNoTracking()
+                .Where(r => r.ListingId == listingId && r.Kind == ListingRevisions.Reviewed)
+                .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+                .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            if (last is null || ListingRevisions.Deserialise(last.Snapshot) is not { } before
+                || await ReadFormAsync(listingId, ct).ConfigureAwait(false) is not { } current)
+            {
+                return null;
+            }
+
+            IReadOnlyList<FieldChange> changes = ListingRevisions.Compare(before, current.Form);
+            return new ReviewDiff(last.CreatedAt, await NameIdsAsync(changes, locale, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>Replaces site and term ids in a diff with their names; an id no longer known stays as it is.</summary>
+    private async Task<IReadOnlyList<FieldChange>> NameIdsAsync(IReadOnlyList<FieldChange> changes, string locale, CancellationToken ct)
+    {
+        static Guid[] Ids(FieldChange c) =>
+            [.. c.Before.Concat(c.After).Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => g != Guid.Empty)];
+
+        string[] termFields = [nameof(ListingForm.TermIds), nameof(ListingForm.AccommodationIds)];
+        Guid[] termIds = [.. changes.Where(c => termFields.Contains(c.Field)).SelectMany(Ids).Distinct()];
+        Guid[] siteIds = [.. changes.Where(c => c.Field == nameof(ListingForm.SiteIds)).SelectMany(Ids).Distinct()];
+
+        Dictionary<string, string> names = new(StringComparer.OrdinalIgnoreCase);
+        if (termIds.Length > 0)
+        {
+            foreach (var t in await taxonomy.GetTermsAsync(termIds, locale, ct).ConfigureAwait(false))
+            {
+                names[t.Id.ToString("D")] = t.Name ?? t.Code;
+            }
+        }
+
+        if (siteIds.Length > 0)
+        {
+            foreach (SiteSummary site in await directory.GetSitesAsync(siteIds, ct).ConfigureAwait(false))
+            {
+                names[site.SiteId.ToString("D")] = site.Name;
+            }
+        }
+
+        if (names.Count == 0)
+        {
+            return changes;
+        }
+
+        string Name(string v) => names.TryGetValue(v, out string? n) ? n : v;
+        return [.. changes.Select(c => c.IsList
+            ? c with { Before = [.. c.Before.Select(Name).Order(StringComparer.CurrentCulture)], After = [.. c.After.Select(Name).Order(StringComparer.CurrentCulture)] }
+            : c)];
+    }
+
+    /// <summary>Stores the listing's current form as a revision, in the caller's transaction, after its changes are saved.</summary>
+    private async Task RecordRevisionAsync(ListingRecord listing, string kind, UserId actor, CancellationToken ct)
+    {
+        if (await ReadFormAsync(listing.Id, ct).ConfigureAwait(false) is not { } current)
+        {
+            return;
+        }
+
+        db.ListingRevisions.Add(new ListingRevisionRecord
+        {
+            Id = UuidV7.NewId(),
+            TenantId = listing.TenantId,
+            ListingId = listing.Id,
+            Kind = kind,
+            Status = listing.Status,
+            Snapshot = ListingRevisions.Serialise(current.Form),
+            CreatedAt = clock.UtcNow,
+            CreatedBy = actor.Value,
+        });
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
 
     public Task<IReadOnlyList<ListingRow>> ListForOrganisationAsync(OrganisationId organisation, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<IReadOnlyList<ListingRow>>(async ct =>

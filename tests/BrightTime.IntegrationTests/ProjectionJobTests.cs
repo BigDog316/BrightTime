@@ -226,6 +226,58 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
         (await SiteRowsAsync(s)).ShouldBe(0, "a closed site is no longer where the listing is found");
     }
 
+    [Fact]
+    public async Task Suspending_an_organisation_takes_its_listings_out_of_search_and_reinstating_brings_them_back()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedListingAsync(DayOfWeek.Friday);
+        await DrainAsync();
+        (await IsPublishedAsync(s.Listing)).ShouldBeTrue();
+
+        await ChangeOrganisationAsync(s, "status = 'suspended', approved_at = null, suspended_at = now(), suspension_reason = 'Under investigation.'");
+        await DrainAsync();
+        (await IsPublishedAsync(s.Listing)).ShouldBeFalse();
+
+        await ChangeOrganisationAsync(s, "status = 'approved', approved_at = now(), suspended_at = null, suspension_reason = null");
+        await DrainAsync();
+        (await IsPublishedAsync(s.Listing)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_listing_revision_cannot_be_edited()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedListingAsync(DayOfWeek.Friday);
+        await using NpgsqlConnection connection = await Sql.OpenAsync(Cs, Ct);
+        await Sql.ExecAsync(connection, null,
+            "insert into opportunity.listing_revision (id, tenant_id, listing_id, kind, status, snapshot) values (@id, @t, @l, 'reviewed', 'published', '{}')",
+            [("id", UuidV7.NewId()), ("t", s.Tenant), ("l", s.Listing)]);
+
+        PostgresException refused = await Should.ThrowAsync<PostgresException>(() =>
+            Sql.ExecAsync(connection, null, "update opportunity.listing_revision set status = 'draft' where listing_id = @l", [("l", s.Listing)]));
+        refused.MessageText.ShouldContain("append-only", Case.Insensitive);
+    }
+
+    /// <summary>Changes the organisation as Directory would, and queues the job Directory queues with it (D24).</summary>
+    private async Task ChangeOrganisationAsync(Seeded s, string set)
+    {
+        await using AsyncServiceScope scope = TestHost.AppScope(Cs, s.Tenant);
+        DirectoryDbContext db = scope.ServiceProvider.GetRequiredService<DirectoryDbContext>();
+        await db.InTransactionAsync(async ct =>
+        {
+#pragma warning disable EF1002 // A fixed fragment from this test, not input.
+            await db.Database.ExecuteSqlRawAsync($"update directory.organisation set {set} where id = @p0", [s.Org], ct);
+#pragma warning restore EF1002
+            return await db.EnqueueJobAsync(new JobRequest
+            {
+                JobType = OrganisationChangedJob.JobType,
+                TenantId = new TenantId(s.Tenant),
+                Payload = new OrganisationChangedJob.Payload(s.Org),
+                UniqueKey = OrganisationChangedJob.UniqueKey(s.Org),
+            }, ct);
+        }, Ct);
+    }
+
     // ---- helpers ----------------------------------------------------------------------
 
     private async Task DrainAsync()
@@ -256,8 +308,8 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
             await Sql.SeedTenantAsync(connection, tenant, "proj-" + tenant.ToString("N"));
             await Sql.ExecAsync(connection, null,
                 """
-                insert into directory.organisation (id, tenant_id, legal_name, display_name, slug, org_kind)
-                values (@org, @t, 'Kettle Youth Collective', 'Kettle Youth Collective', @orgslug, 'nonprofit');
+                insert into directory.organisation (id, tenant_id, legal_name, display_name, slug, org_kind, status, approved_at)
+                values (@org, @t, 'Kettle Youth Collective', 'Kettle Youth Collective', @orgslug, 'nonprofit', 'approved', now());
                 insert into platform.neighbourhood (id, tenant_id, code, kind) values (@hood, @t, @hoodcode, 'neighbourhood');
                 insert into directory.site (id, tenant_id, org_id, name, location, neighbourhood_id, is_address_public)
                 values (@site, @t, @org, 'Kettle High School', st_setsrid(st_makepoint(-73.7629, 41.0339), 4326)::geography, @hood, true);

@@ -95,6 +95,13 @@ public static class OrganisationVetting
         /// <summary>Whether an active owner exists. Required to approve; an organisation with nobody in charge cannot be held to anything.</summary>
         public bool HasActiveOwner { get; init; }
 
+        /// <summary>
+        /// The organiser confirmed the applicant is who they say: reached the owner on a contact
+        /// that the organisation's public record supports. Required to approve; the vetting
+        /// checklist records it.
+        /// </summary>
+        public bool ContactVerified { get; init; }
+
         /// <summary>Whether a current insurance certificate is on file, where the tenant requires one.</summary>
         public bool HasCurrentInsurance { get; init; }
 
@@ -181,6 +188,13 @@ public static class OrganisationVetting
                 "organisation.no_site",
                 "An organisation needs at least one site before it can be approved, " +
                 "so that its listings can be found by distance.");
+        }
+
+        if (!context.ContactVerified)
+        {
+            return Error.Precondition(
+                "organisation.contact_unverified",
+                "Confirm on the vetting checklist that the applicant's contact was verified before approving.");
         }
 
         if (context.TenantRequiresInsurance && !context.HasCurrentInsurance)

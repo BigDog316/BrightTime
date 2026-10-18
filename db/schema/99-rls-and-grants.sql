@@ -313,6 +313,7 @@ begin
     select * from (values
       ('platform',  'audit_event'),
       ('directory', 'organisation_vetting_event'),
+      ('opportunity','listing_revision'),
       ('enrollment','waiver_signature'),
       ('community', 'moderation_action')
     ) as t(sch, tbl)

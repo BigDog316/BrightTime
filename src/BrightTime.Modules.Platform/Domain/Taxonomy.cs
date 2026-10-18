@@ -9,7 +9,7 @@ public sealed class TaxonomyTerm
 
     public required string Vocabulary { get; init; }
 
-    public Guid? ParentId { get; init; }
+    public Guid? ParentId { get; set; }
 
     public required string Code { get; init; }
 

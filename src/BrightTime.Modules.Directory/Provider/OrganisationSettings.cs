@@ -3,6 +3,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Domain;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Directory.Review;
 using BrightTime.Modules.Directory.Vetting;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -121,6 +122,7 @@ public sealed class OrganisationSettings(DirectoryDbContext db, ITenantContext t
                 OccurredAt = now,
             });
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await db.QueueOrganisationChangedAsync(tenant.TenantId, o.Id, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
                 Action = "organisation.status_changed",

@@ -21,6 +21,10 @@
             {
                 <a href="/organiser/audit">@T["site.nav.audit"]</a>
             }
+            @if (user.HasPermission(Permissions.Taxonomy.Manage))
+            {
+                <a href="/organiser/taxonomy">@T["site.nav.taxonomy"]</a>
+            }
             @if (user.HasPermission(Permissions.Tenant.Settings))
             {
                 <a href="/organiser/wording">@T["site.nav.wording"]</a>

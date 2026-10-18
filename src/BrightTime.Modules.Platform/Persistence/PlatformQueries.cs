@@ -5,8 +5,11 @@ using Microsoft.EntityFrameworkCore;
 namespace BrightTime.Modules.Platform.Persistence;
 
 /// <summary>Taxonomy and geography lookups for other modules, read inside a tenant transaction.</summary>
-public sealed class PlatformQueries(PlatformDbContext db) : ITaxonomyQueries, IGeographyQueries
+public sealed class PlatformQueries(PlatformDbContext db) : ITaxonomyQueries, IGeographyQueries, IFeatureFlags
 {
+    public Task<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => db.FeatureFlags.AsNoTracking().AnyAsync(f => f.Key == key && f.IsEnabled, ct), cancellationToken);
+
     private const string FallbackLocale = "en";
 
     public Task<IReadOnlyList<TermSummary>> GetTermsAsync(

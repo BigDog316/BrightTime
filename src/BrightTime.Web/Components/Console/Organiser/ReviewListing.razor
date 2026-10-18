@@ -40,6 +40,8 @@
         <p class="notice">@T["organiser.review.org_not_approved"]</p>
     }
 
+    <ListingDiffView Diff="_diff" />
+
     <section class="review-actions" aria-labelledby="decide-heading">
         <h2 id="decide-heading">@T["organiser.decision"]</h2>
 
@@ -91,6 +93,7 @@
 
     private EditableListing? _listing;
     private ListingDetail? _detail;
+    private ReviewDiff? _diff;
     private string? _orgName;
     private OrganisationStatus _orgStatus;
     private string? _problem;
@@ -111,6 +114,8 @@
             Navigation.NotFound();
             return;
         }
+
+        _diff = await Get<ListingEditor>().DiffSinceReviewAsync(ListingId, Tenant.Locale.Code);
 
         IDirectoryQueries directory = Get<IDirectoryQueries>();
         _orgName = await directory.GetOrganisationNameAsync(_listing.OrganisationId);

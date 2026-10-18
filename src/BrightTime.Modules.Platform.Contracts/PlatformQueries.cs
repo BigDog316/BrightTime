@@ -68,3 +68,29 @@ public sealed class NoGeography : IGeographyQueries
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
 }
+
+/// <summary>Per-tenant switches (<c>platform.feature_flag</c>). An absent flag is off.</summary>
+public interface IFeatureFlags
+{
+    Task<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The flags the code reads. Keys are stable: tenants set them by name.</summary>
+public static class FeatureFlagKeys
+{
+    /// <summary>Approving an organisation needs a current certificate of insurance on the vetting checklist.</summary>
+    public const string VettingInsuranceRequired = "vetting.insurance_required";
+}
+
+/// <summary>
+/// The background job Platform queues when a term is renamed, retired or restored, so the
+/// listings tagged with it are re-projected with its current name (D24).
+/// </summary>
+public static class TermChangedJob
+{
+    public const string JobType = "platform.term_changed";
+
+    public sealed record Payload(Guid TermId);
+
+    public static string UniqueKey(Guid termId) => $"{JobType}:{termId:N}";
+}

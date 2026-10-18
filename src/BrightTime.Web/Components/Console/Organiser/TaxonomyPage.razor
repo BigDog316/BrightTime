@@ -1,0 +1,134 @@
+@page "/organiser/taxonomy"
+@using BrightTime.Modules.Platform.Taxonomy
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.TaxonomyPolicy)]
+@inherits ConsoleComponent
+
+<PageTitle>@T["taxonomy.title"] · BrightTime</PageTitle>
+
+<h1>@T["taxonomy.title"]</h1>
+<p class="hint">@T["taxonomy.intro"]</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["organiser.no_database"]</p>
+}
+else
+{
+    <nav class="org-nav" aria-label="@T["taxonomy.vocabularies"]">
+        <ul>
+            @foreach (string v in TaxonomyEditor.Vocabularies)
+            {
+                <li><a href="/organiser/taxonomy?vocabulary=@v" aria-current="@(v == Current ? "page" : null)">@T["taxonomy.vocabulary." + v]</a></li>
+            }
+        </ul>
+    </nav>
+
+    @if (Done is "saved" or "retired" or "restored")
+    {
+        <p class="notice success" role="status">@T["taxonomy.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p><a class="button" href="/organiser/taxonomy/@Current/new">@T["taxonomy.add"]</a></p>
+
+    @if (_terms.Count == 0)
+    {
+        <p>@T["taxonomy.none"]</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="queue">
+                <thead>
+                    <tr>
+                        <th scope="col">@T["taxonomy.col.name"]</th>
+                        <th scope="col">@T["taxonomy.col.code"]</th>
+                        @if (Current == "interest")
+                        {
+                            <th scope="col">@T["taxonomy.col.parent"]</th>
+                        }
+                        <th scope="col">@T["taxonomy.col.order"]</th>
+                        <th scope="col">@T["taxonomy.col.languages"]</th>
+                        <th scope="col">@T["taxonomy.col.state"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (TermRow term in _terms)
+                    {
+                        int named = _locales.Count(l => term.Names.ContainsKey(l));
+                        <tr class="@(term.IsActive ? "" : "retired")">
+                            <td><a href="/organiser/taxonomy/@Current/@term.Id" dir="auto">@term.Name(Tenant.Locale.Code)</a></td>
+                            <td><code>@term.Code</code></td>
+                            @if (Current == "interest")
+                            {
+                                <td dir="auto">@(term.ParentId is { } p && _parents.TryGetValue(p, out string? parent) ? parent : "")</td>
+                            }
+                            <td>@T.Number(term.SortOrder)</td>
+                            <td class="@(named < _locales.Count ? "incomplete" : "")">@T.Format("taxonomy.named_in", ("named", named), ("total", _locales.Count))</td>
+                            <td>
+                                <form method="post" @formname="@("state-" + term.Id.ToString("N"))" @onsubmit="ToggleAsync" class="inline-actions">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="term" value="@term.Id" />
+                                    <span>@T[term.IsActive ? "taxonomy.state.active" : "taxonomy.state.retired"]</span>
+                                    <button type="submit" class="secondary-button">@T[term.IsActive ? "taxonomy.retire" : "taxonomy.restore"]</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "vocabulary")] public string? Vocabulary { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private string Current => Vocabulary is { } v && TaxonomyEditor.IsManaged(v) ? v : TaxonomyEditor.Vocabularies[0];
+
+    private IReadOnlyList<TermRow> _terms = [];
+    private IReadOnlyList<string> _locales = [];
+    private Dictionary<Guid, string> _parents = [];
+    private string? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            return;
+        }
+
+        TaxonomyEditor editor = Get<TaxonomyEditor>();
+        _locales = await editor.LocalesAsync();
+        _terms = await editor.ListAsync(Current);
+        if (Current == "interest")
+        {
+            _parents = (await editor.ListAsync("category")).ToDictionary(c => c.Id, c => c.Name(Tenant.Locale.Code));
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        if (!Guid.TryParse(FormValue("term"), out Guid id) || _terms.FirstOrDefault(t => t.Id == id) is not { } term)
+        {
+            return;
+        }
+
+        Result result = await Get<TaxonomyEditor>().SetActiveAsync(id, !term.IsActive, Actor);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/taxonomy?vocabulary={Current}&done={(term.IsActive ? "retired" : "restored")}");
+    }
+}

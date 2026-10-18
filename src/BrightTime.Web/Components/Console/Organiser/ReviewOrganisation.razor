@@ -20,6 +20,10 @@
     {
         <p class="notice error" role="alert">@_problem</p>
     }
+    @if (Saved == "1")
+    {
+        <p class="notice success" role="status">@T["organiser.checklist.saved"]</p>
+    }
 
     <dl class="facts review-facts">
         <dt>@T["organiser.col.status"]</dt><dd>@T[BrightTime.Modules.Directory.Vetting.OrganisationVetting.StatusPhrase(o.Status)]</dd>
@@ -70,13 +74,59 @@
                 <span class="hint">@T["organiser.org.start_review_hint"]</span>
             </form>
         }
-        @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.Suspended
-             && User.HasPermission(Permissions.Organisations.Approve))
+        @if (CanSaveChecklist(o.Status))
         {
-            <form method="post" @formname="approve" @onsubmit="ApproveAsync">
-                <AntiforgeryToken />
-                <button type="submit">@T[o.Status == OrganisationStatus.Suspended ? "organiser.org.reinstate" : "organiser.org.approve"]</button>
-            </form>
+            VettingState v = o.Vetting;
+            <section class="checklist" aria-labelledby="checklist-heading">
+                <h3 id="checklist-heading">@T["organiser.checklist.heading"]</h3>
+                <ul class="checks">
+                    @Check(v.HasSite, T["organiser.checklist.has_site"])
+                    @Check(v.ActiveOwners > 0, T.Format("organiser.checklist.owners", ("count", v.ActiveOwners)))
+                    @if (v.InsuranceRequired)
+                    {
+                        @Check(v.InsuranceCurrent, v.InsuranceExpiresOn is { } on
+                            ? T.Format("organiser.checklist.insurance_on_file", ("date", T.DateShort(on)))
+                            : T["organiser.checklist.insurance_missing"])
+                    }
+                    <li class="check-info">
+                        @T.Format("organiser.checklist.staff", ("count", v.YouthFacingStaff), ("unchecked", v.WithoutBackgroundCheck))
+                    </li>
+                </ul>
+                @if (v.SavedAt is { } saved)
+                {
+                    <p class="hint">@T.Format("organiser.checklist.saved_at", ("date", T.DateTime(saved)))</p>
+                }
+                <form method="post" class="editor" @formname="checklist" @onsubmit="ChecklistAsync">
+                    <AntiforgeryToken />
+                    <label class="check">
+                        <input type="checkbox" name="ContactVerified" value="true" checked="@v.Checklist.ContactVerified" />
+                        <strong>@T["organiser.checklist.contact_verified"]</strong>
+                    </label>
+                    <p class="hint">@T["organiser.checklist.contact_verified_hint"]</p>
+                    <label class="check">
+                        <input type="checkbox" name="WebsiteChecked" value="true" checked="@v.Checklist.WebsiteChecked" />
+                        @T["organiser.checklist.website_checked"]
+                    </label>
+                    <label class="check">
+                        <input type="checkbox" name="SafetyPolicySeen" value="true" checked="@v.Checklist.SafetyPolicySeen" />
+                        @T["organiser.checklist.safety_policy_seen"]
+                    </label>
+                    <div class="field field-short">
+                        <label for="InsuranceExpiresOn">@T["organiser.checklist.insurance_expires"]</label>
+                        <p class="hint" id="hint-InsuranceExpiresOn">@T[v.InsuranceRequired ? "organiser.checklist.insurance_required_hint" : "organiser.checklist.insurance_hint"]</p>
+                        <input id="InsuranceExpiresOn" name="InsuranceExpiresOn" type="date" aria-describedby="hint-InsuranceExpiresOn"
+                               value="@(v.Checklist.InsuranceExpiresOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? v.InsuranceExpiresOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit" name="action" value="save" class="secondary-button">@T["organiser.checklist.save"]</button>
+                        @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.Suspended
+                             && User.HasPermission(Permissions.Organisations.Approve))
+                        {
+                            <button type="submit" name="action" value="approve">@T[o.Status == OrganisationStatus.Suspended ? "organiser.org.reinstate" : "organiser.org.approve"]</button>
+                        }
+                    </div>
+                </form>
+            </section>
         }
         @if (o.Status is OrganisationStatus.Applied or OrganisationStatus.UnderReview)
         {
@@ -116,6 +166,8 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
     private OrganisationForReview? _org;
     private string? _problem;
     private readonly Dictionary<string, string> _reasonErrors = [];
@@ -137,9 +189,48 @@
 
     private Task StartReviewAsync() => DecideAsync(OrganisationStatus.UnderReview, null, "started");
 
-    private Task ApproveAsync() => User.HasPermission(Permissions.Organisations.Approve)
-        ? DecideAsync(OrganisationStatus.Approved, null, "approved")
-        : Refuse();
+    private static bool CanSaveChecklist(OrganisationStatus status) =>
+        status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.ChangesRequested
+            or OrganisationStatus.Approved or OrganisationStatus.Suspended;
+
+    /// <summary>Saves the checklist, or approves with it: the ticks on the form are what the approval is judged on.</summary>
+    private async Task ChecklistAsync()
+    {
+        VettingChecklist checklist = new()
+        {
+            ContactVerified = FormValue("ContactVerified") == "true",
+            WebsiteChecked = FormValue("WebsiteChecked") == "true",
+            SafetyPolicySeen = FormValue("SafetyPolicySeen") == "true",
+            InsuranceExpiresOn = DateOnly.TryParseExact(FormValue("InsuranceExpiresOn"), "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out DateOnly on) ? on : null,
+        };
+
+        if (FormValue("action") == "approve")
+        {
+            if (!User.HasPermission(Permissions.Organisations.Approve))
+            {
+                await Refuse();
+                return;
+            }
+
+            await DecideAsync(OrganisationStatus.Approved, null, "approved", checklist);
+            return;
+        }
+
+        Result saved = await Get<OrganisationReview>().SaveChecklistAsync(new OrganisationId(OrgId), checklist, Actor);
+        if (!saved.IsSuccess)
+        {
+            _problem = T.Error(saved.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/review/organisations/{OrgId}?saved=1");
+    }
+
+    private RenderFragment Check(bool ok, string text) => __builder =>
+    {
+        <li class="@(ok ? "check-ok" : "check-missing")"><span class="visually-hidden">@T[ok ? "organiser.checklist.met" : "organiser.checklist.not_met"] </span>@text</li>
+    };
 
     private Task RequestChangesAsync() => DecideAsync(OrganisationStatus.ChangesRequested, "changes", "changes_requested");
 
@@ -156,10 +247,10 @@
         return Task.CompletedTask;
     }
 
-    private async Task DecideAsync(OrganisationStatus to, string? reasonForm, string done)
+    private async Task DecideAsync(OrganisationStatus to, string? reasonForm, string done, VettingChecklist? checklist = null)
     {
         string? reason = reasonForm is null ? null : FormValue("reason");
-        Result result = await Get<OrganisationReview>().DecideAsync(new OrganisationId(OrgId), to, reason, Actor);
+        Result result = await Get<OrganisationReview>().DecideAsync(new OrganisationId(OrgId), to, reason, checklist, Actor);
         if (result.IsSuccess)
         {
             Navigation.NavigateTo(to == OrganisationStatus.UnderReview

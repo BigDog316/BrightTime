@@ -4,8 +4,10 @@ Citywide out-of-school-time platform for a New York county (seed region:
 Kettle County, NY — fictional). Six locales: English, Spanish, Chinese
 (Simplified), Bengali, Haitian Creole, Arabic.
 
-**Status: plan, awaiting approval. No application code written yet**, per step
-1 of the build prompt.
+**Status: plan approved; M1 under way.** For current state, see
+[../HANDOFF.md](../HANDOFF.md). The sections below are the original
+plan-approval text, and the blockers they list have since been settled
+in [08-decisions.md](08-decisions.md).
 
 ## Read in this order
 

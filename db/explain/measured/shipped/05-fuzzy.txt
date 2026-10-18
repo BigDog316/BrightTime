@@ -1,0 +1,65 @@
+with matched as (
+  select ls.listing_id, ls.site_id, ls.slug, ls.title, ls.summary, ls.org_id, ls.kind,
+         ls.cost_cents, ls.is_free, ls.modality, ls.neighbourhood_id,
+         ls.next_start_at, ls.next_deadline_at, ls.popularity, ls.published_at, ls.is_drop_in,
+         null::double precision as distance_m,
+         ts_rank_cd(ls.search_vector, websearch_to_tsquery(@ts_config::regconfig, @text), 32) as text_rank,
+         0 as interest_overlap
+  from opportunity.listing_search ls
+  where ls.tenant_id = @tenant_id and ls.is_published
+    and ls.is_primary
+    and (ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)
+         or ls.fuzzy_text % @text)
+),
+best_site as (
+  select * from matched
+),
+scored as (
+  select bs.*, round((0.45 * least(text_rank * 4.0, 1.0) + 0.20 * (0.5) + 0.15 * (case when next_start_at is null then 0.3 else exp(-greatest(extract(epoch from (next_start_at - now())) / 86400.0, 0) / 30.0) end) + 0.12 * least(interest_overlap / 3.0, 1.0) + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6) as score
+  from best_site bs
+)
+select s.listing_id, s.site_id, s.slug, s.title, s.summary, s.org_id, s.kind,
+       s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,
+       s.next_start_at, s.next_deadline_at, s.published_at,
+       s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,
+       extract(epoch from (s.next_start_at - now())) / 86400.0 as days_until_start
+from scored s
+order by s.score desc, s.listing_id desc
+limit @page_size
+
+Limit  (cost=9532.16..9541.51 rows=25 width=243) (actual time=20.027..21.069 rows=25.00 loops=1)
+  Buffers: shared hit=3992
+  ->  Gather Merge  (cost=9532.16..11497.73 rows=5256 width=243) (actual time=20.026..21.067 rows=25.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=3992
+        ->  Result  (cost=8532.14..9829.71 rows=2190 width=243) (actual time=16.533..16.568 rows=20.33 loops=3)
+              Buffers: shared hit=3992
+              ->  Sort  (cost=8532.14..8537.61 rows=2190 width=273) (actual time=16.530..16.531 rows=20.33 loops=3)
+                    Sort Key: (round((((((('0.45'::double precision * LEAST((ts_rank_cd(ls.search_vector, websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text), 32) * '4'::double precision), '1'::double precision)) + '0.1'::double precision) + ((0.15 * CASE WHEN (ls.next_start_at IS NULL) THEN 0.3 ELSE exp(((- GREATEST((EXTRACT(epoch FROM (ls.next_start_at - now())) / 86400.0), '0'::numeric)) / 30.0)) END))::double precision) + '0'::double precision) + ('0.08'::double precision * LEAST((ls.popularity / '100'::double precision), '1'::double precision))))::numeric, 6)) DESC, ls.listing_id DESC
+                    Sort Method: top-N heapsort  Memory: 36kB
+                    Buffers: shared hit=3992
+                    Worker 0:  Sort Method: top-N heapsort  Memory: 36kB
+                    Worker 1:  Sort Method: top-N heapsort  Memory: 35kB
+                    ->  Parallel Bitmap Heap Scan on listing_search ls  (cost=1499.93..8470.34 rows=2190 width=273) (actual time=1.720..15.994 rows=1645.00 loops=3)
+                          Recheck Cond: (((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) AND is_published) OR ((fuzzy_text % 'robtics'::text) AND is_published))
+                          Filter: (is_primary AND (tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND ((search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) OR (fuzzy_text % 'robtics'::text)))
+                          Rows Removed by Filter: 174
+                          Heap Blocks: exact=1175
+                          Buffers: shared hit=3954
+                          Worker 0:  Heap Blocks: exact=1087
+                          Worker 1:  Heap Blocks: exact=1076
+                          ->  BitmapOr  (cost=1499.93..1499.93 rows=5841 width=0) (actual time=4.141..4.141 rows=0.00 loops=1)
+                                Buffers: shared hit=352
+                                ->  Bitmap Index Scan on ix_ls_fts  (cost=0.00..116.69 rows=276 width=0) (actual time=0.225..0.225 rows=0.00 loops=1)
+                                      Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)))
+                                      Index Searches: 1
+                                      Buffers: shared hit=27
+                                ->  Bitmap Index Scan on ix_ls_fuzzy  (cost=0.00..1380.61 rows=5565 width=0) (actual time=3.915..3.915 rows=5457.00 loops=1)
+                                      Index Cond: (fuzzy_text % 'robtics'::text)
+                                      Index Searches: 1
+                                      Buffers: shared hit=325
+Planning:
+  Buffers: shared hit=5
+Planning Time: 0.384 ms
+Execution Time: 21.100 ms

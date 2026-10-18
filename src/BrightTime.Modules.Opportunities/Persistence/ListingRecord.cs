@@ -198,6 +198,8 @@ public sealed class ListingSearchRecord
 
     public bool IsPublished { get; init; }
 
+    public bool IsPrimary { get; init; } = true;
+
     public string[] Facets { get; init; } = [];
 
     public NpgsqlRange<int>? AgeRange { get; init; }

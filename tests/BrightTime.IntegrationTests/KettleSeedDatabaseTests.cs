@@ -175,38 +175,12 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         }
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
-        "Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The repository's own DDL files and a constant database name.")]
     private async Task<Seeded> BuildAsync()
     {
-        await TestHost.EnsureLoginsAsync(database.ConnectionString, Ct);
-
-        await using (NpgsqlConnection admin = await Sql.OpenAsync(database.ConnectionString, Ct))
-        {
-            await Sql.ExecAsync(admin, null, $"drop database if exists {DatabaseName} with (force)", []);
-            await Sql.ExecAsync(admin, null, $"create database {DatabaseName}", []);
-        }
-
-        string connection = new NpgsqlConnectionStringBuilder(database.ConnectionString) { Database = DatabaseName }.ConnectionString;
-
-        await using (NpgsqlConnection fresh = await Sql.OpenAsync(connection, Ct))
-        {
-            string schema = Path.Combine(DatabaseFixture.RepositoryRoot, "db", "schema");
-            foreach (string file in Directory.GetFiles(schema, "*.sql").OrderBy(f => f, StringComparer.Ordinal))
-            {
-                await using NpgsqlCommand command = new(await File.ReadAllTextAsync(file, Ct), fresh);
-                await command.ExecuteNonQueryAsync(Ct);
-            }
-        }
-
-        SeedData data = KettleSeed.Build(SystemClock.Instance.TodayIn(TimeZoneInfo.FindSystemTimeZoneById(KettleListings.Zone)));
+        (string connection, SeedData data, SeedCounts first) = await KettleDatabase.CreateAsync(database.ConnectionString, DatabaseName, Ct);
 
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(connection);
-        var writer = new SeedWriter(source);
-        SeedCounts first = await writer.WriteAsync(data, Ct);
-        await SeedProjection.ProjectAsync(connection, data.TenantId, [.. data.Listings.Select(l => l.Id)], NullLogger.Instance, Ct);
-        SeedCounts second = await writer.WriteAsync(data, Ct);
+        SeedCounts second = await new SeedWriter(source).WriteAsync(data, Ct);
 
         return new Seeded(connection, data, first, second);
     }

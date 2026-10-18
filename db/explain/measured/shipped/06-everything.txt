@@ -1,0 +1,64 @@
+with matched as (
+  select ls.listing_id, ls.site_id, ls.slug, ls.title, ls.summary, ls.org_id, ls.kind,
+         ls.cost_cents, ls.is_free, ls.modality, ls.neighbourhood_id,
+         ls.next_start_at, ls.next_deadline_at, ls.popularity, ls.published_at, ls.is_drop_in,
+         st_distance(ls.location, st_setsrid(st_makepoint(@origin_lon, @origin_lat), 4326)::geography) as distance_m,
+         ts_rank_cd(ls.search_vector, websearch_to_tsquery(@ts_config::regconfig, @text), 32) as text_rank,
+         0 as interest_overlap
+  from opportunity.listing_search ls
+  where ls.tenant_id = @tenant_id and ls.is_published
+    and ls.kind = any(@kinds)
+    and ls.facets @> @facets_all
+    and ls.session_window && tstzrange(@window_start, @window_end)
+    and ls.cost_cents <= @max_cost_cents
+    and ls.location && st_makeenvelope(@box_west, @box_south, @box_east, @box_north, 4326)::geography
+    and st_distance(ls.location, st_setsrid(st_makepoint(@origin_lon, @origin_lat), 4326)::geography) <= @radius_m
+    and (ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)
+         or ls.fuzzy_text % @text)
+),
+best_site as (
+  select distinct on (listing_id) *
+  from matched
+  order by listing_id, distance_m asc nulls last
+),
+scored as (
+  select bs.*, round((0.45 * least(text_rank * 4.0, 1.0) + 0.20 * (case when distance_m is null then 0.5 else exp(-distance_m / 4000.0) end) + 0.15 * (case when next_start_at is null then 0.3 else exp(-greatest(extract(epoch from (next_start_at - now())) / 86400.0, 0) / 30.0) end) + 0.12 * least(interest_overlap / 3.0, 1.0) + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6) as score
+  from best_site bs
+)
+select s.listing_id, s.site_id, s.slug, s.title, s.summary, s.org_id, s.kind,
+       s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,
+       s.next_start_at, s.next_deadline_at, s.published_at,
+       s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,
+       extract(epoch from (s.next_start_at - now())) / 86400.0 as days_until_start
+from scored s
+order by s.score desc, s.listing_id desc
+limit @page_size
+
+Limit  (cost=7057.29..7057.30 rows=5 width=243) (actual time=10.051..10.052 rows=4.00 loops=1)
+  Buffers: shared hit=603
+  ->  Sort  (cost=7057.29..7057.30 rows=5 width=243) (actual time=10.050..10.051 rows=4.00 loops=1)
+        Sort Key: (round((((((('0.45'::double precision * LEAST((bs.text_rank * '4'::double precision), '1'::double precision)) + ('0.2'::double precision * CASE WHEN (bs.distance_m IS NULL) THEN '0.5'::double precision ELSE exp(((- bs.distance_m) / '4000'::double precision)) END)) + ((0.15 * CASE WHEN (bs.next_start_at IS NULL) THEN 0.3 ELSE exp(((- GREATEST((EXTRACT(epoch FROM (bs.next_start_at - now())) / 86400.0), '0'::numeric)) / 30.0)) END))::double precision) + ((0.12 * LEAST(((bs.interest_overlap)::numeric / 3.0), 1.0)))::double precision) + ('0.08'::double precision * LEAST((bs.popularity / '100'::double precision), '1'::double precision))))::numeric, 6)) DESC, bs.listing_id DESC
+        Sort Method: quicksort  Memory: 26kB
+        Buffers: shared hit=603
+        ->  Subquery Scan on bs  (cost=7056.72..7057.23 rows=5 width=243) (actual time=10.035..10.046 rows=4.00 loops=1)
+              Buffers: shared hit=603
+              ->  Unique  (cost=7056.72..7056.74 rows=5 width=180) (actual time=10.020..10.021 rows=4.00 loops=1)
+                    Buffers: shared hit=603
+                    ->  Sort  (cost=7056.72..7056.73 rows=5 width=180) (actual time=10.019..10.019 rows=5.00 loops=1)
+                          Sort Key: ls.listing_id, (st_distance(ls.location, '0101000020E610000000000000007052C0CDCCCCCCCC8C4440'::geography, true))
+                          Sort Method: quicksort  Memory: 25kB
+                          Buffers: shared hit=603
+                          ->  Bitmap Heap Scan on listing_search ls  (cost=1154.30..7056.66 rows=5 width=180) (actual time=9.683..10.015 rows=5.00 loops=1)
+                                Recheck Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{age:12,cat:arts,dow:3}'::text[]) AND is_published)
+                                Filter: ((kind = ANY ('{program}'::text[])) AND (session_window && '["2026-10-17 22:03:37.349886-04","2026-11-16 21:03:37.349886-05")'::tstzrange) AND (cost_cents <= 2500) AND (location && '0103000020E6100000010000000500000083A76368BE7752C0EA0C660F2181444083A76368BE7752C0B08C338A789844407D589C97416852C0B08C338A789844407D589C97416852C0EA0C660F2181444083A76368BE7752C0EA0C660F21814440'::geography) AND ((search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'art'::text)) OR (fuzzy_text % 'art'::text)) AND (st_distance(location, '0101000020E610000000000000007052C0CDCCCCCCCC8C4440'::geography, true) <= '10000'::double precision))
+                                Rows Removed by Filter: 340
+                                Heap Blocks: exact=301
+                                Buffers: shared hit=603
+                                ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..1154.30 rows=367 width=0) (actual time=9.619..9.619 rows=345.00 loops=1)
+                                      Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{age:12,cat:arts,dow:3}'::text[]))
+                                      Index Searches: 1
+                                      Buffers: shared hit=302
+Planning:
+  Buffers: shared hit=5
+Planning Time: 1.996 ms
+Execution Time: 10.079 ms

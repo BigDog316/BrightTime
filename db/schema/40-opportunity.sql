@@ -449,6 +449,9 @@ create table listing_search (
   slug            citext not null,
   kind            text not null,
   is_published    boolean not null,
+  -- One row per listing is primary: a search with no origin reads only those, so it needs
+  -- no collapsing of sites and the browse order can stop after one page.
+  is_primary      boolean not null default true,
 
   facets          text[] not null default '{}',
 
@@ -496,14 +499,16 @@ create index ix_ls_geo on listing_search using gist (location)
 -- 5. date-range overlap
 create index ix_ls_window on listing_search using gist (tenant_id, session_window)
   where is_published;
--- 6. default browse order and keyset pagination
+-- 6. default browse order and keyset pagination, one row per listing
 create index ix_ls_next_start on listing_search (tenant_id, next_start_at, listing_id)
-  where is_published;
+  where is_published and is_primary;
 -- maintenance helper: rows whose next_start_at has gone stale
 create index ix_ls_stale on listing_search (next_start_at)
   where is_published and next_start_at is not null;
 create index ix_ls_cost on listing_search (tenant_id, cost_cents)
   where is_published and not is_free;
+-- Exactly one primary row per listing: a search with no origin reads only those.
+create unique index ux_listing_search_primary on listing_search (listing_id) where is_primary;
 
 -- Correlated columns the planner otherwise mis-estimates.
 create statistics st_ls_kind_hood (dependencies, ndistinct)

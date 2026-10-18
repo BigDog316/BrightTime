@@ -154,7 +154,6 @@ begin
       ('landscape',  'asset_feature',           'asset_id',              'landscape',  'asset',               'id'),
       ('landscape',  'asset_photo',             'asset_id',              'landscape',  'asset',               'id'),
       ('landscape',  'survey_answer',           'response_id',           'landscape',  'survey_response',     'id'),
-      ('notify',     'preference',              'user_id',               'identity',   'app_user',            'id'),
       ('integration','import_row_error',        'import_run_id',         'integration','import_run',          'id')
     ) as t(child_schema, child_table, fk_column, parent_schema, parent_table, parent_key)
   loop

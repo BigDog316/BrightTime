@@ -22,7 +22,7 @@ public sealed class QueryBuilderTests
         // a dead branch is a predicate the planner still costs.
         BuiltQuery query = SearchQueryBuilder.Build(Browse());
 
-        query.Sql.ShouldNotContain("st_dwithin");
+        query.Sql.ShouldNotContain("ls.location &&");
         query.Sql.ShouldNotContain("websearch_to_tsquery");
         query.Sql.ShouldNotContain("facets @>");
         query.Sql.ShouldNotContain("tstzrange");
@@ -104,10 +104,61 @@ public sealed class QueryBuilderTests
             Radius = Distance.FromMetres(5000),
         });
 
-        query.Sql.ShouldContain("st_dwithin(ls.location, st_setsrid(st_makepoint(@origin_lon, @origin_lat), 4326)::geography, @radius_m)");
-        query.Sql.ShouldContain("st_distance(ls.location, st_setsrid(st_makepoint(@origin_lon, @origin_lat), 4326)::geography)");
+        query.Sql.ShouldContain("ls.location && st_makeenvelope(@box_west, @box_south, @box_east, @box_north, 4326)::geography");
+        query.Sql.ShouldContain("st_distance(ls.location, st_setsrid(st_makepoint(@origin_lon, @origin_lat), 4326)::geography) <= @radius_m");
+        query.Sql.ShouldNotContain("st_dwithin", Case.Insensitive, "PostGIS misestimates it; see SearchQueryBuilder");
+        ((double)query.Parameters["box_south"]!).ShouldBeLessThan(41.0345);
+        ((double)query.Parameters["box_north"]!).ShouldBeGreaterThan(41.0345);
         query.Parameters["origin_lat"].ShouldBe(41.0345);
         query.Parameters["origin_lon"].ShouldBe(-73.7629);
+    }
+
+    [Fact]
+    public void Without_an_origin_one_row_per_listing_is_read_and_nothing_is_collapsed()
+    {
+        BuiltQuery query = SearchQueryBuilder.Build(Browse(SearchSort.Soonest) with { AllFacets = ["hood:1", "cat:stem"] });
+
+        query.Sql.ShouldContain("and ls.is_primary");
+        query.Sql.ShouldNotContain("distinct on");
+    }
+
+    [Fact]
+    public void With_an_origin_every_site_is_read_and_each_listing_shown_at_its_nearest()
+    {
+        BuiltQuery query = SearchQueryBuilder.Build(Browse() with { Origin = new Coordinate(41.0345, -73.7629), Radius = Distance.FromMetres(5000) });
+
+        query.Sql.ShouldNotContain("is_primary");
+        query.Sql.ShouldContain("distinct on (listing_id)");
+    }
+
+    [Theory]
+    [InlineData(41.0345, -73.7629, 5_000)]
+    [InlineData(0.5, 179.9, 80_000)]
+    [InlineData(60.2, 24.9, 80_000)]
+    [InlineData(-33.9, 151.2, 100)]
+    public void The_distance_box_contains_the_whole_circle(double lat, double lon, int metres)
+    {
+        (double west, double south, double east, double north) = SearchQueryBuilder.BoundingBox(new Coordinate(lat, lon), Distance.FromMetres(metres));
+
+        for (int bearing = 0; bearing < 360; bearing += 5)
+        {
+            (double pLat, double pLon) = Destination(lat, lon, bearing, metres);
+            pLat.ShouldBeInRange(south, north);
+            if (east < 180 && west > -180)
+            {
+                pLon.ShouldBeInRange(west, east);
+            }
+        }
+    }
+
+    /// <summary>The point a distance away on a bearing, on a sphere: enough to check a box with a one percent margin.</summary>
+    private static (double Lat, double Lon) Destination(double lat, double lon, double bearing, double metres)
+    {
+        const double R = 6_371_008.8;
+        double d = metres / R, b = bearing * Math.PI / 180, p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+        double p2 = Math.Asin((Math.Sin(p1) * Math.Cos(d)) + (Math.Cos(p1) * Math.Sin(d) * Math.Cos(b)));
+        double l2 = l1 + Math.Atan2(Math.Sin(b) * Math.Sin(d) * Math.Cos(p1), Math.Cos(d) - (Math.Sin(p1) * Math.Sin(p2)));
+        return (p2 * 180 / Math.PI, l2 * 180 / Math.PI);
     }
 
     [Fact]

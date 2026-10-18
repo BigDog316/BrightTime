@@ -6,6 +6,10 @@ The plans below were measured on PostgreSQL 18.6 with PostGIS 3.6.4, against
 50,000 synthetic search rows for one tenant (`db/explain/synthetic-load.sql`).
 Reproduce them with `db/explain/run-explain.sh` after loading the data.
 
+**Since 2026-10-17 the gate is `FinderPlanTests`** (section "As shipped, and gated" below).
+It runs the SQL the finder actually sends, built by `SearchQueryBuilder`, and the
+hand-written scenario files are history. The two differed, and the difference mattered.
+
 Two things are measured and reported. The first is the plans **as the
 application runs them**, under row-level security. The second is the same
 queries with RLS bypassed, which is the best the planner can do on this table.
@@ -210,6 +214,64 @@ Where the predictions were wrong:
   722. Under RLS the estimate is lost entirely, which is part of why the plan is
   a sequential scan. Without RLS the estimate is still low, so scenario 03 remains
   the slowest query even with the index in use.
+
+### As shipped, and gated (2026-10-17)
+
+`FinderPlanTests` builds each scenario with the finder's own `SearchQuery` and
+`SearchQueryBuilder`. It runs `EXPLAIN (ANALYZE, BUFFERS)` as `brighttime_finder`, over the
+synthetic load, which is now drawn from a seeded random sequence:
+- 50,000 listings and 55,290 rows;
+- a tenth of listings at two sites, and one in twenty online only.
+
+It fails if:
+- any node sequentially scans `listing_search`;
+- a scan on it is estimated more than ten times off (once either side reaches 50 rows).
+
+It doesn't judge the arms of a `BitmapOr`/`BitmapAnd` (the planner acts on their
+combination, estimated at the heap scan above), or a scan that a `LIMIT` stopped early.
+CI runs it, and the plans are committed in `db/explain/measured/shipped/`.
+
+| Scenario | Execution | Plan |
+|---|---|---|
+| 01 browse, soonest | 0.06 ms | index scan, `ix_ls_next_start`, stops after a page |
+| 02 keyword | 28 ms | bitmap OR, `ix_ls_fts` + `ix_ls_fuzzy` |
+| 03 age, category, free, within 5 km | 22 ms | bitmap, `ix_ls_facets`, box then distance |
+| 04 date window, soonest | 2.7 ms | index scan, `ix_ls_next_start` |
+| 05 fuzzy typo | 21 ms | bitmap OR, `ix_ls_fts` + `ix_ls_fuzzy` |
+| 06 three facets, kind, text, window, cost, distance | 10 ms | bitmap, `ix_ls_facets` |
+| 07 map counts, category and age | 8 ms | bitmap, `ix_ls_facets` |
+
+What the gate found in the shipped query, and what changed:
+- **Every browse read the whole tenant.** The builder kept every matching row, then
+  collapsed each listing's sites with `DISTINCT ON`, and only then sorted and limited. So
+  "soonest" sorted 55,000 rows to show 24 (96 ms, sequential scan).
+  - Now, without an origin, no filter depends on the site: facets, times and prices are
+    the listing's. So the query reads only each listing's primary row
+    (`listing_search.is_primary`, exactly one per listing, enforced by a unique index)
+    and collapses nothing.
+  - An ordered browse walks the partial index `ix_ls_next_start` and stops at the page
+    size.
+  - With an origin, every site is read and each listing is shown at its nearest.
+- **`ST_DWithin` on geography misestimates itself.** Its support function adds an
+  accurate box test, estimated 13,359 against 12,780 found. But the call itself is costed
+  as selecting almost nothing, and that multiplies every estimate above it down to one
+  row (1 against 203 in scenario 03).
+  - The builder now writes the box itself, with `&&` against an envelope computed with
+    margin in C#, which the geo index serves and the planner estimates well.
+  - The exact spheroid `ST_Distance` then decides.
+  - A unit test checks that the box contains the whole circle at every bearing.
+- **The old synthetic load derived category, price and age from the row number**, so every
+  `stem` row was free. Its "underestimate" was partly a correlation real data doesn't have.
+
+Still to do, and not gated:
+- **Text, 02 and 05, about 25 ms.** Nearly all of it is ranking the roughly 5,000 rows
+  that match, and the trigram arm matches about as many as full text. Next steps: raise
+  the similarity threshold for short queries, and rank only the full-text matches when
+  there are enough of them.
+- **An unfiltered map**, and an unfiltered relevance browse, read every row of the tenant
+  whatever the plan, because they count or score everything. On a table holding many
+  tenants they use the tenant-leading indexes. On this one-tenant test table a scan is
+  right, so the gate measures a filtered map instead.
 
 ### Why the index is ignored under RLS
 

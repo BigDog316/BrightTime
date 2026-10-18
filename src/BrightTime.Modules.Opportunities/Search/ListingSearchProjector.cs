@@ -74,12 +74,13 @@ public static class ListingSearchProjector
             .Concat(source.CategoryNames)
             .Where(s => !string.IsNullOrWhiteSpace(s)));
 
-        // Virtual-only listings have no sites and get a single row with no site.
+        // Virtual-only listings have no sites and get a single row with no site. The first
+        // site, in a stable order, is the listing's primary row (see listing_search.is_primary).
         List<SiteSource?> placements = source.Sites.Count == 0
             ? new List<SiteSource?> { null }
-            : [.. source.Sites.Select(s => (SiteSource?)s)];
+            : [.. source.Sites.OrderBy(s => s.SiteId).Select(s => (SiteSource?)s)];
 
-        return [.. placements.Select(site => new ListingSearchRow(
+        return [.. placements.Select((site, index) => new ListingSearchRow(
             ListingId: source.ListingId,
             SiteId: site?.SiteId,
             OrganisationId: source.OrganisationId,
@@ -105,6 +106,7 @@ public static class ListingSearchProjector
             FuzzyText: fuzzy,
             PublishedAt: source.PublishedAt,
             Popularity: source.Popularity,
-            Slug: source.Slug))];
+            Slug: source.Slug,
+            IsPrimary: index == 0))];
     }
 }

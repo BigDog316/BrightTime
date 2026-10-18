@@ -479,7 +479,7 @@ the site id.
 Moving to the outbox later means publishing `SiteLocationChanged` instead and subscribing
 the same handler. One call site changes.
 
-### D25 — Vetting is a checklist the organiser saves; approval needs the contact verified (**proposed 2026-10-17; implemented, reversible**)
+### D25 — Vetting is a checklist the organiser saves; approval needs the contact verified (**accepted 2026-10-17**)
 
 The screen inventory's "checklist, documents, decision with a reason".
 
@@ -507,7 +507,7 @@ The screen inventory's "checklist, documents, decision with a reason".
 The contact check is my call for M1's acceptance test. Name the tenant's actual vetting
 policy and the checklist follows it.
 
-### D26 — Taxonomy codes are permanent; terms are retired, not deleted (**proposed 2026-10-17; implemented, reversible**)
+### D26 — Taxonomy codes are permanent; terms are retired, not deleted (**accepted 2026-10-17**)
 
 - **Codes:** a term's code is in facet values (`cat:stem`), links and saved searches, so it
   never changes once made.

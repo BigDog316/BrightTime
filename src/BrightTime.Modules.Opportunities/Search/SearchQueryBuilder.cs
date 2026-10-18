@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using BrightTime.Modules.Opportunities.Contracts;
+using BrightTime.SharedKernel.Geo;
 using BrightTime.SharedKernel.Paging;
 
 namespace BrightTime.Modules.Opportunities.Search;
@@ -15,7 +16,7 @@ public sealed record BuiltQuery(string Sql, IReadOnlyDictionary<string, object?>
 /// <para>
 /// The statement contains no caller-supplied text. Every value is bound as a
 /// named parameter, and the SQL is assembled from fixed fragments chosen by
-/// which filters are present. A query with no origin has no <c>st_dwithin</c>
+/// which filters are present. A query with no origin has no distance
 /// predicate at all, rather than a <c>(:origin is null or …)</c> guard, which
 /// keeps the planner from costing a dead branch and keeps each filter shape
 /// with its own cached plan.
@@ -69,12 +70,29 @@ public static class SearchQueryBuilder
             : "         0 as interest_overlap\n");
         sql.Append("  from opportunity.listing_search ls\n");
         sql.Append("  where ls.tenant_id = @tenant_id and ls.is_published\n");
+
+        // Without an origin no filter depends on the site (facets, times and prices are the
+        // listing's), so one row per listing answers the query: no collapsing, and an ordered
+        // browse can stop after a page. With one, each listing is shown at its nearest site.
+        if (!hasOrigin)
+        {
+            sql.Append("    and ls.is_primary\n");
+        }
+
         sql.Append(predicates);
         sql.Append("),\n");
         sql.Append("best_site as (\n");
-        sql.Append("  select distinct on (listing_id) *\n");
-        sql.Append("  from matched\n");
-        sql.Append("  order by listing_id, distance_m asc nulls last\n");
+        if (hasOrigin)
+        {
+            sql.Append("  select distinct on (listing_id) *\n");
+            sql.Append("  from matched\n");
+            sql.Append("  order by listing_id, distance_m asc nulls last\n");
+        }
+        else
+        {
+            sql.Append("  select * from matched\n");
+        }
+
         sql.Append("),\n");
         sql.Append("scored as (\n");
         sql.Append("  select bs.*, ").Append(ScoreExpression(hasOrigin)).Append(" as score\n");
@@ -195,9 +213,19 @@ public static class SearchQueryBuilder
             parameters["max_cost_cents"] = maxCost;
         }
 
-        if (query.Origin is not null && query.Radius is { } radius)
+        if (query.Origin is { } origin && query.Radius is { } radius)
         {
-            predicates.Append("    and st_dwithin(ls.location, " + OriginExpression + ", @radius_m)\n");
+            // Not st_dwithin: PostGIS estimates the function call itself as selecting almost
+            // nothing, which multiplies every estimate above it down to one row. A box the
+            // planner estimates well (and the geo index serves) does the narrowing, and the
+            // exact spheroid distance decides. See docs/plan/03, "Measured plans".
+            (double west, double south, double east, double north) = BoundingBox(origin, radius);
+            predicates.Append("    and ls.location && st_makeenvelope(@box_west, @box_south, @box_east, @box_north, 4326)::geography\n");
+            predicates.Append("    and st_distance(ls.location, " + OriginExpression + ") <= @radius_m\n");
+            parameters["box_west"] = west;
+            parameters["box_south"] = south;
+            parameters["box_east"] = east;
+            parameters["box_north"] = north;
             parameters["radius_m"] = radius.Metres;
         }
 
@@ -206,6 +234,27 @@ public static class SearchQueryBuilder
             predicates.Append("    and (ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)\n");
             predicates.Append("         or ls.fuzzy_text % @text)\n");
         }
+    }
+
+    /// <summary>
+    /// A latitude/longitude box that contains the circle, with room to spare: a degree of
+    /// longitude narrows away from the equator, and a geography box's edges are great circles,
+    /// which bow slightly poleward. One percent plus fifty metres covers both at any radius
+    /// the finder allows (<see cref="Distance.MaxSearchRadiusMetres"/>) below the polar circles.
+    /// The box is clamped at ±180°: a tenant whose area crossed the antimeridian would need it
+    /// split in two, and none does.
+    /// </summary>
+    internal static (double West, double South, double East, double North) BoundingBox(Coordinate origin, Distance radius)
+    {
+        const double MetresPerDegree = 111_320;
+        double reach = (radius.Metres * 1.01) + 50;
+        double dLat = reach / MetresPerDegree;
+        double dLon = reach / (MetresPerDegree * Math.Max(Math.Cos(origin.Latitude * Math.PI / 180), 0.01));
+        return (
+            Math.Max(origin.Longitude - dLon, -180),
+            Math.Max(origin.Latitude - dLat, -90),
+            Math.Min(origin.Longitude + dLon, 180),
+            Math.Min(origin.Latitude + dLat, 90));
     }
 
     private static string ScoreExpression(bool hasOrigin)

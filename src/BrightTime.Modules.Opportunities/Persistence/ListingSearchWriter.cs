@@ -64,6 +64,7 @@ public sealed class ListingSearchWriter(OpportunitiesDbContext db, IClock clock)
         Slug = row.Slug,
         Kind = row.Kind,
         IsPublished = row.IsPublished,
+        IsPrimary = row.IsPrimary,
         Facets = [.. row.Facets],
         AgeRange = row.AgeMin is { } aMin && row.AgeMax is { } aMax
             ? new NpgsqlRange<int>(aMin, true, aMax, true)

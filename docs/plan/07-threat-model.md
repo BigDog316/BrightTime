@@ -119,6 +119,32 @@ that **fails deployment** if any module table lacks RLS.
 request in tenant A reads exactly zero tenant-B rows, both through the API and
 through a hand-forged `DbContext` query.
 
+*Implemented (2026-10-17), `TenantIsolationMatrixTests` and `ConsoleRouteMatrixTests`:*
+- **The catalogue half:** for every table in every module schema, populated or not, RLS is
+  on and forced. The tenant policy (or the parent-derived one, or `tenant_self`) is a
+  permissive policy for all commands, covering every application role, with
+  `tenant_id = platform.current_tenant_id()` for reads and writes alike. No second
+  permissive policy widens it, except two that are named with their reasons:
+  - host lookup on `tenant_domain`, read-only;
+  - the worker's claim on `job`, for `brighttime_jobs` only.
+  A new table is covered without being named.
+- **The behaviour half:** on a database built from `db/schema` with the Kettle seed and an
+  empty second tenant, each of the four application roles was run against every populated
+  table.
+  - The other tenant, and a request with no tenant, see none of Kettle's rows.
+  - Kettle never sees more than its own rows, and the application sees all of them in the
+    core tables.
+  - The other tenant's updates and deletes reach nothing.
+- **The console half:** every page under `/provider/orgs/…` and `/organiser/…`, found from
+  the application's own endpoint table:
+  - refuses another organisation's owner, and providers on the organiser pages;
+  - opens for the person it is for, so a refusal is never the test's own bad id.
+- **What it found:** `notify.preference` carried both its own tenant policy and a
+  parent-derived one. The two were OR-ed, so a row whose `tenant_id` disagreed with its
+  user's tenant would have shown to the user's tenant. The parent-derived policy is removed.
+- **How it was checked:** an injected `using (true)` policy fails the catalogue half by
+  name.
+
 **One deliberate exception (decision D13).** The public finder reads
 `opportunity.listing_search` as `brighttime_finder`, which bypasses RLS, because the
 tenant policy stopped the planner using the search indexes. On that path, isolation

@@ -33,4 +33,5 @@ public sealed record ListingSearchRow(
     string FuzzyText,
     DateTimeOffset? PublishedAt,
     double Popularity,
-    string Slug);
+    string Slug,
+    bool IsPrimary = true);

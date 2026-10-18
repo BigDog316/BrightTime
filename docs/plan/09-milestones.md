@@ -52,6 +52,19 @@ revise.
 **Known gaps at M1:** no mobile app, no registration, no attendance, no
 badges, no community, no dashboards beyond provider listing counts.
 
+*Acceptance status (2026-10-17):*
+- **Cross-tenant matrix:** green. `TenantIsolationMatrixTests` covers the catalogue and
+  every role against every populated table; `ConsoleRouteMatrixTests` covers every
+  console page.
+- **Plans:** committed (`db/explain/measured/shipped/`) and gated in CI by
+  `FinderPlanTests`.
+- **Provider end to end:** covered by `ConsoleTests` and `ProviderManagementTests`.
+- **axe-core and the e2e run:** not started. They need Playwright and axe-core
+  downloaded, which needs your approval.
+- **`docker compose up`:** not verified. There's no container runtime here (Q11), and
+  the compose and CI images are PostGIS 17-3.4 while only 18.6 / 3.6.4 has been
+  verified.
+
 ## M2 — Mobile + parental consent (3–4 weeks)
 
 - MAUI Blazor Hybrid, iOS + Android, over `BrightTime.Ui.Shared`.

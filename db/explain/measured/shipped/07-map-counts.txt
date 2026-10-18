@@ -1,0 +1,26 @@
+select ls.site_id is null as online, ls.neighbourhood_id,
+       count(distinct ls.listing_id)::int as listings
+from opportunity.listing_search ls
+where ls.tenant_id = @tenant_id and ls.is_published
+    and ls.facets @> @facets_all
+group by 1, 2
+
+GroupAggregate  (cost=5714.70..5740.24 rows=36 width=21) (actual time=8.177..8.361 rows=19.00 loops=1)
+  Group Key: ((site_id IS NULL)), neighbourhood_id
+  Buffers: shared hit=2169
+  ->  Sort  (cost=5714.70..5720.97 rows=2509 width=33) (actual time=8.164..8.218 rows=2487.00 loops=1)
+        Sort Key: ((site_id IS NULL)), neighbourhood_id, listing_id
+        Sort Method: quicksort  Memory: 231kB
+        Buffers: shared hit=2169
+        ->  Bitmap Heap Scan on listing_search ls  (cost=1156.93..5573.03 rows=2509 width=33) (actual time=6.646..7.495 rows=2487.00 loops=1)
+              Recheck Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{cat:stem,age:12}'::text[]) AND is_published)
+              Heap Blocks: exact=1870
+              Buffers: shared hit=2169
+              ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..1156.30 rows=2509 width=0) (actual time=6.499..6.499 rows=2487.00 loops=1)
+                    Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{cat:stem,age:12}'::text[]))
+                    Index Searches: 1
+                    Buffers: shared hit=299
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.103 ms
+Execution Time: 8.377 ms

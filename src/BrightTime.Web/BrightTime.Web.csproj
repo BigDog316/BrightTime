@@ -20,11 +20,19 @@
 
   <ItemGroup>
     <ProjectReference Include="../BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <ProjectReference Include="../BrightTime.Hosting/BrightTime.Hosting.csproj" />
     <ProjectReference Include="../BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared with the API host; the web host's code used these types before they moved. -->
+    <Using Include="BrightTime.Hosting.Auditing" />
+    <Using Include="BrightTime.Hosting.Auth" />
+    <Using Include="BrightTime.Hosting.Tenancy" />
   </ItemGroup>
 
 </Project>

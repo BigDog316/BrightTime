@@ -99,6 +99,27 @@ create policy outbox_dispatch on platform.outbox_message
   using (true)
   with check (true);
 
+-- Queue health for the readiness probe. A probe has no tenant, so under RLS it would see no
+-- outbox or job rows and report no lag. This returns counts and ages only, never a row, and
+-- runs as the migrator (BYPASSRLS) so it sees every tenant's queue.
+create or replace function platform.queue_health()
+returns table (outbox_pending bigint, outbox_oldest_seconds double precision,
+               jobs_due bigint, jobs_oldest_due_seconds double precision, jobs_dead bigint)
+language sql stable security definer set search_path = pg_catalog, platform as $fn$
+  select (select count(*) from platform.outbox_message where processed_at is null),
+         (select extract(epoch from now() - min(occurred_at))::double precision
+            from platform.outbox_message where processed_at is null),
+         (select count(*) from platform.job where state = 'ready' and run_after <= now()),
+         (select extract(epoch from now() - min(run_after))::double precision
+            from platform.job where state = 'ready' and run_after <= now()),
+         (select count(*) from platform.job where state = 'dead');
+$fn$;
+alter function platform.queue_health() owner to brighttime_migrator;
+-- The migrator owns these where it applied the schema; where a superuser did, it needs the grant.
+grant select on platform.outbox_message, platform.job to brighttime_migrator;
+revoke all on function platform.queue_health() from public;
+grant execute on function platform.queue_health() to brighttime_app, brighttime_jobs;
+
 -- platform.blind_index_key holds no tenant data and no key material.
 alter table platform.blind_index_key enable row level security;
 create policy blind_index_key_read on platform.blind_index_key

@@ -12,7 +12,6 @@ using BrightTime.Modules.Opportunities.Editing;
 using BrightTime.Modules.Opportunities.Import;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Time;
-using BrightTime.Web.Auditing;
 using BrightTime.Web.Composition;
 using BrightTime.Web.Tenancy;
 using Fido2NetLib;

@@ -109,6 +109,15 @@ POST   /api/v1/guardian-links/{id}/revoke
 GET    /api/v1/guardian-links
 ```
 
+*Built (2026-10-18, D28):*
+- `POST /auth/token`, `POST /auth/token/refresh` and `POST /auth/logout` (a refresh token
+  in the body; 204 whether or not it was one);
+- `GET /me`;
+- `DELETE /me/sessions`.
+
+The rest of this section arrives with registration and consent (M2). Health, outside the
+API's versioning: `GET /health/live` and `GET /health/ready`.
+
 Consent scopes are the enum in `identity.parental_consent.scope`:
 `account`, `enrollment`, `attendance_photo`, `community_participation`,
 `showcase_publication`, `media_capture`, `messaging`, `district_data_share`,

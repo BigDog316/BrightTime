@@ -164,6 +164,9 @@ create table refresh_token (
   family_id     uuid not null,
   token_hash    bytea not null,
   device_id     text,
+  -- How the family's sign-in was proved. Every token in a family carries it, so a refreshed
+  -- session keeps its original method and time and never counts as a fresh sign-in.
+  auth_method   text not null default 'password',
   issued_at     timestamptz not null default now(),
   expires_at    timestamptz not null,
   used_at       timestamptz,
@@ -173,6 +176,8 @@ create table refresh_token (
   constraint ck_refresh_token_expiry check (expires_at > issued_at)
 );
 create index ix_refresh_token_family on refresh_token (family_id);
+-- Signing out everywhere, and a password reset, revoke every live token a person holds.
+create index ix_refresh_token_user on refresh_token (user_id) where revoked_at is null;
 create index ix_refresh_token_sweep on refresh_token (expires_at) where revoked_at is null;
 
 -- ---------------------------------------------------------------------

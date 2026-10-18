@@ -96,11 +96,15 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
-      ConnectionStrings__BrightTime: >-
+      # Unverified until the compose gate runs (Q11): the logins below must exist as LOGIN
+      # roles that are members of brighttime_app and brighttime_auth.
+      ConnectionStrings__App: >-
         Host=postgres;Database=brighttime;Username=brighttime_app;Password=local-only-not-a-secret;
         Include Error Detail=true;Max Auto Prepare=32
-      ConnectionStrings__BrightTimeAuth: >-
+      ConnectionStrings__Auth: >-
         Host=postgres;Database=brighttime;Username=brighttime_auth;Password=local-only-not-a-secret
+      Tenancy__PublicScheme: http
+      Tenancy__PublicPort: 8000
       Storage__Endpoint: http://minio:9000
       Storage__Bucket: brighttime-dev
       Email__Host: mailpit
@@ -120,7 +124,7 @@ services:
       dockerfile: deploy/jobs.Dockerfile
     environment:
       DOTNET_ENVIRONMENT: Development
-      ConnectionStrings__BrightTime: >-
+      ConnectionStrings__Jobs: >-
         Host=postgres;Database=brighttime;Username=brighttime_jobs;Password=local-only-not-a-secret
       Storage__Endpoint: http://minio:9000
       Email__Host: mailpit
@@ -136,9 +140,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
-      ConnectionStrings__BrightTime: >-
+      Finder__Mode: Sql
+      Finder__ConnectionString: >-
         Host=postgres;Database=brighttime;Username=brighttime_app;Password=local-only-not-a-secret
-      Api__BaseUrl: http://api:8080
+      Auth__ConnectionString: >-
+        Host=postgres;Database=brighttime;Username=brighttime_auth;Password=local-only-not-a-secret
+      Tenancy__PublicScheme: http
+      Tenancy__PublicPort: 8000
       # nginx has no fixed address on the compose network, so trust the network. In
       # production, list the proxy's address in Network__TrustedProxies__0 instead.
       Network__TrustedNetworks__0: 172.16.0.0/12

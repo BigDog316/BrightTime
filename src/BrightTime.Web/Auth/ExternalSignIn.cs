@@ -7,7 +7,6 @@ using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
-using BrightTime.Web.Auditing;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;

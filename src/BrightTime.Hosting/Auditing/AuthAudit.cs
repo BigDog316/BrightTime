@@ -1,7 +1,7 @@
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.SharedKernel.Ids;
 
-namespace BrightTime.Web.Auditing;
+namespace BrightTime.Hosting.Auditing;
 
 /// <summary>
 /// The authentication events the audit trail records, and how they are shaped: the account
@@ -23,6 +23,10 @@ public static class AuthAudit
     public const string ExternalConnected = "auth.external.connected";
     public const string ExternalDisconnected = "auth.external.disconnected";
     public const string StepUp = "auth.step_up";
+    public const string SignOutEverywhere = "auth.sign_out_everywhere";
+
+    /// <summary>A spent refresh token was presented again; its token family was revoked.</summary>
+    public const string TokenReused = "auth.token.reused";
 
     public static AuditAccess Allowed(string action, UserId? user, string? method = null, IReadOnlyDictionary<string, string>? detail = null) => new()
     {

@@ -3,10 +3,9 @@ using System.Text;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.SharedKernel.Time;
-using BrightTime.Web.Composition;
 using Npgsql;
 
-namespace BrightTime.Web.Auditing;
+namespace BrightTime.Hosting.Auditing;
 
 public sealed class AuditOptions
 {
@@ -45,12 +44,16 @@ public sealed class ClientHashKey(byte[] key)
 
 public static class AuditServices
 {
-    public static IServiceCollection AddBrightTimeAudit(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    /// <summary>
+    /// The audit trail for a host. <paramref name="hasDatabase"/> says whether the host has the
+    /// application's <see cref="NpgsqlDataSource"/>; without one (the web host on sample data)
+    /// the trail buffers and writes nothing.
+    /// </summary>
+    public static IServiceCollection AddBrightTimeAudit(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment, bool hasDatabase)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(environment);
 
-        FinderOptions finder = configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>() ?? new();
         AuditOptions audit = configuration.GetSection(AuditOptions.SectionName).Get<AuditOptions>() ?? new();
 
         byte[] key;
@@ -62,7 +65,7 @@ public static class AuditServices
                 throw new InvalidOperationException("Audit:ClientHashKey must be at least 32 bytes, base64-encoded.");
             }
         }
-        else if (finder.Mode == FinderMode.Sql && !environment.IsDevelopment())
+        else if (hasDatabase && !environment.IsDevelopment())
         {
             throw new InvalidOperationException("Audit:ClientHashKey is required: client addresses are recorded only as keyed hashes.");
         }
@@ -78,9 +81,9 @@ public static class AuditServices
             sp.GetRequiredService<ITenantContext>(),
             sp.GetRequiredService<IAuditRequestInfo>(),
             sp.GetRequiredService<IClock>(),
-            finder.Mode == FinderMode.Sql ? sp.GetRequiredService<NpgsqlDataSource>() : null));
+            hasDatabase ? sp.GetRequiredService<NpgsqlDataSource>() : null));
         services.AddScoped<IAuditWriter>(sp => sp.GetRequiredService<AuditTrail>());
-        if (finder.Mode == FinderMode.Sql)
+        if (hasDatabase)
         {
             services.AddSingleton(sp => new AuditLog(sp.GetRequiredService<NpgsqlDataSource>()));
         }

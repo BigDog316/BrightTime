@@ -4,7 +4,7 @@ using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.SharedKernel.Ids;
 
-namespace BrightTime.Web.Auth;
+namespace BrightTime.Hosting.Auth;
 
 /// <summary>
 /// Builds the signed-in principal from the database: who the person is, what their roles let

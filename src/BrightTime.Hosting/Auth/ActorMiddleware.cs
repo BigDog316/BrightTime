@@ -2,7 +2,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.SharedKernel.Ids;
 
-namespace BrightTime.Web.Auth;
+namespace BrightTime.Hosting.Auth;
 
 /// <summary>
 /// Makes the signed-in person the request's actor, so row-level security and audit see who

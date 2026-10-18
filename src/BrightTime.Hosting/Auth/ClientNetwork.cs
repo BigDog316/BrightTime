@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using IPNetwork = System.Net.IPNetwork;
 
-namespace BrightTime.Web.Auth;
+namespace BrightTime.Hosting.Auth;
 
 /// <summary>
 /// Which reverse proxies may tell the app who the client is. Nothing is trusted by default.

@@ -157,7 +157,7 @@ else
         // password; an existing one must sign in and accept. A youth or child address gets
         // nothing, and the answer is the same in every case.
         if (await accounts.FindOrCreateAdultAsync(Tenant.TenantId, _email) is var (applicant, created)
-            && Get<BrightTime.Web.Tenancy.SiteContext>().BaseUrl is { } siteUrl)
+            && Get<BrightTime.Hosting.Tenancy.SiteContext>().BaseUrl is { } siteUrl)
         {
             await applications.ApplyAsync(_organisation, _site, place, applicant, applicantIsActive: created);
             if (created)

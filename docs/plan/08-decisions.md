@@ -560,6 +560,46 @@ The outbox now has a dispatcher, and D24's three stopgap jobs are module message
   - Dispatch polls once a second when idle. LISTEN/NOTIFY would cut that, as for jobs,
     and is a follow-up.
 
+### D28 — API tokens: short access tokens checked against the database, rotating refresh tokens (**proposed 2026-10-18; implemented, reversible**)
+
+The mobile app signs in through the API host, which until now was a stub.
+
+- **Access tokens:** JWT, HS256, 10 minutes. They carry the subject, the tenant, the
+  account's security stamp, and when and how the person signed in.
+  - Not roles, permissions or memberships: each request rebuilds the principal from the
+    database, as the web's cookie validator does. The token is refused if the account
+    isn't active or the stamp has changed.
+  - The cost is one account read and one membership read per request. The benefit is
+    that a suspension, a removed membership or "sign out everywhere" applies at once,
+    not at token expiry. A short-lived cache keyed on the token id is the next step if
+    that load matters.
+  - Symmetric signing, because the API issues and verifies and nothing else needs to.
+    Keys live in `Auth:Tokens:SigningKeys`; the first signs, all verify, so keys rotate
+    without breaking live tokens.
+  - The issuer is the tenant's own address, so a token from one tenant is refused by
+    another before its tenant claim is read.
+- **Refresh tokens:** opaque, 256 random bits, stored as SHA-256 hashes in
+  `identity.refresh_token`, rotating and family-chained (T14).
+  - Presenting a spent token revokes the family: the real holder signs in again, and a
+    copy is dead.
+  - Two refreshes racing with one token are the same case, so clients must not refresh
+    concurrently.
+  - Lifetimes: a youth's session ends after 30 minutes unused (T14), an adult's after
+    30 days, and none outlives 90 days.
+  - Each token row carries how the family's sign-in was proved, so a refreshed session
+    keeps its original sign-in time and never counts as a fresh one for step-up.
+  - A password reset revokes every family. Signing out everywhere revokes them and
+    changes the stamp, which also ends web sessions.
+- **Shared hosting code:** tenancy by host, the principal factory, the actor and
+  client-address middleware, the audit wiring and health checks moved from the web host
+  into `BrightTime.Hosting`, so the API and web hosts can't drift apart.
+- **What waits:** sign-in by passkey or external provider through the API, the other
+  `/me` endpoints, registration and consent (M2), and a list of a person's sessions by
+  device.
+- **Question for you:** 30 minutes idle is right for a shared device. For a youth's own
+  phone it means signing in most times the app opens. Passkeys or device binding in M2
+  are the better fix than a longer idle window.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

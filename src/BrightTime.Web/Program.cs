@@ -1,8 +1,8 @@
+using BrightTime.Hosting.Health;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.SharedKernel.Time;
-using BrightTime.Web.Auditing;
 using BrightTime.Web.Auth;
 using BrightTime.Web.Components;
 using BrightTime.Web.Composition;
@@ -19,8 +19,11 @@ builder.Services.AddClientNetwork(builder.Configuration);
 builder.Services.AddBrightTimeFinder(builder.Configuration);
 builder.Services.AddBrightTimeTenancy(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
-builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment);
+builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment,
+    hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 builder.Services.AddBrightTimeLocalisation(builder.Configuration);
+builder.Services.AddBrightTimeHealth(builder.Configuration,
+    hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 
 var app = builder.Build();
 
@@ -35,7 +38,8 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+// Probes come to the container over plain HTTP; a redirect is not an answer.
+app.UseWhen(context => !HostTenancy.IsHealthProbe(context.Request), branch => branch.UseHttpsRedirection());
 
 // Sets the tenant and locale before any page reads them. Runs for every request,
 // including the static-asset requests, which then carry the default locale harmlessly.
@@ -56,6 +60,7 @@ app.UseMiddleware<AuditFlushMiddleware>();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapBrightTimeHealth();
 
 // The listing's "add to calendar" file. A sibling of the page rather than "{slug}.ics", so a
 // slug can never be mistaken for a file name. Same visibility rule as the page: 404 otherwise.

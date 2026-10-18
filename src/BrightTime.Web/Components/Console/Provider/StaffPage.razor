@@ -271,7 +271,7 @@ else if (_name is not null)
                 return;
             }
 
-            if (Get<BrightTime.Web.Tenancy.SiteContext>().BaseUrl is { } siteUrl)
+            if (Get<BrightTime.Hosting.Tenancy.SiteContext>().BaseUrl is { } siteUrl)
             {
                 Get<AccountMailDispatcher>().RequestMembership(AccountMailKind.Invitation, Tenant.TenantId, _email, _name!, created, siteUrl, Tenant.Locale);
             }

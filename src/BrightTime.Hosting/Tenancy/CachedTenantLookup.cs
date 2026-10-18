@@ -2,7 +2,7 @@ using BrightTime.Modules.Platform.Tenancy;
 using BrightTime.SharedKernel.Ids;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace BrightTime.Web.Tenancy;
+namespace BrightTime.Hosting.Tenancy;
 
 /// <summary>
 /// Tenant lookups, cached: every request resolves its tenant, and the answer rarely changes.

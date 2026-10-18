@@ -49,7 +49,7 @@ public sealed partial class AccountMailDispatcher(
 
     /// <summary>
     /// Queues a reset. <paramref name="siteUrl"/> is the tenant's own address, from
-    /// <see cref="Tenancy.SiteContext"/>; <paramref name="pageLocale"/> is the language the form
+    /// <see cref="SiteContext"/>; <paramref name="pageLocale"/> is the language the form
     /// was in, used when the account has no language of its own.
     /// </summary>
     public void RequestReset(TenantId tenant, string email, Uri siteUrl, Locale pageLocale) =>
@@ -136,7 +136,7 @@ public sealed partial class AccountMailDispatcher(
         // The actor stays anonymous: whoever asked was not signed in. The request's
         // address is gone by now, so this row has no client hashes.
         Infrastructure.Auditing.AuditTrail audit = scope.ServiceProvider.GetRequiredService<Infrastructure.Auditing.AuditTrail>();
-        audit.Record(Auditing.AuthAudit.Allowed(Auditing.AuthAudit.ResetRequested, null,
+        audit.Record(AuthAudit.Allowed(AuthAudit.ResetRequested, null,
             detail: new Dictionary<string, string> { ["email_sent"] = receipt.Accepted ? "true" : "false" }) with
         {
             SubjectKind = "user",

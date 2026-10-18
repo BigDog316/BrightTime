@@ -4,7 +4,7 @@ using BrightTime.SharedKernel.Privacy;
 using Microsoft.AspNetCore.Components.Endpoints;
 using Microsoft.AspNetCore.Http.Metadata;
 
-namespace BrightTime.Web.Auditing;
+namespace BrightTime.Hosting.Auditing;
 
 /// <summary>
 /// Refuses to start the host if any endpoint can return youth data without declaring

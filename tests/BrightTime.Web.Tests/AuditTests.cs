@@ -13,7 +13,6 @@ using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
 using BrightTime.SharedKernel.Time;
-using BrightTime.Web.Auditing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;

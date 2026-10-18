@@ -255,6 +255,14 @@ Phone numbers are verified before any send
 rotating and family-chained, so a replayed token kills the family
 (`identity.refresh_token.family_id`).
 
+*Implemented for the API's tokens (D28):*
+- **Refresh tokens:** rotating and family-chained. A spent token presented again revokes its
+  whole family and is audited as `auth.token.reused`.
+- **Youth sessions:** end after 30 minutes unused; adults' after 30 days. No session outlives
+  90 days.
+- **Sign out everywhere:** `DELETE /api/v1/me/sessions` revokes every family and changes the
+  security stamp, which ends web sessions too.
+
 *M1, saved listings (D22).* Saved listings live in a cookie in the browser, so on a shared
 device the next person can see what was saved. A saved support group can say something
 about someone. The saved page says this plainly, the list can be cleared in one press, and
@@ -315,6 +323,18 @@ hashing; breached-password check at set time; lockout; step-up authentication
 for consent grants, guardian-link verification and youth-record export; rate
 limiting on every auth route; no account enumeration in any response or
 timing difference.
+
+*Implemented for the API (D28):*
+- **Sign-in:** `POST /api/v1/auth/token` uses the same password check as the web: the
+  same lockout, and the same answer and work for every refusal. It is rate limited per
+  client address.
+- **Access tokens:** live 10 minutes. They carry who and when, never permissions. Every
+  request rebuilds the principal from the database and refuses the token if the account
+  is no longer active or its security stamp has changed, so a suspension or a sign-out
+  everywhere applies at the next request.
+- **Tenancy:** the issuer is the tenant's own address, so another tenant refuses the token.
+- **Storage:** refresh tokens are kept only as SHA-256 hashes. A password reset revokes
+  them all.
 
 *Implemented for passwords (web):*
 - **Hashing:** Argon2id at the OWASP minimum (19 MiB, t=2, p=1), in PHC format.

@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/BrightTime.Abstractions/BrightTime.Abstractions.csproj" />
     <Project Path="src/BrightTime.Api/BrightTime.Api.csproj" />
+    <Project Path="src/BrightTime.Hosting/BrightTime.Hosting.csproj" />
     <Project Path="src/BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
     <Project Path="src/BrightTime.Jobs/BrightTime.Jobs.csproj" />
     <Project Path="src/BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
@@ -19,6 +20,7 @@
     <Project Path="src/BrightTime.Web/BrightTime.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/BrightTime.Api.Tests/BrightTime.Api.Tests.csproj" />
     <Project Path="tests/BrightTime.Architecture.Tests/BrightTime.Architecture.Tests.csproj" />
     <Project Path="tests/BrightTime.Infrastructure.Tests/BrightTime.Infrastructure.Tests.csproj" />
     <Project Path="tests/BrightTime.IntegrationTests/BrightTime.IntegrationTests.csproj" />

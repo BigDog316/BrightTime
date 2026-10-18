@@ -336,6 +336,18 @@ replay idempotent at the database level
   marked `[Pii]`, and any `DateOnly` named like a birth date. A unit test
   asserts the redaction policy against a sample of every DTO.
 - Health: `/health/live`, `/health/ready` (db, storage, outbox lag, job lag).
+  *Built (2026-10-18), in the web and API hosts (`BrightTime.Hosting.Health`):*
+  - **Live:** runs no checks.
+  - **Ready:** checks the database as the host's own login, then the queues.
+  - **Queue lag:** read through `platform.queue_health()`, a `SECURITY DEFINER`
+    function returning counts and ages only. A probe has no tenant, so under RLS
+    it would otherwise see no rows and report no lag.
+  - **Degraded, not unhealthy:** lag and dead jobs answer 200, because taking a
+    web host out of rotation doesn't fix a stuck worker. The jobs host has no HTTP
+    surface, and this is how its health is seen.
+  - **Probes:** answered without a tenant and without the HTTPS redirect, as
+    plain JSON with no exception text.
+  - Storage joins the readiness check when media storage exists.
 
 ## CI pipeline
 

@@ -11,4 +11,10 @@
     <ProjectReference Include="../../src/BrightTime.Seed/BrightTime.Seed.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="BrightTime.Hosting.Auditing" />
+    <Using Include="BrightTime.Hosting.Auth" />
+    <Using Include="BrightTime.Hosting.Tenancy" />
+  </ItemGroup>
+
 </Project>

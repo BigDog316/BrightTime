@@ -224,6 +224,8 @@ public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clo
                    access_failed_count = 0, lockout_end = null, email_confirmed = true
              where id = @id;
             delete from identity.app_user_token where user_id = @id and login_provider = @provider and name = @name;
+            update identity.refresh_token set revoked_at = now(), revoked_reason = 'password_reset'
+             where user_id = @id and revoked_at is null;
             """,
             cancellationToken,
             ("hash", Argon2PasswordHasher.HashPassword(newPassword)),

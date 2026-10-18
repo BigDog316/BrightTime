@@ -1,4 +1,4 @@
-namespace BrightTime.Web.Tenancy;
+namespace BrightTime.Hosting.Tenancy;
 
 /// <summary>How a request finds its tenant.</summary>
 public enum TenancyMode

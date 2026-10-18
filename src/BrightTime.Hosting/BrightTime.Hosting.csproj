@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    What the web and API hosts share: tenant resolution by host, the signed-in principal,
+    the client's address behind the proxy, the audit trail's request side, and health checks.
+    A library with the web SDK for its implicit ASP.NET Core usings; it has no entry point.
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

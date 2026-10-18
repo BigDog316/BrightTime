@@ -2,7 +2,7 @@ using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.SharedKernel.Privacy;
 
-namespace BrightTime.Web.Auditing;
+namespace BrightTime.Hosting.Auditing;
 
 /// <summary>
 /// Writes the request's buffered audit events before its response starts, and holds

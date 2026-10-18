@@ -1,6 +1,5 @@
 using System.Reflection;
 using BrightTime.SharedKernel.Privacy;
-using BrightTime.Web.Auditing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Endpoints;

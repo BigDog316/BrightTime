@@ -1,6 +1,6 @@
 using BrightTime.Modules.Platform.Tenancy;
 
-namespace BrightTime.Web.Tenancy;
+namespace BrightTime.Hosting.Tenancy;
 
 /// <summary>
 /// The request's tenant as a site: its record and its own address.
@@ -17,7 +17,7 @@ public sealed class SiteContext
 
     public Uri? BaseUrl { get; private set; }
 
-    internal void Set(TenantSite? site, Uri? baseUrl)
+    public void Set(TenantSite? site, Uri? baseUrl)
     {
         Site = site;
         BaseUrl = baseUrl;

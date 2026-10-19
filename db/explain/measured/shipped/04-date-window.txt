@@ -14,27 +14,27 @@ best_site as (
   select * from matched
 ),
 scored as (
-  select bs.*, round((0.45 * least(text_rank * 4.0, 1.0) + 0.20 * (0.5) + 0.15 * (case when next_start_at is null then 0.3 else exp(-greatest(extract(epoch from (next_start_at - now())) / 86400.0, 0) / 30.0) end) + 0.12 * least(interest_overlap / 3.0, 1.0) + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6) as score
+  select bs.*, round((0.45 * least(text_rank * 4.0, 1.0) + 0.20 * (0.5) + 0.15 * (case when next_start_at is null then 0.3 else exp(-greatest(extract(epoch from (next_start_at - @as_of)) / 86400.0, 0) / 30.0) end) + 0.12 * least(interest_overlap / 3.0, 1.0) + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6) as score
   from best_site bs
 )
 select s.listing_id, s.site_id, s.slug, s.title, s.summary, s.org_id, s.kind,
        s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,
        s.next_start_at, s.next_deadline_at, s.published_at,
        s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,
-       extract(epoch from (s.next_start_at - now())) / 86400.0 as days_until_start
+       extract(epoch from (s.next_start_at - @as_of)) / 86400.0 as days_until_start
 from scored s
 order by s.next_start_at asc, s.listing_id asc
 limit @page_size
 
-Limit  (cost=0.41..298.71 rows=25 width=243) (actual time=5.745..5.852 rows=25.00 loops=1)
-  Buffers: shared hit=5911
-  ->  Index Scan using ix_ls_next_start on listing_search ls  (cost=0.41..29841.65 rows=2501 width=243) (actual time=5.743..5.848 rows=25.00 loops=1)
+Limit  (cost=0.41..298.98 rows=25 width=243) (actual time=5.464..5.571 rows=25.00 loops=1)
+  Buffers: shared hit=5916
+  ->  Index Scan using ix_ls_next_start on listing_search ls  (cost=0.41..30143.17 rows=2524 width=243) (actual time=5.463..5.568 rows=25.00 loops=1)
         Index Cond: (tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid)
-        Filter: (session_window && '["2026-10-26 00:19:30.587554+00","2026-10-29 00:19:30.587554+00")'::tstzrange)
+        Filter: (session_window && '["2026-10-26 00:48:29.494423+00","2026-10-29 00:48:29.494423+00")'::tstzrange)
         Rows Removed by Filter: 5772
         Index Searches: 1
-        Buffers: shared hit=5911
+        Buffers: shared hit=5916
 Planning:
   Buffers: shared hit=3
-Planning Time: 0.329 ms
-Execution Time: 5.882 ms
+Planning Time: 0.294 ms
+Execution Time: 5.594 ms

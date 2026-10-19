@@ -5,22 +5,22 @@ where ls.tenant_id = @tenant_id and ls.is_published
     and ls.facets @> @facets_all
 group by 1, 2
 
-GroupAggregate  (cost=6183.69..6209.85 rows=78 width=21) (actual time=8.023..8.325 rows=19.00 loops=1)
+GroupAggregate  (cost=6211.07..6238.03 rows=132 width=21) (actual time=7.055..7.334 rows=19.00 loops=1)
   Group Key: ((site_id IS NULL)), neighbourhood_id
-  Buffers: shared hit=3886
-  ->  Sort  (cost=6183.69..6189.99 rows=2518 width=33) (actual time=7.998..8.099 rows=2487.00 loops=1)
+  Buffers: shared hit=3848
+  ->  Sort  (cost=6211.07..6217.40 rows=2531 width=33) (actual time=7.031..7.114 rows=2487.00 loops=1)
         Sort Key: ((site_id IS NULL)), neighbourhood_id, listing_id
         Sort Method: quicksort  Memory: 231kB
-        Buffers: shared hit=3886
-        ->  Bitmap Heap Scan on listing_search ls  (cost=47.51..6041.45 rows=2518 width=33) (actual time=4.215..6.631 rows=2487.00 loops=1)
+        Buffers: shared hit=3848
+        ->  Bitmap Heap Scan on listing_search ls  (cost=47.57..6068.00 rows=2531 width=33) (actual time=2.773..6.109 rows=2487.00 loops=1)
               Recheck Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{cat:stem,age:12}'::text[]) AND is_published)
-              Heap Blocks: exact=3804
-              Buffers: shared hit=3886
-              ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..46.88 rows=2518 width=0) (actual time=2.697..2.698 rows=4974.00 loops=1)
+              Heap Blocks: exact=3767
+              Buffers: shared hit=3848
+              ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..46.94 rows=2531 width=0) (actual time=2.351..2.351 rows=4974.00 loops=1)
                     Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{cat:stem,age:12}'::text[]))
                     Index Searches: 1
-                    Buffers: shared hit=82
+                    Buffers: shared hit=81
 Planning:
   Buffers: shared hit=3
-Planning Time: 0.166 ms
-Execution Time: 8.360 ms
+Planning Time: 0.164 ms
+Execution Time: 7.366 ms

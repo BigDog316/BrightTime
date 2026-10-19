@@ -333,15 +333,18 @@ which came from the Mac.
 | 05 "robtics", projector-shaped `fuzzy_text` (v4) | 25 ms, **0 matches** | 77 ms, 4,935 matches |
 | 02 "robotics", either load | 34 ms | 34 ms |
 
-The gate's single run of 05 measured 58 to 68 ms on this machine. The plan is a bitmap OR of
-`ix_ls_fts` and `ix_ls_fuzzy`, as before, with estimates within 3% (5,586 against 5,474 at
-the fuzzy index).
+The gate's single run of 05 measured 56 to 68 ms on this machine. The plan is a bitmap OR of
+`ix_ls_fts` and `ix_ls_fuzzy`, as before. The fuzzy index hands the heap scan 10,987
+candidates, and 5,498 survive the recheck. GIN can count only the query's trigrams that a row
+contains, not whether they are adjacent within one word. That index arm is estimated at
+5,615, about half what it returns. The gate doesn't judge arms of a `BitmapOr`, and the heap
+scan above it is estimated within 30%.
 
 Where the 77 ms goes:
 - **Ranking, about 34 ms.** The query matches a tenth of the table, because the load has
   only ten title words. Scoring that many rows costs what it costs in 02.
-- **The operator, the rest. It runs twice per candidate.** It runs once in the heap scan's recheck, and
-  again in its filter. The filter is not dropped because pg_trgm's operators are `STABLE`
+- **The operator, the rest.** It runs on each of the 10,987 candidates in the heap scan's
+  recheck, and again in its filter on each row that survives. The filter is not dropped because pg_trgm's operators are `STABLE`
   (they read the threshold setting), so the planner won't prove the filter is implied by
   the recheck. With the FTS arm removed, the same query takes 54 ms, so the second
   evaluation costs about 23 ms.

@@ -163,7 +163,7 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         }.ConnectionString;
 
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(strict);
-        FinderPage page = await new SqlListingFinder(source).SearchAsync(Query("robtics", null), Ct);
+        FinderPage page = await new SqlListingFinder(source, SystemClock.Instance).SearchAsync(Query("robtics", null), Ct);
         page.Items.ShouldContain(i => i.Title == "Robotics club");
     }
 
@@ -229,7 +229,7 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
     private static async Task<List<string>> SlugsAsync(Seeded s, string text)
     {
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(TestHost.As(s.ConnectionString, TestHost.FinderLogin));
-        FinderPage page = await new SqlListingFinder(source).SearchAsync(Query(text, null) with { PageSize = new PageSize(PageSize.Max) }, Ct);
+        FinderPage page = await new SqlListingFinder(source, SystemClock.Instance).SearchAsync(Query(text, null) with { PageSize = new PageSize(PageSize.Max) }, Ct);
         page.NextCursor.ShouldBeNull();
         return [.. page.Items.Select(i => i.Slug)];
     }

@@ -37,6 +37,15 @@ public static class SearchQueryBuilder
     internal const string OriginExpression =
         "st_setsrid(st_makepoint(@origin_lon, @origin_lat), 4326)::geography";
 
+    /// <summary>
+    /// The <c>strict_word_similarity</c> a run of whole words in the fuzzy text must reach for
+    /// the typo-tolerance arm (<c>&lt;&lt;%</c>) to match. pg_trgm's default, chosen on measurement
+    /// rather than inherited: it finds single-letter typos ("robtics", "baskitball") that plain
+    /// word similarity at its 0.6 default misses, and it does not match a fragment of a longer
+    /// word ("ball" in "basketball", "car" in "Careers"). See docs/plan/03, "Typo tolerance".
+    /// </summary>
+    public const double FuzzyThreshold = 0.5;
+
     public static BuiltQuery Build(SearchQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -236,8 +245,12 @@ public static class SearchQueryBuilder
 
         if (!string.IsNullOrWhiteSpace(query.Text))
         {
+            // Typo tolerance compares the query with whole words of the fuzzy text, not with
+            // the whole string: fuzzy_text is title, organisation and categories, so a one-word
+            // query's plain similarity to it is far below any usable threshold. ix_ls_fuzzy
+            // serves <<%; its threshold is FuzzyThreshold, pinned per transaction by the finder.
             predicates.Append("    and (ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)\n");
-            predicates.Append("         or ls.fuzzy_text % @text)\n");
+            predicates.Append("         or @text <<% ls.fuzzy_text)\n");
         }
     }
 

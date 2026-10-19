@@ -25,13 +25,13 @@ from scored s
 order by s.next_start_at asc, s.listing_id asc
 limit @page_size
 
-Limit  (cost=0.41..9.22 rows=25 width=243) (actual time=0.008..0.055 rows=25.00 loops=1)
+Limit  (cost=0.41..16.58 rows=25 width=243) (actual time=0.030..0.130 rows=25.00 loops=1)
   Buffers: shared hit=28
-  ->  Index Scan using ix_ls_next_start on listing_search ls  (cost=0.41..17614.79 rows=50000 width=243) (actual time=0.008..0.053 rows=25.00 loops=1)
+  ->  Index Scan using ix_ls_next_start on listing_search ls  (cost=0.41..32329.04 rows=49999 width=243) (actual time=0.029..0.128 rows=25.00 loops=1)
         Index Cond: (tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid)
         Index Searches: 1
         Buffers: shared hit=28
 Planning:
   Buffers: shared hit=3
-Planning Time: 0.112 ms
-Execution Time: 0.064 ms
+Planning Time: 0.249 ms
+Execution Time: 0.152 ms

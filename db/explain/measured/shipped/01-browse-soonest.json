@@ -5,11 +5,11 @@
       "Parallel Aware": false,
       "Async Capable": false,
       "Startup Cost": 0.41,
-      "Total Cost": 9.22,
+      "Total Cost": 16.58,
       "Plan Rows": 25,
       "Plan Width": 243,
-      "Actual Startup Time": 0.012,
-      "Actual Total Time": 0.071,
+      "Actual Startup Time": 0.039,
+      "Actual Total Time": 0.198,
       "Actual Rows": 25.00,
       "Actual Loops": 1,
       "Disabled": false,
@@ -34,11 +34,11 @@
           "Relation Name": "listing_search",
           "Alias": "ls",
           "Startup Cost": 0.41,
-          "Total Cost": 17614.79,
-          "Plan Rows": 50000,
+          "Total Cost": 32329.04,
+          "Plan Rows": 49999,
           "Plan Width": 243,
-          "Actual Startup Time": 0.012,
-          "Actual Total Time": 0.069,
+          "Actual Startup Time": 0.038,
+          "Actual Total Time": 0.195,
           "Actual Rows": 25.00,
           "Actual Loops": 1,
           "Disabled": false,
@@ -59,7 +59,7 @@
       ]
     },
     "Planning": {
-      "Shared Hit Blocks": 3,
+      "Shared Hit Blocks": 23,
       "Shared Read Blocks": 0,
       "Shared Dirtied Blocks": 0,
       "Shared Written Blocks": 0,
@@ -70,9 +70,9 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.140,
+    "Planning Time": 0.314,
     "Triggers": [
     ],
-    "Execution Time": 0.081
+    "Execution Time": 0.219
   }
 ]

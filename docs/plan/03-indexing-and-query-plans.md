@@ -201,7 +201,9 @@ under RLS.** As shipped, every finder scenario uses an index.
   stays wrong.
 - **05, fuzzy matching, 16 ms.** Trigram similarity over 50,000 short strings.
   Next step: raise the similarity threshold for short queries, as section "The
-  query" already proposes, and measure again.
+  query" already proposes, and measure again. (Superseded: the synthetic strings
+  were too short to show that `%` matched nothing on real listings. See "Typo
+  tolerance" below.)
 
 Where the predictions were wrong:
 
@@ -265,13 +267,100 @@ What the gate found in the shipped query, and what changed:
 
 Still to do, and not gated:
 - **Text, 02 and 05, about 25 ms.** Nearly all of it is ranking the roughly 5,000 rows
-  that match, and the trigram arm matches about as many as full text. Next steps: raise
-  the similarity threshold for short queries, and rank only the full-text matches when
-  there are enough of them.
+  that match, and the trigram arm matches about as many as full text. Next step: rank
+  only the full-text matches when there are enough of them. (The threshold idea is
+  superseded; see "Typo tolerance" below.)
 - **An unfiltered map**, and an unfiltered relevance browse, read every row of the tenant
   whatever the plan, because they count or score everything. On a table holding many
   tenants they use the tenant-leading indexes. On this one-tenant test table a scan is
   right, so the gate measures a filtered map instead.
+
+### Typo tolerance (2026-10-18)
+
+**`%` matched nothing on real listings.** The trigram arm was `fuzzy_text % @text`, and `%`
+compares the query with the whole string. `fuzzy_text` holds the title, organisation and
+category names, about 40 to 90 characters, so a one-word query's similarity to it is tiny.
+For example, "socer" against "Soccer skills clinic Eastbank Youth Club Sports and fitness
+Soccer" scores 0.09, against a threshold of 0.3. `/search?q=socer` found nothing, and
+`q=soccer` found 16 listings. The synthetic load hid this: its `fuzzy_text` was only the
+title ("Robotics 123"), short enough for whole-string similarity to work.
+
+**The arm is now `@text <<% ls.fuzzy_text`, strict word similarity, at 0.5.**
+- It compares the query with runs of whole words in the fuzzy text.
+- `ix_ls_fuzzy` serves it: the plan shows `fuzzy_text %>> @text`, the commutator, as the
+  index condition.
+- The threshold is pg_trgm's default for this operator. The finder pins it with
+  `SET LOCAL pg_trgm.strict_word_similarity_threshold` in the same round trip as the role
+  (`SqlListingFinder.TransactionSetup`), so the meaning of the arm doesn't depend on the
+  server's configuration.
+
+Measured over the seeded catalogue (396 published listings). Each cell counts listings the
+trigram arm matches:
+
+| Query | `%` (0.3) | `<%` word (0.6) | `<<%` strict (0.5) | Wanted |
+|---|---|---|---|---|
+| socer | 0 | 16 | 16 | the 16 that "soccer" finds |
+| robtics | 0 | 0 | 8 | the 8 that "robotics" finds |
+| baskitball | 0 | 0 | 31 | the 31 that "basketball" finds |
+| yogga, lifegard | 0 | 0 | 6, 5 | yoga, lifeguard |
+| socer skils | 0 | 11 | 11 | Soccer skills clinic (11) |
+| socer clinic | 0 | 0 | 11 | Soccer skills clinic (11) |
+| ball | 0 | 31 | 0 | nothing: a fragment of "basketball" |
+| car | 0 | 46 | 0 | nothing: a fragment of "careers" |
+| xylophone, zebra | 0 | 0 | 0 | nothing |
+
+Why strict, and why 0.5:
+- **Recall.** Plain word similarity (`<%`) at its 0.6 default misses one-letter typos in
+  mid-length words: "robtics" scores 0.55 and "baskitball" 0.57.
+- **No fragment matches.** Lowering `<%` to catch those would not help, because `<%` scores
+  a query against any run of trigrams. So "ball" scores 0.6 inside "basketball" and "car"
+  scores 0.75 inside "careers". Strict word similarity scores whole words only: 0.45 and
+  0.33.
+
+`KettleSeedDatabaseTests` pins all of this down:
+- a misspelt word finds what the correct spelling finds;
+- a misspelt phrase finds its listings;
+- an unrelated word, or a fragment of a longer word, finds nothing.
+
+**Cost.** Synthetic load v4 gives `fuzzy_text` the projector's shape: title, organisation,
+category and interest names. Medians of seven runs, vacuumed, as `brighttime_finder`, on the
+Windows/Docker scratch database. These numbers are not comparable with the table above,
+which came from the Mac.
+
+| Query, load | `%` | `<<%` |
+|---|---|---|
+| 05 "robtics", title-only `fuzzy_text` (v3) | 44 ms, 4,935 matches | 48 ms |
+| 05 "robtics", projector-shaped `fuzzy_text` (v4) | 25 ms, **0 matches** | 77 ms, 4,935 matches |
+| 02 "robotics", either load | 34 ms | 34 ms |
+
+The gate's single run of 05 measured 58 to 68 ms on this machine. The plan is a bitmap OR of
+`ix_ls_fts` and `ix_ls_fuzzy`, as before, with estimates within 3% (5,586 against 5,474 at
+the fuzzy index).
+
+Where the 77 ms goes:
+- **Ranking, about 34 ms.** The query matches a tenth of the table, because the load has
+  only ten title words. Scoring that many rows costs what it costs in 02.
+- **The operator, the rest. It runs twice per candidate.** It runs once in the heap scan's recheck, and
+  again in its filter. The filter is not dropped because pg_trgm's operators are `STABLE`
+  (they read the threshold setting), so the planner won't prove the filter is implied by
+  the recheck. With the FTS arm removed, the same query takes 54 ms, so the second
+  evaluation costs about 23 ms.
+
+Next step: make the trigram arm a fallback, used only when full text finds less than a
+page. Typo tolerance would then cost nothing for a correctly spelt query. A misspelt query
+would scan one index, with no OR, so the operator would run once.
+
+**Chinese is not helped, by this or by `%`.** Chinese has no spaces, so a whole title such as
+课后艺术工作室 is one "word".
+- A two-character query (艺术, "art") contains no trigram that occurs inside a longer run.
+  So `%`, `<%`, `<<%` and full text all find nothing for it.
+- Plain `<%` would find a four-character run inside a title (英语会话 inside 青少年英语会话).
+  Strict word similarity does not.
+- Before this change, none of these queries matched either.
+
+This is the D6 ceiling, measured: for zh, trigram recall works only for queries that match
+whole titles. It needs a segmenter (zhparser, pg_jieba) or bigram indexing (pg_bigm), not a
+different trigram operator.
 
 ### Why the index is ignored under RLS
 
@@ -379,7 +468,8 @@ not `margin-left`), `dir` on `<html>`, and no directional ASCII art in strings.
 `search_vector` is built with the listing's own language configuration, and
 `fuzzy_text` holds the unaccented concatenation of title, org name and
 category names for every locale. For zh/bn/ht/ar, recall comes from index 3,
-not index 2.
+not index 2. For zh this works only for whole titles, not for words within
+them (measured; see "Typo tolerance").
 
 This is adequate for launch and I would not add a search engine yet. But it is
 a real ceiling, and the `ISearchProvider` seam exists so that moving to

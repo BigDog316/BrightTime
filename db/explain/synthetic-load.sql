@@ -21,7 +21,7 @@ delete from opportunity.listing where tenant_id = '0196c3e8-0000-7000-8000-00000
 delete from platform.neighbourhood where tenant_id = '0196c3e8-0000-7000-8000-00000000e001';
 
 insert into platform.tenant (id, slug, display_name, region_name, region_kind, default_locale, timezone)
-values ('0196c3e8-0000-7000-8000-00000000e001', 'synthetic-plans', 'Synthetic plans v3',
+values ('0196c3e8-0000-7000-8000-00000000e001', 'synthetic-plans', 'Synthetic plans v4',
         'Synthetic County', 'demo', 'en', 'America/New_York')
 on conflict (id) do update set display_name = excluded.display_name;
 
@@ -39,9 +39,11 @@ from generate_series(1, 18) g;
 select setseed(0.4242);
 
 create temporary table syn as
+select ('0196c3e8-0000-7000-8000-0000000' || lpad(to_hex(org_n), 5, '0'))::uuid as org_id, d.*
+from (
 select g,
        gen_random_uuid()                                             as listing_id,
-       ('0196c3e8-0000-7000-8000-0000000' || lpad(to_hex(1 + floor(random() * 400)::int), 5, '0'))::uuid as org_id,
+       1 + floor(random() * 400)::int                                as org_n,
        case when random() < 0.25 then 'event' else 'program' end     as kind,
        (array['robotics','coding','art','music','science','basketball',
               'reading','chess','theatre','swimming'])[1 + floor(random() * 10)::int] as word,
@@ -56,7 +58,8 @@ select g,
        floor(random() * 7)::int                                      as dow,
        case when random() < 0.05 then 0 when random() < 0.11 then 2 else 1 end as sites,
        ('0196c3e8-0000-7000-8000-00000001' || lpad(to_hex(1 + floor(random() * 18)::int), 4, '0'))::uuid as hood
-from generate_series(1, 50000) g;
+from generate_series(1, 50000) g
+) d;
 
 insert into opportunity.listing
   (id, tenant_id, org_id, kind, slug, title, summary, status, published_at,
@@ -92,12 +95,27 @@ select gen_random_uuid(), '0196c3e8-0000-7000-8000-00000000e001', s.listing_id,
        tstzrange(s.session_start, s.session_start + interval '90 minutes'),
        s.session_start, s.popularity, s.published_at, false,
        initcap(s.word) || ' ' || s.g, 'A synthetic ' || s.word || ' session.',
-       initcap(s.word) || ' ' || s.g,
+       -- The projector's shape: title, organisation, category name, interest name.
+       initcap(s.word) || ' ' || s.g || ' Org ' || s.org_n || ' '
+         || case s.cat when 'stem' then 'STEM' when 'arts' then 'Arts' when 'sports' then 'Sports and fitness'
+                       when 'academic' then 'Academic support' when 'outdoors' then 'Outdoors and nature'
+                       when 'health' then 'Health and wellbeing' when 'civic' then 'Leadership and community'
+                       when 'careers' then 'Jobs and careers' when 'life-skills' then 'Life skills'
+                       else 'College prep' end
+         || ' ' || initcap(s.word),
        to_tsvector('platform.ts_en'::regconfig, initcap(s.word) || ' ' || s.g || ' ' || s.word)
 from syn s
 cross join lateral generate_series(1, greatest(s.sites, 1)) site_number;
 
 drop table syn;
+
+-- A bulk insert leaves rows in each GIN index's pending list until a vacuum, and every scan
+-- reads that list linearly: measured straight after loading, the text scenarios ran three to
+-- four times slower than they do once autovacuum has run. Flush them, so the plans measure
+-- the steady state whenever they are taken.
+select gin_clean_pending_list('opportunity.ix_ls_facets'),
+       gin_clean_pending_list('opportunity.ix_ls_fts'),
+       gin_clean_pending_list('opportunity.ix_ls_fuzzy');
 
 analyze opportunity.listing;
 analyze opportunity.listing_search;

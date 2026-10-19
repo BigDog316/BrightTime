@@ -26,15 +26,15 @@ from scored s
 order by s.next_start_at asc, s.listing_id asc
 limit @page_size
 
-Limit  (cost=0.41..152.77 rows=25 width=243) (actual time=2.617..2.690 rows=25.00 loops=1)
-  Buffers: shared hit=5844
-  ->  Index Scan using ix_ls_next_start on listing_search ls  (cost=0.41..15126.30 rows=2482 width=243) (actual time=2.617..2.688 rows=25.00 loops=1)
+Limit  (cost=0.41..298.71 rows=25 width=243) (actual time=5.745..5.852 rows=25.00 loops=1)
+  Buffers: shared hit=5911
+  ->  Index Scan using ix_ls_next_start on listing_search ls  (cost=0.41..29841.65 rows=2501 width=243) (actual time=5.743..5.848 rows=25.00 loops=1)
         Index Cond: (tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid)
-        Filter: (session_window && '["2026-10-24 22:03:37.613058-04","2026-10-27 22:03:37.613058-04")'::tstzrange)
-        Rows Removed by Filter: 5769
+        Filter: (session_window && '["2026-10-26 00:19:30.587554+00","2026-10-29 00:19:30.587554+00")'::tstzrange)
+        Rows Removed by Filter: 5772
         Index Searches: 1
-        Buffers: shared hit=5844
+        Buffers: shared hit=5911
 Planning:
   Buffers: shared hit=3
-Planning Time: 0.167 ms
-Execution Time: 2.703 ms
+Planning Time: 0.329 ms
+Execution Time: 5.882 ms

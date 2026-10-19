@@ -9,7 +9,7 @@ with matched as (
   where ls.tenant_id = @tenant_id and ls.is_published
     and ls.is_primary
     and (ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)
-         or ls.fuzzy_text % @text)
+         or @text <<% ls.fuzzy_text)
 ),
 best_site as (
   select * from matched
@@ -27,39 +27,39 @@ from scored s
 order by s.score desc, s.listing_id desc
 limit @page_size
 
-Limit  (cost=9532.16..9541.51 rows=25 width=243) (actual time=20.027..21.069 rows=25.00 loops=1)
-  Buffers: shared hit=3992
-  ->  Gather Merge  (cost=9532.16..11497.73 rows=5256 width=243) (actual time=20.026..21.067 rows=25.00 loops=1)
+Limit  (cost=11809.51..11818.86 rows=25 width=243) (actual time=61.689..67.446 rows=25.00 loops=1)
+  Buffers: shared hit=7049
+  ->  Gather Merge  (cost=11809.51..13700.66 rows=5057 width=243) (actual time=61.686..67.437 rows=25.00 loops=1)
         Workers Planned: 2
         Workers Launched: 2
-        Buffers: shared hit=3992
-        ->  Result  (cost=8532.14..9829.71 rows=2190 width=243) (actual time=16.533..16.568 rows=20.33 loops=3)
-              Buffers: shared hit=3992
-              ->  Sort  (cost=8532.14..8537.61 rows=2190 width=273) (actual time=16.530..16.531 rows=20.33 loops=3)
+        Buffers: shared hit=7049
+        ->  Result  (cost=10809.49..12057.88 rows=2107 width=243) (actual time=45.207..45.272 rows=21.00 loops=3)
+              Buffers: shared hit=7049
+              ->  Sort  (cost=10809.49..10814.75 rows=2107 width=273) (actual time=45.200..45.204 rows=21.00 loops=3)
                     Sort Key: (round((((((('0.45'::double precision * LEAST((ts_rank_cd(ls.search_vector, websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text), 32) * '4'::double precision), '1'::double precision)) + '0.1'::double precision) + ((0.15 * CASE WHEN (ls.next_start_at IS NULL) THEN 0.3 ELSE exp(((- GREATEST((EXTRACT(epoch FROM (ls.next_start_at - now())) / 86400.0), '0'::numeric)) / 30.0)) END))::double precision) + '0'::double precision) + ('0.08'::double precision * LEAST((ls.popularity / '100'::double precision), '1'::double precision))))::numeric, 6)) DESC, ls.listing_id DESC
-                    Sort Method: top-N heapsort  Memory: 36kB
-                    Buffers: shared hit=3992
+                    Sort Method: top-N heapsort  Memory: 35kB
+                    Buffers: shared hit=7049
                     Worker 0:  Sort Method: top-N heapsort  Memory: 36kB
                     Worker 1:  Sort Method: top-N heapsort  Memory: 35kB
-                    ->  Parallel Bitmap Heap Scan on listing_search ls  (cost=1499.93..8470.34 rows=2190 width=273) (actual time=1.720..15.994 rows=1645.00 loops=3)
-                          Recheck Cond: (((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) AND is_published) OR ((fuzzy_text % 'robtics'::text) AND is_published))
-                          Filter: (is_primary AND (tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND ((search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) OR (fuzzy_text % 'robtics'::text)))
-                          Rows Removed by Filter: 174
-                          Heap Blocks: exact=1175
-                          Buffers: shared hit=3954
-                          Worker 0:  Heap Blocks: exact=1087
-                          Worker 1:  Heap Blocks: exact=1076
-                          ->  BitmapOr  (cost=1499.93..1499.93 rows=5841 width=0) (actual time=4.141..4.141 rows=0.00 loops=1)
-                                Buffers: shared hit=352
-                                ->  Bitmap Index Scan on ix_ls_fts  (cost=0.00..116.69 rows=276 width=0) (actual time=0.225..0.225 rows=0.00 loops=1)
+                    ->  Parallel Bitmap Heap Scan on listing_search ls  (cost=142.39..10750.03 rows=2107 width=273) (actual time=2.759..44.195 rows=1645.00 loops=3)
+                          Recheck Cond: (((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) AND is_published) OR (('robtics'::text <<% fuzzy_text) AND is_published))
+                          Filter: (is_primary AND (tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND ((search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) OR ('robtics'::text <<% fuzzy_text)))
+                          Rows Removed by Filter: 180
+                          Heap Blocks: exact=4930
+                          Buffers: shared hit=7011
+                          Worker 0:  Heap Blocks: exact=710
+                          Worker 1:  Heap Blocks: exact=1047
+                          ->  BitmapOr  (cost=142.39..142.39 rows=5596 width=0) (actual time=4.111..4.112 rows=0.00 loops=1)
+                                Buffers: shared hit=60
+                                ->  Bitmap Index Scan on ix_ls_fts  (cost=0.00..21.85 rows=10 width=0) (actual time=0.060..0.060 rows=0.00 loops=1)
                                       Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)))
                                       Index Searches: 1
-                                      Buffers: shared hit=27
-                                ->  Bitmap Index Scan on ix_ls_fuzzy  (cost=0.00..1380.61 rows=5565 width=0) (actual time=3.915..3.915 rows=5457.00 loops=1)
-                                      Index Cond: (fuzzy_text % 'robtics'::text)
+                                      Buffers: shared hit=7
+                                ->  Bitmap Index Scan on ix_ls_fuzzy  (cost=0.00..118.01 rows=5586 width=0) (actual time=4.050..4.050 rows=10931.00 loops=1)
+                                      Index Cond: (fuzzy_text %>> 'robtics'::text)
                                       Index Searches: 1
-                                      Buffers: shared hit=325
+                                      Buffers: shared hit=53
 Planning:
   Buffers: shared hit=5
-Planning Time: 0.384 ms
-Execution Time: 21.100 ms
+Planning Time: 1.416 ms
+Execution Time: 67.544 ms

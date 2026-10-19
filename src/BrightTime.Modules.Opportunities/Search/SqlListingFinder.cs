@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Paging;
@@ -139,16 +140,28 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) 
     public const string FinderRole = "brighttime_finder";
 
     /// <summary>
-    /// Switches to the finder role for the rest of this transaction. <c>SET LOCAL</c>
-    /// reverts at commit or rollback, so a pooled connection never carries the bypass
-    /// into the next request.
+    /// What every finder transaction runs first: the finder role, and the typo-tolerance
+    /// threshold, pinned so the meaning of <c>&lt;&lt;%</c> never rests on the server's
+    /// configuration. One round trip.
     /// </summary>
+    public static readonly string TransactionSetup =
+        $"set local role {FinderRole}; set local {SessionVariables.FuzzyThreshold} = " +
+        SearchQueryBuilder.FuzzyThreshold.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Switches to the finder role, and sets its threshold, for the rest of this transaction.
+    /// <c>SET LOCAL</c> reverts at commit or rollback, so a pooled connection never carries
+    /// the bypass into the next request.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "TransactionSetup is built from constants only.")]
     private static async Task EnterFinderRoleAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         CancellationToken cancellationToken)
     {
-        await using NpgsqlCommand command = new("set local role " + FinderRole, connection, transaction);
+        await using NpgsqlCommand command = new(TransactionSetup, connection, transaction);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 

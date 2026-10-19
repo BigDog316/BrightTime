@@ -54,7 +54,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
         try
         {
-            _container = new PostgreSqlBuilder("postgis/postgis:17-3.4")
+            _container = new PostgreSqlBuilder("postgis/postgis:18-3.6")
                 .WithDatabase("brighttime")
                 .WithUsername("brighttime_migrator")
                 .WithPassword("local-only-not-a-secret")

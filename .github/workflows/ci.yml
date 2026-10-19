@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgis/postgis:17-3.4
+        image: postgis/postgis:18-3.6
         env:
           POSTGRES_DB: brighttime
           POSTGRES_USER: brighttime_migrator
@@ -115,7 +115,7 @@ jobs:
     # times (FinderPlanTests). The plans are uploaded, so a regression arrives with them.
     services:
       postgres:
-        image: postgis/postgis:17-3.4
+        image: postgis/postgis:18-3.6
         env:
           POSTGRES_DB: brighttime
           POSTGRES_USER: postgres

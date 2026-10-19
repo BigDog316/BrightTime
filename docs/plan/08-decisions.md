@@ -600,6 +600,35 @@ The mobile app signs in through the API host, which until now was a stub.
   phone it means signing in most times the app opens. Passkeys or device binding in M2
   are the better fix than a longer idle window.
 
+### D29 — The local stack: built from db/schema on first boot, seeded on every up (**proposed 2026-10-18; implemented, reversible**)
+
+`docker compose -f deploy/compose.yml up --build` now goes from an empty volume to the
+seeded Kettle County site at `http://kettle.localhost:8000` in about 30 seconds (Q11).
+
+- **Database:** PostGIS 18-3.6, the same 18.6 / 3.6.4 the suite is verified on. Compose,
+  CI and the Testcontainers fixture all moved from 17-3.4.
+- **Schema and logins:** on first boot, `deploy/postgres/init-brighttime.sh` applies
+  `db/schema` in order as the superuser.
+  - It then creates `bt_web_login` (app + finder), `bt_auth_login` and `bt_jobs_login`
+    with a local-only password. The DDL still creates only NOLOGIN group roles.
+  - A schema change needs `down -v`. EF migrations are not in the picture (Q12).
+- **Seed:** a one-shot `seed` service runs `BrightTime.Seed` as the superuser on every
+  `up`. It is idempotent and takes about 12 seconds. The hosts wait for it to finish.
+- **Exposure:** only nginx (8000), mailpit's UI (8025) and Postgres (5432) are published,
+  all on 127.0.0.1. Tenants' addresses carry port 8000, so nginx is the way in.
+- **Removed:** minio. Nothing reads `Storage:*`, and `minio/minio` is no longer published
+  on Docker Hub. Object storage comes back with the media-storage decision.
+- **Images:** jobs and seed run on the aspnet runtime, because the modules reference the
+  ASP.NET Core shared framework. Connection strings turn off GSS encryption, because the
+  images have no Kerberos library and Npgsql tries GSS by default.
+- **Verified through compose, without JavaScript:**
+  - All 396 published listings page through `/search`.
+  - Every filter, sort and the text search narrow the results.
+  - All six locales render, and Arabic is `dir="rtl"`.
+  - Listing pages and `.ics` downloads work.
+  - Dev sign-in reaches the organiser console.
+  - Approving a listing there projects it through the jobs container into search.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming
@@ -678,6 +707,7 @@ guessing at a universal one.
 blocks Testcontainers, the local PostGIS stack, and the real `EXPLAIN` output
 you asked for. Docker Desktop, OrbStack or Colima — your preference. This is
 the only true blocker to starting M1.
+*Answered 2026-10-18: Docker Desktop, on the Windows machine. The compose gate runs there (D29).*
 
 **Q12 — Do you want EF migrations or SQL-first?** You asked for "migrations
 reviewed as SQL". Two ways: (a) EF Core migrations as the source of truth,

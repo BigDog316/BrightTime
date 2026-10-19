@@ -1,0 +1,13 @@
+# The images build from src/ alone; keep the rest out of the build context.
+.git/
+.github/
+.claude/
+.vs/
+.idea/
+artifacts/
+**/bin/
+**/obj/
+docs/
+db/explain/
+tests/**
+!tests/Directory.Build.props

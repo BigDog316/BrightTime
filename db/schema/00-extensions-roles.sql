@@ -1,7 +1,7 @@
 -- =====================================================================
 -- BrightTime :: 00 :: extensions, roles, text-search configs, helpers
--- Target: PostgreSQL 17 (minimum 15 for UNIQUE NULLS NOT DISTINCT,
---         minimum 13 for btree_gin uuid support). PostGIS 3.4+.
+-- Target: PostgreSQL 18 (minimum 15 for UNIQUE NULLS NOT DISTINCT,
+--         minimum 13 for btree_gin uuid support). PostGIS 3.6.
 -- Run as superuser. Everything after this file runs as brighttime_migrator.
 -- =====================================================================
 

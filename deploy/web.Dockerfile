@@ -2,16 +2,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
 
-# Restore against the manifest files alone so a source-only change does not
-# invalidate the package layer.
+# The whole of src/ is copied before the restore, so any source change reruns it.
 COPY global.json Directory.Build.props Directory.Packages.props NuGet.config .editorconfig .globalconfig ./
 COPY src/ src/
 COPY tests/Directory.Build.props tests/
 RUN dotnet restore src/BrightTime.Web/BrightTime.Web.csproj
 
 RUN dotnet publish src/BrightTime.Web/BrightTime.Web.csproj \
-    --no-restore -c Release -o /app \
-    -p:UseArtifactsOutput=false
+    --no-restore -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
 WORKDIR /app

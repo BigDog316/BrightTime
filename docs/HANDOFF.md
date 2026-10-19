@@ -1,7 +1,8 @@
 # Handoff
 
 Where the work stands, for picking it up on another machine or in a new session.
-Written 2026-10-18 at commit c97444d.
+Written 2026-10-18 at commit c97444d. Updated the same day on the Windows machine, after the
+compose gate.
 
 ## State
 
@@ -10,18 +11,22 @@ They cover tenancy, the finder, consoles, sign-in, audit, localisation, provider
 organiser review, the tenant-isolation matrix, the finder plan gate, the outbox, the API host
 with token auth, and health endpoints.
 
+`docker compose -f deploy/compose.yml up --build` is green (D29). It reaches the seeded site
+at `http://kettle.localhost:8000` from an empty volume. Compose, CI and the Testcontainers
+fixture now pin PostGIS 18-3.6. The only M1 acceptance item left is axe-core with the e2e run.
+
 Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open question, then
 [plan/09-milestones.md](plan/09-milestones.md) for M1 acceptance status. The status note in
 [plan/README.md](plan/README.md) predates the code.
 
 ## Waiting on Sam
 
-- **Accept or reject D27** (outbox: publish in the caller's transaction, one job per handler)
-  **and D28** (API tokens: 10-minute JWTs, rotating family-chained refresh tokens).
+- **Accept or reject D27** (outbox: publish in the caller's transaction, one job per handler),
+  **D28** (API tokens: 10-minute JWTs, rotating family-chained refresh tokens) **and D29**
+  (the compose stack; it drops minio until media storage is decided).
 - **Approve the Playwright and axe-core download** for the accessibility and e2e gate.
-- **Decide on Docker (Q11)** for the `docker compose up` gate. `deploy/compose.yml` and
-  `.github/workflows/ci.yml` still pin PostGIS 17-3.4, and only 18.6 / 3.6.4 has been verified.
-- **Check GitHub Actions** for the last few pushes. CI results have not been seen.
+- **Check GitHub Actions** for the last few pushes. CI results have not been seen, and CI now
+  uses PostGIS 18-3.6.
 - **Open questions:**
   - Q3, Q7 (map tiles) and Q13 (translations).
   - Q4 retention; 30 days is proposed for processed outbox rows.
@@ -38,7 +43,11 @@ These have not been asked for yet:
 - curation screens;
 - a keyboard-only pass;
 - finder speed (facets plus distance is about 27 ms; see [plan/03](plan/03-indexing-and-query-plans.md));
-- the compose fixes.
+- **typo tolerance, which does nothing today.**
+  - `fuzzy_text % @text` compares the query with the whole title, organisation and category
+    text, so "socer" scores 0.08 against a soccer listing and finds nothing.
+  - `word_similarity` scores it 0.63. `<%` with the existing trigram index is the likely fix,
+    but it changes a gated plan, so it needs re-measuring.
 
 ## Setting up a machine
 
@@ -48,7 +57,19 @@ These have not been asked for yet:
    - On Windows, run `db/apply-schema.sh` from Git Bash or WSL.
 2. **Give the tests their own cluster, never a server holding real data.** The schema creates
    cluster-wide roles, and the fixtures create and drop `brighttime_*` databases and `bt_*_login`
-   roles. The Mac setup used a cluster on 127.0.0.1:5433 with trust auth.
+   roles.
+   - **Mac:** a cluster on 127.0.0.1:5433 with trust auth.
+   - **Windows:** port 5433 there is Sam's own PostgreSQL service, so leave it alone. The
+     scratch cluster is a container on 5434. Use these commands, and the same connection
+     string below with `Port=5434`:
+     ```bash
+     docker run -d --name brighttime-scratch -p 127.0.0.1:5434:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgis/postgis:18-3.6 -c max_connections=300
+     ```
+     ```bash
+     PATH="/c/Program Files/PostgreSQL/18/bin:$PATH" db/apply-schema.sh brighttime 127.0.0.1 5434 postgres
+     ```
+   - **No connection string:** without `BRIGHTTIME_TEST_CONNECTION`, the integration project
+     starts its own PostGIS container through Testcontainers, and the web and API tests skip.
 3. **Apply the schema:**
    ```bash
    db/apply-schema.sh brighttime 127.0.0.1 5433 postgres
@@ -68,6 +89,15 @@ These have not been asked for yet:
      - `Tenancy:PublicScheme=http` and `Tenancy:PublicPort=5175`.
      - `Auth:DevelopmentSignIn=true`.
    - Browse `http://kettle.localhost:5175`; plain `localhost` returns 404. Sign in at `/dev/sign-in`.
+6. **Or run the whole stack in containers.** This needs nothing but Docker:
+   ```bash
+   docker compose -f deploy/compose.yml up --build
+   ```
+   - Browse `http://kettle.localhost:8000`. Mailpit is at `http://localhost:8025`.
+   - After a change under `db/schema/`, run `down -v` first, because the schema is applied
+     on first boot only.
+   - It publishes Postgres on 127.0.0.1:5432, so stop it before using that port for
+     anything else.
 
 ## Conventions that bite
 

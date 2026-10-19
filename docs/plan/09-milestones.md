@@ -15,7 +15,7 @@ revise.
 
 - Solution skeleton, `Directory.Build.props`, central packages, `global.json`,
   analyzers, warnings-as-errors.
-- `deploy/compose.yml`: postgis:17-3.4, minio, mailpit, nominatim, api, jobs,
+- `deploy/compose.yml`: postgis:18-3.6, seed, mailpit, nominatim, api, jobs,
   web, nginx. `docker compose up` to a seeded, working site.
 - `db/schema/*.sql` applied; EF contexts mapped; CI drift gate both ways.
 - Tenancy: host resolution, `TenantContext`, connection interceptor, RLS live
@@ -66,9 +66,10 @@ badges, no community, no dashboards beyond provider listing counts.
   `BrightTime.Hosting`. Health endpoints are in both hosts.
 - **Outbox + job runner:** done. The dispatcher fans each message out to one delivery job
   per handler (D27).
-- **`docker compose up`:** not verified. There's no container runtime here (Q11), and
-  the compose and CI images are PostGIS 17-3.4 while only 18.6 / 3.6.4 has been
-  verified.
+- **`docker compose up`:** green (2026-10-18, D29). An empty volume reaches the seeded site
+  in about 30 seconds. All 396 published listings browse, search and filter in six locales
+  without JavaScript. Compose, CI and Testcontainers use PostGIS 18-3.6. Minio was dropped
+  until media storage is decided.
 
 ## M2 — Mobile + parental consent (3–4 weeks)
 

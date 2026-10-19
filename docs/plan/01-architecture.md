@@ -6,7 +6,7 @@
 |---|---|
 | Runtime | .NET 10, C# 14, `net10.0` everywhere |
 | Language settings | `Nullable=enable`, `TreatWarningsAsErrors=true`, `EnforceCodeStyleInBuild=true`, `AnalysisLevel=latest-all` |
-| Database | PostgreSQL 17 + PostGIS 3.4+ (minimum 15 for `UNIQUE NULLS NOT DISTINCT`) |
+| Database | PostgreSQL 18 + PostGIS 3.6 (verified on 18.6 / 3.6.4; minimum 15 for `UNIQUE NULLS NOT DISTINCT`) |
 | ORM | EF Core 10 + Npgsql 10, `NetTopologySuite` plugin |
 | Web | Blazor Web App — static SSR by default, `InteractiveServer` on the islands that need it |
 | Mobile | .NET MAUI Blazor Hybrid (iOS, Android) over a shared Razor class library |
@@ -325,7 +325,7 @@ replay idempotent at the database level
 
 ## Infrastructure
 
-- `deploy/compose.yml` — postgis/postgis:17-3.4, minio, mailpit, the API, the
+- `deploy/compose.yml` — postgis/postgis:18-3.6, a one-shot seed, mailpit, the API, the
   jobs worker, the web app, nginx. One command to a working local stack.
 - `deploy/compose.prod.yml` — same services, external managed Postgres and S3,
   nginx terminating TLS, no mailpit.
@@ -357,7 +357,7 @@ jobs:
   build:      dotnet restore/build -warnaserror, dotnet format --verify-no-changes
   unit:       dotnet test tests/**/*.Tests
   arch:       BrightTime.Architecture.Tests (module boundaries, cross-schema FKs)
-  db:         apply db/schema/*.sql to postgis:17-3.4, then EF migrations,
+  db:         apply db/schema/*.sql to postgis:18-3.6, then EF migrations,
               then assert the two are identical (schema drift gate)
   integration: Testcontainers; includes the cross-tenant isolation matrix
   e2e:        Playwright, Chromium + WebKit, axe-core on every public route,

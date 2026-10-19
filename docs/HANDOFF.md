@@ -120,6 +120,12 @@ These have not been asked for yet:
 - **Shared test databases.** Web and API tests share one seeded database per project. A
   test that changes an account must use a seed account that no other test uses.
 - **A new public page** belongs in `AccessibilityTests.Routes`, or the axe gate never sees it.
+- **E2E failures leave a trace.** Each one leaves `artifacts/e2e-traces/<test>.zip` (CI
+  uploads them). Open it with `playwright.ps1 show-trace <zip>`. Browser steps go through
+  `SiteFixture.RunAsync`.
+- **One suite per database server at a time.** The fixtures drop and recreate fixed names
+  (`brighttime_e2etest`, `brighttime_consoletest`, `brighttime_apitest`, …), so two checkouts
+  testing against the same server at once break each other.
 - **The finder's instant.** `SearchQueryBuilder.Build` needs `SearchQuery.AsOf`, or a cursor
   that carries one. Finders take it from `IClock` on the first page. Only clocks may read
   the system time (an architecture test).

@@ -101,14 +101,72 @@ public sealed class SiteFixture : IAsyncLifetime
         _factory.StartServer();
     }
 
+    /// <summary>
+    /// Runs a test's browser steps in a fresh context, recording a Playwright trace that is kept
+    /// only if they fail, at <c>artifacts/e2e-traces/&lt;test&gt;.zip</c>. Open one with
+    /// <c>pwsh artifacts/bin/BrightTime.E2E.Tests/debug/playwright.ps1 show-trace &lt;zip&gt;</c>.
+    /// </summary>
+    public async Task RunAsync(string engine, Func<IPage, Task> steps, bool javaScript = true)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        IPage page = await NewPageAsync(engine, javaScript);
+        await page.Context.Tracing.StartAsync(new TracingStartOptions { Screenshots = true, Snapshots = true });
+        try
+        {
+            await steps(page);
+        }
+        catch
+        {
+            try
+            {
+                await page.Context.Tracing.StopAsync(new TracingStopOptions { Path = TracePath() });
+            }
+            catch (PlaywrightException)
+            {
+                // A browser that died takes its trace with it; the test's own failure is the news.
+            }
+
+            throw;
+        }
+        finally
+        {
+            await page.Context.CloseAsync();
+        }
+    }
+
+    private static string TracePath()
+    {
+        string name = TestContext.Current.Test?.TestDisplayName ?? Guid.NewGuid().ToString("N");
+        foreach (char c in Path.GetInvalidFileNameChars().Append(' '))
+        {
+            name = name.Replace(c, '_');
+        }
+
+        string directory = Path.Combine(RepositoryRoot(), "artifacts", "e2e-traces");
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, (name.Length > 150 ? name[..150] : name) + ".zip");
+    }
+
+    private static string RepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "BrightTime.slnx")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new InvalidOperationException("Could not locate the repository root.");
+    }
+
     /// <summary>A fresh browser context (its own cookies) on one engine, with or without JavaScript.</summary>
-    public async Task<IPage> NewPageAsync(string engine, bool javaScript = true, string? locale = null)
+    private async Task<IPage> NewPageAsync(string engine, bool javaScript)
     {
         IBrowserContext context = await _browsers[engine].NewContextAsync(new BrowserNewContextOptions
         {
             BaseURL = BaseUrl.AbsoluteUri,
             JavaScriptEnabled = javaScript,
-            Locale = locale,
         });
         return await context.NewPageAsync();
     }

@@ -106,37 +106,24 @@ public sealed class AccessibilityTests(SiteFixture site)
     {
         Assert.SkipWhen(site.SkipReason is not null, site.SkipReason ?? string.Empty);
 
-        IPage page = await site.NewPageAsync(engine);
-        try
+        await site.RunAsync(engine, async page =>
         {
             await page.GotoAsync("/");
             await page.EvaluateAsync("() => document.querySelector('main').insertAdjacentHTML('beforeend', '<img src=\"/favicon.png\"><button></button>')");
             AxeResult result = await page.RunAxe(Wcag);
             result.Violations.Select(v => v.Id).ShouldBe(["button-name", "image-alt"], ignoreOrder: true);
-        }
-        finally
-        {
-            await page.Context.CloseAsync();
-        }
+        });
     }
 
-    private async Task CheckAsync(string engine, string path)
+    private Task CheckAsync(string engine, string path) => site.RunAsync(engine, async page =>
     {
-        IPage page = await site.NewPageAsync(engine);
-        try
-        {
-            IResponse? response = await page.GotoAsync(path);
-            response.ShouldNotBeNull();
-            response.Status.ShouldBe(path.Contains("no-such", StringComparison.Ordinal) ? 404 : 200, $"{engine} {path}");
-            AxeResult result = await page.RunAxe(Wcag);
-            result.Passes.ShouldNotBeEmpty($"axe ran no rules on {engine} {path}");
-            result.Violations.ShouldBeEmpty(Describe(engine, path, result.Violations));
-        }
-        finally
-        {
-            await page.Context.CloseAsync();
-        }
-    }
+        IResponse? response = await page.GotoAsync(path);
+        response.ShouldNotBeNull();
+        response.Status.ShouldBe(path.Contains("no-such", StringComparison.Ordinal) ? 404 : 200, $"{engine} {path}");
+        AxeResult result = await page.RunAxe(Wcag);
+        result.Passes.ShouldNotBeEmpty($"axe ran no rules on {engine} {path}");
+        result.Violations.ShouldBeEmpty(Describe(engine, path, result.Violations));
+    });
 
     private string Resolve(string route) => route switch
     {

@@ -197,3 +197,13 @@ jobs:
         env:
           BRIGHTTIME_TEST_CONNECTION: "Host=localhost;Port=5432;Database=brighttime;Username=postgres;Password=ci-only"
         run: dotnet test --project tests/BrightTime.E2E.Tests -c Release --no-build
+
+      # A failing test keeps its Playwright trace: screenshots, DOM snapshots and network.
+      # Open one with playwright.ps1 show-trace <zip>, or at trace.playwright.dev.
+      - name: Keep the traces of failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces
+          path: artifacts/e2e-traces/
+          if-no-files-found: ignore

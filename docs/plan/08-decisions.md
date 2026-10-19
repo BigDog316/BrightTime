@@ -521,7 +521,7 @@ policy and the checklist follows it.
 - **Search:** renaming, retiring or restoring queues `platform.term_changed` (D24), which
   re-projects the listings tagged with the term, so search matches its current name.
 
-### D27 — The outbox: publish in the caller's transaction, deliver as one job per handler (**proposed 2026-10-18; implemented, reversible**)
+### D27 — The outbox: publish in the caller's transaction, deliver as one job per handler (**accepted 2026-10-18**)
 
 The outbox now has a dispatcher, and D24's three stopgap jobs are module messages:
 - `SiteChanged`, which replaces the unused `SiteLocationChanged`;
@@ -560,7 +560,7 @@ The outbox now has a dispatcher, and D24's three stopgap jobs are module message
   - Dispatch polls once a second when idle. LISTEN/NOTIFY would cut that, as for jobs,
     and is a follow-up.
 
-### D28 — API tokens: short access tokens checked against the database, rotating refresh tokens (**proposed 2026-10-18; implemented, reversible**)
+### D28 — API tokens: short access tokens checked against the database, rotating refresh tokens (**accepted 2026-10-18**)
 
 The mobile app signs in through the API host, which until now was a stub.
 
@@ -600,7 +600,7 @@ The mobile app signs in through the API host, which until now was a stub.
   phone it means signing in most times the app opens. Passkeys or device binding in M2
   are the better fix than a longer idle window.
 
-### D29 — The local stack: built from db/schema on first boot, seeded on every up (**proposed 2026-10-18; implemented, reversible**)
+### D29 — The local stack: built from db/schema on first boot, seeded on every up (**accepted 2026-10-18**)
 
 `docker compose -f deploy/compose.yml up --build` now goes from an empty volume to the
 seeded Kettle County site at `http://kettle.localhost:8000` in about 30 seconds (Q11).

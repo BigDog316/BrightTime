@@ -21,9 +21,8 @@ Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open qu
 
 ## Waiting on Sam
 
-- **Accept or reject D27** (outbox: publish in the caller's transaction, one job per handler),
-  **D28** (API tokens: 10-minute JWTs, rotating family-chained refresh tokens) **and D29**
-  (the compose stack; it drops minio until media storage is decided).
+Every decision through D29 is accepted. D27, D28 and D29 were accepted on 2026-10-18.
+
 - **Approve the Playwright and axe-core download** for the accessibility and e2e gate.
 - **Check GitHub Actions** for the last few pushes. CI results have not been seen, and CI now
   uses PostGIS 18-3.6.

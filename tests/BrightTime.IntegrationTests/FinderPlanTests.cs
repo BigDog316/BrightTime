@@ -80,8 +80,9 @@ public sealed class FinderPlanTests(DatabaseFixture database)
         Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
         await EnsureLoadedAsync();
 
-        (SearchQuery query, bool counts) = Queries[scenario](DateTimeOffset.UtcNow);
-        BuiltQuery built = counts ? SearchQueryBuilder.BuildNeighbourhoodCounts(query) : SearchQueryBuilder.Build(query);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        (SearchQuery query, bool counts) = Queries[scenario](now);
+        BuiltQuery built = counts ? SearchQueryBuilder.BuildNeighbourhoodCounts(query) : SearchQueryBuilder.Build(query with { AsOf = now });
 
         string json = await ExplainAsync(built, "analyze, buffers, format json");
         JsonElement plan = JsonDocument.Parse(json).RootElement[0].GetProperty("Plan");

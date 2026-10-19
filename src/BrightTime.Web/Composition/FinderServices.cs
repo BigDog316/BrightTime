@@ -44,7 +44,7 @@ public static class FinderServices
             return options.Mode switch
             {
                 FinderMode.Sample => new InMemoryListingFinder(KettleCatalogue.Rows(clock), clock),
-                _ => new SqlListingFinder(sp.GetRequiredService<NpgsqlDataSource>()),
+                _ => new SqlListingFinder(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>()),
             };
         });
 

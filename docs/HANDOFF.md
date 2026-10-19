@@ -13,7 +13,11 @@ with token auth, and health endpoints.
 
 `docker compose -f deploy/compose.yml up --build` is green (D29). It reaches the seeded site
 at `http://kettle.localhost:8000` from an empty volume. Compose, CI and the Testcontainers
-fixture now pin PostGIS 18-3.6. The only M1 acceptance item left is axe-core with the e2e run.
+fixture now pin PostGIS 18-3.6.
+
+The axe-core and e2e gate is green as well (`tests/BrightTime.E2E.Tests`, CI job `e2e`), on
+Chromium and WebKit. It found and fixed a paging bug: relevance drifted with the clock between
+pages. The only M1 acceptance item left is the documented keyboard-only pass.
 
 Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open question, then
 [plan/09-milestones.md](plan/09-milestones.md) for M1 acceptance status. The status note in
@@ -23,7 +27,6 @@ Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open qu
 
 Every decision through D29 is accepted. D27, D28 and D29 were accepted on 2026-10-18.
 
-- **Approve the Playwright and axe-core download** for the accessibility and e2e gate.
 - **Check GitHub Actions** for the last few pushes. CI results have not been seen, and CI now
   uses PostGIS 18-3.6.
 - **Open questions:**
@@ -97,6 +100,11 @@ These have not been asked for yet:
      on first boot only.
    - It publishes Postgres on 127.0.0.1:5432, so stop it before using that port for
      anything else.
+7. **Install the browsers for the e2e tests.** Do this once per machine, after a build. Without
+   them, `BrightTime.E2E.Tests` skips locally and fails under CI:
+   ```bash
+   pwsh artifacts/bin/BrightTime.E2E.Tests/debug/playwright.ps1 install chromium webkit
+   ```
 
 ## Conventions that bite
 
@@ -111,5 +119,11 @@ These have not been asked for yet:
   `TestHost.DrainAsync`, not `JobRunner.DrainAsync` alone.
 - **Shared test databases.** Web and API tests share one seeded database per project. A
   test that changes an account must use a seed account that no other test uses.
+- **A new public page** belongs in `AccessibilityTests.Routes`, or the axe gate never sees it.
+- **The finder's instant.** `SearchQueryBuilder.Build` needs `SearchQuery.AsOf`, or a cursor
+  that carries one. Finders take it from `IClock` on the first page. Only clocks may read
+  the system time (an architecture test).
+- **Line endings on Windows.** `dotnet format --verify-no-changes` reports every file in a
+  CRLF checkout. To check as CI does, run it in a clone made with `core.autocrlf=false`.
 - **Commits.** Commits end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
   `.claude/` is never committed.

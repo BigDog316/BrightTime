@@ -137,7 +137,7 @@ public sealed class FinderRoleTests(DatabaseFixture database)
         await EnsureFinderLoginAsync();
 
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(FinderLoginConnection());
-        var finder = new SqlListingFinder(source);
+        var finder = new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance);
 
         FinderPage page = await finder.SearchAsync(new SearchQuery
         {

@@ -21,6 +21,7 @@
     <InternalsVisibleTo Include="BrightTime.IntegrationTests" />
     <InternalsVisibleTo Include="BrightTime.Web.Tests" />
     <InternalsVisibleTo Include="BrightTime.Api.Tests" />
+    <InternalsVisibleTo Include="BrightTime.E2E.Tests" />
   </ItemGroup>
 
 </Project>

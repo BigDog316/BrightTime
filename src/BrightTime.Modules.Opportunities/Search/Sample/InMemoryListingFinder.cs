@@ -32,7 +32,8 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        DateTimeOffset now = clock.UtcNow;
+        // As the SQL finder: one instant for every page of a search.
+        DateTimeOffset now = Cursor.Precision(query.After?.AsOf ?? query.AsOf ?? clock.UtcNow);
         SearchSort sort = EffectiveSort(query);
 
         List<Scored> ranked = _rows
@@ -55,7 +56,7 @@ public sealed class InMemoryListingFinder(IReadOnlyList<ListingSearchRow> rows, 
         List<FinderItem> items = window.Take(pageSize).Select(x => ToItem(x, sort)).ToList();
 
         string? nextCursor = window.Count > pageSize
-            ? new Cursor(items[^1].SortValue, items[^1].ListingId.Value).Encode()
+            ? new Cursor(items[^1].SortValue, items[^1].ListingId.Value, now).Encode()
             : null;
 
         return Task.FromResult(new FinderPage(items, nextCursor));

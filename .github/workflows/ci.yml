@@ -153,3 +153,47 @@ jobs:
         with:
           name: finder-plans
           path: plans/
+
+  e2e:
+    name: accessibility and the finder without JavaScript
+    runs-on: ubuntu-latest
+    needs: schema
+    # The M1 gate: axe-core finds no WCAG 2.2 A or AA violation on any public route in
+    # Chromium or WebKit, and a family can search, filter, page, save and change language
+    # with JavaScript off (BrightTime.E2E.Tests).
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6
+        env:
+          POSTGRES_DB: brighttime
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d brighttime"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The fixture rebuilds its own database, but the cluster-wide roles must exist first.
+      - name: Apply the DDL in order
+        env:
+          PGPASSWORD: ci-only
+        run: |
+          for f in db/schema/*.sql; do
+            psql -h localhost -U postgres -d brighttime -v ON_ERROR_STOP=1 -X -q -f "$f"
+          done
+
+      - run: dotnet build tests/BrightTime.E2E.Tests -c Release
+
+      - name: Browsers
+        run: pwsh artifacts/bin/BrightTime.E2E.Tests/release/playwright.ps1 install --with-deps chromium webkit
+
+      - name: Gate
+        env:
+          BRIGHTTIME_TEST_CONNECTION: "Host=localhost;Port=5432;Database=brighttime;Username=postgres;Password=ci-only"
+        run: dotnet test --project tests/BrightTime.E2E.Tests -c Release --no-build

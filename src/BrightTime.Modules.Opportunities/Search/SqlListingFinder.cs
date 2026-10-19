@@ -3,6 +3,7 @@ using System.Globalization;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Paging;
+using BrightTime.SharedKernel.Time;
 using Npgsql;
 
 namespace BrightTime.Modules.Opportunities.Search;
@@ -26,7 +27,7 @@ namespace BrightTime.Modules.Opportunities.Search;
 /// for this transaction only and never for the connection.
 /// </para>
 /// </remarks>
-public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFinder
+public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) : IListingFinder
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Security", "CA2100:Review SQL queries for security vulnerabilities",
@@ -44,7 +45,9 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
             throw new ArgumentException("A finder query must name its tenant.", nameof(query));
         }
 
-        BuiltQuery built = SearchQueryBuilder.Build(query);
+        // Fixed on the first page and carried in the cursor, so later pages score as the first did.
+        DateTimeOffset asOf = Cursor.Precision(query.After?.AsOf ?? query.AsOf ?? clock.UtcNow);
+        BuiltQuery built = SearchQueryBuilder.Build(query with { AsOf = asOf });
 
         await using NpgsqlConnection connection = await dataSource
             .OpenConnectionAsync(cancellationToken)
@@ -82,7 +85,7 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource) : IListingFind
 
         List<FinderItem> page = rows.Take(pageSize).ToList();
         FinderItem last = page[^1];
-        string nextCursor = new Cursor(last.SortValue, last.ListingId.Value).Encode();
+        string nextCursor = new Cursor(last.SortValue, last.ListingId.Value, asOf).Encode();
 
         return new FinderPage(page, nextCursor);
     }

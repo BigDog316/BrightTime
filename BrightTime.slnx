@@ -22,6 +22,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/BrightTime.Api.Tests/BrightTime.Api.Tests.csproj" />
     <Project Path="tests/BrightTime.Architecture.Tests/BrightTime.Architecture.Tests.csproj" />
+    <Project Path="tests/BrightTime.E2E.Tests/BrightTime.E2E.Tests.csproj" />
     <Project Path="tests/BrightTime.Infrastructure.Tests/BrightTime.Infrastructure.Tests.csproj" />
     <Project Path="tests/BrightTime.IntegrationTests/BrightTime.IntegrationTests.csproj" />
     <Project Path="tests/BrightTime.Modules.Directory.Tests/BrightTime.Modules.Directory.Tests.csproj" />

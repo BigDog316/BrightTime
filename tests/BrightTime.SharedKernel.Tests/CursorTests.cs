@@ -26,6 +26,26 @@ public sealed class CursorTests
         decoded.LastId.ShouldBe(original.LastId);
     }
 
+    [Fact]
+    public void Round_trips_the_instant_the_sort_was_measured_at()
+    {
+        var original = new Cursor("a|b", Guid.CreateVersion7(), Cursor.Precision(DateTimeOffset.UtcNow));
+
+        Cursor.TryDecode(original.Encode(), out Cursor decoded).ShouldBeTrue();
+        decoded.ShouldBe(original);
+    }
+
+    [Fact]
+    public void A_cursor_from_before_the_instant_existed_still_decodes()
+    {
+        // Links already in people's history carry the two-part form.
+        Guid id = Guid.Parse("0196c3e8-8f0a-7c2a-9b11-6f1d2e3a4b5c");
+        string legacy = System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes($"0.874210|{id:D}"));
+
+        Cursor.TryDecode(legacy, out Cursor decoded).ShouldBeTrue();
+        decoded.ShouldBe(new Cursor("0.874210", id));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

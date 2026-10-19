@@ -11,7 +11,7 @@
 | Web | Blazor Web App — static SSR by default, `InteractiveServer` on the islands that need it |
 | Mobile | .NET MAUI Blazor Hybrid (iOS, Android) over a shared Razor class library |
 | Reports | QuestPDF, ClosedXML |
-| Tests | xUnit v3, Testcontainers (real Postgres+PostGIS), Playwright + axe-core, NetArchTest |
+| Tests | xUnit v3, Testcontainers (real Postgres+PostGIS), Playwright 1.63 + axe-core 4.13 (Chromium and WebKit), NetArchTest |
 
 `global.json` pins the SDK to 10.0.2xx with `rollForward: latestFeature`. Central
 package management via `Directory.Packages.props`; no `PackageReference` carries a

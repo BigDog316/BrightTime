@@ -13,7 +13,9 @@ public sealed class QueryBuilderTests
 {
     private static readonly Guid Tenant = Guid.Parse("0196c3e8-0000-7000-8000-0000000000ee");
 
-    private static SearchQuery Browse(SearchSort sort = SearchSort.Relevance) => new() { TenantId = Tenant, Sort = sort };
+    private static readonly DateTimeOffset At = new(2026, 10, 15, 14, 0, 0, TimeSpan.Zero);
+
+    private static SearchQuery Browse(SearchSort sort = SearchSort.Relevance) => new() { TenantId = Tenant, Sort = sort, AsOf = At };
 
     [Fact]
     public void A_bare_browse_has_no_optional_predicate_at_all()
@@ -37,6 +39,16 @@ public sealed class QueryBuilderTests
 
         query.Sql.ShouldContain("ls.tenant_id = @tenant_id and ls.is_published");
         query.Parameters["tenant_id"].ShouldBe(Tenant);
+    }
+
+    [Fact]
+    public void A_later_page_scores_at_the_instant_its_cursor_carries()
+    {
+        var first = new DateTimeOffset(2026, 10, 15, 14, 0, 0, TimeSpan.Zero);
+        BuiltQuery query = SearchQueryBuilder.Build(Browse() with { After = new Cursor("0.5", Guid.CreateVersion7(), first) });
+
+        query.Sql.ShouldNotContain("now()");
+        query.Parameters["as_of"].ShouldBe(first);
     }
 
     [Fact]
@@ -71,6 +83,7 @@ public sealed class QueryBuilderTests
         var query = new SearchQuery
         {
             TenantId = Tenant,
+            AsOf = At,
             Text = "UNIQUE_TEXT_TOKEN",
             AllFacets = ["UNIQUE_FACET_A"],
             AnyFacets = ["UNIQUE_FACET_B"],
@@ -260,6 +273,7 @@ public sealed class QueryBuilderTests
         var everything = new SearchQuery
         {
             TenantId = Tenant,
+            AsOf = At,
             Text = "robotics",
             AllFacets = ["age:15"],
             AnyFacets = ["lang:es"],

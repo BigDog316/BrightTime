@@ -37,6 +37,52 @@ public sealed class InMemoryListingFinderTests
     }
 
     [Fact]
+    public async Task Paging_returns_every_listing_once_however_long_the_family_takes()
+    {
+        // Relevance rises as a start approaches. Scored afresh on each page, rows drift past the
+        // previous page's last score and are skipped or repeated, so each page must score at the
+        // first page's instant. Two days pass between pages here.
+        var finder = new InMemoryListingFinder(Catalogue(), new SteppingClock(Now, TimeSpan.FromDays(2)));
+        SearchQuery query = Query(q => q.PageSizeValue = 3);
+
+        List<Guid> seen = [];
+        for (int pages = 0; pages < 100; pages++)
+        {
+            FinderPage page = await finder.SearchAsync(query, TestContext.Current.CancellationToken);
+            seen.AddRange(page.Items.Select(i => i.ListingId.Value));
+            if (page.NextCursor is null)
+            {
+                break;
+            }
+
+            Cursor.TryDecode(page.NextCursor, out Cursor next).ShouldBeTrue();
+            query = query with { After = next };
+        }
+
+        seen.ShouldBeUnique();
+        seen.Count.ShouldBe(Catalogue().Select(r => r.ListingId).Distinct().Count());
+    }
+
+    private sealed class SteppingClock(DateTimeOffset start, TimeSpan step) : IClock
+    {
+        private DateTimeOffset _next = start;
+
+        public DateTimeOffset UtcNow
+        {
+            get
+            {
+                DateTimeOffset now = _next;
+                _next += step;
+                return now;
+            }
+        }
+
+        public DateOnly Today => DateOnly.FromDateTime(UtcNow.UtcDateTime);
+
+        public DateOnly TodayIn(TimeZoneInfo timeZone) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(UtcNow, timeZone).DateTime);
+    }
+
+    [Fact]
     public async Task Unpublished_listings_are_never_returned_whatever_the_query_asks()
     {
         // The public finder must not show a draft, however the caller phrases it.

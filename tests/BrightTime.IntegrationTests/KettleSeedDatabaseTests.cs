@@ -95,7 +95,7 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         Seeded s = await SeedOnceAsync();
 
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(TestHost.As(s.ConnectionString, TestHost.FinderLogin));
-        var finder = new SqlListingFinder(source);
+        var finder = new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance);
 
         // Text matches the title by full-text search and the organisation name by trigram, so
         // "Alder Crossing Robotics Boosters" listings match too. A title match must rank first.

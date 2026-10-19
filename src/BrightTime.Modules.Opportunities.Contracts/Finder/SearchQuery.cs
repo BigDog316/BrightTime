@@ -57,5 +57,13 @@ public sealed record SearchQuery
     /// <summary>The keyset position after the previous page, or null for the first.</summary>
     public Cursor? After { get; init; }
 
+    /// <summary>
+    /// The instant relevance and "days until it starts" are measured at, for the first page. A
+    /// cursor's own instant wins over it, and with neither, finders use now. Finders carry the
+    /// first page's instant in the cursor, so a score can't drift between pages (see
+    /// <see cref="Cursor"/>).
+    /// </summary>
+    public DateTimeOffset? AsOf { get; init; }
+
     public PageSize PageSize { get; init; } = new(PageSize.Default);
 }

@@ -12,7 +12,7 @@ public sealed class SqlListingFinderGuardTests
         // The data source points nowhere. If the guard did not fire first, the test would
         // fail on the connection attempt instead of on the argument.
         await using NpgsqlDataSource nowhere = NpgsqlDataSource.Create("Host=invalid.invalid;Port=1;Timeout=1");
-        var finder = new SqlListingFinder(nowhere);
+        var finder = new SqlListingFinder(nowhere, BrightTime.SharedKernel.Time.SystemClock.Instance);
 
         ArgumentException error = await Should.ThrowAsync<ArgumentException>(() =>
             finder.SearchAsync(new SearchQuery { TenantId = Guid.Empty }, TestContext.Current.CancellationToken));

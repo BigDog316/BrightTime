@@ -27,7 +27,7 @@ public sealed class FinderScopeTests
         Guid org = Guid.NewGuid();
         Guid listing = Guid.NewGuid();
 
-        BuiltQuery built = SearchQueryBuilder.Build(new SearchQuery { TenantId = Tenant, OrganisationId = org, ListingIds = [listing] });
+        BuiltQuery built = SearchQueryBuilder.Build(new SearchQuery { TenantId = Tenant, AsOf = Now, OrganisationId = org, ListingIds = [listing] });
 
         built.Sql.ShouldContain("ls.org_id = @org_id");
         built.Sql.ShouldContain("ls.listing_id = any(@listing_ids)");
@@ -39,7 +39,7 @@ public sealed class FinderScopeTests
     [Fact]
     public void An_empty_set_of_listings_still_filters_so_it_matches_nothing()
     {
-        BuiltQuery built = SearchQueryBuilder.Build(new SearchQuery { TenantId = Tenant, ListingIds = [] });
+        BuiltQuery built = SearchQueryBuilder.Build(new SearchQuery { TenantId = Tenant, AsOf = Now, ListingIds = [] });
 
         built.Sql.ShouldContain("any(@listing_ids)");
     }

@@ -156,7 +156,7 @@ public sealed class EfTenancyTests(DatabaseFixture database)
 
         await EnsureFinderMembershipAsync();
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(AppConnection());
-        FinderPage page = await new SqlListingFinder(source).SearchAsync(new SearchQuery
+        FinderPage page = await new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance).SearchAsync(new SearchQuery
         {
             TenantId = tenant,
             Text = "tide pools",

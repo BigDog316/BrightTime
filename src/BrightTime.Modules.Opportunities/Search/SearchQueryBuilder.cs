@@ -45,6 +45,11 @@ public static class SearchQueryBuilder
         {
             ["tenant_id"] = query.TenantId,
             ["page_size"] = query.PageSize.FetchCount,
+
+            // Bound rather than now(): every page of one search scores at the same instant.
+            ["as_of"] = (query.After?.AsOf ?? query.AsOf
+                ?? throw new ArgumentException("A finder query must say when it is measured: set AsOf, or page from a cursor that carries it.", nameof(query)))
+                .ToUniversalTime(),
         };
 
         var predicates = new StringBuilder();
@@ -102,7 +107,7 @@ public static class SearchQueryBuilder
         sql.Append("       s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,\n");
         sql.Append("       s.next_start_at, s.next_deadline_at, s.published_at,\n");
         sql.Append("       s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,\n");
-        sql.Append("       extract(epoch from (s.next_start_at - now())) / 86400.0 as days_until_start\n");
+        sql.Append("       extract(epoch from (s.next_start_at - @as_of)) / 86400.0 as days_until_start\n");
         sql.Append("from scored s\n");
 
         if (query.After is { } cursor)
@@ -267,7 +272,7 @@ public static class SearchQueryBuilder
             $"round((0.45 * least(text_rank * 4.0, 1.0)" +
             $" + 0.20 * ({distance})" +
             $" + 0.15 * (case when next_start_at is null then 0.3" +
-            $" else exp(-greatest(extract(epoch from (next_start_at - now())) / 86400.0, 0) / 30.0) end)" +
+            $" else exp(-greatest(extract(epoch from (next_start_at - @as_of)) / 86400.0, 0) / 30.0) end)" +
             $" + 0.12 * least(interest_overlap / 3.0, 1.0)" +
             $" + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6)");
     }

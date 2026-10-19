@@ -59,8 +59,20 @@ badges, no community, no dashboards beyond provider listing counts.
 - **Plans:** committed (`db/explain/measured/shipped/`) and gated in CI by
   `FinderPlanTests`.
 - **Provider end to end:** covered by `ConsoleTests` and `ProviderManagementTests`.
-- **axe-core and the e2e run:** not started. They need Playwright and axe-core
-  downloaded, which needs your approval.
+- **axe-core and the e2e run:** green (2026-10-18), in `BrightTime.E2E.Tests` and the
+  CI `e2e` job.
+  - **Coverage:** axe-core 4.13 finds no WCAG 2.2 A or AA violation on 18 public routes in
+    Chromium and WebKit. The routes include the empty, filtered, map and missing states.
+    Home, search and a listing are also checked in all six locales.
+  - **Guards:** a planted violation must be caught, and each route must answer with its
+    expected status.
+  - **Without JavaScript, in both engines:** a family searches, filters, pages through all
+    396 published listings, opens one, downloads its `.ics`, saves it and changes language.
+  - **Bug found:** paging the default sort skipped or repeated listings, because relevance
+    drifts with the clock between pages. Every page now scores at the first page's instant,
+    which the cursor carries.
+- **Keyboard-only pass:** not done. axe can't judge focus order or visible focus, so this
+  stays a documented manual pass.
 - **Identity, cookie + JWT:** done. The API host signs in for access and refresh tokens
   (D28) and shares tenancy, the principal and the audit trail with the web host through
   `BrightTime.Hosting`. Health endpoints are in both hosts.

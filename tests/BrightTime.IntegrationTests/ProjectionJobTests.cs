@@ -426,7 +426,7 @@ public sealed class ProjectionJobTests(DatabaseFixture database)
     private async Task<FinderPage> SearchAsync(Guid tenant, string text, IReadOnlyList<string>? facets)
     {
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(TestHost.As(Cs, TestHost.FinderLogin));
-        return await new SqlListingFinder(source).SearchAsync(new SearchQuery
+        return await new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance).SearchAsync(new SearchQuery
         {
             TenantId = tenant,
             Text = text,

@@ -27,7 +27,7 @@ public sealed class FinderParityTests(DatabaseFixture database)
     private async Task<T> WithFinderAsync<T>(Func<SqlListingFinder, Task<T>> body)
     {
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(FinderConnection());
-        return await body(new SqlListingFinder(source)).ConfigureAwait(false);
+        return await body(new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance)).ConfigureAwait(false);
     }
 
     /// <summary>The finder connects as a login role that inherits brighttime_app, never as a superuser.</summary>
@@ -97,7 +97,7 @@ public sealed class FinderParityTests(DatabaseFixture database)
         await SeedSampleCatalogueAsync();
 
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(FinderConnection());
-        var finder = new SqlListingFinder(source);
+        var finder = new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance);
 
         List<Guid> everything = await Order(finder, Scenario("browse") with { Sort = sort, PageSize = new PageSize(50) });
 

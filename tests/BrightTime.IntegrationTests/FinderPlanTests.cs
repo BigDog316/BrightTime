@@ -25,7 +25,7 @@ public sealed class FinderPlanTests(DatabaseFixture database)
     public static readonly Guid SyntheticTenant = Guid.Parse("0196c3e8-0000-7000-8000-00000000e001");
 
     /// <summary>The load's version, carried in the synthetic tenant's display name.</summary>
-    private const string LoadVersion = "Synthetic plans v3";
+    private const string LoadVersion = "Synthetic plans v4";
 
     /// <summary>Below this many rows on both sides, a misestimate is noise, not a finding.</summary>
     private const double EstimateFloor = 50;
@@ -150,7 +150,7 @@ public sealed class FinderPlanTests(DatabaseFixture database)
     {
         await using NpgsqlConnection connection = await Sql.OpenAsync(TestHost.As(database.ConnectionString, TestHost.FinderLogin), Ct);
         await using NpgsqlTransaction tx = await connection.BeginTransactionAsync(Ct);
-        await using (NpgsqlCommand role = new($"set local role {SqlListingFinder.FinderRole}", connection, tx))
+        await using (NpgsqlCommand role = new(SqlListingFinder.TransactionSetup, connection, tx))
         {
             await role.ExecuteNonQueryAsync(Ct);
         }

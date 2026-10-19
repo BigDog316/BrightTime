@@ -17,50 +17,50 @@ best_site as (
   order by listing_id, distance_m asc nulls last
 ),
 scored as (
-  select bs.*, round((0.45 * least(text_rank * 4.0, 1.0) + 0.20 * (case when distance_m is null then 0.5 else exp(-distance_m / 4000.0) end) + 0.15 * (case when next_start_at is null then 0.3 else exp(-greatest(extract(epoch from (next_start_at - now())) / 86400.0, 0) / 30.0) end) + 0.12 * least(interest_overlap / 3.0, 1.0) + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6) as score
+  select bs.*, round((0.45 * least(text_rank * 4.0, 1.0) + 0.20 * (case when distance_m is null then 0.5 else exp(-distance_m / 4000.0) end) + 0.15 * (case when next_start_at is null then 0.3 else exp(-greatest(extract(epoch from (next_start_at - @as_of)) / 86400.0, 0) / 30.0) end) + 0.12 * least(interest_overlap / 3.0, 1.0) + 0.08 * least(popularity / 100.0, 1.0))::numeric, 6) as score
   from best_site bs
 )
 select s.listing_id, s.site_id, s.slug, s.title, s.summary, s.org_id, s.kind,
        s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,
        s.next_start_at, s.next_deadline_at, s.published_at,
        s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,
-       extract(epoch from (s.next_start_at - now())) / 86400.0 as days_until_start
+       extract(epoch from (s.next_start_at - @as_of)) / 86400.0 as days_until_start
 from scored s
 order by s.distance_m asc nulls last, s.listing_id asc
 limit @page_size
 
-Limit  (cost=16253.66..16256.16 rows=25 width=243) (actual time=18.297..21.620 rows=25.00 loops=1)
-  Buffers: shared hit=1503
-  ->  Result  (cost=16253.66..16263.76 rows=101 width=243) (actual time=18.297..21.618 rows=25.00 loops=1)
-        Buffers: shared hit=1503
-        ->  Sort  (cost=16253.66..16253.91 rows=101 width=211) (actual time=18.283..21.537 rows=25.00 loops=1)
+Limit  (cost=15960.61..15962.98 rows=25 width=243) (actual time=18.287..22.192 rows=25.00 loops=1)
+  Buffers: shared hit=2431
+  ->  Result  (cost=15960.61..15970.20 rows=101 width=243) (actual time=18.286..22.188 rows=25.00 loops=1)
+        Buffers: shared hit=2431
+        ->  Sort  (cost=15960.61..15960.86 rows=101 width=211) (actual time=18.262..22.062 rows=25.00 loops=1)
               Sort Key: bs.distance_m, bs.listing_id
               Sort Method: top-N heapsort  Memory: 35kB
-              Buffers: shared hit=1503
-              ->  Subquery Scan on bs  (cost=16237.03..16250.81 rows=101 width=211) (actual time=18.109..21.481 rows=200.00 loops=1)
-                    Buffers: shared hit=1503
-                    ->  Unique  (cost=16237.03..16248.79 rows=101 width=180) (actual time=18.105..21.428 rows=200.00 loops=1)
-                          Buffers: shared hit=1503
-                          ->  Gather Merge  (cost=16237.03..16248.54 rows=101 width=180) (actual time=18.104..21.385 rows=203.00 loops=1)
+              Buffers: shared hit=2431
+              ->  Subquery Scan on bs  (cost=15944.23..15957.76 rows=101 width=211) (actual time=17.979..21.984 rows=200.00 loops=1)
+                    Buffers: shared hit=2431
+                    ->  Unique  (cost=15944.23..15955.99 rows=101 width=180) (actual time=17.971..21.900 rows=200.00 loops=1)
+                          Buffers: shared hit=2431
+                          ->  Gather Merge  (cost=15944.23..15955.74 rows=101 width=180) (actual time=17.968..21.822 rows=203.00 loops=1)
                                 Workers Planned: 1
                                 Workers Launched: 1
-                                Buffers: shared hit=1503
-                                ->  Sort  (cost=15237.02..15237.17 rows=59 width=180) (actual time=5.675..5.678 rows=101.50 loops=2)
+                                Buffers: shared hit=2431
+                                ->  Sort  (cost=14944.22..14944.36 rows=59 width=180) (actual time=3.448..3.456 rows=101.50 loops=2)
                                       Sort Key: ls.listing_id, (st_distance(ls.location, '0101000020E610000000000000007052C0CDCCCCCCCC8C4440'::geography, true))
                                       Sort Method: quicksort  Memory: 66kB
-                                      Buffers: shared hit=1503
+                                      Buffers: shared hit=2431
                                       Worker 0:  Sort Method: quicksort  Memory: 25kB
-                                      ->  Parallel Bitmap Heap Scan on listing_search ls  (cost=1159.41..15235.28 rows=59 width=180) (actual time=5.080..5.634 rows=101.50 loops=2)
+                                      ->  Parallel Bitmap Heap Scan on listing_search ls  (cost=54.09..14942.48 rows=59 width=180) (actual time=2.322..3.369 rows=101.50 loops=2)
                                             Recheck Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{age:15,cat:stem,free}'::text[]) AND is_published)
                                             Filter: ((location && '0103000020E61000000100000005000000EB8C2F16E47352C013493492EF864440EB8C2F16E47352C087506507AA9244401573D0E91B6C52C087506507AA9244401573D0E91B6C52C013493492EF864440EB8C2F16E47352C013493492EF864440'::geography) AND (st_distance(location, '0101000020E610000000000000007052C0CDCCCCCCCC8C4440'::geography, true) <= '5000'::double precision))
                                             Rows Removed by Filter: 599
-                                            Heap Blocks: exact=1150
-                                            Buffers: shared hit=1484
-                                            ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..1159.38 rows=1384 width=0) (actual time=9.987..9.987 rows=1401.00 loops=1)
+                                            Heap Blocks: exact=2275
+                                            Buffers: shared hit=2412
+                                            ->  Bitmap Index Scan on ix_ls_facets  (cost=0.00..54.07 rows=1394 width=0) (actual time=3.288..3.288 rows=2802.00 loops=1)
                                                   Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (facets @> '{age:15,cat:stem,free}'::text[]))
                                                   Index Searches: 1
-                                                  Buffers: shared hit=313
+                                                  Buffers: shared hit=116
 Planning:
   Buffers: shared hit=3
-Planning Time: 0.611 ms
-Execution Time: 21.650 ms
+Planning Time: 2.162 ms
+Execution Time: 22.248 ms

@@ -97,8 +97,9 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         await using NpgsqlDataSource source = NpgsqlDataSource.Create(TestHost.As(s.ConnectionString, TestHost.FinderLogin));
         var finder = new SqlListingFinder(source, BrightTime.SharedKernel.Time.SystemClock.Instance);
 
-        // Text matches the title by full-text search and the organisation name by trigram, so
-        // "Alder Crossing Robotics Boosters" listings match too. A title match must rank first.
+        // Text matches the organisation name as well as the title (both are in the search vector
+        // and the fuzzy text), so "Alder Crossing Robotics Boosters" listings match too. A title
+        // match must rank first.
         FinderPage robotics = await finder.SearchAsync(Query("robotics", null), Ct);
         string[] clubs = [.. s.Data.Listings.Where(l => l.Status == "published" && l.Title == "Robotics club").Select(l => l.Slug)];
         clubs.ShouldNotBeEmpty();
@@ -111,6 +112,82 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         FinderPage jobs = await finder.SearchAsync(Query(null, ["kind:job", "age:17"]), Ct);
         jobs.Items.ShouldNotBeEmpty();
         jobs.Items.ShouldAllBe(i => i.Kind == ListingKind.Job);
+    }
+
+    [Theory]
+    [InlineData("socer", "soccer")]
+    [InlineData("baskitball", "basketball")]
+    [InlineData("robtics", "robotics")]
+    public async Task A_misspelt_word_finds_what_the_right_spelling_finds(string misspelt, string spelt)
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedOnceAsync();
+
+        // Full text alone finds nothing for the misspelling, so whatever is found, typo tolerance found.
+        await using (NpgsqlConnection connection = await Sql.OpenAsync(s.ConnectionString, Ct))
+        {
+            (await Sql.ScalarAsync<long>(connection, null,
+                "select count(*) from opportunity.listing_search where search_vector @@ websearch_to_tsquery('platform.ts_en', @t)",
+                [("t", misspelt)])).ShouldBe(0);
+        }
+
+        List<string> expected = await SlugsAsync(s, spelt);
+        expected.ShouldNotBeEmpty();
+        (await SlugsAsync(s, misspelt)).ShouldBe(expected, ignoreOrder: true);
+    }
+
+    [Theory]
+    [InlineData("socer skils", "Soccer skills clinic")]
+    [InlineData("robtics club", "Robotics club")]
+    public async Task A_misspelt_phrase_finds_its_listings(string misspelt, string title)
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedOnceAsync();
+        string[] listings = [.. s.Data.Listings.Where(l => l.Status == "published" && l.Title == title).Select(l => l.Slug)];
+        listings.ShouldNotBeEmpty();
+
+        listings.ShouldBeSubsetOf(await SlugsAsync(s, misspelt));
+    }
+
+    [Fact]
+    public async Task The_finder_pins_its_typo_threshold_whatever_the_server_is_set_to()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedOnceAsync();
+
+        // "robtics" scores 0.55 against "Robotics club". At a server-side 0.9 it would match
+        // nothing, so finding it shows the finder's own SET LOCAL wins.
+        string strict = new NpgsqlConnectionStringBuilder(TestHost.As(s.ConnectionString, TestHost.FinderLogin))
+        {
+            Options = "-c pg_trgm.strict_word_similarity_threshold=0.9",
+        }.ConnectionString;
+
+        await using NpgsqlDataSource source = NpgsqlDataSource.Create(strict);
+        FinderPage page = await new SqlListingFinder(source, SystemClock.Instance).SearchAsync(Query("robtics", null), Ct);
+        page.Items.ShouldContain(i => i.Title == "Robotics club");
+    }
+
+    [Theory]
+    [InlineData("xylophone")]
+    [InlineData("zebra")]
+    public async Task A_word_unlike_any_listing_finds_nothing(string word)
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedOnceAsync();
+
+        (await SlugsAsync(s, word)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_fragment_of_a_longer_word_is_not_a_typo_of_it()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedOnceAsync();
+
+        // Plain word similarity matches "ball" inside "basketball" (0.6); strict word similarity,
+        // which compares whole words only, does not (0.45). The reason the finder uses <<%.
+        List<string> found = await SlugsAsync(s, "ball");
+        found.ShouldNotContain(slug => s.Data.Listings.Single(l => l.Slug == slug).Title == "Youth basketball league");
     }
 
     [Fact]
@@ -147,6 +224,15 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         AllFacets = facets,
         PageSize = new PageSize(24),
     };
+
+    /// <summary>Every listing the finder finds for a text, through its own role; the seed keeps it within one page.</summary>
+    private static async Task<List<string>> SlugsAsync(Seeded s, string text)
+    {
+        await using NpgsqlDataSource source = NpgsqlDataSource.Create(TestHost.As(s.ConnectionString, TestHost.FinderLogin));
+        FinderPage page = await new SqlListingFinder(source, SystemClock.Instance).SearchAsync(Query(text, null) with { PageSize = new PageSize(PageSize.Max) }, Ct);
+        page.NextCursor.ShouldBeNull();
+        return [.. page.Items.Select(i => i.Slug)];
+    }
 
     private static async Task<ListingDetail?> ReadAsync(string connection, string slug, string locale)
     {

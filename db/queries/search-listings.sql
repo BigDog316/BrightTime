@@ -81,7 +81,7 @@ with matched as (
       and ($8::geography is null or st_dwithin(ls.location, $8::geography, $9::int))
       and ($2::text is null or $2 = ''
            or ls.search_vector @@ websearch_to_tsquery($11::regconfig, $2)
-           or ls.fuzzy_text % $2::text)
+           or $2::text <<% ls.fuzzy_text)
 ),
 -- One row per listing: a listing with four sites must not appear four
 -- times. Keep the nearest site when a location anchor was given.

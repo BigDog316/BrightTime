@@ -57,7 +57,7 @@ public sealed class QueryBuilderTests
         BuiltQuery query = SearchQueryBuilder.Build(Browse() with { Text = "robotics", TextSearchConfig = "platform.ts_en" });
 
         query.Sql.ShouldContain("websearch_to_tsquery(@ts_config::regconfig, @text)");
-        query.Sql.ShouldContain("ls.fuzzy_text % @text");
+        query.Sql.ShouldContain("@text <<% ls.fuzzy_text");
         query.Parameters["text"].ShouldBe("robotics");
         query.Parameters["ts_config"].ShouldBe("platform.ts_en");
     }

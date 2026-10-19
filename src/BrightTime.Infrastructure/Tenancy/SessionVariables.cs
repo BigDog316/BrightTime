@@ -18,6 +18,6 @@ public static class SessionVariables
 
     public const string ActorId = "brighttime.actor_id";
 
-    /// <summary>Per-request trigram similarity threshold for fuzzy search; see docs/plan/03-indexing-and-query-plans.md.</summary>
-    public const string TrigramThreshold = "pg_trgm.similarity_threshold";
+    /// <summary>The threshold of the finder's typo-tolerance operator, <c>&lt;&lt;%</c>, set per transaction; see docs/plan/03-indexing-and-query-plans.md.</summary>
+    public const string FuzzyThreshold = "pg_trgm.strict_word_similarity_threshold";
 }

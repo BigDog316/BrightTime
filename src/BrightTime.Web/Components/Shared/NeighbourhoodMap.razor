@@ -10,12 +10,20 @@
 {
     <figure class="hood-map @(Compact ? "compact" : null)" dir="ltr">
         <svg viewBox="0 0 @Num(Width) @Num(_height)" role="group" aria-label="@Label" focusable="false">
+            @* Each area is clipped to its own shape, so nothing paints outside it: a neighbour drawn
+               later cannot cover the focused area's stroke, which shows as an inner border. *@
+            <defs>
+                @foreach (NeighbourhoodShape shape in Shapes)
+                {
+                    <clipPath id="@ClipId(shape)"><path d="@Path(shape)" clip-rule="evenodd" /></clipPath>
+                }
+            </defs>
             @foreach (NeighbourhoodShape shape in Shapes)
             {
                 int count = CountOf(shape);
                 bool here = shape.Id == Highlight;
                 <a href="@Href(shape)" aria-label="@AreaLabel(shape, count)" aria-current="@(here ? "location" : null)">
-                    <path d="@Path(shape)" class="hood @Bucket(count) @(here ? "here" : null)" fill-rule="evenodd"><title>@AreaLabel(shape, count)</title></path>
+                    <path d="@Path(shape)" class="hood @Bucket(count) @(here ? "here" : null)" fill-rule="evenodd" clip-path="url(#@ClipId(shape))"><title>@AreaLabel(shape, count)</title></path>
                     @if (Counts is not null && !Compact)
                     {
                         @CountLabel(shape, count)
@@ -93,6 +101,9 @@
 
         return d.ToString().TrimEnd();
     }
+
+    /// <summary>Unique per page: a page shows at most one full and one compact map.</summary>
+    private string ClipId(NeighbourhoodShape shape) => string.Create(CultureInfo.InvariantCulture, $"hood-clip-{(Compact ? "c" : "f")}-{shape.Id:N}");
 
     private int CountOf(NeighbourhoodShape shape) => Counts?.ByNeighbourhood.GetValueOrDefault(shape.Id) ?? 0;
 

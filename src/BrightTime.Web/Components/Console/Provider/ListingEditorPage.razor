@@ -81,12 +81,13 @@ else if (_orgName is not null)
     {
         @if (_errors.Count > 0)
         {
-            <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1">
+            @* autofocus: a failed save opens on its list of problems, with or without JavaScript. *@
+            <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1" autofocus>
                 <h2 id="error-summary-heading">@T["form.check_fields"]</h2>
                 <ul>
                     @foreach (var (field, messages) in _errors)
                     {
-                        <li><a href="#@field">@T[messages[0]]</a></li>
+                        <li><SamePageLink To="@field">@T[messages[0]]</SamePageLink></li>
                     }
                 </ul>
             </section>
@@ -99,7 +100,7 @@ else if (_orgName is not null)
             <nav class="editor-sections" aria-label="@T["editor.sections"]">
                 @foreach (string part in Sections)
                 {
-                    <a href="#@part">@T["editor.section." + part]</a>@(part == Sections[^1] ? "" : " · ")
+                    <SamePageLink To="@part">@T["editor.section." + part]</SamePageLink>@(part == Sections[^1] ? "" : " · ")
                 }
             </nav>
 

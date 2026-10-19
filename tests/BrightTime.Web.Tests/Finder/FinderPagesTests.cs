@@ -267,6 +267,7 @@ public sealed partial class FinderPagesTests(ConsoleFixture db)
         (await bare.PostAsync(new Uri("/saved/change", UriKind.Relative), forged, TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    [GeneratedRegex("<path d=\"M")]
+    // The drawn areas: each also has a clipPath copy of its outline, which carries no class.
+    [GeneratedRegex("<path d=\"M[^\"]*\" class=\"hood")]
     private static partial Regex PathElement();
 }

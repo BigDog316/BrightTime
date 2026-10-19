@@ -71,8 +71,12 @@ badges, no community, no dashboards beyond provider listing counts.
   - **Bug found:** paging the default sort skipped or repeated listings, because relevance
     drifts with the clock between pages. Every page now scores at the first page's instant,
     which the cursor carries.
-- **Keyboard-only pass:** not done. axe can't judge focus order or visible focus, so this
-  stays a documented manual pass.
+- **Keyboard-only pass:** done (2026-10-19), documented in
+  [accessibility/keyboard.md](../accessibility/keyboard.md), and kept true by `KeyboardTests`
+  in the e2e gate.
+  - **Fixes:** the skip link and every error link left the page (`<base href="/">` resolved
+    `#id` to the home page). The skip link was unreachable after load, a failed form didn't
+    open on its errors, and the map's focus ring was mostly hidden.
 - **Identity, cookie + JWT:** done. The API host signs in for access and refresh tokens
   (D28) and shares tenancy, the principal and the audit trail with the web host through
   `BrightTime.Hosting`. Health endpoints are in both hosts.

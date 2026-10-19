@@ -159,9 +159,9 @@ public sealed partial class ProviderManagementTests(ConsoleFixture db)
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         browser.Html.ShouldContain("error-summary");
-        browser.Html.ShouldContain("href=\"#Email\"");
-        browser.Html.ShouldContain("href=\"#DisplayName\"");
-        browser.Html.ShouldContain("href=\"#Site.NeighbourhoodId\"");
+        browser.Html.ShouldContain("href=\"/providers/apply#Email\"");
+        browser.Html.ShouldContain("href=\"/providers/apply#DisplayName\"");
+        browser.Html.ShouldContain("href=\"/providers/apply#Site.NeighbourhoodId\"");
     }
 
     [Fact]

@@ -1,0 +1,19 @@
+@inject NavigationManager Navigation
+
+@* A link to an element on this page: the skip link, an error summary's links to its fields.
+   A bare "#id" resolves against <base href="/">, so it would leave for the home page (and,
+   after a form post, lose what was typed). The page's own path and query keep it in place.
+   data-enhance-nav="false": Blazor's enhanced navigation would scroll to the target but leave
+   keyboard focus behind, so the browser handles it, as it does without JavaScript. *@
+<a href="@Href" data-enhance-nav="false" @attributes="Attributes">@ChildContent</a>
+
+@code {
+    /// <summary>The id of the element to go to.</summary>
+    [Parameter, EditorRequired] public string To { get; set; } = string.Empty;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? Attributes { get; set; }
+
+    private string Href => new Uri(Navigation.Uri).PathAndQuery + "#" + Uri.EscapeDataString(To);
+}

@@ -63,7 +63,7 @@ public sealed class SearchPageTests : IClassFixture<WebApplicationFactory<Progra
         string html = await GetAsync("/search?age=99");
 
         html.ShouldContain("class=\"error-summary\"");
-        html.ShouldContain("href=\"#age\"");
+        html.ShouldContain("href=\"/search?age=99#age\"");
         html.ShouldContain("<p class=\"field-error\" id=\"err-age\">");
         html.ShouldContain("aria-invalid=\"true\"");
     }
@@ -108,7 +108,8 @@ public sealed class SearchPageTests : IClassFixture<WebApplicationFactory<Progra
     {
         string html = await GetAsync("/search");
 
-        html.ShouldContain("href=\"#main\"");
+        // The page's own address before the fragment: <base href="/"> would send a bare "#main" home.
+        html.ShouldContain("href=\"/search#main\"");
         html.ShouldContain("<main id=\"main\"");
     }
 

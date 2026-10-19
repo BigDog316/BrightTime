@@ -978,7 +978,10 @@ button.secondary-button {
 .hood-map a:hover .hood,
 .hood-map a:focus .hood {
     stroke: var(--bt-ink);
-    stroke-width: 2.5;
+    /* Each area is clipped to itself (NeighbourhoodMap), so half of this shows, as a 3px inner
+       border no neighbour can cover. In screen pixels, however small the map is drawn. */
+    stroke-width: 6;
+    vector-effect: non-scaling-stroke;
 }
 
 .hood-map a:focus {

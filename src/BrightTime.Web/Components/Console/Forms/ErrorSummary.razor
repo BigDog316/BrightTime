@@ -1,12 +1,13 @@
 @* The list at the top of a form that failed: each problem links to its field. *@
 @if (Errors.Count > 0)
 {
-    <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1">
+    @* autofocus: a failed form opens on its list of problems, with or without JavaScript. *@
+    <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1" autofocus>
         <h2 id="error-summary-heading">@T["form.check_fields"]</h2>
         <ul>
             @foreach (var (field, messages) in Errors.All)
             {
-                <li><a href="#@Anchor(field)">@T[messages[0]]</a></li>
+                <li><SamePageLink To="@Anchor(field)">@T[messages[0]]</SamePageLink></li>
             }
         </ul>
     </section>

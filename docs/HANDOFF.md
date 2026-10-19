@@ -17,7 +17,12 @@ fixture now pin PostGIS 18-3.6.
 
 The axe-core and e2e gate is green as well (`tests/BrightTime.E2E.Tests`, CI job `e2e`), on
 Chromium and WebKit. It found and fixed a paging bug: relevance drifted with the clock between
-pages. The only M1 acceptance item left is the documented keyboard-only pass.
+pages.
+
+The keyboard-only pass is done ([accessibility/keyboard.md](accessibility/keyboard.md)) and
+gated by `KeyboardTests`, so every M1 acceptance item is now green. CI was green on all four
+jobs at `fc92193`. What's left before M1 is closed is the M1 report and the typo-tolerance
+branch, `claude/zealous-booth-0178d6`, which is unmerged.
 
 Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open question, then
 [plan/09-milestones.md](plan/09-milestones.md) for M1 acceptance status. The status note in
@@ -27,8 +32,8 @@ Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open qu
 
 Every decision through D29 is accepted. D27, D28 and D29 were accepted on 2026-10-18.
 
-- **Check GitHub Actions** for the last few pushes. CI results have not been seen, and CI now
-  uses PostGIS 18-3.6.
+- **Review and merge the typo-tolerance branch** (`claude/zealous-booth-0178d6`). It notes
+  that the fuzzy index estimate runs about 2× high, and the plan gate doesn't judge that index.
 - **Open questions:**
   - Q3, Q7 (map tiles) and Q13 (translations).
   - Q4 retention; 30 days is proposed for processed outbox rows.
@@ -43,7 +48,6 @@ These have not been asked for yet:
 - passkey and external sign-in through the API;
 - D15 pending revisions (edits currently go live and are recorded as revisions);
 - curation screens;
-- a keyboard-only pass;
 - finder speed (facets plus distance is about 27 ms; see [plan/03](plan/03-indexing-and-query-plans.md));
 - **typo tolerance, which does nothing today.**
   - `fuzzy_text % @text` compares the query with the whole title, organisation and category
@@ -119,7 +123,9 @@ These have not been asked for yet:
   `TestHost.DrainAsync`, not `JobRunner.DrainAsync` alone.
 - **Shared test databases.** Web and API tests share one seeded database per project. A
   test that changes an account must use a seed account that no other test uses.
-- **A new public page** belongs in `AccessibilityTests.Routes`, or the axe gate never sees it.
+- **A new public page** belongs in `PublicRoutes`, or neither the axe nor the keyboard gate sees it.
+- **Links to a spot on the same page** use `SamePageLink`, never a bare `href="#id"`, which
+  `<base href="/">` sends to the home page.
 - **E2E failures leave a trace.** Each one leaves `artifacts/e2e-traces/<test>.zip` (CI
   uploads them). Open it with `playwright.ps1 show-trace <zip>`. Browser steps go through
   `SiteFixture.RunAsync`.

@@ -1,6 +1,4 @@
 using System.Text;
-using BrightTime.Seed;
-using BrightTime.Seed.Kettle;
 using Deque.AxeCore.Commons;
 using Deque.AxeCore.Playwright;
 using Microsoft.Playwright;
@@ -12,9 +10,8 @@ namespace BrightTime.E2E.Tests;
 /// engine, and none on the core finder pages in any of the six locales.
 /// </summary>
 /// <remarks>
-/// Routes are named by key and resolved against the seed at run time, so the data stays in one
-/// place. A new public page belongs in <see cref="Routes"/>. Console pages are behind sign-in and
-/// are not in this gate.
+/// Routes come from <see cref="PublicRoutes"/>. Console pages are behind sign-in, so axe doesn't
+/// see them; <see cref="KeyboardTests"/> drives their main flows.
 /// </remarks>
 [Collection(Site.Name)]
 public sealed class AccessibilityTests(SiteFixture site)
@@ -29,42 +26,7 @@ public sealed class AccessibilityTests(SiteFixture site)
         },
     };
 
-    /// <summary>Every public route, including the empty, filtered and missing states.</summary>
-    public static TheoryData<string, string> Routes()
-    {
-        string[] routes =
-        [
-            "/",
-            "/search",
-            "/search?q=soccer&free=1&sort=soonest",
-            "/search?q=zzzz-nothing-matches",
-            "/search?view=map",
-            "{listing}",
-            "/collections",
-            "/collections/" + KettleCuration.FreeCollection,
-            "/neighbourhoods",
-            "/neighbourhoods/hood-downtown",
-            "{organisation}",
-            "/saved",
-            "/providers/apply",
-            "/sign-in",
-            "/account/forgot",
-            "/account/reset",
-            "/access-denied",
-            "/listings/no-such-listing",
-        ];
-
-        TheoryData<string, string> data = [];
-        foreach (string engine in new[] { Engines.Chromium, Engines.WebKit })
-        {
-            foreach (string route in routes)
-            {
-                data.Add(engine, route);
-            }
-        }
-
-        return data;
-    }
+    public static TheoryData<string, string> Routes() => PublicRoutes.OnEachEngine(Engines.Chromium, Engines.WebKit);
 
     public static TheoryData<string, string> Locales()
     {
@@ -125,20 +87,7 @@ public sealed class AccessibilityTests(SiteFixture site)
         result.Violations.ShouldBeEmpty(Describe(engine, path, result.Violations));
     });
 
-    private string Resolve(string route) => route switch
-    {
-        "{listing}" => "/listings/" + PublishedListing().Slug,
-        "{organisation}" => "/organisations/" + Organisation(PublishedListing().OrgId).Slug,
-        _ => route,
-    };
-
-    /// <summary>A published listing of an approved organisation: the first by slug, so runs agree.</summary>
-    private SeedListing PublishedListing() => site.Data.Listings
-        .Where(l => l.Status == "published" && Organisation(l.OrgId).Status == "approved")
-        .OrderBy(l => l.Slug, StringComparer.Ordinal)
-        .First();
-
-    private SeedOrganisation Organisation(Guid id) => site.Data.Organisations.Single(o => o.Id == id);
+    private string Resolve(string route) => PublicRoutes.Resolve(site, route);
 
     private static string Describe(string engine, string path, AxeResultItem[] violations)
     {

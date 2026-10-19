@@ -5,7 +5,7 @@
 @inject NavigationManager Navigation
 @inject SiteContext Site
 
-<a class="skip-link" href="#main">@T["site.skip_to_content"]</a>
+<SamePageLink class="skip-link" To="main">@T["site.skip_to_content"]</SamePageLink>
 
 <header class="site-header">
     <a class="brand" href="/search">BrightTime</a>
@@ -64,7 +64,8 @@
 <div id="blazor-error-ui" data-nosnippet>
     @T["site.error.unhandled"]
     <a href="." class="reload">@T["site.error.reload"]</a>
-    <span class="dismiss" role="button" aria-label="@T["site.error.dismiss"]">🗙</span>
+    @* A real button, so the keyboard can reach it; blazor.web.js wires any .dismiss inside the banner. *@
+    <button type="button" class="dismiss" aria-label="@T["site.error.dismiss"]">🗙</button>
 </div>
 
 @code {

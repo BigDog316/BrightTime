@@ -106,12 +106,13 @@
 
 @if (Parse is { FieldErrors.Count: > 0 } errored)
 {
-    <section class="error-summary" aria-labelledby="error-summary-heading">
+    @* autofocus: a search with a malformed filter opens on what to fix, with or without JavaScript. *@
+    <section class="error-summary" aria-labelledby="error-summary-heading" tabindex="-1" autofocus>
         <h2 id="error-summary-heading">@T["form.check_fields"]</h2>
         <ul>
             @foreach (var (field, message) in errored.FieldErrors)
             {
-                <li><a href="#@field">@T[message]</a></li>
+                <li><SamePageLink To="@field">@T[message]</SamePageLink></li>
             }
         </ul>
     </section>

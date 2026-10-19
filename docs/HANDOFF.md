@@ -20,20 +20,17 @@ Chromium and WebKit. It found and fixed a paging bug: relevance drifted with the
 pages.
 
 The keyboard-only pass is done ([accessibility/keyboard.md](accessibility/keyboard.md)) and
-gated by `KeyboardTests`, so every M1 acceptance item is now green. CI was green on all four
-jobs at `fc92193`. What's left before M1 is closed is the M1 report and the typo-tolerance
-branch, `claude/zealous-booth-0178d6`, which is unmerged.
+gated by `KeyboardTests`, so every M1 acceptance item is now green. The typo-tolerance fix
+is merged (`cec1ed6`).
 
-Read [plan/08-decisions.md](plan/08-decisions.md) for every decision and open question, then
-[plan/09-milestones.md](plan/09-milestones.md) for M1 acceptance status. The status note in
-[plan/README.md](plan/README.md) predates the code.
+**M1 is complete, pending sign-off:** read [m1-report.md](m1-report.md) first. Then read
+[plan/08-decisions.md](plan/08-decisions.md) for every decision and open question.
 
 ## Waiting on Sam
 
 Every decision through D29 is accepted. D27, D28 and D29 were accepted on 2026-10-18.
 
-- **Review and merge the typo-tolerance branch** (`claude/zealous-booth-0178d6`). It notes
-  that the fuzzy index estimate runs about 2× high, and the plan gate doesn't judge that index.
+- **Sign off M1** from [m1-report.md](m1-report.md), or say what's missing.
 - **Open questions:**
   - Q3, Q7 (map tiles) and Q13 (translations).
   - Q4 retention; 30 days is proposed for processed outbox rows.
@@ -48,12 +45,9 @@ These have not been asked for yet:
 - passkey and external sign-in through the API;
 - D15 pending revisions (edits currently go live and are recorded as revisions);
 - curation screens;
-- finder speed (facets plus distance is about 27 ms; see [plan/03](plan/03-indexing-and-query-plans.md));
-- **typo tolerance, which does nothing today.**
-  - `fuzzy_text % @text` compares the query with the whole title, organisation and category
-    text, so "socer" scores 0.08 against a soccer listing and finds nothing.
-  - `word_similarity` scores it 0.63. `<%` with the existing trigram index is the likely fix,
-    but it changes a gated plan, so it needs re-measuring.
+- finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see
+  [plan/03](plan/03-indexing-and-query-plans.md));
+- M2: the mobile app and parental consent.
 
 ## Setting up a machine
 

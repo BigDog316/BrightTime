@@ -4,10 +4,11 @@ Citywide out-of-school-time platform for a New York county (seed region:
 Kettle County, NY — fictional). Six locales: English, Spanish, Chinese
 (Simplified), Bengali, Haitian Creole, Arabic.
 
-**Status: plan approved; M1 under way.** For current state, see
-[../HANDOFF.md](../HANDOFF.md). The sections below are the original
-plan-approval text, and the blockers they list have since been settled
-in [08-decisions.md](08-decisions.md).
+**Status (2026-10-19): M1 complete, pending your sign-off.** Every M1
+acceptance criterion is met and gated in CI; see the
+[M1 report](../m1-report.md). For working on the code, see
+[../HANDOFF.md](../HANDOFF.md). The tables below are the plan as approved on
+2026-10-09, and some of their counts have moved since.
 
 ## Read in this order
 
@@ -32,21 +33,14 @@ db/queries/    search-listings.sql — the finder's reference query
 db/explain/    run-explain.sh + 7 scenarios, ready to produce real plans
 ```
 
-## The three things blocking M1
+## What blocked M1, and how it was settled
 
-1. **Docker is not installed on this machine** (nor `psql`). No Testcontainers,
-   no local PostGIS, and no real `EXPLAIN` output — which is why
-   [03](03-indexing-and-query-plans.md) states predicted plans and labels them
-   as predictions rather than inventing numbers. Docker Desktop, OrbStack or
-   Colima; your preference. (Q11)
-2. **EF migrations or SQL-first?** The DDL uses partial indexes with
-   `coalesce`, `UNIQUE NULLS NOT DISTINCT`, generated columns, constraint
-   triggers, RLS policies and partitioning — several of which EF cannot
-   express. I lean SQL-first with EF mapped to it and CI failing on drift
-   either way. (Q12)
-3. **Confirm D6, D7, D8** — Postgres FTS cannot stem four of your six
-   languages; the public finder should be static SSR that works with
-   JavaScript off; no youth home address is ever persisted.
+1. **Docker** (Q11): Docker Desktop on the Windows machine. Testcontainers, the
+   compose stack and real `EXPLAIN` output all run, and
+   [03](03-indexing-and-query-plans.md) now holds measured plans.
+2. **EF migrations or SQL-first** (Q12): SQL-first. EF is mapped to
+   `db/schema/`, and CI fails on drift either way.
+3. **D6, D7, D8**: confirmed with the plan and implemented.
 
 ## Deliberate deviation from the prompt
 

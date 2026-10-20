@@ -1,10 +1,10 @@
 # M1 report: foundation and the opportunity finder
 
-The end-of-milestone report that [plan/09](plan/09-milestones.md) promises, for sign-off.
+The end-of-milestone report that [plan/09](plan/09-milestones.md) promises.
 Written 2026-10-19 at `cec1ed6`. M1 ran from the plan's approval on 2026-10-09.
 
-**Recommendation: close M1.** Every acceptance criterion is met and gated in CI. The open
-items below are decisions or later-milestone work, not M1 defects.
+**Signed off by Sam on 2026-10-19: M1 is closed.** Every acceptance criterion is met and
+gated in CI. The open items below are decisions or later-milestone work, not M1 defects.
 
 ## Acceptance
 

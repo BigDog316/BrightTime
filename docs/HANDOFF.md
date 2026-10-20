@@ -23,14 +23,13 @@ The keyboard-only pass is done ([accessibility/keyboard.md](accessibility/keyboa
 gated by `KeyboardTests`, so every M1 acceptance item is now green. The typo-tolerance fix
 is merged (`cec1ed6`).
 
-**M1 is complete, pending sign-off:** read [m1-report.md](m1-report.md) first. Then read
+**M1 was signed off on 2026-10-19** ([m1-report.md](m1-report.md)); M2 is next. Read
 [plan/08-decisions.md](plan/08-decisions.md) for every decision and open question.
 
 ## Waiting on Sam
 
 Every decision through D29 is accepted. D27, D28 and D29 were accepted on 2026-10-18.
 
-- **Sign off M1** from [m1-report.md](m1-report.md), or say what's missing.
 - **Open questions:**
   - Q3, Q7 (map tiles) and Q13 (translations).
   - Q4 retention; 30 days is proposed for processed outbox rows.

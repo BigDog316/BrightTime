@@ -52,7 +52,7 @@ revise.
 **Known gaps at M1:** no mobile app, no registration, no attendance, no
 badges, no community, no dashboards beyond provider listing counts.
 
-*Acceptance status (2026-10-19): all met; M1 is complete pending sign-off. See the [M1 report](../m1-report.md).*
+*Acceptance status: all met. **Signed off 2026-10-19.** See the [M1 report](../m1-report.md).*
 - **Cross-tenant matrix:** green. `TenantIsolationMatrixTests` covers the catalogue and
   every role against every populated table; `ConsoleRouteMatrixTests` covers every
   console page.

@@ -4,8 +4,8 @@ Citywide out-of-school-time platform for a New York county (seed region:
 Kettle County, NY — fictional). Six locales: English, Spanish, Chinese
 (Simplified), Bengali, Haitian Creole, Arabic.
 
-**Status (2026-10-19): M1 complete, pending your sign-off.** Every M1
-acceptance criterion is met and gated in CI; see the
+**Status: M1 signed off on 2026-10-19; M2 next.** Every M1 acceptance
+criterion is met and gated in CI; see the
 [M1 report](../m1-report.md). For working on the code, see
 [../HANDOFF.md](../HANDOFF.md). The tables below are the plan as approved on
 2026-10-09, and some of their counts have moved since.

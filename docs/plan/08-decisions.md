@@ -599,6 +599,8 @@ The mobile app signs in through the API host, which until now was a stub.
 - **Question for you:** 30 minutes idle is right for a shared device. For a youth's own
   phone it means signing in most times the app opens. Passkeys or device binding in M2
   are the better fix than a longer idle window.
+  *Answered 2026-10-19: keep 30 minutes for now, and revisit with passkeys or device binding on
+  the app.*
 
 ### D29 — The local stack: built from db/schema on first boot, seeded on every up (**accepted 2026-10-18**)
 
@@ -629,6 +631,68 @@ seeded Kettle County site at `http://kettle.localhost:8000` in about 30 seconds 
   - Dev sign-in reaches the organiser console.
   - Approving a listing there projects it through the jobs container into search.
 
+### D30 — The app's public read API (**proposed 2026-10-19; implemented, reversible**)
+
+`/api/v1/public/**` serves the finder to the app with no account. It covers listings
+(search and detail), collections, neighbourhoods, organisations, taxonomy and the tenant.
+It uses the web's services and visibility rules, so the two can't disagree about what is
+published.
+- **Filters:** `category[]` matches any of its values, and `accommodation[]` requires all of
+  them. `SearchQuery` has one any-of list, so `interest`, `language`, `dayOfWeek` and
+  `modality` wait. `nearAddress` and `nearSchool` wait on Q7. `maxCost` is whole dollars,
+  as on the web.
+- **Errors:** RFC 9457 problems whose `type` is a URN per error class
+  (`urn:brighttime:problem:validation`, `…:consent.method_insufficient`). Validation errors
+  are keyed by parameter.
+- **Language:** `?locale=`, then the account's own language, then `Accept-Language`, then
+  the tenant's default. The choice is sent back in `Content-Language`, with
+  `Vary: Accept-Language`.
+- **Caching and limits:** responses may be cached publicly for 60 seconds. Each client
+  address gets 300 requests a minute (`Api:PublicRequestsPerMinute`).
+- **"Why it matched":** catalogue keys with arguments. The app renders them in its own
+  language, with catalogues it shares with the web.
+- **Privacy:** neighbourhood boundaries are public geography, the areas the web's map draws
+  (D21), and no site's position is exposed. A private site's address is now stripped
+  inside `SqlListingDetails` on the public path, as `OrganisationProfiles` already did, so
+  no page, feed or API has to remember to hide it.
+- **Not yet:** a separate OpenAPI document and CORS policy for third parties.
+
+### D31 — Child profiles and scoped parental consent (**proposed 2026-10-19; implemented, reversible**)
+
+M2's consent core, on the schema the plan laid down. Q3 was answered as recommended.
+- **Child profiles:** a guardian is any adult account with a confirmed email.
+  - A child profile is an under-13 account with no password. It holds a first name (an
+    Identity `given_name` claim) and a birth month, nothing more.
+  - It stays `pending_consent` until the guardian's link is verified. The schema's
+    trigger refuses an active child account without an `account` consent.
+  - Young people aged 13 and over make their own accounts.
+- **Method by scope (for counsel to confirm):** COPPA permits email plus only where a
+  child's information is not disclosed (16 CFR 312.5(b)(2)(vi)).
+  - Email plus can stand behind `account`, `enrollment`, `attendance_photo`,
+    `media_capture` and `location_use`.
+  - A signed form reviewed in person is needed for `messaging`, `district_data_share`
+    and `research_use`.
+  - `community_participation` and `showcase_publication` aren't offered for under-13s at
+    all, since the capability floor makes them moot.
+- **Disclosures:** versioned, and pinned by `consent_text_hash`. A grant must name the
+  hash of the text shown, and a stale hash is refused (409). **The texts are drafts:**
+  legal review and translation are needed before launch.
+- **Signed-form fallback:** `POST /organiser/guardian-links/{id}/attest` verifies the link
+  and records the `account` consent. It needs the new permission
+  `consent.attest_signed_form`, granted to network organisers only. Provider staff get it
+  with enrolment (M3), when it has a scope. Nobody attests their own link.
+- **One transaction per change:** each grant, revoke or link change commits with its audit
+  row and a recompute of `youth_capability`.
+  - A revoke takes effect on the child's next request, because principals are rebuilt
+    every time (D28). This meets M2's acceptance that revoking removes the ability at once.
+  - Revoking a link ends every consent given through it.
+  - `ck_guardian_verified` makes a revoked link drop `verified_at`, and the audit log keeps
+    when and how it was verified.
+- **Not yet:** the email-plus round trip, meaning the consent email and its confirmation.
+  It needs account mail and localisation moved out of the web host into a shared library,
+  which the app needs anyway. That's the next slice. Until then, links are verified only
+  by signed form.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming
@@ -654,6 +718,8 @@ ID match costs a vendor and excludes undocumented families. My recommendation
 is **email-plus as default, with organiser-attested signed-form review as the
 in-person fallback at enrollment** — which also fits how families actually
 reach these programs. Confirm, or name a vendor.
+*Answered 2026-10-19: as recommended. Email-plus is the default, and an organiser-attested signed
+form reviewed in person at enrollment is the fallback.*
 
 **Q4 — Retention defaults.** I need numbers, or I will seed these and you can
 change them per tenant: attendance 400 days; applications 3 years (funder

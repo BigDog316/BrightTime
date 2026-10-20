@@ -105,6 +105,7 @@ public static class BrightTimeRoles
                 Permissions.Staff.Invite,
                 Permissions.Clearances.Record,
                 Permissions.Clearances.ViewStatus,
+                Permissions.Consent.AttestSignedForm,
                 Permissions.Taxonomy.Manage,
                 Permissions.Tenant.Settings,
                 Permissions.Tenant.FeatureFlags,

@@ -73,6 +73,16 @@ public static class Permissions
         public const string ReadSupportNeeds = "support_needs.read";
     }
 
+    public static class Consent
+    {
+        /// <summary>
+        /// Recording that a guardian's signed consent form was reviewed in person, which verifies
+        /// their link to a child (Q3's fallback). Network organisers only in M2: a provider
+        /// attesting for any child in the tenant is too broad until enrolment gives it a scope.
+        /// </summary>
+        public const string AttestSignedForm = "consent.attest_signed_form";
+    }
+
     public static class Taxonomy
     {
         public const string Manage = "taxonomy.manage";
@@ -110,6 +120,7 @@ public static class Permissions
         Staff.Invite,
         Clearances.Record, Clearances.ViewStatus,
         Youth.ReadRecord, Youth.ReadSupportNeeds,
+        Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,
         Audit.Read,

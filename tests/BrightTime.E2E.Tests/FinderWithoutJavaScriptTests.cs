@@ -10,12 +10,6 @@ namespace BrightTime.E2E.Tests;
 [Collection(Site.Name)]
 public sealed partial class FinderWithoutJavaScriptTests(SiteFixture site)
 {
-    /// <summary>
-    /// Navigation is done once the new document is parsed. The default, the load event, also
-    /// waits for every subresource, so one slow image would hold a test on the right page.
-    /// </summary>
-    private static readonly PageWaitForURLOptions Parsed = new() { WaitUntil = WaitUntilState.DOMContentLoaded };
-
     [Theory]
     [MemberData(nameof(Engines.All), MemberType = typeof(Engines))]
     public async Task A_family_can_search_filter_and_page_through_results(string engine)
@@ -23,23 +17,23 @@ public sealed partial class FinderWithoutJavaScriptTests(SiteFixture site)
         Assert.SkipWhen(site.SkipReason is not null, site.SkipReason ?? string.Empty);
         await site.RunAsync(engine, async page =>
         {
-            await page.GotoAsync("/");
+            await page.GoAsync("/");
             await page.GetByRole(AriaRole.Searchbox).First.FillAsync("soccer");
             await page.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }).First.ClickAsync();
 
-            await page.WaitForURLAsync(new Regex("/search\\?q=soccer"), Parsed);
+            await page.ArrivedAsync(new Regex("/search\\?q=soccer"));
             int soccer = await ResultCountAsync(page);
             soccer.ShouldBeGreaterThan(0);
 
             // Narrow with the filter form, as a family would: tick "free", search again.
             await page.Locator("form.finder-form input[name=free]").CheckAsync();
             await page.Locator("form.finder-form button[type=submit]").ClickAsync();
-            await page.WaitForURLAsync(new Regex("[?&]free=1"), Parsed);
+            await page.ArrivedAsync(new Regex("[?&]free=1"));
             page.Url.ShouldContain("q=soccer");
             (await ResultCountAsync(page)).ShouldBeLessThanOrEqualTo(soccer);
 
             // Every published listing can be reached by following "Show more results".
-            await page.GotoAsync("/search");
+            await page.GoAsync("/search");
             HashSet<string> seen = new(StringComparer.Ordinal);
             for (int pages = 0; pages < 40; pages++)
             {
@@ -57,7 +51,7 @@ public sealed partial class FinderWithoutJavaScriptTests(SiteFixture site)
                 // Each page's link is unique (a keyset cursor), so its URL marks the navigation done.
                 string href = (await next.GetAttributeAsync("href")).ShouldNotBeNull();
                 await next.ClickAsync();
-                await page.WaitForURLAsync(url => url.EndsWith(href, StringComparison.Ordinal), Parsed);
+                await page.ArrivedAsync(new Regex(Regex.Escape(href) + "$"));
             }
 
             seen.Count.ShouldBe(site.Data.Listings.Count(l =>
@@ -72,11 +66,11 @@ public sealed partial class FinderWithoutJavaScriptTests(SiteFixture site)
         Assert.SkipWhen(site.SkipReason is not null, site.SkipReason ?? string.Empty);
         await site.RunAsync(engine, async page =>
         {
-            await page.GotoAsync("/search?q=soccer");
+            await page.GoAsync("/search?q=soccer");
             ILocator first = page.Locator("ol.listing-list a[href^='/listings/']").First;
             string title = (await first.InnerTextAsync()).Trim();
             await first.ClickAsync();
-            await page.WaitForURLAsync(new Regex("/listings/[^/?]+$"), Parsed);
+            await page.ArrivedAsync(new Regex("/listings/[^/?]+$"));
             (await page.Locator("h1").InnerTextAsync()).Trim().ShouldBe(title);
             string listingPath = new Uri(page.Url).AbsolutePath;
 
@@ -94,7 +88,7 @@ public sealed partial class FinderWithoutJavaScriptTests(SiteFixture site)
             await Assertions.Expect(save).ToHaveAttributeAsync("aria-pressed", "true");
             page.Url.ShouldEndWith(listingPath);
 
-            await page.GotoAsync("/saved");
+            await page.GoAsync("/saved");
             (await ListingLinksAsync(page)).ShouldContain(listingPath);
         }, javaScript: false);
     }
@@ -106,18 +100,18 @@ public sealed partial class FinderWithoutJavaScriptTests(SiteFixture site)
         Assert.SkipWhen(site.SkipReason is not null, site.SkipReason ?? string.Empty);
         await site.RunAsync(engine, async page =>
         {
-            await page.GotoAsync("/search");
+            await page.GoAsync("/search");
             await page.Locator("nav.language-picker a[hreflang=ar]").ClickAsync();
-            await page.WaitForURLAsync(new Regex("lang=ar"), Parsed);
+            await page.ArrivedAsync(new Regex("lang=ar"));
             (await page.Locator("html").GetAttributeAsync("lang")).ShouldBe("ar");
             (await page.Locator("html").GetAttributeAsync("dir")).ShouldBe("rtl");
 
             // The choice is remembered: the next page, with no lang in its address, stays in Arabic.
-            await page.GotoAsync("/neighbourhoods");
+            await page.GoAsync("/neighbourhoods");
             (await page.Locator("html").GetAttributeAsync("lang")).ShouldBe("ar");
 
             await page.Locator("nav.language-picker a[hreflang=es]").ClickAsync();
-            await page.WaitForURLAsync(new Regex("lang=es"), Parsed);
+            await page.ArrivedAsync(new Regex("lang=es"));
             (await page.Locator("html").GetAttributeAsync("dir")).ShouldBe("ltr");
             (await page.Locator("h1").InnerTextAsync()).ShouldNotBeNullOrWhiteSpace();
         }, javaScript: false);

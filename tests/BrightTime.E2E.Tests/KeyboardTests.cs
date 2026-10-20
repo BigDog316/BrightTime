@@ -56,7 +56,7 @@ public sealed partial class KeyboardTests(SiteFixture site)
         Assert.SkipWhen(site.SkipReason is not null, site.SkipReason ?? string.Empty);
         await site.RunAsync(Engines.Chromium, async page =>
         {
-            await page.GotoAsync(PublicRoutes.Resolve(site, route));
+            await page.GoAsync(PublicRoutes.Resolve(site, route));
             List<string> problems = [];
             HashSet<string> seen = new(StringComparer.Ordinal);
             int stops = 0;
@@ -103,7 +103,7 @@ public sealed partial class KeyboardTests(SiteFixture site)
         await site.RunAsync(Engines.Chromium, async page =>
         {
             // Not the home page: a skip link resolved against <base href="/"> only fails elsewhere.
-            await page.GotoAsync("/search?q=soccer");
+            await page.GoAsync("/search?q=soccer");
             await page.Keyboard.PressAsync("Tab");
             (await page.EvaluateAsync<string>("() => document.activeElement.className")).ShouldContain("skip-link");
 
@@ -125,13 +125,13 @@ public sealed partial class KeyboardTests(SiteFixture site)
         {
             // A provider saves an empty listing by keyboard.
             var org = site.Data.Organisations.Where(o => o.Status == "approved").OrderBy(o => o.Slug, StringComparer.Ordinal).First();
-            await page.GotoAsync("/dev/sign-in");
+            await page.GoAsync("/dev/sign-in");
             await TabToAsync(page, $"e => e.innerText.trim() === 'admin@{org.Slug}.example.org'");
             await page.Keyboard.PressAsync("Enter");
-            await page.WaitForURLAsync(u => !u.Contains("/dev/sign-in", StringComparison.Ordinal));
+            await page.ArrivedAsync(new Regex("^(?!.*/dev/sign-in)"));
 
             string editor = $"/provider/orgs/{org.Id}/listings/new";
-            await page.GotoAsync(editor);
+            await page.GoAsync(editor);
             await TabToAsync(page, "e => e.tagName === 'BUTTON' && e.value === 'save'");
             await page.Keyboard.PressAsync("Enter");
 
@@ -155,7 +155,7 @@ public sealed partial class KeyboardTests(SiteFixture site)
         Assert.SkipWhen(site.SkipReason is not null, site.SkipReason ?? string.Empty);
         await site.RunAsync(Engines.Chromium, async page =>
         {
-            await page.GotoAsync("/search?age=99");
+            await page.GoAsync("/search?age=99");
             await Assertions.Expect(page.Locator("main .error-summary")).ToBeFocusedAsync();
         }, javaScript: false);
     }
@@ -167,7 +167,7 @@ public sealed partial class KeyboardTests(SiteFixture site)
         await site.RunAsync(Engines.Chromium, async page =>
         {
             // A fresh load leaves focus at the top, where the skip link is.
-            await page.GotoAsync("/search?q=soccer");
+            await page.GoAsync("/search?q=soccer");
             (await page.EvaluateAsync<string>("() => document.activeElement.tagName")).ShouldBe("BODY");
 
             // Blazor swaps the next page in without a reload; its heading takes focus, so a

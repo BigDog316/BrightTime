@@ -30,6 +30,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 
     public DbSet<YouthAccessGrant> YouthAccessGrants => Set<YouthAccessGrant>();
 
+    public DbSet<AppUserClaim> UserClaims => Set<AppUserClaim>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -105,6 +107,14 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             // ix_youth_access_lookup: the shape every authorisation check uses.
             b.HasIndex(g => new { g.TenantId, g.OrgId, g.YouthUserId, g.EndsAt });
             b.HasIndex(g => g.YouthUserId);
+        });
+
+        modelBuilder.Entity<AppUserClaim>(b =>
+        {
+            b.ToTable("app_user_claim");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Id).UseIdentityAlwaysColumn();
+            b.HasIndex(c => new { c.UserId, c.ClaimType, c.ClaimValue }).IsUnique();
         });
 
         modelBuilder.ApplySnakeCaseNames();

@@ -23,30 +23,42 @@ The keyboard-only pass is done ([accessibility/keyboard.md](accessibility/keyboa
 gated by `KeyboardTests`, so every M1 acceptance item is now green. The typo-tolerance fix
 is merged (`cec1ed6`).
 
-**M1 was signed off on 2026-10-19** ([m1-report.md](m1-report.md)); M2 is next. Read
+**M1 was signed off on 2026-10-19** ([m1-report.md](m1-report.md)). Read
 [plan/08-decisions.md](plan/08-decisions.md) for every decision and open question.
+
+**M2 is under way** (mobile and parental consent). It is server-side first:
+- **Slice 1, the public read API** (D30): `/api/v1/public/**` serves the finder to the app.
+- **Slice 2, the consent core** (D31): child profiles, scoped grant and revoke, organiser
+  attestation of signed forms, and capability recomputation with `/me/capabilities`.
+- **Next:** move localisation and account mail out of the web host into a shared library.
+  That unlocks the email-plus round trip, guardian registration through the API, and the
+  MAUI app's own strings.
 
 ## Waiting on Sam
 
-Every decision through D29 is accepted. D27, D28 and D29 were accepted on 2026-10-18.
+Every decision through D29 is accepted. Q3 is answered (email plus, with a signed-form
+fallback), and the youth 30-minute refresh idle stays for now.
 
+- **Accept or reject D30** (the public read API) **and D31** (child profiles and consent).
+- **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a
+  child's information. Also review the draft consent texts (`ConsentDisclosures`) before launch.
 - **Open questions:**
-  - Q3, Q7 (map tiles) and Q13 (translations).
+  - Q7 (map tiles and geocoding) and Q13 (translations).
   - Q4 retention; 30 days is proposed for processed outbox rows.
-  - Whether the youth 30-minute refresh idle suits mobile.
+  - Q5 (deletion versus audit), needed for M2's export and delete requests.
   - Where media is stored.
+  - Firebase and Apple developer accounts, for push in M2.
 
 ## Candidate next work
 
 These have not been asked for yet:
 
-- public API read endpoints;
 - passkey and external sign-in through the API;
 - D15 pending revisions (edits currently go live and are recorded as revisions);
 - curation screens;
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see
   [plan/03](plan/03-indexing-and-query-plans.md));
-- M2: the mobile app and parental consent.
+- the M2 MAUI app shell, which needs the Mac for iOS.
 
 ## Setting up a machine
 

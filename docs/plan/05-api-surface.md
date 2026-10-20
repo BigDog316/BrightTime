@@ -69,6 +69,15 @@ dropIn, orgId, sort, cursor, limit, locale
 in `search_event`, not in access logs. nginx is configured to strip it from
 the logged query string.
 
+*Built (2026-10-19, D30):*
+- **Endpoints:** `/listings`, `/listings/{slug}`, `/collections`, `/collections/{slug}`,
+  `/neighbourhoods`, `/neighbourhoods/{code}`, `/organisations/{slug}`,
+  `/taxonomy/{vocabulary}` and `/tenant`.
+- **Filters:** `q, kind[], category[], accommodation[], age, grade, from, to, free, maxCost,
+  mealsProvided, transportProvided, dropIn, nearNeighbourhood, orgId, sort, cursor, limit`.
+  The rest of the list above waits on Q7 and on combining several any-of filters.
+- **Paging:** results come as `{ items, nextCursor, notices }`.
+
 ---
 
 ## Identity & consent
@@ -115,7 +124,12 @@ GET    /api/v1/guardian-links
 - `GET /me`;
 - `DELETE /me/sessions`.
 
-The rest of this section arrives with registration and consent (M2). Health, outside the
+*Built (2026-10-19, D31):* `GET /me/capabilities`; `POST`, `GET` `/children` and
+`GET /children/{id}`; `POST /children/{id}/consents` (scope and the disclosure hash shown);
+`DELETE /children/{id}/consents/{scope}`; `POST /guardian-links/{id}/revoke`; and
+`GET /consent/disclosures`, which gives each scope's text, hash and accepted methods. An organiser
+verifies a link with `POST /organiser/guardian-links/{id}/attest`. Still to come: registration,
+the email-plus round trip (`/guardian-links/{id}/verify`), and export and delete requests. Health, outside the
 API's versioning: `GET /health/live` and `GET /health/ready`.
 
 Consent scopes are the enum in `identity.parental_consent.scope`:

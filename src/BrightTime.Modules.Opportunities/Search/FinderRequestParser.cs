@@ -160,7 +160,7 @@ public static class FinderRequestParser
     }
 
     /// <summary>Accepts the kind words used in the URL, which are the database values.</summary>
-    internal static ListingKind? KindFromParam(string value) => value.Trim().ToLowerInvariant() switch
+    public static ListingKind? KindFromParam(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
     {
         "program" => ListingKind.Program,
         "event" => ListingKind.Event,
@@ -169,7 +169,8 @@ public static class FinderRequestParser
         _ => null,
     };
 
-    internal static SearchSort? SortFromParam(string value) => value.Trim().ToLowerInvariant() switch
+    /// <summary>Accepts the sort words used in the URL.</summary>
+    public static SearchSort? SortFromParam(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
     {
         "relevance" => SearchSort.Relevance,
         "soonest" => SearchSort.Soonest,

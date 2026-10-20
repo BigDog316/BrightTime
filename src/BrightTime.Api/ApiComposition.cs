@@ -1,5 +1,7 @@
 using System.Threading.RateLimiting;
 using BrightTime.Api.Auth;
+using BrightTime.Api.Consent;
+using BrightTime.Api.Public;
 using BrightTime.Hosting.Auditing;
 using BrightTime.Hosting.Auth;
 using BrightTime.Hosting.Health;
@@ -8,7 +10,18 @@ using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Identity.Authorization;
+using BrightTime.Modules.Identity.Consent;
+using BrightTime.Modules.Identity.Contracts;
+using BrightTime.Modules.Identity.Persistence;
 using BrightTime.Modules.Identity.SignIn;
+using BrightTime.Modules.Opportunities.Contracts;
+using BrightTime.Modules.Opportunities.Curation;
+using BrightTime.Modules.Opportunities.Details;
+using BrightTime.Modules.Opportunities.Persistence;
+using BrightTime.Modules.Opportunities.Search;
+using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Persistence;
 using BrightTime.Modules.Platform.Tenancy;
 using BrightTime.SharedKernel.Time;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -57,6 +70,25 @@ public static class ApiComposition
         services.AddBrightTimeDbContext<DirectoryDbContext>(app, DirectoryDbContext.SchemaName, DirectoryDbContext.MigrationsHistoryTable);
         services.AddScoped<IDirectoryQueries, DirectoryQueries>();
 
+        // The public read surface: the same services as the web's finder pages. Module contexts
+        // read under the tenant's RLS as brighttime_app; only the search steps into
+        // brighttime_finder (D13).
+        services.AddBrightTimeDbContext<OpportunitiesDbContext>(app, OpportunitiesDbContext.SchemaName, OpportunitiesDbContext.MigrationsHistoryTable);
+        services.AddBrightTimeDbContext<PlatformDbContext>(app, PlatformDbContext.SchemaName, PlatformDbContext.MigrationsHistoryTable);
+        services.AddScoped<PlatformQueries>();
+        services.AddScoped<ITaxonomyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
+        services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
+        services.AddSingleton<IListingFinder>(sp => new SqlListingFinder(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>()));
+        services.AddScoped<IListingDetails, SqlListingDetails>();
+        services.AddScoped<ICurationQueries, CurationQueries>();
+        services.AddScoped<IOrganisationProfiles, OrganisationProfiles>();
+
+        // Guardianship and consent: the identity context as brighttime_app, under the tenant's RLS
+        // and the actor guard; who is whose guardian is decided by Guardianship itself (D4).
+        services.AddBrightTimeDbContext<IdentityDbContext>(app, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
+        services.AddScoped<IIdentityQueries, IdentityQueries>();
+        services.AddScoped<Guardianship>();
+
         // The authentication path's login: Identity stores only.
         services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth));
         services.AddSingleton(sp => new AccountReader(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
@@ -77,6 +109,7 @@ public static class ApiComposition
 
         AddTokens(services, configuration, environment);
 
+        int publicPerMinute = Math.Max(1, configuration.GetValue("Api:PublicRequestsPerMinute", 300));
         int perMinute = Math.Max(1, configuration.GetValue("Auth:SignInAttemptsPerMinute", 10));
         services.AddRateLimiter(o =>
         {
@@ -86,6 +119,9 @@ public static class ApiComposition
                 rejected.HttpContext.Response.Headers.RetryAfter = "60";
                 return ValueTask.CompletedTask;
             };
+            o.AddPolicy(PublicEndpoints.RateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = publicPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
             o.AddPolicy(SignInLimit, http => RateLimitPartition.GetFixedWindowLimiter(
                 ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = perMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
@@ -124,6 +160,9 @@ public static class ApiComposition
                 };
                 o.Events = new JwtBearerEvents { OnTokenValidated = BearerPrincipal.ValidateAsync };
             });
-        services.AddAuthorization();
+        services.AddAuthorizationBuilder()
+            .AddPolicy(ConsentEndpoints.AttestPolicy, p => p.RequireAuthenticatedUser()
+                .AddRequirements(new PermissionRequirement(Permissions.Consent.AttestSignedForm)));
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PermissionHandler>();
     }
 }

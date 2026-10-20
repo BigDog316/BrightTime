@@ -1,6 +1,8 @@
 using BrightTime.Api;
 using BrightTime.Api.Auth;
+using BrightTime.Api.Consent;
 using BrightTime.Api.Me;
+using BrightTime.Api.Public;
 using BrightTime.Hosting.Auditing;
 using BrightTime.Hosting.Auth;
 using BrightTime.Hosting.Health;
@@ -29,6 +31,8 @@ app.UseMiddleware<ApiTenantMiddleware>();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<ActorMiddleware>();
+// After the actor, whose own language is one of the choices; before anything is written.
+app.UseMiddleware<ApiLocaleMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<AuditFlushMiddleware>();
 
@@ -41,6 +45,8 @@ if (app.Environment.IsDevelopment())
 RouteGroupBuilder v1 = app.MapGroup("/api/v1");
 v1.MapTokenEndpoints();
 v1.MapMeEndpoints();
+v1.MapPublicEndpoints();
+v1.MapConsentEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

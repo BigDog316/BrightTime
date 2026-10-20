@@ -188,6 +188,7 @@ rather than merely unassigned — and the data model cannot express it
 | `api_clients.manage` | — | — | — | — | — | — | — | ● | — | — | — | — | ● |
 | `audit.read` | — | ◐ own | — | ◐ children | — | ◐ org | — | ● | ● | — | — | — | ● |
 | `subject_request.fulfil` | — | — | — | — | — | — | — | ● | — | — | — | — | ● |
+| `consent.attest_signed_form` | — | — | — | — | — | — | — | ● | — | — | — | — | — |
 
 `audit.read ◐ own` is the transparency right: a 13+ youth can see who read
 their record and why. A guardian can see the same for a linked child. This is

@@ -164,17 +164,23 @@ public sealed class SqlListingDetails(
             Categories = [.. terms.Where(t => !accommodationIds.Contains(t.Id)).Select(t => t.Name ?? t.Code)],
             Accommodations = [.. terms.Where(t => accommodationIds.Contains(t.Id)).Select(t => t.Name ?? t.Code)],
             Languages = loaded.Languages,
-            Places = [.. activeSites.Select(s => new ListingPlace(
-                s.Name,
-                s.IsAddressPublic,
-                s.AddressLine1,
-                s.AddressLine2,
-                s.Locality,
-                s.PostalCode,
-                s.NeighbourhoodId is { } h && hoodNames.TryGetValue(h, out string? name) ? name : null,
-                s.TransitNote,
-                s.IsWheelchairAccessible,
-                s.NeighbourhoodId))],
+            // A private address never leaves this method on the public path, so no page, feed or
+            // API has to remember to hide it. Reviewers see it, to check it.
+            Places = [.. activeSites.Select(s =>
+            {
+                bool open = !publicView || s.IsAddressPublic;
+                return new ListingPlace(
+                    s.Name,
+                    s.IsAddressPublic,
+                    open ? s.AddressLine1 : null,
+                    open ? s.AddressLine2 : null,
+                    open ? s.Locality : null,
+                    open ? s.PostalCode : null,
+                    s.NeighbourhoodId is { } h && hoodNames.TryGetValue(h, out string? name) ? name : null,
+                    open ? s.TransitNote : null,
+                    s.IsWheelchairAccessible,
+                    s.NeighbourhoodId);
+            })],
             Upcoming = loaded.Upcoming,
             Deadlines = loaded.Deadlines,
         };

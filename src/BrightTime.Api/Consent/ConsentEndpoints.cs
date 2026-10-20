@@ -1,0 +1,163 @@
+using System.Globalization;
+using System.Security.Claims;
+using BrightTime.Hosting.Auth;
+using BrightTime.Modules.Identity.Authorization;
+using BrightTime.Modules.Identity.Consent;
+using BrightTime.Modules.Identity.Contracts;
+using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Primitives;
+
+namespace BrightTime.Api.Consent;
+
+public sealed record CreateChildRequest(string? GivenName, string? BirthMonth, string? Relationship);
+
+public sealed record GrantConsentRequest(string? Scope, string? DisclosureHash);
+
+public sealed record LinkResponse(Guid Id, string Relationship, string Status, string? VerificationMethod, DateTimeOffset? VerifiedAt);
+
+public sealed record ConsentResponse(string Scope, string Method, DateTimeOffset GrantedAt);
+
+public sealed record CapabilitiesResponse(
+    bool IsUnder13,
+    bool HasAccountConsent,
+    bool CanSelfEnroll,
+    bool CanPostInCommunity,
+    bool CanUploadMedia,
+    bool CanPublishShowcase,
+    bool CanReceiveSms,
+    bool CanBeMessagedByOrganisation)
+{
+    public static CapabilitiesResponse From(YouthCapabilities c)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        return new(c.IsUnder13, c.HasAccountConsent, c.CanSelfEnroll, c.CanPostInCommunity, c.CanUploadMedia,
+            c.CanPublishShowcase, c.CanReceiveSms, c.CanBeMessagedByOrganisation);
+    }
+}
+
+public sealed record ChildResponse(
+    Guid Id,
+    string GivenName,
+    string BirthMonth,
+    string Status,
+    LinkResponse Link,
+    IReadOnlyList<ConsentResponse> Consents,
+    CapabilitiesResponse Capabilities);
+
+public sealed record DisclosureResponse(string Scope, string Version, string Text, string Hash, IReadOnlyList<string> Methods, bool AvailableUnder13);
+
+/// <summary>
+/// Guardians, child profiles and parental consent (docs/plan/05, "Identity &amp; consent"), over
+/// <see cref="Guardianship"/>, which decides who may do what.
+/// </summary>
+/// <remarks>
+/// A guardian is any adult account. A child profile does nothing until the guardian's link is
+/// verified: by email plus (sent once account mail moves to a shared library) or by a signed
+/// form an organiser reviews in person (<c>POST /organiser/guardian-links/{id}/attest</c>).
+/// </remarks>
+public static class ConsentEndpoints
+{
+    public const string AttestPolicy = "consent.attest";
+
+    public static RouteGroupBuilder MapConsentEndpoints(this RouteGroupBuilder api)
+    {
+        ArgumentNullException.ThrowIfNull(api);
+
+        api.MapGet("/consent/disclosures", Disclosures).RequireAuthorization();
+
+        RouteGroupBuilder children = api.MapGroup("/children").RequireAuthorization();
+        children.MapPost("/", CreateAsync);
+        children.MapGet("/", ListAsync);
+        children.MapGet("/{id:guid}", GetAsync);
+        children.MapPost("/{id:guid}/consents", GrantAsync);
+        children.MapDelete("/{id:guid}/consents/{scope}", RevokeAsync);
+
+        api.MapPost("/guardian-links/{id:guid}/revoke", RevokeLinkAsync).RequireAuthorization();
+        api.MapPost("/organiser/guardian-links/{id:guid}/attest", AttestAsync).RequireAuthorization(AttestPolicy);
+
+        api.MapGet("/me/capabilities", CapabilitiesAsync).RequireAuthorization();
+        return api;
+    }
+
+    private static IResult Disclosures() => Results.Ok(ConsentDisclosures.All
+        .OrderBy(d => d.Scope)
+        .Select(d => new DisclosureResponse(d.Scope.ToDbValue(), d.Version, d.Text, d.HashHex, [.. d.Methods.Order(StringComparer.Ordinal)], d.AvailableUnder13))
+        .ToList());
+
+    private static async Task<IResult> CreateAsync(CreateChildRequest body, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (!DateOnly.TryParseExact(body.BirthMonth, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly month))
+        {
+            return ApiProblems.Validation(new Dictionary<string, string[]> { ["birthMonth"] = ["A month as yyyy-MM."] });
+        }
+
+        Result<ChildView> made = await guardianship.CreateChildAsync(Actor(user), body.GivenName ?? string.Empty, month, body.Relationship ?? string.Empty, ct);
+        return made.IsSuccess
+            ? Results.Created($"/api/v1/children/{made.Value.Id.Value}", Child(made.Value))
+            : ApiProblems.From(made.Error);
+    }
+
+    private static async Task<IResult> ListAsync(ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct) =>
+        Results.Ok((await guardianship.ChildrenAsync(Actor(user), ct)).Select(Child).ToList());
+
+    private static async Task<IResult> GetAsync(Guid id, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct) =>
+        await guardianship.ChildAsync(Actor(user), new UserId(id), ct) is { } child
+            ? Results.Ok(Child(child))
+            : ApiProblems.NotFound("You have no child profile with that id.");
+
+    private static async Task<IResult> GrantAsync(Guid id, GrantConsentRequest body, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (!ConsentScopeExtensions.TryFromDbValue(body.Scope, out ConsentScope scope))
+        {
+            return ApiProblems.Validation(new Dictionary<string, string[]> { ["scope"] = ["Not a consent scope; see /consent/disclosures."] });
+        }
+
+        Result<ConsentView> granted = await guardianship.GrantAsync(Actor(user), new UserId(id), scope, body.DisclosureHash, ct);
+        return granted.IsSuccess
+            ? Results.Ok(new ConsentResponse(granted.Value.Scope.ToDbValue(), granted.Value.Method, granted.Value.GrantedAt))
+            : ApiProblems.From(granted.Error);
+    }
+
+    private static async Task<IResult> RevokeAsync(Guid id, string scope, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
+    {
+        if (!ConsentScopeExtensions.TryFromDbValue(scope, out ConsentScope parsed))
+        {
+            return ApiProblems.NotFound("Not a consent scope.");
+        }
+
+        Result revoked = await guardianship.RevokeAsync(Actor(user), new UserId(id), parsed, ct);
+        return revoked.IsSuccess ? Results.NoContent() : ApiProblems.From(revoked.Error);
+    }
+
+    private static async Task<IResult> RevokeLinkAsync(Guid id, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
+    {
+        Result revoked = await guardianship.RevokeLinkAsync(Actor(user), id, ct);
+        return revoked.IsSuccess ? Results.NoContent() : ApiProblems.From(revoked.Error);
+    }
+
+    private static async Task<IResult> AttestAsync(Guid id, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
+    {
+        Result<GuardianLinkView> attested = await guardianship.AttestSignedFormAsync(id, Actor(user), ct);
+        return attested.IsSuccess ? Results.Ok(Link(attested.Value)) : ApiProblems.From(attested.Error);
+    }
+
+    /// <summary>What the signed-in person may do, so the app gates on the server's answer rather than its own guess.</summary>
+    private static async Task<IResult> CapabilitiesAsync(ClaimsPrincipal user, IIdentityQueries identity, CancellationToken ct) =>
+        Results.Ok(CapabilitiesResponse.From(await identity.GetCapabilitiesAsync(Actor(user), ct)));
+
+    private static UserId Actor(ClaimsPrincipal user) =>
+        new(user.GetUserId() ?? throw new InvalidOperationException("An authorised request has a user."));
+
+    private static ChildResponse Child(ChildView c) => new(
+        c.Id.Value,
+        c.GivenName,
+        c.BirthMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+        c.Status,
+        Link(c.Link),
+        [.. c.Consents.Select(x => new ConsentResponse(x.Scope.ToDbValue(), x.Method, x.GrantedAt))],
+        CapabilitiesResponse.From(c.Capabilities));
+
+    private static LinkResponse Link(GuardianLinkView l) => new(l.Id, l.Relationship, l.Status, l.VerificationMethod, l.VerifiedAt);
+}

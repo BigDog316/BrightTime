@@ -1,0 +1,151 @@
+@page "/register"
+@* Making an account (D34, D35). The age question comes first and asks the month and year only,
+   with no hint of the answer that "works" (a neutral age screen). Under 13, nothing is sent:
+   a parent or guardian adds the child from their own account. The server decides again. *@
+@inject BrightTimeApi Api
+@inject AppState App
+@inject TimeProvider Clock
+
+<h1>@T["app.account.create"]</h1>
+
+@switch (_step)
+{
+    case Step.Age:
+        <form class="stack" @onsubmit="AnswerAge">
+            <fieldset>
+                <legend>@T["app.register.birth"]</legend>
+                <div class="inline">
+                    <div class="field">
+                        <label for="month">@T["app.register.month"]</label>
+                        <select id="month" @bind="_month" required>
+                            <option value="0"></option>
+                            @for (int m = 1; m <= 12; m++)
+                            {
+                                <option value="@m">@Words.MonthName(T, m)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="year">@T["app.register.year"]</label>
+                        <select id="year" @bind="_year" required>
+                            <option value="0"></option>
+                            @foreach (int y in Years)
+                            {
+                                <option value="@y">@y.ToString(T.Culture)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </fieldset>
+            <p class="hint">@T["app.register.why_birth"]</p>
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@(_month == 0 || _year == 0)">@T["app.register.continue"]</button>
+            </div>
+        </form>
+        break;
+
+    case Step.TooYoung:
+        <div class="notice" role="status">
+            <p>@T["error.register.under_13"]</p>
+            <p>@T["app.register.ask_a_parent"]</p>
+        </div>
+        <a class="button" href="">@T["app.register.browse"]</a>
+        break;
+
+    case Step.Email:
+        <form class="stack" @onsubmit="RegisterAsync">
+            <div class="field">
+                <label for="email">@T["account.field.email"]</label>
+                <p class="hint" id="email-hint">@T["app.register.email_hint"]</p>
+                <input id="email" type="email" autocomplete="email" inputmode="email" required @bind="_email" aria-describedby="email-hint" />
+            </div>
+            <ProblemNotice Problem="_problem" />
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@_busy">@T["app.register.submit"]</button>
+            </div>
+        </form>
+        break;
+
+    case Step.CheckEmail:
+        <div class="notice success" role="status">
+            <p>@T.Format("app.register.check_email", ("email", Text.Name(_email)))</p>
+        </div>
+        <p>@T["app.register.then_sign_in"]</p>
+        <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+        break;
+}
+
+<p class="hint">@T["app.register.privacy"]</p>
+
+@code {
+    private enum Step
+    {
+        Age,
+        TooYoung,
+        Email,
+        CheckEmail,
+    }
+
+    private Step _step = Step.Age;
+    private int _month;
+    private int _year;
+    private string _email = "";
+    private bool _busy;
+    private ApiProblem? _problem;
+
+    private DateOnly Today => DateOnly.FromDateTime(Clock.GetUtcNow().UtcDateTime);
+
+    private IEnumerable<int> Years => Enumerable.Range(Today.Year - 100, 101).Reverse();
+
+    protected override void OnInitialized()
+    {
+        if (App.AnsweredUnder13Recently(Clock.GetUtcNow()))
+        {
+            _step = Step.TooYoung;
+        }
+    }
+
+    private void AnswerAge()
+    {
+        if (_month is < 1 or > 12 || _year == 0)
+        {
+            return;
+        }
+
+        if (new DateOnly(_year, _month, 1) > Today)
+        {
+            _year = 0;
+            return;
+        }
+
+        if (Words.IsUnder13(_year, _month, Today))
+        {
+            App.RememberUnder13(Clock.GetUtcNow());
+            _step = Step.TooYoung;
+            return;
+        }
+
+        _step = Step.Email;
+    }
+
+    private async Task RegisterAsync()
+    {
+        _busy = true;
+        _problem = null;
+        ApiResult registered = await Api.RegisterAsync(_email.Trim(), Words.BirthMonth(_year, _month));
+        _busy = false;
+        if (registered.IsSuccess)
+        {
+            _step = Step.CheckEmail;
+        }
+        else if (registered.Problem!.Code == "register.under_13")
+        {
+            App.RememberUnder13(Clock.GetUtcNow());
+            _step = Step.TooYoung;
+        }
+        else
+        {
+            _problem = registered.Problem;
+        }
+    }
+}

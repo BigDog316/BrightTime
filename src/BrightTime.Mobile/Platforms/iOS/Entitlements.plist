@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Universal links and shared credentials for the region's site (D35), checked against its
+  /.well-known/apple-app-site-association. The host is the region's; a release build replaces it.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:kettle.localhost</string>
+        <string>webcredentials:kettle.localhost</string>
+    </array>
+</dict>
+</plist>

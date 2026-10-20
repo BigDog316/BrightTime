@@ -1,0 +1,97 @@
+@page "/place"
+@* Where the feed searches from: a neighbourhood, never an address (D8). "Use my location" picks
+   the nearest neighbourhood on the phone; the position itself is never sent. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject ILocationProvider Location
+@inject NavigationManager Navigation
+
+<h1>@T["app.place.title"]</h1>
+<p>@T["app.place.explain"]</p>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_hoods is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_hoods is not null)
+    {
+        <form class="stack" @onsubmit="SaveAsync">
+            <div class="field">
+                <label for="hood">@T["finder.field.neighbourhood"]</label>
+                <select id="hood" @bind="_hood">
+                    <option value="">@T["finder.field.anywhere"]</option>
+                    @foreach (NeighbourhoodSummary hood in _hoods)
+                    {
+                        <option value="@hood.Code">@hood.Name</option>
+                    }
+                </select>
+            </div>
+            <button type="button" @onclick="NearMeAsync" disabled="@_busy">@T["app.place.use_location"]</button>
+            @if (_note is not null)
+            {
+                <p class="hint" role="status">@_note</p>
+            }
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@_busy">@T["app.save"]</button>
+            </div>
+        </form>
+    }
+}
+
+@code {
+    private IReadOnlyList<NeighbourhoodSummary>? _hoods;
+    private string _hood = "";
+    private string? _note;
+    private ApiProblem? _problem;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<NeighbourhoodSummary>> hoods = await Api.NeighbourhoodsAsync();
+        ApiResult<SearchPreferences> mine = await Api.SearchPreferencesAsync();
+        _problem = hoods.Problem ?? mine.Problem;
+        _hoods = hoods.Value?.OrderBy(h => h.Name, StringComparer.Create(T.Culture, ignoreCase: true)).ToList();
+        _hood = mine.Value?.NearNeighbourhood ?? "";
+    }
+
+    private async Task NearMeAsync()
+    {
+        _busy = true;
+        GeoPoint? here = await Location.CurrentAsync();
+        _busy = false;
+        if (here is not { } point || _hoods is not { Count: > 0 } hoods)
+        {
+            _note = T["app.filter.no_location"];
+            return;
+        }
+
+        NeighbourhoodSummary nearest = Nearest.Neighbourhood(hoods, point);
+        _hood = nearest.Code;
+        _note = T.Format("app.filter.nearest", ("area", Text.Name(nearest.Name)));
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        ApiResult saved = await Api.SetSearchPreferencesAsync(_hood.Length == 0 ? null : _hood, null);
+        _busy = false;
+        if (saved.IsSuccess)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            _problem = saved.Problem;
+        }
+    }
+}

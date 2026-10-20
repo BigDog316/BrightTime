@@ -1,0 +1,100 @@
+@page "/app/guardian-links/{LinkId:guid}/verify"
+@* The consent email's link, opened in the app (D34, D35): the guardian, signed in as themselves,
+   reads the account disclosure and gives consent. The token is in the link's fragment, which
+   never left the phone; it is held in memory while the guardian signs in. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject PendingConsent Pending
+@inject NavigationManager Navigation
+
+<h1>@T["consent.web.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["consent.web.sign_in_first"]</p>
+    <a class="button primary" href="@SignInHref">@T["consent.web.sign_in"]</a>
+}
+else if (_done is { } child)
+{
+    <p class="notice success" role="status">@T.Format("consent.web.done", ("child", Text.Name(child.GivenName)))</p>
+    <a class="button" href="family/@child.Id">@T["app.family.title"]</a>
+}
+else if (_token is null)
+{
+    <p>@T["app.consent_link.no_token"]</p>
+}
+else
+{
+    @if (_child is { } c)
+    {
+        <p>@T.Format("consent.web.intro", ("child", Text.Name(c.GivenName)))</p>
+    }
+    @if (_disclosure is { } d)
+    {
+        <h2>@T["email.consent.disclosure_heading"]</h2>
+        @if (T.Locale.Code != "en")
+        {
+            <p class="hint">@T["email.consent.disclosure_in_english"]</p>
+        }
+        <p class="disclosure" lang="en" dir="ltr">@d.Text</p>
+    }
+    <ProblemNotice Problem="_problem" />
+    <button type="button" class="primary" @onclick="ConsentAsync" disabled="@_busy">@T["consent.web.submit"]</button>
+}
+
+@code {
+    [Parameter] public Guid LinkId { get; set; }
+
+    private string? _token;
+    private Child? _child;
+    private Child? _done;
+    private Disclosure? _disclosure;
+    private ApiProblem? _problem;
+    private bool _busy;
+
+    private string SignInHref => "sign-in?returnUrl=" + Uri.EscapeDataString($"/app/guardian-links/{LinkId:D}/verify");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // From the link itself, or held from before the guardian signed in.
+        string fragment = new Uri(Navigation.Uri).Fragment;
+        string? fromLink = fragment.StartsWith("#token=", StringComparison.Ordinal) ? Uri.UnescapeDataString(fragment["#token=".Length..]) : null;
+        if (fromLink is { Length: > 0 })
+        {
+            Pending.Hold(LinkId, fromLink);
+        }
+
+        _token = Pending.TokenFor(LinkId);
+        if (!Session.IsSignedIn || _token is null)
+        {
+            return;
+        }
+
+        // The child this link is for, if it is this guardian's; the API decides either way.
+        if (await Api.ChildrenAsync() is { Value: { } children })
+        {
+            _child = children.FirstOrDefault(c => c.Link.Id == LinkId);
+        }
+
+        if (await Api.DisclosuresAsync() is { Value: { } disclosures })
+        {
+            _disclosure = disclosures.FirstOrDefault(d => d.Scope == "account");
+        }
+    }
+
+    private async Task ConsentAsync()
+    {
+        _busy = true;
+        ApiResult<Child> verified = await Api.VerifyLinkAsync(LinkId, _token!);
+        _busy = false;
+        if (verified.IsSuccess)
+        {
+            Pending.Clear();
+            _done = verified.Value;
+        }
+        else
+        {
+            _problem = verified.Problem;
+        }
+    }
+}

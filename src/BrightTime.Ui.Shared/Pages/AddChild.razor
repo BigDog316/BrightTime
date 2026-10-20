@@ -1,0 +1,91 @@
+@page "/family/add"
+@* A child profile (D31): a first name or nickname and a birth month, nothing more. It does
+   nothing until the guardian answers the consent email that follows. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<h1>@T["app.family.add"]</h1>
+
+@if (Session.Me is not { IsAdult: true })
+{
+    <p>@T["app.family.adults_only"]</p>
+}
+else
+{
+    <p>@T["app.family.add_explain"]</p>
+    <form class="stack" @onsubmit="AddAsync">
+        <div class="field">
+            <label for="name">@T["app.family.given_name"]</label>
+            <p class="hint" id="name-hint">@T["app.family.given_name_hint"]</p>
+            <input id="name" required maxlength="50" autocomplete="off" @bind="_name" aria-describedby="name-hint" />
+        </div>
+        <fieldset>
+            <legend>@T["app.family.birth"]</legend>
+            <div class="inline">
+                <div class="field">
+                    <label for="month">@T["app.register.month"]</label>
+                    <select id="month" @bind="_month" required>
+                        <option value="0"></option>
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@Words.MonthName(T, m)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="year">@T["app.register.year"]</label>
+                    <select id="year" @bind="_year" required>
+                        <option value="0"></option>
+                        @foreach (int y in Enumerable.Range(Today.Year - 13, 14).Reverse())
+                        {
+                            <option value="@y">@y.ToString(T.Culture)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </fieldset>
+        <div class="field">
+            <label for="relationship">@T["app.family.relationship"]</label>
+            <select id="relationship" @bind="_relationship">
+                @foreach (string r in Relationships)
+                {
+                    <option value="@r">@T["app.relationship." + r]</option>
+                }
+            </select>
+        </div>
+        <ProblemNotice Problem="_problem" />
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@(_busy || _month == 0 || _year == 0)">@T["app.family.add_submit"]</button>
+        </div>
+    </form>
+}
+
+@code {
+    private static readonly string[] Relationships = ["parent", "legal_guardian", "foster_parent", "kinship_caregiver", "other"];
+
+    private string _name = "";
+    private int _month;
+    private int _year;
+    private string _relationship = "parent";
+    private bool _busy;
+    private ApiProblem? _problem;
+
+    private DateOnly Today => DateOnly.FromDateTime(Clock.GetUtcNow().UtcDateTime);
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        ApiResult<Child> made = await Api.CreateChildAsync(_name.Trim(), Words.BirthMonth(_year, _month), _relationship);
+        _busy = false;
+        if (made.IsSuccess)
+        {
+            Navigation.NavigateTo($"family/{made.Value!.Id}?added=1");
+        }
+        else
+        {
+            _problem = made.Problem;
+        }
+    }
+}

@@ -880,6 +880,83 @@ opens when no app claims it.
   - The real app identifiers for `AppLinks:*` wait on the developer accounts.
   - A young person's own export and delete requests wait on Q5.
 
+### D36 — The app: MAUI Blazor Hybrid over a shared, tested library (**proposed 2026-10-20; implemented, reversible**)
+
+M2's app, as docs/plan/01 lays it out.
+- **Three projects:**
+  - **`BrightTime.Ui.Shared`** holds the screens, the API client, the session and the region's
+    words. It is plain `net10.0`, so it builds and is tested on any machine.
+  - **`BrightTime.Ui.Design`** holds the stylesheet. Every margin, padding and alignment is
+    logical, so Arabic mirrors with no second stylesheet. Tap targets are at least 44px, focus
+    is always visible, and dark mode is included.
+  - **`BrightTime.Mobile`** is the MAUI host: a BlazorWebView and the device services. It builds
+    for Android anywhere the workload is; iOS needs the Mac.
+  - The host is not in `BrightTime.slnx`, so the main build and CI need no mobile workloads. CI
+    builds it in its own job (`mobile`).
+- **One build per region:** each region is its own white-label app.
+  - The region's addresses are build properties (`BrightTimeApiBase`, `BrightTimeSiteBase`,
+    `BrightTimeLinkHost`), written into `BuildConfig`. A release build without them fails.
+  - Debug points at the local stack from the Android emulator (`10.0.2.2:8000`). It sends
+    `Host: kettle.localhost`, because the stack tells regions apart by host. Only `10.0.2.2`
+    may use plain HTTP.
+- **Sign-in (D28's tokens):**
+  - The access token is kept in memory only, and refresh tokens rotate.
+  - An adult's refresh token is kept in the iOS keychain or Android Keystore, so they stay
+    signed in.
+  - A young person's never is (docs/plan/06: no "remember me", since devices are often shared),
+    so closing the app signs them out.
+  - Refreshes run one at a time, because a refresh token used twice ends the whole family.
+  - Offline doesn't sign anyone out.
+- **Words:**
+  - The shared catalogues, with 124 new `app.*` strings drafted in six languages and listed in
+    `@@drafts`.
+  - The reading-level gate now covers `app.*`.
+  - Times are written in the region's zone, not the phone's.
+  - Problems are worded from the error code, never from the server's English title.
+- **The API's shapes** are written out in the app, not shared with the server.
+  `AppClientContractTests` runs the app's client against the real API, which keeps the two in
+  step.
+- **Screens:**
+  - home: the feed with "why", or what starts soonest;
+  - search with a filter sheet;
+  - listing detail, with save, remind, share and calendar;
+  - saved items, readable offline;
+  - sign-in, and registration with a neutral age question;
+  - interests and home area;
+  - the inbox and notification settings;
+  - language and account;
+  - family: children, adding one, the consent centre with each scope's exact disclosure, and the
+    claim at 13;
+  - the consent link.
+- **Capabilities:** what a young person's account may do is read from `/me/capabilities` and
+  shown as the server says. The app works out nothing about consent itself.
+- **The device:**
+  - "Near me" asks for a coarse, foreground position only when tapped. The nearest
+    neighbourhood is chosen on the phone, and only its code is sent (D8).
+  - Saved items are kept as JSON in the app's private folder, so the list opens offline.
+  - Share, a provider's website and the calendar file go to the system.
+  - "Forgot your password?" opens the web page, as the emailed links do.
+- **Links (D35):**
+  - Android claims `https://{region}/app/*` (auto-verified), and iOS through associated
+    domains. Each link is passed to the UI.
+  - A consent link's token stays in the fragment, and in memory while the guardian signs in.
+- **The age question:** an under-13 answer sends nothing and is remembered on the device for a
+  day.
+- **Checked on the emulator** (Pixel 7, Android 16) against the compose stack: the feed, a
+  listing, Arabic laid out right to left, and a consent link opening the app from cold.
+- **Not yet:**
+  - **iOS:** the build and its universal-link handling are written but not compiled. They need
+    the Mac.
+  - **Push:** `IPushRegistrar` returns nothing until Firebase and APNs are set up, so the inbox
+    works and the phone gets no pushes.
+  - **Map:** waits on the tile proxy (Q7).
+  - **My schedule and local notifications:** wait on enrolments (M3).
+  - **Passkeys** in the app.
+  - **The release:** real app identifiers and signing (the entitlements name `kettle.localhost`)
+    and store compliance (M8).
+  - **Physical devices:** M2's acceptance asks for physical iOS and Android devices. Only the
+    emulator has run it so far.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

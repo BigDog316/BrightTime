@@ -1,0 +1,119 @@
+@page "/saved"
+@* Saved listings follow the account between devices (D33). The last copy is kept on the phone,
+   so the list still opens offline (docs/plan/06), marked as such. *@
+@using System.Text.Json
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject IOfflineStore Offline
+
+<h1>@T["saved.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.saved.sign_in"]</p>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    @if (_offline)
+    {
+        <p class="notice" role="status">@T["app.saved.offline"]</p>
+    }
+
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+    @if (_items is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_items is { Count: 0 })
+    {
+        <p>@T["saved.none"]</p>
+    }
+    else if (_items is not null)
+    {
+        @foreach ((string heading, List<SavedItem> group) in Groups())
+        {
+            <h2>@heading</h2>
+            @foreach (SavedItem item in group)
+            {
+                <div class="saved-item" @key="item.Listing.Id">
+                    <ListingCard Listing="item.Listing" />
+                    @if (!_offline)
+                    {
+                        <button type="button" @onclick="() => RemoveAsync(item)">@T["saved.remove"]</button>
+                    }
+                </div>
+            }
+        }
+    }
+}
+
+@code {
+    public const string CacheKey = "saved-items";
+
+    private List<SavedItem>? _items;
+    private ApiProblem? _problem;
+    private bool _offline;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<SavedItem>> saved = await Api.SavedAsync();
+        if (saved.IsSuccess)
+        {
+            _items = [.. saved.Value!];
+            _offline = false;
+            await Offline.SaveAsync(CacheKey, JsonSerializer.Serialize(_items, AppSession.Json));
+            return;
+        }
+
+        if (saved.Problem!.Type == ApiProblem.OfflineType && await Offline.LoadAsync(CacheKey) is { } kept)
+        {
+            _items = JsonSerializer.Deserialize<List<SavedItem>>(kept, AppSession.Json) ?? [];
+            _offline = true;
+            return;
+        }
+
+        _problem = saved.Problem;
+    }
+
+    private async Task RemoveAsync(SavedItem item)
+    {
+        ApiResult removed = await Api.UnsaveAsync(item.Listing.Id);
+        if (removed.IsSuccess)
+        {
+            _items!.Remove(item);
+            await Offline.SaveAsync(CacheKey, JsonSerializer.Serialize(_items, AppSession.Json));
+        }
+        else
+        {
+            _problem = removed.Problem;
+        }
+    }
+
+    // Grouped by deadline, as the web groups them: the next week, later, none.
+    private IEnumerable<(string Heading, List<SavedItem> Items)> Groups()
+    {
+        DateTimeOffset week = DateTimeOffset.UtcNow.AddDays(7);
+        List<SavedItem> soon = [.. _items!.Where(i => i.Listing.NextDeadlineAt is { } d && d <= week).OrderBy(i => i.Listing.NextDeadlineAt)];
+        List<SavedItem> later = [.. _items!.Where(i => i.Listing.NextDeadlineAt is { } d && d > week).OrderBy(i => i.Listing.NextDeadlineAt)];
+        List<SavedItem> none = [.. _items!.Where(i => i.Listing.NextDeadlineAt is null).OrderByDescending(i => i.SavedAt)];
+        if (soon.Count > 0)
+        {
+            yield return (T["saved.group.soon"], soon);
+        }
+
+        if (later.Count > 0)
+        {
+            yield return (T["saved.group.later"], later);
+        }
+
+        if (none.Count > 0)
+        {
+            yield return (T["saved.group.no_deadline"], none);
+        }
+    }
+}

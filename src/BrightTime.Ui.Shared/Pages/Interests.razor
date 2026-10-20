@@ -1,0 +1,88 @@
+@page "/interests"
+@* The only ranking inputs the person controls, stated as such (docs/plan/06). The feed's "why"
+   names them. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+<h1>@T["app.interests.title"]</h1>
+<p>@T["app.interests.explain"]</p>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_terms is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_terms is not null)
+    {
+        <form class="stack" @onsubmit="SaveAsync">
+            <fieldset>
+                <legend>@T["app.interests.choose"]</legend>
+                @foreach (Term term in _terms)
+                {
+                    <label class="check"><input type="checkbox" checked="@_chosen.Contains(term.Code)" @onchange="e => Toggle(term.Code, e)" /> @term.Name</label>
+                }
+            </fieldset>
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@_busy">@T["app.save"]</button>
+            </div>
+        </form>
+    }
+}
+
+@code {
+    public const int Weight = 3;
+
+    private IReadOnlyList<Term>? _terms;
+    private readonly HashSet<string> _chosen = new(StringComparer.Ordinal);
+    private ApiProblem? _problem;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<Term>> terms = await Api.TermsAsync("interest");
+        ApiResult<IReadOnlyList<Interest>> mine = await Api.InterestsAsync();
+        _problem = terms.Problem ?? mine.Problem;
+        _terms = terms.Value?.OrderBy(t => t.SortOrder).ToList();
+        foreach (Interest interest in mine.Value ?? [])
+        {
+            _chosen.Add(interest.Code);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        ApiResult saved = await Api.SetInterestsAsync(_chosen.Select(c => (c, Weight)));
+        _busy = false;
+        if (saved.IsSuccess)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            _problem = saved.Problem;
+        }
+    }
+
+    private void Toggle(string code, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            _chosen.Add(code);
+        }
+        else
+        {
+            _chosen.Remove(code);
+        }
+    }
+}

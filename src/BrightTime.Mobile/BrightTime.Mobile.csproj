@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    The MAUI Blazor Hybrid host (docs/plan/01): a BlazorWebView over BrightTime.Ui.Shared, and the
+    device services the shared UI asks for. Android builds anywhere the android workload is; iOS
+    only on a Mac. Not in BrightTime.slnx, so the main build and CI need no mobile workloads; CI
+    builds it in its own job (mobile), and it is opened and built on its own:
+      dotnet build src/BrightTime.Mobile -f net10.0-android
+
+    One build per region (each is its own white-label app): the region's addresses are build
+    properties, written into BuildConfig at compile time. Debug points at the local compose stack
+    through the Android emulator's host address.
+  -->
+
+  <PropertyGroup>
+    <!-- Directory.Build.props sets one framework for the server; this project targets the phones. -->
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <RootNamespace>BrightTime.Mobile</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <EnableDefaultCssItems>false</EnableDefaultCssItems>
+
+    <ApplicationTitle>BrightTime</ApplicationTitle>
+    <ApplicationId>org.brighttime.app</ApplicationId>
+    <ApplicationDisplayVersion>0.2</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
+
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+
+    <!-- The generated platform glue is not ours to document. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- The region this build serves. Debug: the local stack (deploy/compose.yml) from the emulator. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <BrightTimeApiBase Condition="'$(BrightTimeApiBase)' == ''">http://10.0.2.2:8000/api/v1/</BrightTimeApiBase>
+    <BrightTimeSiteBase Condition="'$(BrightTimeSiteBase)' == ''">http://10.0.2.2:8000/</BrightTimeSiteBase>
+    <BrightTimeHostHeader Condition="'$(BrightTimeHostHeader)' == ''">kettle.localhost</BrightTimeHostHeader>
+    <BrightTimeLinkHost Condition="'$(BrightTimeLinkHost)' == ''">kettle.localhost</BrightTimeLinkHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#0B5CAD" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#0B5CAD" BaseSize="128,128" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
+  </ItemGroup>
+
+  <Target Name="BrightTimeRequireRegion" BeforeTargets="CoreCompile" Condition="'$(BrightTimeApiBase)' == '' or '$(BrightTimeSiteBase)' == '' or '$(BrightTimeLinkHost)' == ''">
+    <Error Text="A release build serves one region: set BrightTimeApiBase, BrightTimeSiteBase and BrightTimeLinkHost (for example -p:BrightTimeApiBase=https://kettle.example.org/api/v1/)." />
+  </Target>
+
+  <!-- BuildConfig: the region's addresses as constants, which the Android link filter needs. -->
+  <Target Name="BrightTimeBuildConfig" BeforeTargets="CoreCompile" DependsOnTargets="BrightTimeRequireRegion">
+    <PropertyGroup>
+      <BrightTimeBuildConfigFile>$(IntermediateOutputPath)BuildConfig.g.cs</BrightTimeBuildConfigFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(BrightTimeBuildConfigFile)" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="// Generated from BrightTime.Mobile.csproj's region properties.;namespace BrightTime.Mobile%3B;internal static class BuildConfig;{;    public const string ApiBase = &quot;$(BrightTimeApiBase)&quot;%3B;    public const string SiteBase = &quot;$(BrightTimeSiteBase)&quot;%3B;    public const string HostHeader = &quot;$(BrightTimeHostHeader)&quot;%3B;    public const string LinkHost = &quot;$(BrightTimeLinkHost)&quot;%3B;}" />
+    <ItemGroup>
+      <Compile Include="$(BrightTimeBuildConfigFile)" />
+      <FileWrites Include="$(BrightTimeBuildConfigFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

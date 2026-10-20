@@ -1,0 +1,6 @@
+<svg width="456" height="456" viewBox="0 0 456 456" xmlns="http://www.w3.org/2000/svg">
+    <!-- A sun rising over a line: bright time. -->
+    <circle cx="228" cy="250" r="78" fill="#FFC94D" />
+    <rect x="108" y="250" width="240" height="90" fill="#0B5CAD" />
+    <rect x="108" y="246" width="240" height="10" rx="5" fill="#FFFFFF" />
+</svg>

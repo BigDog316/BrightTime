@@ -1,0 +1,95 @@
+@page "/account"
+@* Language, the person's own settings, and what their account may do. The capability list is
+   read from the server (GET /me/capabilities), never worked out here (M2's acceptance). *@
+@inject AppSession Session
+@inject AppState App
+@inject AppRegion Region
+@inject BrightTimeApi Api
+@inject NavigationManager Navigation
+
+<h1>@T["app.nav.account"]</h1>
+
+<section aria-labelledby="language">
+    <h2 id="language">@T["site.language"]</h2>
+    <label for="locale" class="visually-hidden">@T["site.language"]</label>
+    <select id="locale" value="@Region.Locale.Code" @onchange="e => App.ChooseLocale(e.Value?.ToString() ?? string.Empty)">
+        @foreach (BrightTime.SharedKernel.Primitives.Locale locale in Region.Locales)
+        {
+            <option value="@locale.Code" lang="@locale.Code">@locale.NativeName</option>
+        }
+    </select>
+</section>
+
+@if (Session.Me is not { } me)
+{
+    <div class="actions">
+        <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+        <a class="button" href="register">@T["app.account.create"]</a>
+    </div>
+}
+else
+{
+    <p>@T.Format("app.account.signed_in_as", ("name", Text.Name(me.UserName)))</p>
+
+    <nav aria-label="@T["app.nav.account"]">
+        <ul class="menu">
+            <li><a href="interests">@T["app.interests.title"]</a></li>
+            <li><a href="place">@T["app.place.title"]</a></li>
+            <li><a href="notifications/settings">@T["app.notifications.settings"]</a></li>
+            @if (me.IsAdult)
+            {
+                <li><a href="family">@T["app.family.title"]</a></li>
+            }
+        </ul>
+    </nav>
+
+    @if (me.IsYouth && Session.Capabilities is { } can)
+    {
+        <section aria-labelledby="can">
+            <h2 id="can">@T["app.account.can_heading"]</h2>
+            <ul class="capabilities">
+                <li>@(can.CanSelfEnroll ? T["app.can.enroll"] : T["app.cannot.enroll"])</li>
+                <li>@(can.CanUploadMedia ? T["app.can.upload"] : T["app.cannot.upload"])</li>
+                <li>@(can.CanPostInCommunity ? T["app.can.post"] : T["app.cannot.post"])</li>
+                <li>@(can.CanBeMessagedByOrganisation ? T["app.can.be_messaged"] : T["app.cannot.be_messaged"])</li>
+            </ul>
+            <p class="hint">@T["app.account.can_why"]</p>
+        </section>
+    }
+
+    @if (me.IsYouth)
+    {
+        <p class="hint">@T["app.account.youth_sign_out"]</p>
+    }
+
+    <ProblemNotice Problem="_problem" />
+    <div class="actions">
+        <button type="button" @onclick="SignOutAsync">@T["site.nav.sign_out"]</button>
+        <button type="button" @onclick="SignOutEverywhereAsync">@T["app.account.sign_out_everywhere"]</button>
+    </div>
+}
+
+@code {
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? Session.RefreshCapabilitiesAsync() : Task.CompletedTask;
+
+    private async Task SignOutAsync()
+    {
+        await Session.SignOutAsync();
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task SignOutEverywhereAsync()
+    {
+        ApiResult ended = await Api.SignOutEverywhereAsync();
+        if (!ended.IsSuccess)
+        {
+            _problem = ended.Problem;
+            return;
+        }
+
+        await Session.SignOutAsync();
+        Navigation.NavigateTo("/");
+    }
+}

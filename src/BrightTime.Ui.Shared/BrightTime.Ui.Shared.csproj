@@ -1,16 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
+  <!--
+    The app's screens, view state and API client (docs/plan/01, "Mobile sharing model"). It
+    knows nothing about the device: BrightTime.Mobile supplies the platform services. Plain
+    net10.0, so it is built and tested on any machine; the MAUI host is not.
+  -->
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+    <ProjectReference Include="../BrightTime.Localisation/BrightTime.Localisation.csproj" />
     <ProjectReference Include="../BrightTime.Ui.Design/BrightTime.Ui.Design.csproj" />
-    <ProjectReference Include="../BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
-    <ProjectReference Include="../BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
-    <ProjectReference Include="../BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
-    <ProjectReference Include="../BrightTime.Modules.Opportunities.Contracts/BrightTime.Modules.Opportunities.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,17 @@
+@* What went wrong, in the app's language (Words.Problem), with a way to try again when there is one. *@
+@if (Problem is not null)
+{
+    <div class="notice error" role="alert">
+        <p>@Words.Problem(T, Problem)</p>
+        @if (Retry.HasDelegate)
+        {
+            <button type="button" @onclick="Retry">@T["site.reconnect.retry"]</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ApiProblem? Problem { get; set; }
+
+    [Parameter] public EventCallback Retry { get; set; }
+}

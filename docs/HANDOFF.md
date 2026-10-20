@@ -50,8 +50,13 @@ is merged (`cec1ed6`).
     `consent-link.js`).
   - The app-link files are served from `AppLinks:*`.
   - The server words pushes and the inbox (`notify.*`).
-- **The server side of M2 is done.** What is left is the MAUI app (iOS needs the Mac), and
-  what waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
+- **The app** (D36, proposed): `BrightTime.Ui.Shared` (screens, client, session; tested
+  anywhere), `BrightTime.Ui.Design` (styles) and `BrightTime.Mobile` (the MAUI host).
+  - The Android build runs on the emulator against the compose stack.
+  - The iOS build is written but not compiled; it needs the Mac.
+  - Still to do: push, the map (Q7), the schedule (M3), a run on physical devices, and the
+    release identifiers.
+- What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
@@ -78,8 +83,7 @@ These have not been asked for yet:
 - curation screens;
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see
   [plan/03](plan/03-indexing-and-query-plans.md));
-- the M2 MAUI app shell, which needs the Mac for iOS. It answers `/app/*` links and asks for
-  a birth month when someone registers.
+- the app on iOS (the Mac), and on physical phones, which M2's acceptance asks for.
 
 ## Setting up a machine
 
@@ -138,7 +142,17 @@ These have not been asked for yet:
      on first boot only.
    - It publishes Postgres on 127.0.0.1:5432, so stop it before using that port for
      anything else.
-7. **Install the browsers for the e2e tests.** Do this once per machine, after a build. Without
+7. **Run the app on the Android emulator.** Visual Studio's Android SDK and JDK are enough.
+   Start the compose stack (step 6), boot an emulator, then deploy with the build's `Install`
+   target. A plain `adb install` of a Debug APK crashes on start, because Debug uses fast
+   deployment and keeps the assemblies outside the APK.
+   ```bash
+   dotnet build src/BrightTime.Mobile -t:Install -f net10.0-android -p:JavaSdkDirectory="C:\Program Files\Android\openjdk\jdk-21.0.8" -p:AndroidSdkDirectory="C:\Program Files (x86)\Android\android-sdk"
+   ```
+   - Debug talks to `http://10.0.2.2:8000/api/v1/` as `kettle.localhost`.
+   - A long checkout path breaks aapt2 (Windows path length). The repository's
+     `artifacts/` paths are short enough.
+8. **Install the browsers for the e2e tests.** Do this once per machine, after a build. Without
    them, `BrightTime.E2E.Tests` skips locally and fails under CI:
    ```bash
    pwsh artifacts/bin/BrightTime.E2E.Tests/debug/playwright.ps1 install chromium webkit

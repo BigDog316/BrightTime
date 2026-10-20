@@ -1,0 +1,93 @@
+@page "/"
+@* Signed in: the person's feed, each card saying why it was shown (D33). Signed out: what
+   starts soonest, and the way in. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@(Session.IsSignedIn ? T["home.featured"] : T["home.find"])</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p class="lead">@T["home.lead"]</p>
+    <div class="actions">
+        <a class="button primary" href="register">@T["app.account.create"]</a>
+        <a class="button" href="sign-in">@T["account.sign_in.title"]</a>
+    </div>
+    <h2>@T["finder.sort.soonest"]</h2>
+}
+else if (_noInterests)
+{
+    <div class="notice">
+        <p>@T["app.home.add_interests"]</p>
+        <a class="button" href="interests">@T["app.interests.title"]</a>
+    </div>
+}
+
+<ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+@if (_items is null && _problem is null)
+{
+    <Busy />
+}
+else if (_items is { Count: 0 })
+{
+    <p>@T["home.nothing_this_week"]</p>
+}
+else if (_items is not null)
+{
+    <div class="results">
+        @foreach (ListingSummary listing in _items)
+        {
+            <ListingCard Listing="listing" @key="listing.Id" />
+        }
+    </div>
+    @if (_next is not null)
+    {
+        <button type="button" class="more" @onclick="MoreAsync" disabled="@_loading">@T["finder.results.more"]</button>
+    }
+}
+
+@code {
+    private List<ListingSummary>? _items;
+    private string? _next;
+    private ApiProblem? _problem;
+    private bool _noInterests;
+    private bool _loading;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        _items = null;
+        _loading = true;
+        ApiResult<Page<ListingSummary>> page = Session.IsSignedIn
+            ? await Api.FeedAsync()
+            : await Api.SearchAsync(SearchFilters.StartingSoon);
+        Accept(page, append: false);
+
+        if (Session.IsSignedIn && await Api.InterestsAsync() is { IsSuccess: true, Value: { Count: 0 } })
+        {
+            _noInterests = true;
+        }
+    }
+
+    private async Task MoreAsync()
+    {
+        _loading = true;
+        Accept(Session.IsSignedIn ? await Api.FeedAsync(_next) : await Api.SearchAsync(SearchFilters.StartingSoon, _next), append: true);
+    }
+
+    private void Accept(ApiResult<Page<ListingSummary>> page, bool append)
+    {
+        _loading = false;
+        if (!page.IsSuccess)
+        {
+            _problem = page.Problem;
+            return;
+        }
+
+        _items = append && _items is not null ? [.. _items, .. page.Value!.Items] : [.. page.Value!.Items];
+        _next = page.Value!.NextCursor;
+    }
+}

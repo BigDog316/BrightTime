@@ -1,0 +1,64 @@
+@* Every screen's frame: the region's name, the screen, and the tab bar. Its language and
+   direction follow the app's, so Arabic lays out right to left throughout. A link the system
+   opened the app with (AppLinks) is followed as soon as the frame is up. *@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AppRegion Region
+@inject AppSession Session
+@inject AppLinks Links
+@inject NavigationManager Navigation
+
+<div class="app" lang="@T.Locale.Code" dir="@T.Locale.Direction">
+    <header class="app-bar">
+        <span class="app-name">@(Region.Name ?? "BrightTime")</span>
+    </header>
+    <main id="main" class="app-main">
+        @Body
+    </main>
+    <nav class="tab-bar" aria-label="@T["app.nav.label"]">
+        <NavLink href="" Match="NavLinkMatch.All">@T["app.nav.home"]</NavLink>
+        <NavLink href="search">@T["finder.search"]</NavLink>
+        <NavLink href="saved">@T["saved.title"]</NavLink>
+        @if (Session.IsSignedIn)
+        {
+            <NavLink href="notifications">@T["app.nav.inbox"]</NavLink>
+        }
+        <NavLink href="account">@T["app.nav.account"]</NavLink>
+    </nav>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Region.Changed += Refresh;
+        Session.Changed += Refresh;
+        Links.Arrived += OnArrived;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            FollowLink();
+        }
+    }
+
+    private void OnArrived(object? sender, EventArgs e) => FollowLink();
+
+    private void FollowLink() => InvokeAsync(() =>
+    {
+        if (Links.Take() is { } path)
+        {
+            Navigation.NavigateTo(path);
+        }
+    });
+
+    private void Refresh(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Region.Changed -= Refresh;
+        Session.Changed -= Refresh;
+        Links.Arrived -= OnArrived;
+    }
+}

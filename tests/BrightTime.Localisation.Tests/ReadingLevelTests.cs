@@ -24,7 +24,7 @@ public sealed partial class ReadingLevelTests
     private const double Grade = 8.0;
 
     private static readonly string[] YouthFacing =
-        ["site.", "home.", "finder.", "listing.", "account.", "email.", "form.", "collections.", "hoods.", "org.", "saved.", "map."];
+        ["site.", "home.", "finder.", "listing.", "account.", "email.", "form.", "collections.", "hoods.", "org.", "saved.", "map.", "app."];
 
     private static readonly Catalogue Shipped = Catalogue.Load(typeof(Catalogue).Assembly);
 

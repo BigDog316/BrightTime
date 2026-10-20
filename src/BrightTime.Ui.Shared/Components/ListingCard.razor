@@ -1,0 +1,31 @@
+@* One result: what, who, when and how much, and why it was shown (D30). *@
+<article class="card listing-card">
+    <h3><a href="listings/@Uri.EscapeDataString(Listing.Slug)">@Listing.Title</a></h3>
+    @if (Listing.Organisation is { } org)
+    {
+        <p class="byline">@T.Format("listing.byline", ("organisation", Text.Name(org.Name)))</p>
+    }
+    <p class="summary">@Listing.Summary</p>
+    <ul class="facts">
+        <li>@T["listing.kind." + Listing.Kind]</li>
+        <li>@Words.Price(T, Listing.Cost)</li>
+        @if (Listing.NextStartAt is { } start)
+        {
+            <li>@T.Format("finder.results.next", ("when", T.DayTime(start)))</li>
+        }
+        @if (Listing.NextDeadlineAt is { } due)
+        {
+            <li class="deadline">@T.Format("finder.card.deadline", ("date", T.DateShort(due)))</li>
+        }
+    </ul>
+    @if (Why.Count > 0)
+    {
+        <p class="why"><span class="visually-hidden">@T["finder.results.why"]: </span>@string.Join(" · ", Why)</p>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ListingSummary Listing { get; set; } = default!;
+
+    private List<string> Why => [.. Listing.Why.Select(p => Words.Phrase(T, p)).Where(s => s.Length > 0)];
+}

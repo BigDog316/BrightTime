@@ -1,0 +1,266 @@
+@page "/listings/{Slug}"
+@* One listing, as the web shows it: what, who, when, where, how much, and how to join. Save,
+   remind, share and add to calendar. A private site's address never comes from the API (D8). *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject AppEndpoints Endpoints
+@inject IShareService Share
+@inject IExternalLauncher Launcher
+
+<ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+@if (_listing is null && _problem is null)
+{
+    <Busy />
+}
+else if (_listing is { } l)
+{
+    <article class="listing" lang="@l.ContentLanguage">
+        <h1>@l.Title</h1>
+        <p class="byline">@T.Format("listing.byline", ("organisation", Text.Name(l.Organisation.Name)))</p>
+        <p class="summary">@l.Summary</p>
+
+        <div class="actions" lang="@T.Locale.Code">
+            @if (Session.IsSignedIn)
+            {
+                <button type="button" class="@(_saved ? "" : "primary")" aria-pressed="@(_saved ? "true" : "false")" @onclick="ToggleSaveAsync" disabled="@_busy">
+                    @(_saved ? T["saved.saved"] : T["saved.save"])
+                </button>
+            }
+            else
+            {
+                <a class="button" href="sign-in">@T["app.listing.sign_in_to_save"]</a>
+            }
+            <button type="button" @onclick="ShareAsync">@T["app.listing.share"]</button>
+            @if (l.Upcoming.Count > 0)
+            {
+                <button type="button" @onclick="CalendarAsync">@T["listing.sessions.calendar"]</button>
+            }
+        </div>
+
+        @if (_status is not null)
+        {
+            <p class="notice" role="status" lang="@T.Locale.Code">@_status</p>
+        }
+
+        <section lang="@T.Locale.Code" aria-labelledby="glance">
+            <h2 id="glance">@T["listing.glance"]</h2>
+            <dl class="facts">
+                <dt>@T["listing.kind." + l.Kind]</dt>
+                <dd>@T["listing.modality." + l.Modality]</dd>
+                @if (Words.Ages(T, l.AgeMin, l.AgeMax) is { } ages)
+                {
+                    <dt>@T["listing.fact.ages"]</dt>
+                    <dd>@ages</dd>
+                }
+                <dt>@T["listing.fact.price"]</dt>
+                <dd>@Price(l)</dd>
+                @if (l.Languages.Count > 0)
+                {
+                    <dt>@T["listing.fact.languages"]</dt>
+                    <dd>@string.Join(", ", l.Languages.Select(Language))</dd>
+                }
+            </dl>
+            @if (l.MealsProvided)
+            {
+                <p>@T["listing.meals_provided"]</p>
+            }
+            @if (l.TransportProvided)
+            {
+                <p>@T["listing.transport_provided"]</p>
+            }
+        </section>
+
+        @if (l.Description is { Length: > 0 } description)
+        {
+            <section aria-labelledby="about" lang="@l.DescriptionLanguage">
+                <h2 id="about" lang="@T.Locale.Code">@T["listing.about"]</h2>
+                @if (l.IsMachineTranslated)
+                {
+                    <p class="hint" lang="@T.Locale.Code">@T.Format("listing.machine_translated", ("language", Language(l.ContentLanguage)))</p>
+                }
+                @* Plain text, a paragraph per blank line: the app renders no markup from the API. *@
+                @foreach (string paragraph in description.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    <p>@paragraph</p>
+                }
+            </section>
+        }
+
+        <section lang="@T.Locale.Code" aria-labelledby="sessions">
+            <h2 id="sessions">@T["listing.sessions"]</h2>
+            @if (l.Upcoming.Count == 0)
+            {
+                <p>@T.Format("listing.sessions.none", ("organisation", Text.Name(l.Organisation.Name)))</p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (Session s in l.Upcoming)
+                    {
+                        <li>@T.Range(T.DayTime(s.StartsAt), T.Time(s.EndsAt))</li>
+                    }
+                </ul>
+                <p class="hint">@T["listing.sessions.local_time"]</p>
+                @if (Session.IsSignedIn)
+                {
+                    <button type="button" @onclick='() => RemindAsync("next_session", 60)' disabled="@_busy">@T["app.reminder.before_session"]</button>
+                }
+            }
+        </section>
+
+        @if (l.Deadlines.Count > 0)
+        {
+            <section lang="@T.Locale.Code" aria-labelledby="deadlines">
+                <h2 id="deadlines">@T["listing.deadlines"]</h2>
+                <ul>
+                    @foreach (Deadline d in l.Deadlines)
+                    {
+                        <li>@(d.Label ?? T["listing.deadline." + d.Kind]): @T.DayTime(d.DueAt)</li>
+                    }
+                </ul>
+                @if (Session.IsSignedIn)
+                {
+                    <button type="button" @onclick='() => RemindAsync("deadline", 24 * 60)' disabled="@_busy">@T["app.reminder.before_deadline"]</button>
+                }
+            </section>
+        }
+
+        @if (l.Places.Count > 0)
+        {
+            <section lang="@T.Locale.Code" aria-labelledby="where">
+                <h2 id="where">@T.Format("listing.places", ("count", l.Places.Count))</h2>
+                @foreach (Place p in l.Places)
+                {
+                    <div class="place">
+                        <p><strong>@p.Name</strong></p>
+                        @if (p.IsAddressPublic)
+                        {
+                            <p>@string.Join(", ", new[] { p.AddressLine1, p.AddressLine2, p.Locality, p.PostalCode }.Where(x => !string.IsNullOrWhiteSpace(x)))</p>
+                        }
+                        else
+                        {
+                            <p>@T["listing.places.address_after_registering"]</p>
+                        }
+                        @if (p.Neighbourhood is { } area)
+                        {
+                            <p>@T.Format("listing.places.area", ("area", Text.Name(area)))</p>
+                        }
+                        @if (p.TransitNote is { } transit)
+                        {
+                            <p>@transit</p>
+                        }
+                        @if (p.IsWheelchairAccessible == true)
+                        {
+                            <p>@T["listing.places.wheelchair"]</p>
+                        }
+                    </div>
+                }
+            </section>
+        }
+
+        @if (l.AccessibilityNote is { Length: > 0 } access)
+        {
+            <section aria-labelledby="access">
+                <h2 id="access" lang="@T.Locale.Code">@T["listing.access"]</h2>
+                <p>@access</p>
+            </section>
+        }
+
+        <section lang="@T.Locale.Code" aria-labelledby="join">
+            <h2 id="join">@(l.Kind == "job" ? T["listing.register.heading_apply"] : T["listing.register.heading_join"])</h2>
+            @if (l.IsDropIn)
+            {
+                <p>@T["listing.register.just_come"]</p>
+            }
+            else if (l.ExternalUrl is { } external && Uri.TryCreate(external, UriKind.Absolute, out Uri? site) && site.Scheme == Uri.UriSchemeHttps)
+            {
+                <p>@T.Format("listing.register.on_provider_site", ("organisation", Text.Name(l.Organisation.Name)))</p>
+                <button type="button" class="primary" @onclick="() => Launcher.OpenAsync(site)">
+                    @(l.Kind == "job" ? T["listing.register.apply"] : T["listing.register.register"])
+                </button>
+            }
+            else
+            {
+                <p>@T.Format(l.Kind == "job" ? "listing.register.contact_to_apply" : "listing.register.contact_to_register", ("organisation", Text.Name(l.Organisation.Name)))</p>
+            }
+            @if (l.ContactEmail is { } email)
+            {
+                <p><a href="mailto:@email">@email</a></p>
+            }
+            @if (l.ContactPhone is { } phone)
+            {
+                <p><a href="tel:@phone">@phone</a></p>
+            }
+        </section>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private ListingDetail? _listing;
+    private ApiProblem? _problem;
+    private bool _saved;
+    private bool _busy;
+    private string? _status;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        _listing = null;
+        ApiResult<ListingDetail> found = await Api.ListingAsync(Slug);
+        _listing = found.Value;
+        _problem = found.Problem;
+        if (_listing is not null && Session.IsSignedIn && await Api.SavedAsync() is { IsSuccess: true, Value: { } saved })
+        {
+            _saved = saved.Any(s => s.Listing.Id == _listing.Id);
+        }
+    }
+
+    private async Task ToggleSaveAsync()
+    {
+        _busy = true;
+        ApiResult done = _saved ? await Api.UnsaveAsync(_listing!.Id) : await Api.SaveAsync(_listing!.Id);
+        _busy = false;
+        if (done.IsSuccess)
+        {
+            _saved = !_saved;
+            _status = null;
+        }
+        else
+        {
+            _status = Words.Problem(T, done.Problem!);
+        }
+    }
+
+    private async Task RemindAsync(string anchor, int leadMinutes)
+    {
+        _busy = true;
+        ApiResult<Reminder> made = await Api.RemindAsync(_listing!.Id, anchor, leadMinutes);
+        _busy = false;
+        _status = made.IsSuccess
+            ? T.Format("app.reminder.set", ("when", T.DayTime(made.Value!.RemindAt)))
+            : Words.Problem(T, made.Problem!);
+    }
+
+    private Task ShareAsync() => Share.ShareAsync(_listing!.Title, Endpoints.Listing(_listing.Slug));
+
+    private Task CalendarAsync() => Launcher.OpenAsync(Endpoints.Calendar(_listing!.Slug));
+
+    // As the web's ListingView words it, from the API's cost_model values.
+    private string Price(ListingDetail l) => l.CostModel switch
+    {
+        "free" => T["listing.price.free"],
+        "fixed" when l.CostCentsMin is { } c => T.Money(c),
+        "sliding_scale" when l.CostCentsMin is { } min && l.CostCentsMax is { } max =>
+            T.Format("listing.price.sliding", ("min", T.Money(min)), ("max", T.Money(max))),
+        "stipend_paid" => T["listing.price.paid"],
+        _ => T["listing.price.varies"],
+    };
+
+    private string Language(string code) =>
+        BrightTime.SharedKernel.Primitives.Locale.TryFromCode(code, out var known) ? known.NativeName : code;
+}

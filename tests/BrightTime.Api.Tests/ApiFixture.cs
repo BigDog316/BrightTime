@@ -87,6 +87,10 @@ public sealed class ApiFixture : IAsyncLifetime
     public HttpClient Client(string host = Host) =>
         Factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri($"https://{host}/"), AllowAutoRedirect = false });
 
+    /// <summary>A client the way the app makes one: based at the region's <c>/api/v1/</c>.</summary>
+    public HttpClient AppClient(string host = Host) =>
+        Factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri($"https://{host}/api/v1/"), AllowAutoRedirect = false });
+
     /// <summary>Gives a seeded account a fresh password and returns it. Never printed.</summary>
     public async Task<string> SetPasswordAsync(string email)
     {

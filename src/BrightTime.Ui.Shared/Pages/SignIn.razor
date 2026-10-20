@@ -1,0 +1,58 @@
+@page "/sign-in"
+@* Email and password (D28's token endpoint). A forgotten password is reset on the web, as the
+   emailed links are. Passkeys in the app come later. *@
+@inject AppSession Session
+@inject AppEndpoints Endpoints
+@inject IExternalLauncher Launcher
+@inject NavigationManager Navigation
+
+<h1>@T["account.sign_in.title"]</h1>
+
+@if (_problem is not null)
+{
+    <p class="notice error" role="alert" id="sign-in-error">@_problem</p>
+}
+
+<form class="stack" @onsubmit="SignInAsync">
+    <div class="field">
+        <label for="email">@T["account.field.email"]</label>
+        <input id="email" type="email" autocomplete="username" inputmode="email" required @bind="_email"
+               aria-describedby="@(_problem is null ? null : "sign-in-error")" />
+    </div>
+    <div class="field">
+        <label for="password">@T["account.field.password"]</label>
+        <input id="password" type="password" autocomplete="current-password" required @bind="_password" />
+    </div>
+    <div class="actions">
+        <button type="submit" class="primary" disabled="@_busy">@T["account.sign_in.submit"]</button>
+    </div>
+</form>
+
+<p><button type="button" class="link" @onclick="() => Launcher.OpenAsync(Endpoints.ForgotPassword)">@T["account.sign_in.forgot"]</button></p>
+<p>@T["app.sign_in.no_account"] <a href="register">@T["app.account.create"]</a></p>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private string _email = "";
+    private string _password = "";
+    private string? _problem;
+    private bool _busy;
+
+    private async Task SignInAsync()
+    {
+        _busy = true;
+        ApiProblem? failed = await Session.SignInAsync(_email.Trim(), _password);
+        _busy = false;
+        if (failed is not null)
+        {
+            // A wrong password and an unknown address read the same (T21).
+            _problem = failed.Type is ApiProblem.OfflineType ? Words.Problem(T, failed) : T["app.sign_in.failed"];
+            return;
+        }
+
+        _password = "";
+        // Only a path inside the app: never a link elsewhere.
+        Navigation.NavigateTo(ReturnUrl is { Length: > 1 } back && back[0] == '/' && back[1] != '/' ? back : "/");
+    }
+}

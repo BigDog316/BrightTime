@@ -24,6 +24,11 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup Label="Mobile (BrightTime.Mobile; the MAUI workload's version)">
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.110" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.110" />
+  </ItemGroup>
+
   <ItemGroup Label="Extensions">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />

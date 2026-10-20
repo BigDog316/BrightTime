@@ -1,0 +1,60 @@
+@page "/family"
+@* A guardian's children (D31): each profile's state at a glance. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.family.title"]</h1>
+
+@if (Session.Me is not { IsAdult: true })
+{
+    <p>@T["app.family.adults_only"]</p>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_children is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_children is not null)
+    {
+        @if (_children.Count == 0)
+        {
+            <p>@T["app.family.none"]</p>
+        }
+
+        <ul class="cards">
+            @foreach (Child child in _children)
+            {
+                <li class="card" @key="child.Id">
+                    <h2><a href="family/@child.Id">@child.GivenName</a></h2>
+                    <p>@State(child)</p>
+                </li>
+            }
+        </ul>
+        <a class="button primary" href="family/add">@T["app.family.add"]</a>
+    }
+}
+
+@code {
+    private IReadOnlyList<Child>? _children;
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.Me is { IsAdult: true } ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<Child>> children = await Api.ChildrenAsync();
+        _children = children.Value;
+        _problem = children.Problem;
+    }
+
+    private string State(Child child) => child switch
+    {
+        { IsClaimed: true } => T["app.family.state.own_sign_in"],
+        { Link.Status: "pending" } => T["app.family.state.waiting"],
+        { Status: "active" } => T["app.family.state.active"],
+        _ => T["app.family.state.paused"],
+    };
+}

@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/BrightTime.Api/BrightTime.Api.csproj" />
     <ProjectReference Include="../../src/BrightTime.Seed/BrightTime.Seed.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,116 @@
+@page "/notifications/settings"
+@* Which kinds arrive where, and one quiet window for pushes (D33). *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.notifications.settings"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_choices is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_choices is not null)
+    {
+        <form class="stack" @onsubmit="SaveAsync">
+            @foreach (IGrouping<string, ChannelChoice> kind in _choices.GroupBy(c => c.Kind))
+            {
+                <fieldset>
+                    <legend>@T["app.notify_kind." + kind.Key]</legend>
+                    @foreach (ChannelChoice choice in kind)
+                    {
+                        <label class="check">
+                            <input type="checkbox" checked="@choice.Enabled" @onchange="e => Set(choice, e)" />
+                            @T["app.channel." + choice.Channel]
+                        </label>
+                    }
+                </fieldset>
+            }
+
+            <fieldset>
+                <legend>@T["app.quiet.heading"]</legend>
+                <p class="hint">@T["app.quiet.explain"]</p>
+                <div class="inline">
+                    <div class="field">
+                        <label for="from">@T["app.quiet.from"]</label>
+                        <input id="from" type="time" @bind="_quietFrom" />
+                    </div>
+                    <div class="field">
+                        <label for="to">@T["app.quiet.to"]</label>
+                        <input id="to" type="time" @bind="_quietTo" />
+                    </div>
+                </div>
+            </fieldset>
+
+            @if (_saved)
+            {
+                <p class="notice success" role="status">@T["app.saved_settings"]</p>
+            }
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@_busy">@T["app.save"]</button>
+            </div>
+        </form>
+    }
+}
+
+@code {
+    private List<ChannelChoice>? _choices;
+    private TimeOnly? _quietFrom;
+    private TimeOnly? _quietTo;
+    private ApiProblem? _problem;
+    private bool _busy;
+    private bool _saved;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<NotificationSettings> settings = await Api.NotificationSettingsAsync();
+        _problem = settings.Problem;
+        if (settings.Value is { } s)
+        {
+            Accept(s);
+        }
+    }
+
+    private void Accept(NotificationSettings s)
+    {
+        _choices = [.. s.Choices];
+        _quietFrom = Time(s.QuietFrom);
+        _quietTo = Time(s.QuietTo);
+    }
+
+    private static TimeOnly? Time(string? value) =>
+        TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly t) ? t : null;
+
+    private void Set(ChannelChoice choice, ChangeEventArgs e)
+    {
+        _saved = false;
+        _choices![_choices.IndexOf(choice)] = choice with { Enabled = e.Value is true };
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        // Both ends of the window, or neither: the server refuses half of one.
+        bool window = _quietFrom is not null && _quietTo is not null;
+        ApiResult<NotificationSettings> saved = await Api.SetNotificationSettingsAsync(new NotificationSettings(
+            window ? _quietFrom!.Value.ToString("HH:mm", CultureInfo.InvariantCulture) : null,
+            window ? _quietTo!.Value.ToString("HH:mm", CultureInfo.InvariantCulture) : null,
+            _choices!));
+        _busy = false;
+        _problem = saved.Problem;
+        if (saved.Value is { } s)
+        {
+            Accept(s);
+            _saved = true;
+        }
+    }
+}

@@ -1,0 +1,46 @@
+@* The app's root component, which the host's BlazorWebView renders. Start-up first: the region
+   and its language, and any kept sign-in; then the router. *@
+@implements IDisposable
+@inject AppState App
+
+@if (App.IsReady)
+{
+    <Router AppAssembly="typeof(Routes).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="typeof(MainLayout)">
+                <h1>@T["site.not_found.title"]</h1>
+                <p>@T["site.not_found.body"]</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+else if (App.StartProblem is { } problem)
+{
+    <main class="app-start" lang="@T.Locale.Code" dir="@T.Locale.Direction">
+        <h1>BrightTime</h1>
+        <p role="alert">@Words.Problem(T, problem)</p>
+        <button type="button" class="primary" @onclick="StartAsync">@T["site.reconnect.retry"]</button>
+    </main>
+}
+else
+{
+    <main class="app-start"><Busy /></main>
+}
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        App.Changed += Refresh;
+        await StartAsync();
+    }
+
+    private Task StartAsync() => App.StartAsync();
+
+    private void Refresh(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => App.Changed -= Refresh;
+}

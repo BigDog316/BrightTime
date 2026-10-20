@@ -1,0 +1,236 @@
+@page "/search"
+@* The finder: words, then a filter sheet (docs/plan/06). "Near me" asks for the phone's position
+   only when tapped, picks the nearest neighbourhood on the device, and sends only its code: the
+   position never leaves the phone (D8). *@
+@inject BrightTimeApi Api
+@inject ILocationProvider Location
+
+<h1>@T["finder.title"]</h1>
+
+<form class="search-bar" role="search" @onsubmit="SearchAsync">
+    <label for="q">@T["finder.field.text"]</label>
+    <div class="inline">
+        <input id="q" type="search" @bind="_text" maxlength="200" />
+        <button type="submit" class="primary">@T["finder.search"]</button>
+    </div>
+</form>
+
+<button type="button" class="filters-toggle" aria-expanded="@(_sheetOpen ? "true" : "false")" aria-controls="filters" @onclick="() => _sheetOpen = !_sheetOpen">
+    @T["finder.filters"]@(_filters.Count > 0 ? $" ({_filters.Count})" : "")
+</button>
+
+@if (_sheetOpen)
+{
+    <section id="filters" class="sheet" aria-label="@T["finder.filters"]">
+        <fieldset>
+            <legend>@T["finder.field.kind"]</legend>
+            @foreach ((string kind, string key) in Kinds)
+            {
+                <label class="check"><input type="checkbox" checked="@_kinds.Contains(kind)" @onchange="e => Toggle(_kinds, kind, e)" /> @T[key]</label>
+            }
+        </fieldset>
+
+        @if (_categories is { Count: > 0 })
+        {
+            <fieldset>
+                <legend>@T["listing.fact.topics"]</legend>
+                @foreach (Term term in _categories)
+                {
+                    <label class="check"><input type="checkbox" checked="@_chosenCategories.Contains(term.Code)" @onchange="e => Toggle(_chosenCategories, term.Code, e)" /> @term.Name</label>
+                }
+            </fieldset>
+        }
+
+        <div class="field">
+            <label for="age">@T["finder.field.age"]</label>
+            <input id="age" type="number" inputmode="numeric" min="0" max="25" @bind="_age" />
+        </div>
+        <label class="check"><input type="checkbox" @bind="_free" /> @T["finder.field.free"]</label>
+        <div class="field">
+            <label for="max">@T["finder.field.max_price"]</label>
+            <input id="max" type="number" inputmode="numeric" min="0" @bind="_maxCost" disabled="@_free" />
+        </div>
+        <label class="check"><input type="checkbox" @bind="_meals" /> @T["app.filter.meals"]</label>
+        <label class="check"><input type="checkbox" @bind="_transport" /> @T["app.filter.transport"]</label>
+        <label class="check"><input type="checkbox" @bind="_dropIn" /> @T["app.filter.drop_in"]</label>
+
+        <div class="field">
+            <label for="hood">@T["finder.field.neighbourhood"]</label>
+            <select id="hood" @bind="_hood">
+                <option value="">@T["finder.field.anywhere"]</option>
+                @foreach (NeighbourhoodSummary hood in _hoods ?? [])
+                {
+                    <option value="@hood.Code">@hood.Name</option>
+                }
+            </select>
+            <button type="button" @onclick="NearMeAsync" disabled="@(_hoods is not { Count: > 0 } || _locating)">@T["app.filter.near_me"]</button>
+            @if (_locationNote is not null)
+            {
+                <p class="hint" role="status">@_locationNote</p>
+            }
+        </div>
+
+        <div class="field">
+            <label for="sort">@T["finder.field.sort"]</label>
+            <select id="sort" @bind="_sort">
+                <option value="@SearchFilters.Relevance">@T["finder.sort.relevance"]</option>
+                <option value="@SearchFilters.Soonest">@T["finder.sort.soonest"]</option>
+                <option value="@SearchFilters.Newest">@T["finder.sort.newest"]</option>
+            </select>
+        </div>
+
+        <div class="actions">
+            <button type="button" class="primary" @onclick="SearchAsync">@T["app.filter.apply"]</button>
+            <button type="button" @onclick="ClearAsync">@T["finder.clear"]</button>
+        </div>
+    </section>
+}
+
+@foreach (Phrase notice in _notices)
+{
+    <p class="notice" role="status">@Words.Phrase(T, notice)</p>
+}
+
+<ProblemNotice Problem="_problem" Retry="SearchAsync" />
+
+@if (_searching && _items is null)
+{
+    <Busy />
+}
+else if (_items is { Count: 0 })
+{
+    <p>@T["finder.results.none"]</p>
+}
+else if (_items is not null)
+{
+    <div class="results" aria-live="polite">
+        @foreach (ListingSummary listing in _items)
+        {
+            <ListingCard Listing="listing" @key="listing.Id" />
+        }
+    </div>
+    @if (_next is not null)
+    {
+        <button type="button" class="more" @onclick="MoreAsync" disabled="@_searching">@T["finder.results.more"]</button>
+    }
+}
+
+@code {
+    private static readonly (string Kind, string Key)[] Kinds =
+    [
+        ("program", "finder.kind_filter.program"),
+        ("event", "finder.kind_filter.event"),
+        ("job", "finder.kind_filter.job"),
+        ("resource", "finder.kind_filter.resource"),
+    ];
+
+    private string? _text;
+    private readonly HashSet<string> _kinds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _chosenCategories = new(StringComparer.Ordinal);
+    private int? _age;
+    private bool _free;
+    private int? _maxCost;
+    private bool _meals;
+    private bool _transport;
+    private bool _dropIn;
+    private string _hood = "";
+    private string _sort = SearchFilters.Relevance;
+
+    private bool _sheetOpen;
+    private bool _searching;
+    private bool _locating;
+    private string? _locationNote;
+    private IReadOnlyList<NeighbourhoodSummary>? _hoods;
+    private IReadOnlyList<Term>? _categories;
+    private SearchFilters _filters = new();
+    private List<ListingSummary>? _items;
+    private string? _next;
+    private IReadOnlyList<Phrase> _notices = [];
+    private ApiProblem? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Task<ApiResult<IReadOnlyList<NeighbourhoodSummary>>> hoods = Api.NeighbourhoodsAsync();
+        Task<ApiResult<IReadOnlyList<Term>>> categories = Api.TermsAsync("category");
+        await SearchAsync();
+        _hoods = (await hoods).Value;
+        _categories = [.. ((await categories).Value ?? []).Where(t => t.ParentCode is null).OrderBy(t => t.SortOrder)];
+    }
+
+    private async Task SearchAsync()
+    {
+        _filters = new SearchFilters
+        {
+            Text = _text,
+            Kinds = [.. _kinds],
+            Categories = [.. _chosenCategories],
+            Age = _age,
+            FreeOnly = _free,
+            MaxCostDollars = _free ? null : _maxCost,
+            MealsProvided = _meals,
+            TransportProvided = _transport,
+            DropIn = _dropIn,
+            NearNeighbourhood = _hood.Length == 0 ? null : _hood,
+            Sort = _sort,
+        };
+        _sheetOpen = false;
+        _items = null;
+        _searching = true;
+        Accept(await Api.SearchAsync(_filters), append: false);
+    }
+
+    private async Task MoreAsync()
+    {
+        _searching = true;
+        Accept(await Api.SearchAsync(_filters, _next), append: true);
+    }
+
+    private Task ClearAsync()
+    {
+        _kinds.Clear();
+        _chosenCategories.Clear();
+        (_age, _free, _maxCost, _meals, _transport, _dropIn, _hood, _sort) = (null, false, null, false, false, false, "", SearchFilters.Relevance);
+        return SearchAsync();
+    }
+
+    private void Accept(ApiResult<Page<ListingSummary>> page, bool append)
+    {
+        _searching = false;
+        _problem = page.Problem;
+        if (page.IsSuccess)
+        {
+            _items = append && _items is not null ? [.. _items, .. page.Value!.Items] : [.. page.Value!.Items];
+            _next = page.Value!.NextCursor;
+            _notices = page.Value!.Notices ?? [];
+        }
+    }
+
+    private async Task NearMeAsync()
+    {
+        _locating = true;
+        _locationNote = null;
+        GeoPoint? here = await Location.CurrentAsync();
+        _locating = false;
+        if (here is not { } point || _hoods is not { Count: > 0 } hoods)
+        {
+            _locationNote = T["app.filter.no_location"];
+            return;
+        }
+
+        NeighbourhoodSummary nearest = Nearest.Neighbourhood(hoods, point);
+        _hood = nearest.Code;
+        _locationNote = T.Format("app.filter.nearest", ("area", Text.Name(nearest.Name)));
+    }
+
+    private static void Toggle(HashSet<string> set, string value, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            set.Add(value);
+        }
+        else
+        {
+            set.Remove(value);
+        }
+    }
+}

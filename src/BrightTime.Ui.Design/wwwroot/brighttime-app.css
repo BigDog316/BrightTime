@@ -1,0 +1,436 @@
+/*
+  The app's look (docs/plan/01: design tokens, logical properties for right-to-left).
+  Every margin, padding and alignment is logical (inline/block), so Arabic mirrors without a
+  second stylesheet. Tap targets are at least 44px; focus is always visible; colours meet
+  WCAG 2.2 AA contrast in both schemes.
+*/
+
+:root {
+    --bt-ink: #1b1f24;
+    --bt-ink-muted: #4a5360;
+    --bt-paper: #ffffff;
+    --bt-paper-raised: #f4f6f8;
+    --bt-line: #c9d1da;
+    --bt-brand: #0b5cad;
+    --bt-brand-ink: #ffffff;
+    --bt-focus: #b35c00;
+    --bt-success: #0f6b3a;
+    --bt-success-paper: #e6f4ec;
+    --bt-error: #a3221a;
+    --bt-error-paper: #fbeceb;
+    --bt-notice-paper: #eef4fb;
+
+    --bt-space-1: 0.25rem;
+    --bt-space-2: 0.5rem;
+    --bt-space-3: 0.75rem;
+    --bt-space-4: 1rem;
+    --bt-space-6: 1.5rem;
+    --bt-radius: 0.5rem;
+    --bt-tap: 44px;
+    --bt-font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Bengali", "Noto Sans Arabic", "Noto Sans SC", sans-serif;
+
+    color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bt-ink: #e8ecf0;
+        --bt-ink-muted: #b4bdc8;
+        --bt-paper: #12161b;
+        --bt-paper-raised: #1d232a;
+        --bt-line: #3a434e;
+        --bt-brand: #6fb1f2;
+        --bt-brand-ink: #0b1a2a;
+        --bt-focus: #ffb35c;
+        --bt-success: #7fd8a4;
+        --bt-success-paper: #10281b;
+        --bt-error: #ff9c94;
+        --bt-error-paper: #2e1412;
+        --bt-notice-paper: #16222f;
+    }
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    background: var(--bt-paper);
+    color: var(--bt-ink);
+    font-family: var(--bt-font);
+    font-size: 100%;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 100dvh;
+}
+
+.app-bar {
+    padding-block: var(--bt-space-3);
+    padding-inline: var(--bt-space-4);
+    padding-block-start: max(var(--bt-space-3), env(safe-area-inset-top));
+    background: var(--bt-brand);
+    color: var(--bt-brand-ink);
+    font-weight: 700;
+}
+
+.app-main {
+    flex: 1;
+    padding: var(--bt-space-4);
+    max-inline-size: 48rem;
+    inline-size: 100%;
+    margin-inline: auto;
+}
+
+.app-start {
+    padding: var(--bt-space-6) var(--bt-space-4);
+}
+
+.tab-bar {
+    position: sticky;
+    inset-block-end: 0;
+    display: flex;
+    justify-content: space-around;
+    border-block-start: 1px solid var(--bt-line);
+    background: var(--bt-paper-raised);
+    padding-block-end: env(safe-area-inset-bottom);
+}
+
+.tab-bar a {
+    flex: 1;
+    min-block-size: var(--bt-tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--bt-space-2);
+    color: var(--bt-ink-muted);
+    text-decoration: none;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.tab-bar a.active {
+    color: var(--bt-brand);
+    font-weight: 700;
+    box-shadow: inset 0 3px 0 var(--bt-brand);
+}
+
+h1 {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    margin-block: 0 var(--bt-space-4);
+}
+
+h2 {
+    font-size: 1.2rem;
+    margin-block: var(--bt-space-6) var(--bt-space-2);
+}
+
+h3 {
+    font-size: 1.05rem;
+    margin-block: 0 var(--bt-space-1);
+}
+
+a {
+    color: var(--bt-brand);
+}
+
+:focus-visible {
+    outline: 3px solid var(--bt-focus);
+    outline-offset: 2px;
+}
+
+.lead {
+    font-size: 1.1rem;
+}
+
+.hint, small, .byline {
+    color: var(--bt-ink-muted);
+}
+
+.visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Buttons, and links styled as buttons. */
+button, .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: var(--bt-tap);
+    min-inline-size: var(--bt-tap);
+    padding-block: var(--bt-space-2);
+    padding-inline: var(--bt-space-4);
+    border: 1px solid var(--bt-brand);
+    border-radius: var(--bt-radius);
+    background: var(--bt-paper);
+    color: var(--bt-brand);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+button.primary, .button.primary {
+    background: var(--bt-brand);
+    color: var(--bt-brand-ink);
+}
+
+button.danger {
+    border-color: var(--bt-error);
+    color: var(--bt-error);
+}
+
+button.link {
+    border: 0;
+    padding-inline: 0;
+    background: none;
+    text-decoration: underline;
+    font-weight: 400;
+}
+
+button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bt-space-2);
+    margin-block: var(--bt-space-4);
+}
+
+/* Forms. */
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bt-space-4);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bt-space-1);
+}
+
+.inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bt-space-2);
+    align-items: end;
+}
+
+.inline > input {
+    flex: 1;
+}
+
+label {
+    font-weight: 600;
+}
+
+label.check {
+    display: flex;
+    align-items: center;
+    gap: var(--bt-space-2);
+    min-block-size: var(--bt-tap);
+    font-weight: 400;
+}
+
+input, select {
+    min-block-size: var(--bt-tap);
+    padding-inline: var(--bt-space-3);
+    border: 1px solid var(--bt-line);
+    border-radius: var(--bt-radius);
+    background: var(--bt-paper);
+    color: var(--bt-ink);
+    font: inherit;
+}
+
+input[type="checkbox"] {
+    min-block-size: auto;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    accent-color: var(--bt-brand);
+}
+
+fieldset {
+    border: 1px solid var(--bt-line);
+    border-radius: var(--bt-radius);
+    padding: var(--bt-space-3);
+    margin: 0;
+}
+
+legend {
+    font-weight: 700;
+    padding-inline: var(--bt-space-1);
+}
+
+.sheet {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bt-space-4);
+    margin-block: var(--bt-space-4);
+    padding: var(--bt-space-4);
+    border: 1px solid var(--bt-line);
+    border-radius: var(--bt-radius);
+    background: var(--bt-paper-raised);
+}
+
+.filters-toggle {
+    margin-block: var(--bt-space-3);
+}
+
+/* Cards and lists. */
+.results, .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bt-space-3);
+    padding: 0;
+    list-style: none;
+}
+
+.card {
+    padding: var(--bt-space-4);
+    border: 1px solid var(--bt-line);
+    border-radius: var(--bt-radius);
+    background: var(--bt-paper-raised);
+}
+
+.card p {
+    margin-block: var(--bt-space-1);
+}
+
+.facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bt-space-1) var(--bt-space-3);
+    padding: 0;
+    margin-block: var(--bt-space-2);
+    list-style: none;
+    color: var(--bt-ink-muted);
+}
+
+dl.facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+}
+
+dl.facts dt {
+    font-weight: 700;
+    color: var(--bt-ink);
+}
+
+dl.facts dd {
+    margin: 0;
+}
+
+.deadline {
+    color: var(--bt-error);
+    font-weight: 600;
+}
+
+.why {
+    font-size: 0.9rem;
+    color: var(--bt-success);
+}
+
+.more {
+    inline-size: 100%;
+    margin-block: var(--bt-space-4);
+}
+
+.menu {
+    padding: 0;
+    list-style: none;
+}
+
+.menu a {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--bt-tap);
+    border-block-end: 1px solid var(--bt-line);
+}
+
+.inbox {
+    padding: 0;
+    list-style: none;
+}
+
+.inbox-item {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: var(--bt-space-1);
+    inline-size: 100%;
+    margin-block-end: var(--bt-space-2);
+    text-align: start;
+    font-weight: 400;
+    color: var(--bt-ink);
+    border-color: var(--bt-line);
+}
+
+.unread .inbox-item {
+    border-inline-start: 4px solid var(--bt-brand);
+}
+
+.disclosure {
+    padding: var(--bt-space-3);
+    border-inline-start: 4px solid var(--bt-line);
+    background: var(--bt-paper);
+}
+
+/* Notices. */
+.notice {
+    padding: var(--bt-space-3);
+    border-radius: var(--bt-radius);
+    background: var(--bt-notice-paper);
+}
+
+.notice.success {
+    background: var(--bt-success-paper);
+    color: var(--bt-success);
+}
+
+.notice.error {
+    background: var(--bt-error-paper);
+    color: var(--bt-error);
+}
+
+.busy {
+    display: flex;
+    align-items: center;
+    gap: var(--bt-space-2);
+    color: var(--bt-ink-muted);
+}
+
+.spinner {
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: 2px solid var(--bt-line);
+    border-block-start-color: var(--bt-brand);
+    border-radius: 50%;
+    animation: bt-spin 0.8s linear infinite;
+}
+
+@keyframes bt-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spinner {
+        animation: none;
+    }
+}

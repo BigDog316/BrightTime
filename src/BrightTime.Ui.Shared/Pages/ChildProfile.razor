@@ -1,0 +1,192 @@
+@page "/family/{Id:guid}"
+@* The consent centre for one child (docs/plan/06): each scope, the exact words a consent is
+   recorded against, and a way to give or withdraw it. Withdrawing takes effect on the child's
+   next request (D31). From 13 the profile can be handed to its owner (D35). *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject TimeProvider Clock
+
+<ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+@if (_child is null && _problem is null)
+{
+    <Busy />
+}
+else if (_child is { } child)
+{
+    <h1>@child.GivenName</h1>
+
+    @if (Added)
+    {
+        <p class="notice success" role="status">@T["app.family.check_email"]</p>
+    }
+
+    @if (_status is not null)
+    {
+        <p class="notice" role="status">@_status</p>
+    }
+
+    @if (child.Link.Status == "pending")
+    {
+        <section aria-labelledby="waiting">
+            <h2 id="waiting">@T["app.family.state.waiting"]</h2>
+            <p>@T["app.family.waiting_explain"]</p>
+            <button type="button" @onclick="ResendAsync" disabled="@_busy">@T["app.family.resend"]</button>
+        </section>
+    }
+    else
+    {
+        <section aria-labelledby="consents">
+            <h2 id="consents">@T["app.consent.heading"]</h2>
+            <p class="hint">@T["app.consent.explain"]</p>
+            @foreach (Disclosure d in Offered(child))
+            {
+                GivenConsent? given = child.Consents.FirstOrDefault(c => c.Scope == d.Scope);
+                bool allowed = d.Methods.Contains(child.Link.VerificationMethod ?? "");
+                <article class="card consent" @key="d.Scope">
+                    <h3>@T["app.scope." + d.Scope]</h3>
+                    @if (given is not null)
+                    {
+                        <p>@T.Format("app.consent.given_on", ("date", T.DateShort(given.GrantedAt)))</p>
+                        @if (d.Scope != "account")
+                        {
+                            <button type="button" @onclick="() => RevokeAsync(d.Scope)" disabled="@_busy">@T["app.consent.withdraw"]</button>
+                        }
+                    }
+                    else if (!allowed)
+                    {
+                        <p>@T["app.consent.needs_form"]</p>
+                    }
+                    else if (_reading == d.Scope)
+                    {
+                        <h4>@T["email.consent.disclosure_heading"]</h4>
+                        @if (T.Locale.Code != "en")
+                        {
+                            <p class="hint">@T["email.consent.disclosure_in_english"]</p>
+                        }
+                        <p class="disclosure" lang="en" dir="ltr">@d.Text</p>
+                        <button type="button" class="primary" @onclick="() => GrantAsync(d)" disabled="@_busy">@T["consent.web.submit"]</button>
+                        <button type="button" @onclick="() => _reading = null">@T["app.cancel"]</button>
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="() => _reading = d.Scope">@T["app.consent.read_and_give"]</button>
+                    }
+                </article>
+            }
+        </section>
+
+        @if (!child.IsClaimed && OldEnough(child))
+        {
+            <section aria-labelledby="claim">
+                <h2 id="claim">@T["app.claim.heading"]</h2>
+                <p>@T.Format("app.claim.explain", ("child", Text.Name(child.GivenName)))</p>
+                <form class="stack" @onsubmit="ClaimAsync">
+                    <div class="field">
+                        <label for="claim-email">@T["app.claim.email"]</label>
+                        <input id="claim-email" type="email" inputmode="email" required @bind="_claimEmail" />
+                    </div>
+                    <button type="submit" disabled="@_busy">@T["app.claim.submit"]</button>
+                </form>
+            </section>
+        }
+        else if (child.IsClaimed)
+        {
+            <p>@T.Format("app.claim.done", ("child", Text.Name(child.GivenName)))</p>
+        }
+    }
+
+    <section aria-labelledby="end">
+        <h2 id="end">@T["app.family.end_heading"]</h2>
+        <p class="hint">@T["app.family.end_explain"]</p>
+        @if (_confirmEnd)
+        {
+            <button type="button" class="danger" @onclick="EndLinkAsync" disabled="@_busy">@T["app.family.end_confirm"]</button>
+            <button type="button" @onclick="() => _confirmEnd = false">@T["app.cancel"]</button>
+        }
+        else
+        {
+            <button type="button" @onclick="() => _confirmEnd = true">@T["app.family.end"]</button>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "added")] public string? AddedFlag { get; set; }
+
+    private bool Added => AddedFlag == "1";
+
+    private Child? _child;
+    private IReadOnlyList<Disclosure> _disclosures = [];
+    private ApiProblem? _problem;
+    private string? _status;
+    private string? _reading;
+    private string _claimEmail = "";
+    private bool _busy;
+    private bool _confirmEnd;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<Child> child = await Api.ChildAsync(Id);
+        ApiResult<IReadOnlyList<Disclosure>> disclosures = await Api.DisclosuresAsync();
+        _child = child.Value;
+        _disclosures = disclosures.Value ?? [];
+        _problem = child.Problem ?? disclosures.Problem;
+    }
+
+    // Scopes the floor rules out for a child are not offered until the profile is claimed (D31, D35).
+    private IEnumerable<Disclosure> Offered(Child child) =>
+        _disclosures.Where(d => d.AvailableUnder13 || child.IsClaimed);
+
+    private bool OldEnough(Child child) =>
+        DateOnly.TryParseExact(child.BirthMonth, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly month)
+        && !Words.IsUnder13(month.Year, month.Month, DateOnly.FromDateTime(Clock.GetUtcNow().UtcDateTime));
+
+    private Task GrantAsync(Disclosure d) => ActAsync(async () =>
+    {
+        ApiResult<GivenConsent> given = await Api.GrantAsync(Id, d.Scope, d.Hash);
+        _reading = null;
+        return given.IsSuccess ? null : given.Problem;
+    }, reload: true);
+
+    private Task RevokeAsync(string scope) => ActAsync(async () => (await Api.RevokeAsync(Id, scope)).Problem, reload: true);
+
+    private Task ResendAsync() => ActAsync(async () =>
+    {
+        ApiResult sent = await Api.ResendConsentEmailAsync(_child!.Link.Id);
+        _status = sent.IsSuccess ? T["app.family.resent"] : null;
+        return sent.Problem;
+    }, reload: false);
+
+    private Task ClaimAsync() => ActAsync(async () =>
+    {
+        ApiResult asked = await Api.ClaimAsync(Id, _claimEmail.Trim());
+        _status = asked.IsSuccess ? T.Format("app.claim.sent", ("email", Text.Name(_claimEmail.Trim()))) : null;
+        return asked.Problem;
+    }, reload: false);
+
+    private Task EndLinkAsync() => ActAsync(async () => (await Api.RevokeLinkAsync(_child!.Link.Id)).Problem, reload: true);
+
+    private async Task ActAsync(Func<Task<ApiProblem?>> act, bool reload)
+    {
+        _busy = true;
+        _status = null;
+        ApiProblem? problem = await act();
+        _busy = false;
+        if (problem is not null)
+        {
+            _status = Words.Problem(T, problem);
+            return;
+        }
+
+        if (reload)
+        {
+            await LoadAsync();
+        }
+    }
+}

@@ -1,0 +1,99 @@
+@page "/notifications"
+@* The inbox, worded by the server in the app's language, as the push was (D35). Opening one
+   marks it read and follows its link inside the app. On first open the phone is offered for
+   pushes, if a push provider is set up and the account may be messaged at all. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject IPushRegistrar Push
+@inject NavigationManager Navigation
+
+<h1>@T["app.notifications.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p><a href="notifications/settings">@T["app.notifications.settings"]</a></p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_items is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_items is { Count: 0 })
+    {
+        <p>@T["app.notifications.none"]</p>
+    }
+    else if (_items is not null)
+    {
+        <ul class="inbox">
+            @foreach (InboxItem item in _items)
+            {
+                <li class="@(item.IsRead ? "read" : "unread")" @key="item.Id">
+                    <button type="button" class="inbox-item" @onclick="() => OpenAsync(item)">
+                        <strong>@item.Title</strong>
+                        @if (!item.IsRead)
+                        {
+                            <span class="visually-hidden">@T["app.notifications.unread"]</span>
+                        }
+                        <span>@item.Body</span>
+                        <small>@T.DayTime(item.CreatedAt)</small>
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private List<InboxItem>? _items;
+    private ApiProblem? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsSignedIn)
+        {
+            return;
+        }
+
+        await LoadAsync();
+        await OfferPushAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<InboxItem>> inbox = await Api.InboxAsync();
+        _items = inbox.Value?.ToList();
+        _problem = inbox.Problem;
+    }
+
+    private async Task OfferPushAsync()
+    {
+        // The server checks again on every push; this only avoids asking for nothing.
+        if (Session.Capabilities is { HasAccountConsent: false })
+        {
+            return;
+        }
+
+        if (await Push.RegisterAsync() is { } device)
+        {
+            await Api.RegisterDeviceAsync(device.Platform, device.Token, appVersion: null, osVersion: null);
+        }
+    }
+
+    private async Task OpenAsync(InboxItem item)
+    {
+        if (!item.IsRead && (await Api.MarkReadAsync(item.Id)).IsSuccess)
+        {
+            _items![_items.IndexOf(item)] = item with { IsRead = true };
+        }
+
+        // Only a path inside the app.
+        if (item.DeepLink is { Length: > 1 } link && link[0] == '/' && link[1] != '/')
+        {
+            Navigation.NavigateTo(link);
+        }
+    }
+}

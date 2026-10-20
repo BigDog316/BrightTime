@@ -43,6 +43,35 @@ jobs:
       - name: Tests
         run: dotnet test --no-build -c Release
 
+  mobile:
+    name: Android app builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      # The app is outside BrightTime.slnx, so only this job needs the workload.
+      - name: Android workload
+        run: dotnet workload install maui-android
+
+      - name: Android SDK platform
+        run: dotnet build src/BrightTime.Mobile -t:InstallAndroidDependencies -f net10.0-android -p:AcceptAndroidSDKLicenses=True
+
+      # Debug: it points at the local stack, so it needs no region's addresses.
+      - name: Build the app
+        run: dotnet build src/BrightTime.Mobile -f net10.0-android -c Debug
+
+      - name: Formatting
+        run: dotnet format src/BrightTime.Mobile/BrightTime.Mobile.csproj --no-restore --verify-no-changes
+
   schema:
     name: schema applies and matches the EF model
     runs-on: ubuntu-latest

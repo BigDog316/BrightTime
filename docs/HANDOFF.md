@@ -55,8 +55,7 @@ is merged (`cec1ed6`).
 
 ## Waiting on Sam
 
-Every decision through D34 is accepted (D30 and D31 on 2026-10-19, D32 to D34 on 2026-10-20).
-**D35 (youth accounts, the claim, the consent page and app links) is proposed.**
+Every decision through D35 is accepted (D30 and D31 on 2026-10-19, D32 to D35 on 2026-10-20).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a

@@ -811,7 +811,7 @@ round trip D31 left for it.
   - Mail is queued in process, as on the web, so a restart loses a queued email and the
     person asks again.
 
-### D35 — Youth accounts, the child-to-youth claim, and the pages behind the app's links (**proposed 2026-10-20; implemented, reversible**)
+### D35 — Youth accounts, the child-to-youth claim, and the pages behind the app's links (**accepted 2026-10-20**)
 
 The rest of M2's server work: young people's own accounts, and what a consent email's link
 opens when no app claims it.

@@ -22,6 +22,7 @@ builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environmen
 builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment,
     hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 builder.Services.AddBrightTimeLocalisation(builder.Configuration);
+builder.Services.Configure<AppLinksOptions>(builder.Configuration.GetSection(AppLinksOptions.SectionName));
 builder.Services.AddBrightTimeHealth(builder.Configuration,
     hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 
@@ -61,6 +62,9 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapBrightTimeHealth();
+
+// The files that let the app open this site's /app/ links (D35); 404 until an app is configured.
+app.MapAppLinks();
 
 // The listing's "add to calendar" file. A sibling of the page rather than "{slug}.ics", so a
 // slug can never be mistaken for a file name. Same visibility rule as the page: 404 otherwise.

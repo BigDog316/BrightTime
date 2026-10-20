@@ -742,6 +742,7 @@ application (07-threat-model). Until now, no host had a key provider.
     key, so a retry inserts nothing and pushes nothing.
 - **Text:** notification titles are catalogue keys, which the app renders as it does search
   results' "why". The `notify.*` strings join the shared catalogues with the app's own.
+  *Amended by D35: the server words pushes and the inbox.*
 - **Not yet:**
   - A real push provider: Firebase and APNs need your accounts. Until then
     `LoggingPushSender` logs the kind and platform, never the token or content.
@@ -804,10 +805,80 @@ round trip D31 left for it.
 - **Not yet:**
   - The app's page for `/app/guardian-links/{id}/verify`, and the app-link files
     (`apple-app-site-association`, `assetlinks.json`). Until then the link is a 404 on the web.
+    *Done in D35.*
   - A forgot-password route in the API. The set-password link opens the web's
     `/account/reset`, as D23's does.
   - Mail is queued in process, as on the web, so a restart loses a queued email and the
     person asks again.
+
+### D35 — Youth accounts, the child-to-youth claim, and the pages behind the app's links (**proposed 2026-10-20; implemented, reversible**)
+
+The rest of M2's server work: young people's own accounts, and what a consent email's link
+opens when no app claims it.
+- **Registration by age:** `POST /api/v1/auth/register {email, birthMonth}`. The app asks the
+  month and year of birth first, as a neutral age question, and the server takes the younger
+  reading of the month, as everywhere.
+  - **Under 13:** 403 `register.under_13`, with nothing kept or sent. A child's account is
+    their guardian's to make (D31). The server cannot stop someone changing the month and asking
+    again, so the app should remember the answer on the device.
+  - **13 to 17:** a youth account. It keeps the birth month only, as a child profile does, with
+    no date of birth. Nobody is signed in to recompute its capabilities, so the worker does,
+    booked at once.
+  - **18 or older, or no month:** an adult account, as D34 makes it. No birth month is kept.
+  - The answer is 202 for every address, as in D34, and depends on the month alone. An existing
+    account is left as it was, whatever kind it is.
+- **T2 in the calculator:** a youth with no guardian link may upload, and organisations may
+  message them, only once an organisation has vouched for them. That was already the rule for
+  posting.
+  - Nothing sets "vouched for" until enrolment (M3). Until then a self-registered youth can
+    browse, save and enrol (with the terms accepted), and no more.
+  - A youth with a guardian link follows the guardian's consents, as before.
+- **The claim (child to youth):**
+  - **The request.** From the day the child turns 13, by the younger reading, their guardian asks
+    `POST /api/v1/children/{id}/claim {email}`, naming the young person's own address. The answer
+    is 202, and the endpoint is rate limited.
+  - **The email.** After the response, a link goes to that address. It works once, for 3 days,
+    and is kept like a reset token: only its hash, with the address it is for. If the address
+    already has an account, its owner is told instead, and nothing changes.
+  - **The hand-over.** The young person chooses a password, at `/account/claim?token=…` on the
+    web or with `POST /api/v1/auth/claim {token, password}` from the app. Only then does the
+    account change hands: in one statement it becomes a youth account, with the address
+    confirmed and the password set. Until then it is a child profile, with the under-13 floor.
+  - **The guardian stays.** The link and its consents carry on. The guardian still sees the
+    account (`accountKind: youth`) and still consents for it, as the calculator says for a
+    managed teen. The scopes closed to under-13s (`community_participation`,
+    `showcase_publication`) can now be granted, if the link's verification method allows them.
+    For the young person to consent for themselves, the guardian ends the link. There is no
+    route yet for the young person to ask for that.
+  - **The record.** The worker recomputes the capabilities, booked at once. The steps are audited
+    as `consent.claim_requested`, `consent.claim_email_sent` and `consent.account_claimed`.
+- **The consent link on the web:** `/app/guardian-links/{id}/verify`, the page a consent email's
+  link opens when no app claims it.
+  - The guardian, signed in, sees the child's name and the account disclosure, and gives consent
+    as the API does. The confirmatory email follows.
+  - The token stays in the fragment. `consent-link.js` keeps it in the tab's session storage
+    while the guardian signs in, puts it in the form, and forgets it once the link is verified.
+  - Without JavaScript the page can't read the token, and says to turn it on or use the app.
+  - The consent email now says the link works in the app or on the website.
+- **App links:** `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json`,
+  built from `AppLinks:*`. They answer 404 until an app is configured.
+  - They claim `/app/*` only. Claim and reset links stay on the web.
+  - They also share passwords and passkeys between the site and the app (`webcredentials`,
+    `get_login_creds`).
+- **Notification text (amends D33's "Text"):** the server words pushes and the inbox.
+  - A request names `notify.<what>`, whose `.title` and `.body` are in the shared catalogues.
+  - A push is worded in the language its phone was registered in. The inbox is worded in the
+    request's language, so the two always match.
+  - Instants are written as a day and time in the tenant's zone, and names are isolated.
+  - A push needs words, so it can't be left to the app.
+  - The jobs host now has the shared catalogue and the tenant's wording overrides.
+- **Not yet:**
+  - "Vouched for by an organisation" has no source until enrolment (M3).
+  - A young person has no route to accept the terms, which self-enrolment needs.
+  - The API checks no passwords against breaches (the web's PwnedPasswords check), so a claim
+    from the app skips that check. The web page makes it.
+  - The real app identifiers for `AppLinks:*` wait on the developer accounts.
+  - A young person's own export and delete requests wait on Q5.
 
 ## Open questions
 

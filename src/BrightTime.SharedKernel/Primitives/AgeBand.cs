@@ -64,4 +64,10 @@ public static class AgeBandExtensions
     /// </summary>
     public static bool IsCoppaProtected(this AgeBand band) =>
         band is AgeBand.Unknown or AgeBand.Under6 or AgeBand.Age6To8 or AgeBand.Age9To12;
+
+    /// <summary>
+    /// 13 to 17: old enough to make an account and consent for themselves, not yet an adult. The
+    /// ages a youth account is for.
+    /// </summary>
+    public static bool IsYouth(this AgeBand band) => band is AgeBand.Age13To14 or AgeBand.Age15To17;
 }

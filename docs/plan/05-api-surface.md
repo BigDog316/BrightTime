@@ -142,8 +142,18 @@ API's versioning: `GET /health/live` and `GET /health/ready`.
 - `POST /guardian-links/{id}/consent-email`: a new consent email that replaces the last
   (202), at most once a minute (429).
 
-Still to come: youth (13+) registration, passwords and passkeys through the API, and export
-and delete requests.
+*Built (2026-10-20, D35):*
+- `POST /auth/register {email, birthMonth}`: with a birth month of 13 to 17, a youth account.
+  Under 13 gets 403 `register.under_13`, with nothing kept or sent. 18 or older, or no month,
+  gets an adult account, as before.
+- `POST /children/{id}/claim {email}`: from 13, the guardian hands the profile to its owner
+  (202, rate limited). The link goes to that address; an address that already has an account
+  tells only its owner.
+- `POST /auth/claim {token, password}`: the young person takes the account (204), which then
+  signs in as theirs. On the web the same link opens `/account/claim`.
+- A child's view gains `accountKind` (`child`, or `youth` once claimed).
+
+Still to come: passwords and passkeys through the API, and export and delete requests.
 
 Consent scopes are the enum in `identity.parental_consent.scope`:
 `account`, `enrollment`, `attendance_photo`, `community_participation`,
@@ -497,3 +507,8 @@ person searched for or where they are.
 - **Settings and inbox:** `GET` and `PUT /me/notification-preferences` (choices by kind and
   channel, and one quiet window); `GET /me/notifications`; `POST /me/notifications/{id}/read`.
 - **Waiting:** sync and the tile and geocode proxies wait on offline attendance (M3) and Q7.
+
+*Changed (2026-10-20, D35):* the inbox comes back in words (`title`, `body`), in the
+request's language, worded as the push was. The web serves `/.well-known/apple-app-site-association`
+and `/.well-known/assetlinks.json` for the app's `/app/*` links, from `AppLinks:*`, and answers 404
+until an app is configured.

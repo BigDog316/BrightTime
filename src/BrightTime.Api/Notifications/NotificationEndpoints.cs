@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using BrightTime.Api.Public;
 using BrightTime.Hosting.Auth;
+using BrightTime.Localisation;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Notifications;
 using BrightTime.SharedKernel.Ids;
@@ -17,11 +18,12 @@ public sealed record ChannelChoiceDto(string? Kind, string? Channel, bool Enable
 
 public sealed record NotificationSettingsDto(string? QuietFrom, string? QuietTo, IReadOnlyList<ChannelChoiceDto>? Choices);
 
-public sealed record InboxItemResponse(Guid Id, string Kind, PhraseResponse Title, string? DeepLink, DateTimeOffset CreatedAt, bool IsRead);
+public sealed record InboxItemResponse(Guid Id, string Kind, string Title, string Body, string? DeepLink, DateTimeOffset CreatedAt, bool IsRead);
 
 /// <summary>
 /// Push devices, notification preferences with quiet hours, and the inbox (docs/plan/05,
-/// "Mobile-specific"). Titles come back as catalogue keys the app renders, as "why" does (D30).
+/// "Mobile-specific"). The inbox comes back in words, in the request's language, worded as the
+/// push was (<see cref="NotificationText"/>), so the two always agree.
 /// </summary>
 public static class NotificationEndpoints
 {
@@ -71,10 +73,16 @@ public static class NotificationEndpoints
         return set.IsSuccess ? Results.Ok(Dto(set.Value)) : ApiProblems.From(set.Error);
     }
 
-    private static async Task<IResult> InboxAsync(ClaimsPrincipal user, NotificationInbox inbox, CancellationToken ct) =>
-        Results.Ok((await inbox.ListAsync(Actor(user), ct))
-            .Select(i => new InboxItemResponse(i.Id, i.Kind, new PhraseResponse(i.TitleKey, i.Arguments.ToDictionary(a => a.Key, a => (object)a.Value)), i.DeepLink, i.CreatedAt, i.IsRead))
-            .ToList());
+    private static async Task<IResult> InboxAsync(ClaimsPrincipal user, NotificationInbox inbox, Text text, CancellationToken ct)
+    {
+        IReadOnlyList<InboxItem> items = await inbox.ListAsync(Actor(user), ct);
+        await text.LoadAsync(ct);
+        return Results.Ok(items.Select(i =>
+        {
+            NotificationWords said = NotificationText.Render(text, i.TitleKey, i.Arguments);
+            return new InboxItemResponse(i.Id, i.Kind, said.Title, said.Body, i.DeepLink, i.CreatedAt, i.IsRead);
+        }).ToList());
+    }
 
     private static async Task<IResult> ReadAsync(Guid id, ClaimsPrincipal user, NotificationInbox inbox, CancellationToken ct) =>
         await inbox.MarkReadAsync(Actor(user), id, ct) ? Results.NoContent() : ApiProblems.NotFound("No unread notification has that id.");

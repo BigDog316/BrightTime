@@ -1,14 +1,17 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Identity.Domain;
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Primitives;
 using Npgsql;
 
 namespace BrightTime.Modules.Identity.SignIn;
 
 /// <summary>
-/// Adult accounts for the people who run organisations: someone applying for their
-/// organisation, or someone an organisation invites (decision D23).
+/// Accounts made by address, before their owner has set a password: adults who run
+/// organisations, applying or invited (decision D23), and adults and young people registering
+/// from the app (D34, D35).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,7 +23,7 @@ namespace BrightTime.Modules.Identity.SignIn;
 /// Callers must not tell anyone whether an address already had an account: the answer to an
 /// application or an invitation reads the same either way. <see cref="FindOrCreateAdultAsync"/>
 /// says which it was so the caller can choose a membership state, not so it can be shown.
-/// Never a youth or child account: those come with consent (M2).
+/// Never a child profile: those are made by a guardian, with consent (D31).
 /// </para>
 /// </remarks>
 public sealed class AccountProvisioning(NpgsqlDataSource authDataSource)
@@ -34,7 +37,26 @@ public sealed class AccountProvisioning(NpgsqlDataSource authDataSource)
     /// address typed into an application or an invitation must not change what an existing
     /// account can do before its owner has said yes.
     /// </remarks>
-    public async Task<(UserId User, bool Created)?> FindOrCreateAdultAsync(TenantId tenant, string email, CancellationToken cancellationToken = default)
+    public Task<(UserId User, bool Created)?> FindOrCreateAdultAsync(TenantId tenant, string email, CancellationToken cancellationToken = default) =>
+        FindOrCreateAsync(tenant, email, AccountKind.Adult, null, cancellationToken);
+
+    /// <summary>
+    /// The account with this address, made as a youth account (13 to 17, D35) if there was none. An
+    /// existing account is left as it is, whatever kind: an address typed into a form must not
+    /// change someone else's account. Only the birth month is kept, as for a child profile.
+    /// </summary>
+    /// <returns>The account, and whether it was made just now. Null when the address belongs to a child profile.</returns>
+    public Task<(UserId User, bool Created)?> FindOrCreateYouthAsync(TenantId tenant, string email, DateOnly birthMonth, AgeBand band, CancellationToken cancellationToken = default)
+    {
+        if (birthMonth.Day != 1 || !band.IsYouth())
+        {
+            throw new ArgumentOutOfRangeException(nameof(band), "A youth account is for 13 to 17, by the first of the birth month.");
+        }
+
+        return FindOrCreateAsync(tenant, email, AccountKind.Youth, (birthMonth, band), cancellationToken);
+    }
+
+    private async Task<(UserId User, bool Created)?> FindOrCreateAsync(TenantId tenant, string email, string kind, (DateOnly Month, AgeBand Band)? age, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
         string address = email.Trim();
@@ -54,14 +76,17 @@ public sealed class AccountProvisioning(NpgsqlDataSource authDataSource)
             """
             insert into identity.app_user
               (id, tenant_id, user_name, normalized_user_name, email, normalized_email, email_confirmed,
-               security_stamp, concurrency_stamp, account_kind, status)
-            values (@id, @tenant, @email, upper(@email), @email, upper(@email), false, @stamp, @concurrency, 'adult', 'active')
+               security_stamp, concurrency_stamp, account_kind, status, birth_month, age_band)
+            values (@id, @tenant, @email, upper(@email), @email, upper(@email), false, @stamp, @concurrency, @kind, 'active', @month, @band)
             on conflict (tenant_id, normalized_email) do nothing
             """, cancellationToken,
-            ("id", id), ("tenant", tenant.Value), ("email", address), ("stamp", stamp), ("concurrency", Guid.NewGuid().ToString("N"))).ConfigureAwait(false);
+            ("id", id), ("tenant", tenant.Value), ("email", address), ("stamp", stamp), ("concurrency", Guid.NewGuid().ToString("N")),
+            ("kind", kind),
+            ("month", age is { } a ? a.Month : DBNull.Value),
+            ("band", age is { } b ? b.Band.ToDbValue() : DBNull.Value)).ConfigureAwait(false);
 
-        (Guid existing, string kind) = await ReadAsync(connection, tx, address, cancellationToken).ConfigureAwait(false);
-        if (kind != "adult")
+        (Guid existing, string found) = await ReadAsync(connection, tx, address, cancellationToken).ConfigureAwait(false);
+        if (found is not (AccountKind.Adult or AccountKind.Youth) || (kind == AccountKind.Adult && found != AccountKind.Adult))
         {
             await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
             return null;

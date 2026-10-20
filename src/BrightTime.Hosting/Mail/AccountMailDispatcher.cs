@@ -26,7 +26,7 @@ public enum AccountMailKind
     /// <summary>Someone was invited to an organisation's staff (D23).</summary>
     Invitation,
 
-    /// <summary>Someone registered an adult account from the app, for this address.</summary>
+    /// <summary>Someone registered from the app, for this address: an adult, or a young person of 13 to 17 (D35).</summary>
     Registration,
 
     /// <summary>A guardian is asked to consent to their child's account (email plus, D31).</summary>
@@ -34,6 +34,9 @@ public enum AccountMailKind
 
     /// <summary>The confirmatory email after a guardian consented by email: the "plus".</summary>
     ConsentConfirmation,
+
+    /// <summary>A young person, now 13, is sent the link to claim their child profile as their own sign-in (D35).</summary>
+    Claim,
 }
 
 /// <summary>
@@ -74,7 +77,9 @@ public sealed partial class AccountMailDispatcher(
         string? Organisation = null,
         bool NewAccount = false,
         ConsentEmail? Consent = null,
-        ConsentConfirmation? Confirmation = null);
+        ConsentConfirmation? Confirmation = null,
+        (DateOnly Month, AgeBand Band)? Youth = null,
+        ClaimAsk? Claim = null);
 
     private readonly record struct Paragraph(string Text, Locale? Language = null);
 
@@ -105,12 +110,39 @@ public sealed partial class AccountMailDispatcher(
     }
 
     /// <summary>
-    /// Queues a registration: the adult account for <paramref name="email"/> is found or made
-    /// here (D23's <see cref="AccountProvisioning.FindOrCreateAdultAsync"/>), then sent a link
-    /// to set a password. An address that belongs to a youth or child account gets nothing.
+    /// Queues a registration: the account for <paramref name="email"/> is found or made here
+    /// (D23's <see cref="AccountProvisioning.FindOrCreateAdultAsync"/>), then sent a link to set a
+    /// password. With a birth month of 13 to 17 it is made a youth account (D35), and its
+    /// capabilities are booked for the worker. An existing account is left as it is; an address
+    /// that belongs to a child profile gets nothing.
     /// </summary>
-    public void RequestRegistration(TenantId tenant, string email, Uri siteUrl, Locale pageLocale) =>
-        Enqueue(new Request(AccountMailKind.Registration, tenant, email, siteUrl, pageLocale));
+    public void RequestRegistration(TenantId tenant, string email, Uri siteUrl, Locale pageLocale, (DateOnly Month, AgeBand Band)? youth = null)
+    {
+        if (youth is { } y && (y.Month.Day != 1 || !y.Band.IsYouth()))
+        {
+            throw new ArgumentOutOfRangeException(nameof(youth), "A youth registration is for 13 to 17, by the first of the birth month.");
+        }
+
+        Enqueue(new Request(AccountMailKind.Registration, tenant, email, siteUrl, pageLocale, Youth: youth));
+    }
+
+    /// <summary>
+    /// Queues a claim (D35): the link goes to the young person's address. When that address already
+    /// has an account, its owner is told instead and nothing changes; the guardian's answer is the
+    /// same either way.
+    /// </summary>
+    public void RequestClaim(TenantId tenant, ClaimAsk claim, Uri siteUrl, Locale pageLocale)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        Enqueue(new Request(AccountMailKind.Claim, tenant, claim.Email, siteUrl, pageLocale, Claim: claim));
+    }
+
+    /// <summary>The link a claim email carries: the web's page for choosing a password, which the app may also answer.</summary>
+    public static Uri ClaimLink(Uri siteUrl, string token)
+    {
+        ArgumentNullException.ThrowIfNull(siteUrl);
+        return new Uri(siteUrl, $"/account/claim?token={Uri.EscapeDataString(token)}");
+    }
 
     /// <summary>Queues a guardian's consent email, in their own language when they have one.</summary>
     public void RequestConsent(TenantId tenant, ConsentEmail consent, Uri siteUrl, Locale pageLocale)
@@ -155,6 +187,7 @@ public sealed partial class AccountMailDispatcher(
                 Task sending = request.Kind switch
                 {
                     AccountMailKind.Registration => SendRegistrationAsync(scope.ServiceProvider, request, stoppingToken),
+                    AccountMailKind.Claim => SendClaimAsync(scope.ServiceProvider, request, stoppingToken),
                     AccountMailKind.ConsentRequest or AccountMailKind.ConsentConfirmation => SendConsentAsync(scope.ServiceProvider, request, stoppingToken),
                     _ => SendAccountAsync(scope.ServiceProvider, request, stoppingToken),
                 };
@@ -211,12 +244,21 @@ public sealed partial class AccountMailDispatcher(
 
     private static async Task SendRegistrationAsync(IServiceProvider services, Request request, CancellationToken ct)
     {
-        (UserId User, bool Created)? account = await services.GetRequiredService<AccountProvisioning>()
-            .FindOrCreateAdultAsync(request.Tenant, request.Email, ct).ConfigureAwait(false);
+        AccountProvisioning provisioning = services.GetRequiredService<AccountProvisioning>();
+        (UserId User, bool Created)? account = request.Youth is { } youth
+            ? await provisioning.FindOrCreateYouthAsync(request.Tenant, request.Email, youth.Month, youth.Band, ct).ConfigureAwait(false)
+            : await provisioning.FindOrCreateAdultAsync(request.Tenant, request.Email, ct).ConfigureAwait(false);
         if (account is null)
         {
-            // A youth or child account's address: those come with consent, never from here.
+            // A child profile's address: those are a guardian's, never from here.
             return;
+        }
+
+        if (account.Value.Created && request.Youth is not null)
+        {
+            // Nobody is signed in to recompute as; the worker writes the new account's capabilities.
+            services.GetRequiredService<TenantContext>().SetTenant(request.Tenant, TimeZoneInfo.Utc, request.PageLocale);
+            await services.GetRequiredService<Guardianship>().RequestRecomputeAsync(account.Value.User, "registered", ct).ConfigureAwait(false);
         }
 
         // New or not, the way in is the same link: set a password, or set a new one.
@@ -247,6 +289,48 @@ public sealed partial class AccountMailDispatcher(
         {
             SubjectKind = "user",
             SubjectIds = [account.Value.User.Value],
+        }, ct).ConfigureAwait(false);
+    }
+
+    private static async Task SendClaimAsync(IServiceProvider services, Request request, CancellationToken ct)
+    {
+        ClaimAsk claim = request.Claim!;
+        AccountClaimIssue issue = await services.GetRequiredService<PasswordAccounts>()
+            .CreateClaimAsync(request.Tenant, claim.ChildId, claim.Email, ct).ConfigureAwait(false);
+
+        if (issue.AddressInUse)
+        {
+            // Only the address's owner reads this, so it may say the address is taken. The guardian's
+            // answer said nothing, and nothing changed.
+            Text text = await TextAsync(services, request, issue.InUseLocale, ct).ConfigureAwait(false);
+            await services.GetRequiredService<IEmailSender>().SendAsync(
+                Compose(request.Email, text["email.claim_in_use.subject"], text,
+                    [new(text["email.claim_in_use.intro"]), new(text["email.claim_in_use.next"])],
+                    request.SiteUrl.AbsoluteUri, text["email.claim_in_use.button"], text["email.claim_in_use.not_you"]),
+                ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (issue.Claim is not { } link)
+        {
+            // Asked again within the resend interval, or the profile changed meanwhile.
+            return;
+        }
+
+        Text t = await TextAsync(services, request, link.Locale, ct).ConfigureAwait(false);
+        int days = (int)PasswordAccounts.ClaimLifetime.TotalDays;
+        DeliveryReceipt receipt = await services.GetRequiredService<IEmailSender>().SendAsync(
+            Compose(link.Email, t["email.claim.subject"], t,
+                [new(t["email.claim.intro"]), new(t.Format("email.claim.use_link", ("days", days)))],
+                ClaimLink(request.SiteUrl, link.Token).AbsoluteUri, t["email.claim.button"], t["email.claim.not_you"]),
+            ct).ConfigureAwait(false);
+
+        await AuditAsync(services, new AuditAccess
+        {
+            Action = Guardianship.ClaimEmailSent,
+            SubjectKind = "user",
+            SubjectIds = [claim.ChildId.Value],
+            Detail = Sent(receipt),
         }, ct).ConfigureAwait(false);
     }
 

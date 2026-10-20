@@ -1,0 +1,116 @@
+@page "/app/guardian-links/{Id:guid}/verify"
+@using BrightTime.Hosting.Mail
+@using BrightTime.Hosting.Tenancy
+@using BrightTime.Modules.Identity.Consent
+@using BrightTime.Modules.Identity.Contracts
+@using BrightTime.Modules.Identity.Domain
+@using BrightTime.SharedKernel.Primitives
+@inherits ConsoleComponent
+
+@* The page a consent email's link opens when the app does not claim it (D35): the guardian gives
+   consent here instead, signed in as themselves, as the app would with POST /guardian-links/{id}/verify.
+   The token is in the link's fragment, which no server sees; consent-link.js keeps it in this tab
+   while the guardian signs in, and puts it in the form. Without JavaScript it cannot be read. *@
+
+<PageTitle>@T["consent.web.title"] · BrightTime</PageTitle>
+<HeadContent>
+    <meta name="referrer" content="no-referrer" />
+</HeadContent>
+
+<h1>@T["consent.web.title"]</h1>
+
+<div data-consent-link="@Id" data-consent-done="@(_finished ? "true" : null)">
+@if (!Availability.CanSignIn)
+{
+    <p>@T["account.unavailable"]</p>
+}
+else if (User.Identity?.IsAuthenticated != true)
+{
+    <p>@T["consent.web.sign_in_first"]</p>
+    <p><a href="@SignInHref">@T["consent.web.sign_in"]</a></p>
+    <p>@T["consent.web.or_app"]</p>
+}
+else if (_link is null)
+{
+    <p>@T["consent.web.not_yours"]</p>
+}
+else if (Done == "1" && _link.Status == GuardianLinkStatus.Verified)
+{
+    <p class="notice success" role="status">@T.Format("consent.web.done", ("child", Text.Name(_link.ChildGivenName)))</p>
+}
+else if (_link.Status == GuardianLinkStatus.Verified)
+{
+    <p>@T.Format("consent.web.already", ("child", Text.Name(_link.ChildGivenName)))</p>
+}
+else
+{
+    <p>@T.Format("consent.web.intro", ("child", Text.Name(_link.ChildGivenName)))</p>
+
+    <h2>@T["email.consent.disclosure_heading"]</h2>
+    @if (T.Locale != Locale.English)
+    {
+        <p>@T["email.consent.disclosure_in_english"]</p>
+    }
+    <p lang="en" dir="ltr" class="disclosure">@_disclosure</p>
+
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert" id="consent-error">@_problem</p>
+    }
+
+    <noscript><p class="notice">@T["consent.web.needs_script"]</p></noscript>
+
+    <form method="post" class="editor" @formname="consent" @onsubmit="ConsentAsync">
+        <AntiforgeryToken />
+        <input type="hidden" name="token" value="" />
+        <div class="actions">
+            <button type="submit" aria-describedby="@(_problem is null ? null : "consent-error")">@T["consent.web.submit"]</button>
+        </div>
+    </form>
+}
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private LinkToConfirm? _link;
+    private string? _problem;
+    private bool _finished;
+    private readonly string _disclosure = ConsentDisclosures.For(ConsentScope.Account).Text;
+
+    private string SignInHref => "/sign-in?returnUrl=" + Uri.EscapeDataString($"/app/guardian-links/{Id:D}/verify");
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.CanSignIn || User.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        _link = await Get<Guardianship>().LinkToConfirmAsync(Actor, Id, HttpContext.RequestAborted);
+        // Once it is verified the token is spent: the script may forget it.
+        _finished = _link?.Status == GuardianLinkStatus.Verified;
+    }
+
+    private async Task ConsentAsync()
+    {
+        if (_link is null)
+        {
+            return;
+        }
+
+        Result<ConsentConfirmation> verified = await Get<Guardianship>().VerifyByEmailAsync(Actor, Id, FormValue("token"), HttpContext.RequestAborted);
+        if (!verified.IsSuccess)
+        {
+            _problem = T.Error(verified.Error);
+            return;
+        }
+
+        // The "plus" of email plus: a confirmatory email to the same address.
+        Uri site = Get<SiteContext>().BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
+        Get<AccountMailDispatcher>().RequestConsentConfirmation(Tenant.TenantId, verified.Value, site, Tenant.Locale);
+        Navigation.NavigateTo($"/app/guardian-links/{Id:D}/verify?done=1");
+    }
+}

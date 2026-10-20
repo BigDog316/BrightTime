@@ -7,6 +7,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Provider;
 using BrightTime.Modules.Directory.Review;
 using BrightTime.Modules.Identity.Authorization;
+using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.SignIn;
 using BrightTime.Modules.Opportunities.Editing;
 using BrightTime.Modules.Opportunities.Import;
@@ -107,6 +108,7 @@ public static class ConsoleServices
                 sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             services.AddScoped<BrightTimePrincipalFactory>();
             services.AddSingleton(sp => new AccountProvisioning(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
+            services.AddScoped<AccountClaims>();
 
             // WebAuthn's relying party is the tenant's own address, as for reset links: the
             // browser checks each passkey against it, so a phishing site cannot use one. Per
@@ -268,7 +270,7 @@ public static class ConsoleServices
 
     private static readonly string[] AuthenticationPaths =
     [
-        "/sign-in", "/account/forgot", "/account/reset", "/dev/sign-in/as",
+        "/sign-in", "/account/forgot", "/account/reset", "/account/claim", "/dev/sign-in/as",
         PasskeyEndpoints.SignInOptionsPath, PasskeyEndpoints.SignInPath,
         PasskeyEndpoints.RegisterOptionsPath, PasskeyEndpoints.RegisterPath,
         ExternalSignIn.StartPath, ExternalSignIn.LinkPath,

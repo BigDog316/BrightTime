@@ -45,7 +45,7 @@ public sealed record PasswordResetRequest(UserId UserId, string Email, string? L
 /// every existing session is rejected the next time its cookie is revalidated.
 /// </para>
 /// </remarks>
-public sealed class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clock)
+public sealed partial class PasswordAccounts(NpgsqlDataSource authDataSource, IClock clock)
 {
     public const int MaxFailedAttempts = 5;
     public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);

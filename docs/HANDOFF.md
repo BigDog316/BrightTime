@@ -1,12 +1,12 @@
 # Handoff
 
 Where the work stands, for picking it up on another machine or in a new session.
-Written 2026-10-18 at commit c97444d. Updated on the Windows machine through 2026-10-19 (M2 server
-work and the shared localisation slice, D34).
+Written 2026-10-18 at commit c97444d. Updated on the Windows machine through 2026-10-20 (M2's
+server work: D30 to D35).
 
 ## State
 
-M1 feature slices are built; the full suite passes (2026-10-19, after D34) against PostgreSQL 18.6 + PostGIS 3.6.4.
+M1 feature slices are built; the full suite passes (2026-10-20, after D35) against PostgreSQL 18.6 + PostGIS 3.6.4.
 They cover tenancy, the finder, consoles, sign-in, audit, localisation, provider management,
 organiser review, the tenant-isolation matrix, the finder plan gate, the outbox, the API host
 with token auth, and health endpoints.
@@ -42,13 +42,21 @@ is merged (`cec1ed6`).
   `BrightTime.Hosting/Mail`, and the API host sends mail. On top of that: the email-plus round
   trip (consent email, `POST /guardian-links/{id}/verify`, confirmatory email) and
   `POST /auth/register`.
-- **Next:** the text of push and inbox messages (the `notify.*` keys, now that the catalogues
-  are shared), youth registration, the app's page for the consent link
-  (`/app/guardian-links/{id}/verify`) and its app-link files, and the MAUI shell.
+- **Youth accounts and the web's side of the app's links** (D35):
+  - Registration takes a birth month. Under 13 is refused, and 13 to 17 makes a youth account.
+  - A guardian hands a 13-year-old their profile: the claim email, then `/account/claim` or
+    `POST /auth/claim`.
+  - The consent link works on the web (`/app/guardian-links/{id}/verify`, with
+    `consent-link.js`).
+  - The app-link files are served from `AppLinks:*`.
+  - The server words pushes and the inbox (`notify.*`).
+- **The server side of M2 is done.** What is left is the MAUI app (iOS needs the Mac), and
+  what waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D34 is accepted (D30 and D31 on 2026-10-19, D32 to D34 on 2026-10-20).
+**D35 (youth accounts, the claim, the consent page and app links) is proposed.**
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a
@@ -59,7 +67,8 @@ Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minut
   - Q4 retention; 30 days is proposed for processed outbox rows.
   - Q5 (deletion versus audit), needed for M2's export and delete requests.
   - Where media is stored.
-  - Firebase and Apple developer accounts, for push in M2.
+  - Firebase and Apple developer accounts, for push in M2, and the app identifiers and
+    signing fingerprints for `AppLinks:*`.
 
 ## Candidate next work
 
@@ -70,7 +79,8 @@ These have not been asked for yet:
 - curation screens;
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see
   [plan/03](plan/03-indexing-and-query-plans.md));
-- the M2 MAUI app shell, which needs the Mac for iOS.
+- the M2 MAUI app shell, which needs the Mac for iOS. It answers `/app/*` links and asks for
+  a birth month when someone registers.
 
 ## Setting up a machine
 
@@ -96,8 +106,9 @@ These have not been asked for yet:
      schema to it the same way, and set `Database=brighttime_main`.
    - **API test accounts:** each API test signs in as its own seeded admin, chosen by index,
      so parallel classes don't collide. Indices 20–29 are consent, 30–37 are email plus and
-     registration, 40–44 are the personal finder and 45–49 are notifications. Pick a new range
-     for a new class.
+     registration, 40–44 are the personal finder, 45–49 are notifications and 50–53 are youth
+     accounts. Pick a new range for a new class. The web tests' `YouthAccountPagesTests` use
+     the admins at indices 40–43 of the web fixture's own database.
    - **No connection string:** without `BRIGHTTIME_TEST_CONNECTION`, the integration project
      starts its own PostGIS container through Testcontainers, and the web and API tests skip.
 3. **Apply the schema:**

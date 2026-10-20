@@ -1,0 +1,109 @@
+@page "/account/claim"
+@using BrightTime.Modules.Identity.Consent
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.SharedKernel.Primitives
+@inherits ConsoleComponent
+
+@* A young person, now 13, makes their child profile their own sign-in (D35), from the link their
+   claim email carries. Like a reset link: the token is in the address, and the form posts it back. *@
+
+<PageTitle>@T["account.claim.title"] · BrightTime</PageTitle>
+<HeadContent>
+    @* The token is in this page's address; do not send it on in a Referer header. *@
+    <meta name="referrer" content="no-referrer" />
+</HeadContent>
+
+<h1>@T["account.claim.title"]</h1>
+
+@if (!Availability.CanSignIn)
+{
+    <p>@T["account.unavailable"]</p>
+}
+else if (Done == "1")
+{
+    <p class="notice success" role="status">@T["account.claim.done"]</p>
+    <p><a href="/sign-in">@T["account.claim.sign_in"]</a></p>
+}
+else if (string.IsNullOrWhiteSpace(Token))
+{
+    <p>@T["account.claim.incomplete"]</p>
+}
+else
+{
+    <p>@T["account.claim.intro"]</p>
+
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert" id="claim-error">@_problem</p>
+    }
+
+    <form method="post" class="editor sign-in" @formname="claim" @onsubmit="ClaimAsync">
+        <AntiforgeryToken />
+        <input type="hidden" name="token" value="@Token" />
+        <div class="field">
+            <label for="password">@T["account.reset.new_password"]</label>
+            <p class="hint" id="password-hint">
+                @T.Format("account.reset.hint", ("min", PasswordPolicy.MinimumLength))
+            </p>
+            <input id="password" name="password" type="password" autocomplete="new-password" required
+                   minlength="@PasswordPolicy.MinimumLength" maxlength="@PasswordPolicy.MaximumLength"
+                   aria-describedby="password-hint @(_problem is null ? null : "claim-error")" />
+        </div>
+        <div class="field">
+            <label for="confirm">@T["account.reset.confirm"]</label>
+            <input id="confirm" name="confirm" type="password" autocomplete="new-password" required />
+        </div>
+        <div class="actions">
+            <button type="submit">@T["account.claim.submit"]</button>
+        </div>
+    </form>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private string? _problem;
+
+    protected override void OnInitialized()
+    {
+        // The posted token wins over the query, so the form works however it was reached.
+        if (IsPost && FormValue("token") is { Length: > 0 } posted)
+        {
+            Token = posted;
+        }
+    }
+
+    private async Task ClaimAsync()
+    {
+        string password = FormValue("password");
+        if (!string.Equals(password, FormValue("confirm"), StringComparison.Ordinal))
+        {
+            _problem = T["account.reset.mismatch"];
+            return;
+        }
+
+        if (PasswordPolicy.Check(password, null) is { Count: > 0 } problems)
+        {
+            _problem = T[problems[0]];
+            return;
+        }
+
+        if (await Get<IBreachedPasswordCheck>().IsBreachedAsync(password, HttpContext.RequestAborted))
+        {
+            _problem = T["account.password.breached"];
+            return;
+        }
+
+        Result<BrightTime.SharedKernel.Ids.UserId> result = await Get<AccountClaims>().CompleteAsync(Token!, password, HttpContext.RequestAborted);
+        if (!result.IsSuccess)
+        {
+            // A weak password says which rule it broke; anything else is the error itself.
+            _problem = result.Error!.Details?.GetValueOrDefault("password") is { Length: > 0 } rules ? T[rules[0]] : T.Error(result.Error);
+            return;
+        }
+
+        Navigation.NavigateTo("/account/claim?done=1");
+    }
+}

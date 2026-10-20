@@ -23,8 +23,8 @@ public sealed record TaxonomyTermChanged(
 /// </summary>
 /// <param name="UserId">Who is told.</param>
 /// <param name="Kind">One of <c>ck_notification_kind</c>, which their preferences are kept by.</param>
-/// <param name="TitleKey">A catalogue key, rendered in the recipient's language: never prose.</param>
-/// <param name="Arguments">The key's arguments: identifiers, counts and dates, never personal details.</param>
+/// <param name="TitleKey">A catalogue key under <c>notify.</c>, never prose: its <c>.title</c> and <c>.body</c> are rendered in the recipient's language.</param>
+/// <param name="Arguments">The key's arguments: names, counts and instants (ISO 8601, named <c>at</c> or <c>*_at</c>), never personal details.</param>
 /// <param name="DeepLink">An app path to open (<c>/listings/{slug}</c>), never an external address.</param>
 /// <param name="DedupeKey">Two requests with the same key make one notification, so a retried job never notifies twice.</param>
 /// <param name="ExpiresAt">When it stops mattering (a reminder after its deadline), and leaves the inbox.</param>

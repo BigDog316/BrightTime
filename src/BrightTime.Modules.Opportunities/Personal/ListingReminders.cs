@@ -124,7 +124,7 @@ public sealed class ReminderDueHandler(OpportunitiesDbContext db, IClock clock) 
 {
     public static string JobType => "opportunities.reminder_due";
 
-    /// <summary>The titles the app renders. They join the shared catalogues with the app's strings.</summary>
+    /// <summary>The notification keys: each one's <c>.title</c> and <c>.body</c> are in the shared catalogues.</summary>
     public const string DeadlineTitle = "notify.reminder.deadline";
     public const string SessionTitle = "notify.reminder.session";
 

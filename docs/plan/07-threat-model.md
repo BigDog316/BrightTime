@@ -57,7 +57,9 @@ escalation path on `grooming_concern` reports.
 **Controls:** youth self-registration yields `youth_capability` with posting,
 uploads and messaging off until an organisation verifies the account via
 enrollment or roster. Community participation requires space membership,
-which only staff can grant. *Enforced in schema + policy.*
+which only staff can grant. *Enforced in schema + policy.* `YouthCapabilityCalculator`
+holds posting, uploads and organisation messages until the account is vouched for (D35).
+Nothing vouches for an account until enrolment (M3).
 
 ### T3 — Youth or unvetted adult poses as a mentor
 **Controls:** `mentor_profile.is_searchable` requires `status='active'`;

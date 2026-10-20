@@ -35,11 +35,25 @@ public sealed record ConsentConfirmation(Guid LinkId, UserId ChildId, string Gua
 /// <summary>A child profile just made, and the consent email its guardian is to be sent.</summary>
 public sealed record NewChild(ChildView Child, ConsentEmail ConsentEmail);
 
-/// <summary>A child profile as its guardian sees it.</summary>
+/// <summary>A guardian's own open link, as the page that answers a consent email shows it.</summary>
+public sealed record LinkToConfirm(Guid LinkId, UserId ChildId, string ChildGivenName, string Status);
+
+/// <summary>A guardian's request that their child, now 13, have a sign-in of their own at this address (D35).</summary>
+public sealed record ClaimAsk(UserId ChildId, string Email)
+{
+    /// <summary>Never the address: a logged request must not carry it.</summary>
+    public override string ToString() => $"ClaimAsk {{ ChildId = {ChildId} }}";
+}
+
+/// <summary>
+/// A child profile as its guardian sees it. <see cref="AccountKind"/> is <c>youth</c> once the young
+/// person has claimed it (D35): it is theirs to sign in to, and still the guardian's to consent for.
+/// </summary>
 public sealed record ChildView(
     UserId Id,
     string GivenName,
     DateOnly BirthMonth,
+    string AccountKind,
     string Status,
     GuardianLinkView Link,
     IReadOnlyList<ConsentView> Consents,
@@ -91,6 +105,14 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
 
     /// <summary>Recorded by the host once the confirmatory email has gone (or failed to).</summary>
     public const string ConfirmationSent = "consent.confirmation_sent";
+
+    public const string ClaimRequested = "consent.claim_requested";
+
+    /// <summary>Recorded by the host once a claim email has gone (or failed to).</summary>
+    public const string ClaimEmailSent = "consent.claim_email_sent";
+
+    /// <summary>Recorded when the young person completes a claim (<see cref="AccountClaims"/>).</summary>
+    public const string AccountClaimed = "consent.account_claimed";
 
     /// <summary>
     /// How long a consent email's link works. Long enough for a parent to get to it after a
@@ -199,7 +221,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             await AuditAsync(ChildCreated, childId, new() { ["relationship"] = relationship }, ct).ConfigureAwait(false);
 
             return Result<NewChild>.Success(new NewChild(
-                new ChildView(child.UserId, name, birthMonth, child.Status, View(link), [], capabilities),
+                new ChildView(child.UserId, name, birthMonth, child.AccountKind, child.Status, View(link), [], capabilities),
                 new ConsentEmail(link.Id, child.UserId, adult.Email!, adult.Locale, name, token, link.EmailTokenExpiresAt!.Value)));
         }, cancellationToken);
 
@@ -346,7 +368,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
                     new Dictionary<string, object> { ["current"] = disclosure.HashHex }));
             }
 
-            if (!disclosure.AvailableUnder13)
+            if (!disclosure.AvailableUnder13 && await IsUnder13Async(child.Value, ct).ConfigureAwait(false))
             {
                 return Result<ConsentView>.Failure(Error.Forbidden("consent.not_available_under_13",
                     "Children under 13 never post or publish, whatever their guardian consents to."));
@@ -481,6 +503,20 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             return children;
         }, cancellationToken);
 
+    /// <summary>
+    /// The guardian's own open link, for the web page a consent email's link opens (D35); null when
+    /// it is not theirs or was revoked, so a link opened by the wrong account says nothing about it.
+    /// </summary>
+    public Task<LinkToConfirm?> LinkToConfirmAsync(UserId guardian, Guid linkId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<LinkToConfirm?>(async ct =>
+        {
+            GuardianLink? link = await db.GuardianLinks.AsNoTracking()
+                .FirstOrDefaultAsync(l => l.Id == linkId && l.GuardianUserId == guardian.Value && l.RevokedAt == null, ct).ConfigureAwait(false);
+            return link is null
+                ? null
+                : new LinkToConfirm(link.Id, new UserId(link.ChildUserId), await GivenNameAsync(link.ChildUserId, ct).ConfigureAwait(false), link.Status);
+        }, cancellationToken);
+
     /// <summary>One child, if the guardian has an open link to them.</summary>
     public Task<ChildView?> ChildAsync(UserId guardian, UserId child, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
@@ -488,6 +524,67 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             GuardianLink? link = await db.GuardianLinks.AsNoTracking()
                 .FirstOrDefaultAsync(l => l.GuardianUserId == guardian.Value && l.ChildUserId == child.Value && l.RevokedAt == null, ct).ConfigureAwait(false);
             return link is null ? null : await ViewChildAsync(link, ct).ConfigureAwait(false);
+        }, cancellationToken);
+
+    /// <summary>
+    /// A guardian asks that their child, now 13, have a sign-in of their own, at an address the young
+    /// person reads (D35). Checks who and when, and records the request; the host then sends the
+    /// claim email after the response, so the answer never says whether the address has an account.
+    /// </summary>
+    public Task<Result<ClaimAsk>> RequestClaimAsync(UserId guardian, UserId child, string? email, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            string address = (email ?? string.Empty).Trim();
+            if (address.Length is 0 or > SignIn.AccountProvisioning.MaxEmailLength
+                || !System.Net.Mail.MailAddress.TryCreate(address, out System.Net.Mail.MailAddress? parsed)
+                || !string.Equals(parsed.Address, address, StringComparison.Ordinal))
+            {
+                return Result<ClaimAsk>.Failure(Error.Validation("consent.invalid_email", "The young person's own email address."));
+            }
+
+            if (await VerifiedLinkAsync(guardian, child, ct).ConfigureAwait(false) is null)
+            {
+                return Result<ClaimAsk>.Failure(NotYourChild());
+            }
+
+            AppUser profile = await db.Users.AsNoTracking().FirstAsync(u => u.Id == child.Value, ct).ConfigureAwait(false);
+            if (profile.AccountKind != AccountKind.Child)
+            {
+                return Result<ClaimAsk>.Failure(Error.Conflict("consent.already_claimed", "This account already has a sign-in of its own."));
+            }
+
+            if (profile.Status != UserStatus.Active)
+            {
+                return Result<ClaimAsk>.Failure(Error.Precondition("consent.claim_needs_consent", "The profile needs your consent before it can be handed over."));
+            }
+
+            // The same younger reading as everywhere: never a day early.
+            if (profile.BirthMonth is not { } month || Age.BandFromBirthMonth(month, clock.TodayIn(Zone)).IsCoppaProtected())
+            {
+                return Result<ClaimAsk>.Failure(Error.Forbidden("consent.claim_too_young", "A child can have a sign-in of their own from the day they turn 13."));
+            }
+
+            await AuditAsync(ClaimRequested, child.Value, [], ct).ConfigureAwait(false);
+            return Result<ClaimAsk>.Success(new ClaimAsk(child, address));
+        }, cancellationToken);
+
+    /// <summary>
+    /// Books a recompute of one account's capabilities, to run at once on the worker. For changes
+    /// made where no one is signed in to recompute as (a registration, a claim): the actor guard
+    /// keeps <c>youth_capability</c> from an anonymous request, and the worker is exempt from it.
+    /// The reason is part of the job's key, so each cause books once: <c>registered</c>, <c>claimed</c>.
+    /// </summary>
+    public Task RequestRecomputeAsync(UserId user, string reason, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            await db.EnqueueJobAsync(new JobRequest
+            {
+                JobType = RecomputeCapabilitiesHandler.JobType,
+                TenantId = tenant.TenantId,
+                Payload = new RecomputeCapabilitiesHandler.Payload(user.Value),
+                UniqueKey = $"{RecomputeCapabilitiesHandler.JobType}:{user.Value:N}:{reason}",
+            }, ct).ConfigureAwait(false);
+            return 0;
         }, cancellationToken);
 
     /// <summary>Verifies a link by a method, records the account consent and activates the profile.</summary>
@@ -686,6 +783,15 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             l => l.GuardianUserId == guardian.Value && l.ChildUserId == child.Value
                  && l.Status == GuardianLinkStatus.Verified && l.RevokedAt == null, ct);
 
+    /// <summary>A child profile keeps the floor until it is claimed; an account with no birth month is treated as under 13.</summary>
+    private async Task<bool> IsUnder13Async(Guid userId, CancellationToken ct)
+    {
+        AppUser user = await db.Users.AsNoTracking().FirstAsync(u => u.Id == userId, ct).ConfigureAwait(false);
+        return user.AccountKind == AccountKind.Child
+               || user.BirthMonth is not { } month
+               || Age.BandFromBirthMonth(month, clock.TodayIn(Zone)).IsCoppaProtected();
+    }
+
     private Task<bool> HasLiveAccountConsentAsync(Guid child, DateTimeOffset now, CancellationToken ct)
     {
         string account = ConsentScope.Account.ToDbValue();
@@ -718,6 +824,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             child.UserId,
             name,
             child.BirthMonth ?? default,
+            child.AccountKind,
             child.Status,
             View(link),
             [.. consents.Select(c => ConsentScopeExtensions.TryFromDbValue(c.Scope, out ConsentScope s) ? new ConsentView(s, c.Method, c.GrantedAt) : null).OfType<ConsentView>()],

@@ -5,6 +5,7 @@ using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Localisation;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Notifications.Contracts;
 using BrightTime.Modules.Notifications.Persistence;
@@ -28,18 +29,26 @@ public sealed record NotificationSettings(TimeOnly? QuietFrom, TimeOnly? QuietTo
 
 public sealed record InboxItem(Guid Id, string Kind, string TitleKey, IReadOnlyDictionary<string, string> Arguments, string? DeepLink, DateTimeOffset CreatedAt, bool IsRead);
 
+/// <summary>One push to one device, already in the words its phone was registered in.</summary>
+public sealed record PushMessage(string Platform, string Token, string Kind, string Title, string Body, string? DeepLink)
+{
+    /// <summary>Never the token or the words: a logged message must not carry either.</summary>
+    public override string ToString() => $"PushMessage {{ Platform = {Platform}, Kind = {Kind} }}";
+}
+
 /// <summary>Sends a push to one device. Firebase and APNs adapters arrive with their accounts; until then pushes are logged.</summary>
 public interface IPushSender
 {
-    Task<bool> SendAsync(string platform, string token, string kind, string titleKey, IReadOnlyDictionary<string, string> arguments, string? deepLink, CancellationToken cancellationToken);
+    Task<bool> SendAsync(PushMessage message, CancellationToken cancellationToken);
 }
 
 /// <summary>Logs that a push would go, and to which platform: never the token, never the content.</summary>
 public sealed partial class LoggingPushSender(ILogger<LoggingPushSender> logger) : IPushSender
 {
-    public Task<bool> SendAsync(string platform, string token, string kind, string titleKey, IReadOnlyDictionary<string, string> arguments, string? deepLink, CancellationToken cancellationToken)
+    public Task<bool> SendAsync(PushMessage message, CancellationToken cancellationToken)
     {
-        LogPush(logger, kind, platform);
+        ArgumentNullException.ThrowIfNull(message);
+        LogPush(logger, message.Kind, message.Platform);
         return Task.FromResult(true);
     }
 
@@ -245,6 +254,7 @@ public sealed class NotificationRequestedHandler(
     ITenantContext tenant,
     IIdentityQueries identity,
     IFieldCipher cipher,
+    NotificationTextFactory words,
     IPushSender push,
     IClock clock) : IModuleMessageHandler<NotificationRequested>
 {
@@ -310,10 +320,15 @@ public sealed class NotificationRequestedHandler(
         foreach (PushDeviceRecord device in devices)
         {
             string? token = await cipher.DecryptAsync(tenant.TenantId, device.TokenEnc, cancellationToken).ConfigureAwait(false);
-            if (token is not null)
+            if (token is null)
             {
-                await push.SendAsync(device.PlatformKind, token, message.Kind, message.TitleKey, message.Arguments, message.DeepLink, cancellationToken).ConfigureAwait(false);
+                continue;
             }
+
+            // In the phone's language, which may not be the language of whoever else uses the account.
+            Text text = await words.ForAsync(device.Locale, cancellationToken).ConfigureAwait(false);
+            NotificationWords said = NotificationText.Render(text, message.TitleKey, message.Arguments);
+            await push.SendAsync(new PushMessage(device.PlatformKind, token, message.Kind, said.Title, said.Body, message.DeepLink), cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -351,9 +366,10 @@ public static class NotificationsModule
         return services;
     }
 
-    /// <summary>The worker side: delivering requested notifications.</summary>
+    /// <summary>The worker side: delivering requested notifications. Needs the shared catalogue and wording overrides.</summary>
     public static IServiceCollection AddNotificationDelivery(this IServiceCollection services)
     {
+        services.AddScoped<NotificationTextFactory>();
         services.AddSingleton<IPushSender, LoggingPushSender>();
         services.AddMessageHandler<NotificationRequested, NotificationRequestedHandler>();
         return services;

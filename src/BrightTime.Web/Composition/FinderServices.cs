@@ -2,6 +2,8 @@ using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Identity.Consent;
+using BrightTime.Modules.Identity.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Modules.Opportunities.Persistence;
@@ -63,6 +65,12 @@ public static class FinderServices
                 connection, DirectoryDbContext.SchemaName, DirectoryDbContext.MigrationsHistoryTable);
             services.AddBrightTimeDbContext<PlatformDbContext>(
                 connection, PlatformDbContext.SchemaName, PlatformDbContext.MigrationsHistoryTable);
+
+            // A guardian answering a consent email, and a young person claiming their account,
+            // on the web (D35): Guardianship decides who may (D4), under RLS and the actor guard.
+            services.AddBrightTimeDbContext<IdentityDbContext>(
+                connection, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
+            services.AddScoped<Guardianship>();
 
             services.AddScoped<IDirectoryQueries, DirectoryQueries>();
             services.AddScoped<PlatformQueries>();

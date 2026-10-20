@@ -16,6 +16,9 @@ public sealed record CreateChildRequest(string? GivenName, string? BirthMonth, s
 
 public sealed record GrantConsentRequest(string? Scope, string? DisclosureHash);
 
+/// <summary>The young person's own address, for their claim email (D35).</summary>
+public sealed record ClaimRequest(string? Email);
+
 /// <summary>The token from the guardian's consent email (the fragment of its link).</summary>
 public sealed record VerifyLinkRequest(string? Token);
 
@@ -45,6 +48,7 @@ public sealed record ChildResponse(
     Guid Id,
     string GivenName,
     string BirthMonth,
+    string AccountKind,
     string Status,
     LinkResponse Link,
     IReadOnlyList<ConsentResponse> Consents,
@@ -85,6 +89,7 @@ public static class ConsentEndpoints
         children.MapGet("/{id:guid}", GetAsync);
         children.MapPost("/{id:guid}/consents", GrantAsync);
         children.MapDelete("/{id:guid}/consents/{scope}", RevokeAsync);
+        children.MapPost("/{id:guid}/claim", ClaimAsync).RequireRateLimiting(ApiComposition.SignInLimit);
 
         api.MapPost("/guardian-links/{id:guid}/verify", VerifyLinkAsync).RequireAuthorization();
         api.MapPost("/guardian-links/{id:guid}/consent-email", ResendConsentEmailAsync).RequireAuthorization();
@@ -156,6 +161,32 @@ public static class ConsentEndpoints
 
         Result revoked = await guardianship.RevokeAsync(Actor(user), new UserId(id), parsed, ct);
         return revoked.IsSuccess ? Results.NoContent() : ApiProblems.From(revoked.Error);
+    }
+
+    /// <summary>
+    /// The guardian asks that their child, now 13, have a sign-in of their own (D35). 202 whatever the
+    /// address: the claim email, or a word to an address that already has an account, goes after the
+    /// response. Rate limited, since each request sends an email.
+    /// </summary>
+    private static async Task<IResult> ClaimAsync(
+        Guid id,
+        ClaimRequest body,
+        ClaimsPrincipal user,
+        Guardianship guardianship,
+        AccountMailDispatcher mail,
+        ITenantContext tenant,
+        SiteContext site,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        Result<ClaimAsk> asked = await guardianship.RequestClaimAsync(Actor(user), new UserId(id), body.Email, ct);
+        if (!asked.IsSuccess)
+        {
+            return ApiProblems.From(asked.Error);
+        }
+
+        mail.RequestClaim(tenant.TenantId, asked.Value, SiteUrl(site), tenant.Locale);
+        return Results.Accepted();
     }
 
     /// <summary>The guardian's answer to their consent email. Answers with the child, now active.</summary>
@@ -230,6 +261,7 @@ public static class ConsentEndpoints
         c.Id.Value,
         c.GivenName,
         c.BirthMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+        c.AccountKind,
         c.Status,
         Link(c.Link),
         [.. c.Consents.Select(x => new ConsentResponse(x.Scope.ToDbValue(), x.Method, x.GrantedAt))],

@@ -151,14 +151,33 @@ public sealed class YouthCapabilityCalculatorTests
     }
 
     [Fact]
-    public void A_self_registered_teen_cannot_post_until_an_organisation_vouches_for_them()
+    public void A_self_registered_teen_cannot_post_upload_or_be_messaged_until_an_organisation_vouches_for_them()
     {
-        // The defence against an adult posing as a youth: a self-registered
-        // account browses and saves, but cannot reach other young people until
-        // enrolment or a district roster verifies it.
+        // The defence against an adult posing as a youth (T2): a self-registered
+        // account browses and saves, but cannot reach other young people, or be
+        // reached, until enrolment or a district roster verifies it.
         CapabilityInputs inputs = Teen() with { IsOrganisationVerified = false };
 
-        YouthCapabilityCalculator.Calculate(inputs).CanPostInCommunity.ShouldBeFalse();
+        YouthCapabilities capabilities = YouthCapabilityCalculator.Calculate(inputs);
+        capabilities.CanPostInCommunity.ShouldBeFalse();
+        capabilities.CanUploadMedia.ShouldBeFalse();
+        capabilities.CanBeMessagedByOrganisation.ShouldBeFalse();
+        capabilities.CanSelfEnroll.ShouldBeTrue();
+
+        YouthCapabilities vouched = YouthCapabilityCalculator.Calculate(Teen());
+        vouched.CanUploadMedia.ShouldBeTrue();
+        vouched.CanBeMessagedByOrganisation.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_claimed_teen_uploads_and_is_messaged_on_the_guardians_consent_not_on_vouching()
+    {
+        // A claimed child profile keeps its guardian (D35); the guardian's consent decides.
+        CapabilityInputs managed = Teen(ConsentScope.MediaCapture) with { HasVerifiedGuardian = true, IsOrganisationVerified = false };
+
+        YouthCapabilities capabilities = YouthCapabilityCalculator.Calculate(managed);
+        capabilities.CanUploadMedia.ShouldBeTrue();
+        capabilities.CanBeMessagedByOrganisation.ShouldBeFalse();
     }
 
     [Fact]

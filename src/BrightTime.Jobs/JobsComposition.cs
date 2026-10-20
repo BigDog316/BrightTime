@@ -1,3 +1,4 @@
+using BrightTime.Hosting.Localisation;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Jobs;
 using BrightTime.Infrastructure.Outbox;
@@ -78,16 +79,18 @@ public static class JobsComposition
             connection, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
         services.AddScoped(sp => new AuditTrail(
             sp.GetRequiredService<ITenantContext>(), NoAuditRequestInfo.Instance, sp.GetRequiredService<IClock>(), sp.GetRequiredService<NpgsqlDataSource>()));
+        services.AddScoped<IAuditWriter>(sp => sp.GetRequiredService<AuditTrail>());
         services.AddSingleton<IAuditRequestInfo>(NoAuditRequestInfo.Instance);
         services.AddGuardianshipJobs();
         services.AddScoped<IIdentityQueries, IdentityQueries>();
 
         // Reminders, and delivering what modules ask to be told: the inbox and pushes. Push tokens are
-        // decrypted under the tenant's data key (D32).
+        // decrypted under the tenant's data key (D32), and pushes are worded from the shared catalogues.
         services.AddReminderJobs();
         services.AddBrightTimeDbContext<NotificationsDbContext>(
             connection, NotificationsDbContext.SchemaName, NotificationsDbContext.MigrationsHistoryTable);
         services.AddFieldEncryption(configuration, environment.IsDevelopment());
+        services.AddBrightTimeText(hasDatabase: true);
         services.AddNotificationDelivery();
 
         return services;

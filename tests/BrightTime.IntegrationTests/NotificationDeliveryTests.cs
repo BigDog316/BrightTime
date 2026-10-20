@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using BrightTime.Abstractions.Security;
+using BrightTime.Hosting.Localisation;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Security;
@@ -11,6 +13,7 @@ using BrightTime.Modules.Notifications.Persistence;
 using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Seed;
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Time;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -32,17 +35,17 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
     /// <summary>Records pushes instead of sending them.</summary>
     private sealed class RecordingPushSender : IPushSender
     {
-        public ConcurrentQueue<(string Platform, string Token, string TitleKey)> Sent { get; } = new();
+        public ConcurrentQueue<PushMessage> Sent { get; } = new();
 
-        public Task<bool> SendAsync(string platform, string token, string kind, string titleKey, IReadOnlyDictionary<string, string> arguments, string? deepLink, CancellationToken cancellationToken)
+        public Task<bool> SendAsync(PushMessage message, CancellationToken cancellationToken)
         {
-            Sent.Enqueue((platform, token, titleKey));
+            Sent.Enqueue(message);
             return Task.FromResult(true);
         }
     }
 
     [Fact]
-    public async Task A_due_reminder_reaches_the_inbox_and_the_phone_once_and_quiet_hours_hold_the_push()
+    public async Task A_due_reminder_reaches_the_inbox_and_each_phone_in_its_language_once_and_quiet_hours_hold_the_push()
     {
         Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
         (string cs, SeedData data, _) = await KettleDatabase.CreateAsync(database.ConnectionString, DatabaseName, Ct);
@@ -67,28 +70,37 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
             services.AddScoped<IIdentityQueries, IdentityQueries>();
             services.AddBrightTimeDbContext<NotificationsDbContext>(jobs, NotificationsDbContext.SchemaName, NotificationsDbContext.MigrationsHistoryTable);
             services.AddFieldEncryption(keys, development: false);
+            services.AddScoped<IAuditWriter>(sp => new AuditTrail(
+                sp.GetRequiredService<ITenantContext>(), NoAuditRequestInfo.Instance, sp.GetRequiredService<IClock>(), sp.GetRequiredService<NpgsqlDataSource>()));
+            services.AddBrightTimeText(hasDatabase: true);
             services.AddReminderJobs();
             services.AddNotificationDelivery();
             services.AddSingleton<IPushSender>(push);
         });
 
-        // The person's phone, sealed as the API seals it.
+        // The person's phones, sealed as the API seals them: one with no language, one in Spanish.
         const string Token = "fcm-token-For-This-Phone";
-        byte[] hash = await worker.GetRequiredService<HmacTokenHasher>().HashAsync(new TenantId(tenant), PushDevices.TokenPurpose, Token, Ct);
-        byte[] sealedToken = (await worker.GetRequiredService<IFieldCipher>().EncryptAsync(new TenantId(tenant), Token, Ct))!;
+        const string SpanishToken = "fcm-token-For-The-Other-Phone";
+        HmacTokenHasher hasher = worker.GetRequiredService<HmacTokenHasher>();
+        IFieldCipher cipher = worker.GetRequiredService<IFieldCipher>();
+        byte[] hash = await hasher.HashAsync(new TenantId(tenant), PushDevices.TokenPurpose, Token, Ct);
+        byte[] sealedToken = (await cipher.EncryptAsync(new TenantId(tenant), Token, Ct))!;
+        byte[] spanishHash = await hasher.HashAsync(new TenantId(tenant), PushDevices.TokenPurpose, SpanishToken, Ct);
+        byte[] spanishSealed = (await cipher.EncryptAsync(new TenantId(tenant), SpanishToken, Ct))!;
         Guid reminder = UuidV7.NewId();
         await using (NpgsqlConnection connection = await Sql.OpenAsync(cs, Ct))
         {
             await Sql.ExecAsync(connection, null,
                 """
-                insert into notify.push_device (id, tenant_id, user_id, platform_kind, token_hash, token_enc)
-                values (gen_random_uuid(), @t, @u, 'android', @h, @e);
+                insert into notify.push_device (id, tenant_id, user_id, platform_kind, token_hash, token_enc, locale)
+                values (gen_random_uuid(), @t, @u, 'android', @h, @e, null),
+                       (gen_random_uuid(), @t, @u, 'ios', @sh, @se, 'es');
                 insert into opportunity.listing_reminder (id, tenant_id, user_id, listing_id, anchor, lead_minutes, remind_at)
                 values (@r, @t, @u, @l, 'next_session', 60, now());
                 insert into platform.job (id, tenant_id, queue, job_type, payload, run_after)
                 values (gen_random_uuid(), @t, @q, @type, jsonb_build_object('reminderId', @r::text), now());
                 """,
-                [("t", tenant), ("u", user), ("h", hash), ("e", sealedToken), ("r", reminder), ("l", listing.Id),
+                [("t", tenant), ("u", user), ("h", hash), ("e", sealedToken), ("sh", spanishHash), ("se", spanishSealed), ("r", reminder), ("l", listing.Id),
                  ("q", queue), ("type", ReminderDueHandler.JobType)]);
         }
 
@@ -98,12 +110,21 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
         (await Sql.ScalarAsync<bool>(check, null, "select sent_at is not null from opportunity.listing_reminder where id = @r", [("r", reminder)])).ShouldBeTrue();
         (await Sql.ScalarAsync<string>(check, null, "select title || ' ' || deep_link from notify.notification where user_id = @u", [("u", user)]))
             .ShouldBe($"{ReminderDueHandler.SessionTitle} /listings/{listing.Slug}");
-        push.Sent.ShouldHaveSingleItem().ShouldBe(("android", Token, ReminderDueHandler.SessionTitle));
+        // Worded on the way out: the tenant's language for the phone with none, Spanish for the other.
+        push.Sent.Count.ShouldBe(2);
+        PushMessage english = push.Sent.Single(m => m.Token == Token);
+        english.Platform.ShouldBe("android");
+        english.Title.ShouldBe("Starting soon");
+        english.Body.ShouldStartWith("⁨" + listing.Title + "⁩ starts on ");
+        english.DeepLink.ShouldBe($"/listings/{listing.Slug}");
+        PushMessage spanish = push.Sent.Single(m => m.Token == SpanishToken);
+        spanish.Title.ShouldBe("Empieza pronto");
+        spanish.Body.ShouldNotContain("{");
 
         // Asked again with the same key, as a retried delivery would: nothing new.
         await HandleAsync(worker, tenant, Request(user, "reminder:" + reminder.ToString("N")));
         (await Sql.ScalarAsync<long>(check, null, "select count(*) from notify.notification where user_id = @u", [("u", user)])).ShouldBe(1);
-        push.Sent.Count.ShouldBe(1);
+        push.Sent.Count.ShouldBe(2);
 
         // In quiet hours the inbox still gets it; the phone stays silent.
         await Sql.ExecAsync(check, null,
@@ -114,11 +135,11 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
             [("u", user), ("t", tenant)]);
         await HandleAsync(worker, tenant, Request(user, "quiet-" + Guid.NewGuid().ToString("N")));
         (await Sql.ScalarAsync<long>(check, null, "select count(*) from notify.notification where user_id = @u", [("u", user)])).ShouldBe(2);
-        push.Sent.Count.ShouldBe(1);
+        push.Sent.Count.ShouldBe(2);
     }
 
     private static Modules.Platform.Contracts.Messages.NotificationRequested Request(Guid user, string dedupe) =>
-        new(user, "session_reminder", ReminderDueHandler.SessionTitle, new Dictionary<string, string>(), "/listings/x", dedupe);
+        new(user, "session_reminder", ReminderDueHandler.SessionTitle, new Dictionary<string, string> { ["listing"] = "x", ["at"] = "2026-10-21T20:00:00Z" }, "/listings/x", dedupe);
 
     private static async Task HandleAsync(ServiceProvider worker, Guid tenant, Modules.Platform.Contracts.Messages.NotificationRequested message)
     {

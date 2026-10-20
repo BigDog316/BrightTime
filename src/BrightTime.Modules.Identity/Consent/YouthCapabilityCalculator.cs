@@ -109,10 +109,11 @@ public static class YouthCapabilityCalculator
         // Uploads are the one capability an under-13 account can hold, because
         // a child submitting a photo of their own work to their own mentor is
         // the point of a playlist. It needs explicit media-capture consent, and
-        // publication is a separate decision below.
-        bool canUploadMedia = isUnder13
+        // publication is a separate decision below. A teen consenting for
+        // themselves uploads once an organisation has vouched for them (T2).
+        bool canUploadMedia = isUnder13 || RequiresConsent(inputs)
             ? Consented(inputs, ConsentScope.MediaCapture)
-            : !RequiresConsent(inputs) || Consented(inputs, ConsentScope.MediaCapture);
+            : inputs.IsOrganisationVerified;
 
         bool canPublishShowcase = !isUnder13
                                   && (!RequiresConsent(inputs) || Consented(inputs, ConsentScope.ShowcasePublication));
@@ -121,9 +122,10 @@ public static class YouthCapabilityCalculator
                              && inputs.PhoneConfirmed
                              && (!RequiresConsent(inputs) || Consented(inputs, ConsentScope.Messaging));
 
-        bool canBeMessagedByOrg = isUnder13
+        // T2 again: an organisation messages a self-registered teen only once one has vouched for them.
+        bool canBeMessagedByOrg = isUnder13 || RequiresConsent(inputs)
             ? Consented(inputs, ConsentScope.Messaging)
-            : !RequiresConsent(inputs) || Consented(inputs, ConsentScope.Messaging);
+            : inputs.IsOrganisationVerified;
 
         return new YouthCapabilities(
             inputs.UserId,

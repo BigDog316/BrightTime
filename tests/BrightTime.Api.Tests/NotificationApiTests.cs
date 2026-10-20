@@ -88,6 +88,21 @@ public sealed class NotificationApiTests(ApiFixture api)
         sms.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         (await me.GetFromJsonAsync<JsonElement>("api/v1/me/notifications", Ct)).GetArrayLength().ShouldBe(0);
+
+        // The inbox comes back in words, in the language asked for, worded as the push was.
+        Guid user = await api.ScalarAsync<Guid>("select id from identity.app_user where normalized_email = upper(@e)", ("e", Admin(47)));
+        await api.ExecuteAsync(
+            """
+            insert into notify.notification (id, tenant_id, user_id, notification_kind, title, deep_link, payload)
+            select gen_random_uuid(), tenant_id, id, 'session_reminder', 'notify.reminder.session', '/listings/x',
+                   '{"args": {"listing": "Robotics", "at": "2026-10-21T20:00:00Z"}}'
+              from identity.app_user where id = @u
+            """, ("u", user));
+        JsonElement item = (await me.GetFromJsonAsync<JsonElement>("api/v1/me/notifications?locale=es", Ct)).EnumerateArray().Single();
+        item.GetProperty("title").GetString().ShouldBe("Empieza pronto");
+        string body = item.GetProperty("body").GetString()!;
+        body.ShouldStartWith("⁨Robotics⁩ empieza el ");
+        body.ShouldContain("16:00"); // 20:00 UTC in the tenant's zone, New York.
     }
 
     [Fact]

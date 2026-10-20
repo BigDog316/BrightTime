@@ -97,6 +97,7 @@ public static class ApiComposition
         services.AddBrightTimeDbContext<IdentityDbContext>(app, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
         services.AddScoped<IIdentityQueries, IdentityQueries>();
         services.AddScoped<Guardianship>();
+        services.AddScoped<AccountClaims>();
 
         // Notifications: devices, preferences and the inbox. Push tokens are encrypted under the
         // tenant's data key (D32).

@@ -880,7 +880,7 @@ opens when no app claims it.
   - The real app identifiers for `AppLinks:*` wait on the developer accounts.
   - A young person's own export and delete requests wait on Q5.
 
-### D36 — The app: MAUI Blazor Hybrid over a shared, tested library (**proposed 2026-10-20; implemented, reversible**)
+### D36 — The app: MAUI Blazor Hybrid over a shared, tested library (**accepted 2026-10-20**)
 
 M2's app, as docs/plan/01 lays it out.
 - **Three projects:**
@@ -957,7 +957,7 @@ M2's app, as docs/plan/01 lays it out.
   - **Physical devices:** M2's acceptance asks for physical iOS and Android devices. Only the
     emulator has run it so far.
 
-### D37 — The terms of use, agreed to by version (**proposed 2026-10-20; implemented, reversible**)
+### D37 — The terms of use, agreed to by version (**accepted 2026-10-20**)
 
 Self-enrolment for a young person needed the terms accepted (the calculator's `TermsAccepted`),
 and nothing could accept them.
@@ -983,7 +983,7 @@ and nothing could accept them.
   until counsel reviews it and it is translated (Q13). The web shows no terms page yet.
 - Audited as `account.terms_accepted`, with the version.
 
-### D38 — Passkeys from the app (**proposed 2026-10-20; implemented, reversible**)
+### D38 — Passkeys from the app (**accepted 2026-10-20**)
 
 docs/plan/05's `/auth/passkeys` routes, which T21 prefers for young people.
 - **The same passkeys as the web.** The same store (`user_credential`) and the same relying party:

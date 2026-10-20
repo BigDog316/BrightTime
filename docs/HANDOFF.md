@@ -50,13 +50,13 @@ is merged (`cec1ed6`).
     `consent-link.js`).
   - The app-link files are served from `AppLinks:*`.
   - The server words pushes and the inbox (`notify.*`).
-- **The app** (D36, proposed): `BrightTime.Ui.Shared` (screens, client, session; tested
+- **The app** (D36): `BrightTime.Ui.Shared` (screens, client, session; tested
   anywhere), `BrightTime.Ui.Design` (styles) and `BrightTime.Mobile` (the MAUI host).
   - The Android build runs on the emulator against the compose stack.
   - The iOS build is written but not compiled; it needs the Mac.
   - Still to do: push, the map (Q7), the schedule (M3), a run on physical devices, and the
     release identifiers.
-- **Terms and passkeys** (D37, D38, proposed):
+- **Terms and passkeys** (D37, D38):
   - A young person agrees to the terms (versioned, pinned by hash) and may then sign up for
     programs themselves.
   - Passkeys work through the API, sharing the web's store and relying party.
@@ -66,9 +66,8 @@ is merged (`cec1ed6`).
 
 ## Waiting on Sam
 
-Every decision through D35 is accepted (D30 and D31 on 2026-10-19, D32 to D35 on 2026-10-20).
-**D36 (the app), D37 (terms) and D38 (passkeys from the app) are proposed.** Counsel should also
-review the terms' draft text (`AccountTerms.Current`).
+Every decision through D38 is accepted (D30 and D31 on 2026-10-19, D32 to D38 on 2026-10-20).
+Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a

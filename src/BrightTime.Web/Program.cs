@@ -1,4 +1,5 @@
 using BrightTime.Hosting.Health;
+using BrightTime.Hosting.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
@@ -22,6 +23,9 @@ builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environmen
 builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment,
     hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 builder.Services.AddBrightTimeLocalisation(builder.Configuration);
+// Cookies, antiforgery and passkey ceremonies, with the key ring in the database when there is one (D39).
+builder.Services.AddBrightTimeDataProtection(builder.Configuration, "BrightTime.Web", builder.Environment.IsDevelopment(),
+    hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 builder.Services.Configure<AppLinksOptions>(builder.Configuration.GetSection(AppLinksOptions.SectionName));
 builder.Services.AddBrightTimeHealth(builder.Configuration,
     hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);

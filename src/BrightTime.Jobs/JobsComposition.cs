@@ -82,6 +82,8 @@ public static class JobsComposition
         services.AddScoped<IAuditWriter>(sp => sp.GetRequiredService<AuditTrail>());
         services.AddSingleton<IAuditRequestInfo>(NoAuditRequestInfo.Instance);
         services.AddGuardianshipJobs();
+        // When the terms change, the self-enrolment they allowed waits for agreement again (D37).
+        services.AddHostedService<TermsSweep>();
         services.AddScoped<IIdentityQueries, IdentityQueries>();
 
         // Reminders, and delivering what modules ask to be told: the inbox and pushes. Push tokens are

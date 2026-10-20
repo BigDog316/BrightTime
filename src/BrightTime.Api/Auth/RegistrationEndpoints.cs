@@ -87,9 +87,14 @@ public static class RegistrationEndpoints
     }
 
     /// <summary>A young person completes their claim from the app: the account becomes theirs (D35).</summary>
-    private static async Task<IResult> ClaimAsync(ClaimAccountRequest body, AccountClaims claims, CancellationToken ct)
+    private static async Task<IResult> ClaimAsync(ClaimAccountRequest body, AccountClaims claims, IBreachedPasswordCheck breached, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
+        if (await breached.IsBreachedAsync(body.Password ?? string.Empty, ct))
+        {
+            return ApiProblems.From(PasswordEndpoints.Breached());
+        }
+
         Result<UserId> claimed = await claims.CompleteAsync(body.Token ?? string.Empty, body.Password ?? string.Empty, ct);
         return claimed.IsSuccess ? Results.NoContent() : ApiProblems.From(claimed.Error);
     }

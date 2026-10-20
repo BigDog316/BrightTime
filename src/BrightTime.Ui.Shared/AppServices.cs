@@ -12,9 +12,6 @@ namespace BrightTime.Ui.Shared;
 /// <param name="SiteBase">The region's web address, for pages the app opens outside itself.</param>
 public sealed record AppEndpoints(Uri ApiBase, Uri SiteBase)
 {
-    /// <summary>"Forgot your password?" is the web's page, as the emailed links are.</summary>
-    public Uri ForgotPassword => new(SiteBase, "/account/forgot");
-
     /// <summary>A listing's calendar file, which the phone's calendar opens.</summary>
     public Uri Calendar(string slug) => new(SiteBase, $"/listings/{Uri.EscapeDataString(slug)}/calendar.ics");
 

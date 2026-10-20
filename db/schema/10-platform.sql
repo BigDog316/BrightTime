@@ -466,6 +466,20 @@ create table api_client (
     check (scopes <@ array['listings.read','orgs.read','taxonomy.read','geography.read','collections.read','ical.read'])
 );
 
+-- ---------------------------------------------------------------------
+-- ASP.NET Core data protection's key ring, shared by every instance of a
+-- host (cookies, antiforgery, passkey ceremonies). Each key is encrypted at
+-- rest under a vault key (Security:Keys, D32) before it is written here, so
+-- the table holds no usable key material and no tenant data.
+-- ---------------------------------------------------------------------
+create table data_protection_key (
+  id            bigint generated always as identity primary key,
+  friendly_name text not null,
+  xml           text not null,
+  created_at    timestamptz not null default now(),
+  constraint ux_data_protection_key_name unique (friendly_name)
+);
+
 create table blind_index_key (
   id          smallint primary key,
   key_ref     text not null,         -- KMS/vault reference, never the key itself

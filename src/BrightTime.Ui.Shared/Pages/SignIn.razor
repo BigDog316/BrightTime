@@ -1,10 +1,8 @@
 @page "/sign-in"
 @* A passkey first where the phone has them (D38; T21 prefers them), then email and password
-   (D28's token endpoint). A forgotten password is reset on the web, as the emailed links are. *@
+   (D28's token endpoint). A forgotten password is asked for here; its link opens the web's page. *@
 @inject AppSession Session
 @inject IPasskeyAuthenticator Passkey
-@inject AppEndpoints Endpoints
-@inject IExternalLauncher Launcher
 @inject NavigationManager Navigation
 
 <h1>@T["account.sign_in.title"]</h1>
@@ -37,7 +35,7 @@
     </div>
 </form>
 
-<p><button type="button" class="link" @onclick="() => Launcher.OpenAsync(Endpoints.ForgotPassword)">@T["account.sign_in.forgot"]</button></p>
+<p><a href="forgot">@T["account.sign_in.forgot"]</a></p>
 <p>@T["app.sign_in.no_account"] <a href="register">@T["app.account.create"]</a></p>
 
 @code {

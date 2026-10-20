@@ -876,7 +876,7 @@ opens when no app claims it.
   - "Vouched for by an organisation" has no source until enrolment (M3).
   - A young person has no route to accept the terms, which self-enrolment needs.
   - The API checks no passwords against breaches (the web's PwnedPasswords check), so a claim
-    from the app skips that check. The web page makes it.
+    from the app skips that check. The web page makes it. *Done in D39.*
   - The real app identifiers for `AppLinks:*` wait on the developer accounts.
   - A young person's own export and delete requests wait on Q5.
 
@@ -970,7 +970,8 @@ and nothing could accept them.
   agreed to afresh before self-enrolment works again.
   - Accounts recompute when they agree.
   - Stored rows from before a new version change only at the next recompute. A deployment that
-    changes the terms should book one for every youth account; that step isn't built yet.
+    changes the terms should book one for every youth account. *Built in D39: the worker's terms
+    sweep.*
 - **The API:**
   - `GET /api/v1/terms` (anyone) gives the words, version and hash.
   - `GET /api/v1/me/terms` says where the person stands.
@@ -1001,7 +1002,8 @@ docs/plan/05's `/auth/passkeys` routes, which T21 prefers for young people.
   - With no cookies, a ceremony's options travel back as `state`: sealed by data protection,
     bound to their purpose (and for a registration, to the account), and good for 5 minutes.
   - **The API host's data protection keys are its default, per instance.** That works for one
-    instance. Several need shared keys, or a ceremony started on one fails on another.
+    instance. Several need shared keys, or a ceremony started on one fails on another. *Shared
+    since D39.*
   - Adding and removing a passkey need a sign-in in the last 15 minutes (T21's step-up), read
     from the token's `auth_time`, which a refresh keeps. An older session gets 403, and the app
     asks the person to sign in again.
@@ -1022,7 +1024,39 @@ docs/plan/05's `/auth/passkeys` routes, which T21 prefers for young people.
     emulator against `kettle.localhost`, so the Android path is compiled but not run.
   - **iOS:** passkeys need AuthenticationServices code, which can't be compiled here, so the
     buttons stay hidden on iOS.
-  - **Several API instances** need shared data protection keys (above).
+  - **Several API instances** need shared data protection keys (above). *Done in D39.*
+
+### D39 — A shared, encrypted key ring, the terms sweep, and passwords from the app (**proposed 2026-10-20; implemented, reversible**)
+
+Three loose ends from D37 and D38.
+- **The key ring** (ASP.NET Core data protection, which seals cookies, antiforgery tokens and
+  passkey ceremonies) lives in `platform.data_protection_key`, read by every instance of the web
+  and the API host.
+  - Each key is encrypted before it is written: AES-256-GCM under a vault key
+    (`Security:Keys:data-protection`, D32; `DataProtection:KeyRef` names another). The key
+    reference is bound in as associated data, so the table holds nothing usable without the vault.
+  - The table is append-only by grant (no update, delete or truncate) and holds no tenant data,
+    so the isolation matrix lists it as global, as it does `platform.blind_index_key`.
+  - Each host keeps its own application name, so one host can't open what the other sealed.
+  - **Production needs `Security:Keys:data-protection`** in both hosts, or the first cookie fails.
+    Development makes one up per process, as for the other keys, so restarting signs everyone
+    out.
+  - The web's sample mode, which has no database, keeps the framework's per-machine keys.
+- **The terms sweep** (D37's missing step):
+  - On the worker's start, each tenant's stale capability rows get a recompute. Stale means a row
+    that allows self-enrolment with no agreement to the current terms' hash.
+  - Each booking is keyed by the account and the terms' hash, so a restart books nothing twice.
+  - After a deployment that changes nothing, the set is empty.
+  - Tenants are listed from `platform.tenant_domain`, the one table the jobs role reads without
+    a tenant.
+- **Passwords from the app:**
+  - `POST /api/v1/auth/password/forgot {email}` answers 202 for every well-formed address and
+    sends the web's reset link after the response (T21).
+  - `POST /api/v1/auth/password/reset {token, password}` sets the new password and ends every
+    session, as the web's page does.
+  - The app asks for the link itself and no longer opens the web's form.
+  - The API now checks new passwords, from a reset or a claim, against Have I Been Pwned by hash
+    prefix when `Auth:CheckBreachedPasswords` is on, as the web does (D34 and D38 noted the gap).
 
 ## Open questions
 

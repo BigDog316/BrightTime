@@ -62,11 +62,17 @@ is merged (`cec1ed6`).
   - Passkeys work through the API, sharing the web's store and relying party.
   - In the app: a terms page, "Sign in with a passkey", and a passkeys page. Android uses
     Credential Manager (compiled, not run on a device).
+- **Shared key ring, terms sweep, passwords from the app** (D39, proposed):
+  - The data protection keys are in `platform.data_protection_key`, encrypted under
+    `Security:Keys:data-protection`, which production must set in both hosts.
+  - The worker recomputes capabilities left stale by a terms change.
+  - `/auth/password/forgot` and `/auth/password/reset`, with the breached-password check.
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D38 is accepted (D30 and D31 on 2026-10-19, D32 to D38 on 2026-10-20).
+**D39 (shared key ring, terms sweep, passwords from the app) is proposed.**
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 
@@ -117,7 +123,7 @@ These have not been asked for yet:
    - **API test accounts:** each API test signs in as its own seeded admin, chosen by index,
      so parallel classes don't collide. Indices 20–29 are consent, 30–37 are email plus and
      registration, 40–44 are the personal finder, 45–49 are notifications, 50–53 are youth
-     accounts, 54 and 57 are the app's contract tests, and 55–56 are terms and passkeys. Pick a new range for a new class. The web tests' `YouthAccountPagesTests` use
+     accounts, 54 and 57 are the app's contract tests, and 55, 56 and 58 are terms, passkeys and password resets. Pick a new range for a new class. The web tests' `YouthAccountPagesTests` use
      the admins at indices 40–43 of the web fixture's own database.
    - **No connection string:** without `BRIGHTTIME_TEST_CONNECTION`, the integration project
      starts its own PostGIS container through Testcontainers, and the web and API tests skip.

@@ -120,6 +120,14 @@ grant select on platform.outbox_message, platform.job to brighttime_migrator;
 revoke all on function platform.queue_health() from public;
 grant execute on function platform.queue_health() to brighttime_app, brighttime_jobs;
 
+-- platform.data_protection_key: the hosts' shared key ring, encrypted at rest,
+-- no tenant data. The hosts read and add keys; nothing updates or deletes one.
+alter table platform.data_protection_key enable row level security;
+create policy data_protection_key_read on platform.data_protection_key
+  as permissive for select to brighttime_app using (true);
+create policy data_protection_key_add on platform.data_protection_key
+  as permissive for insert to brighttime_app with check (true);
+
 -- platform.blind_index_key holds no tenant data and no key material.
 alter table platform.blind_index_key enable row level security;
 create policy blind_index_key_read on platform.blind_index_key
@@ -358,6 +366,9 @@ $$;
 -- roles can use what lives there: the pg_trgm % operator and citext comparison.
 -- Without it, fuzzy search and case-insensitive email lookups fail for the app.
 grant usage on schema public to brighttime_app, brighttime_jobs, brighttime_readonly, brighttime_auth;
+
+-- The key ring is append-only: a key is added, never changed or removed in place.
+revoke update, delete, truncate on platform.data_protection_key from brighttime_app, brighttime_jobs;
 
 -- Authentication role: the Identity stores and the tenant lookup. Nothing
 -- else. It has no grant on enrollment, attendance, community, learning or

@@ -20,7 +20,8 @@ namespace BrightTime.IntegrationTests;
 /// <para>
 /// A table added to a module schema is covered without being named here. Exceptions are named,
 /// with the reason: <c>platform.tenant</c> shows a request its own row, and
-/// <c>platform.blind_index_key</c> holds the platform's key ids, which are not tenant data.
+/// <c>platform.blind_index_key</c> holds the platform's key ids, which are not tenant data, and
+/// <c>platform.data_protection_key</c> the hosts' key ring, encrypted, which is not either.
 /// The finder's role is covered by <see cref="FinderRoleTests"/>: it bypasses RLS on one
 /// table by design (D13), and its isolation is the query builder's tenant predicate.
 /// </para>
@@ -43,7 +44,7 @@ public sealed class TenantIsolationMatrixTests(DatabaseFixture database)
         ("brighttime_auth", "bt_auth_login"),
     ];
 
-    private static readonly string[] Global = ["platform.blind_index_key"];
+    private static readonly string[] Global = ["platform.blind_index_key", "platform.data_protection_key"];
 
     /// <summary>
     /// Policies that deliberately reach past the tenant, with the reason, the roles they may

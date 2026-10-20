@@ -570,6 +570,7 @@
   "error.passkey.expired": "That request has expired. Try again.",
   "error.passkey.invalid": "That passkey could not be checked. Try again.",
   "error.passkey.wrong_account": "That passkey request was started by another account.",
+  "error.password.breached": "That password has appeared in a data breach elsewhere, so attackers try it. Choose another.",
   "error.password.weak": "Choose a stronger password.",
   "error.password_reset.invalid": "This link has expired or has already been used. Ask for a new one.",
   "error.preferences.quiet_hours": "Set both the start and the end of quiet hours, or neither.",

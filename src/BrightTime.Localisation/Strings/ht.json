@@ -570,6 +570,7 @@
   "error.passkey.expired": "Demann sa a ekspire. Eseye ankò.",
   "error.passkey.invalid": "Nou pa t ka verifye kle aksè sa a. Eseye ankò.",
   "error.passkey.wrong_account": "Se yon lòt kont ki te kòmanse demann kle aksè sa a.",
+  "error.password.breached": "Modpas sa a te parèt nan yon fwit done yon lòt kote, kidonk pirat yo eseye l. Chwazi yon lòt.",
   "error.password.weak": "Chwazi yon modpas ki pi solid.",
   "error.password_reset.invalid": "Lyen sa a ekspire oswa yo deja itilize l. Mande yon nouvo.",
   "error.preferences.quiet_hours": "Mete kòmansman ak fen lè silans yo, oswa pa mete okenn.",

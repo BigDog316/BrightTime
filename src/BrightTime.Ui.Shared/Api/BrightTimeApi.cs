@@ -76,6 +76,10 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<MyTerms>> AcceptTermsAsync(string hash, CancellationToken ct = default) =>
         SendAsync<MyTerms>(HttpMethod.Post, "me/terms", new { hash }, signedIn: true, ct);
 
+    /// <summary>Asks for a reset link. Answers the same for every address; the email says what to do.</summary>
+    public Task<ApiResult> ForgotPasswordAsync(string email, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, "auth/password/forgot", new { email }, signedIn: false, ct);
+
     /// <summary>Ends every session this person has, on every device.</summary>
     public Task<ApiResult> SignOutEverywhereAsync(CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, "me/sessions", null, signedIn: true, ct);

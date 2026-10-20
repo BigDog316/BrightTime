@@ -7,6 +7,7 @@ using BrightTime.Hosting.Auth;
 using BrightTime.Hosting.Health;
 using BrightTime.Hosting.Localisation;
 using BrightTime.Hosting.Mail;
+using BrightTime.Hosting.Security;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Security;
@@ -114,12 +115,29 @@ public static class ApiComposition
         services.AddSingleton(sp => new AccountProvisioning(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
         services.AddScoped<BrightTimePrincipalFactory>();
 
+        // New passwords set from the app (a reset, a claim) are checked against Have I Been Pwned's
+        // list by hash prefix, as the web's are, when Auth:CheckBreachedPasswords is on.
+        if (configuration.GetValue<bool>("Auth:CheckBreachedPasswords"))
+        {
+            services.AddHttpClient<IBreachedPasswordCheck, PwnedPasswordsCheck>(c =>
+            {
+                c.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
+                c.Timeout = TimeSpan.FromSeconds(3);
+                c.DefaultRequestHeaders.Add("Add-Padding", "true");
+            });
+        }
+        else
+        {
+            services.AddSingleton<IBreachedPasswordCheck, NoBreachedPasswordCheck>();
+        }
+
         // Passkeys (D38): the web's store, with this request's region as the relying party and
-        // the app's origins besides; the options a ceremony started with are sealed by data protection.
+        // the app's origins besides; the options a ceremony started with are sealed by data
+        // protection, whose key ring every instance shares (D39).
         services.Configure<ApiPasskeyOptions>(configuration.GetSection(ApiPasskeyOptions.SectionName));
         services.AddScoped(sp => PasskeyEndpoints.Fido2For(sp.GetRequiredService<SiteContext>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiPasskeyOptions>>().Value));
         services.AddScoped(sp => new Passkeys(sp.GetRequiredService<Fido2NetLib.IFido2>(), sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
-        services.AddDataProtection();
+        services.AddBrightTimeDataProtection(configuration, "BrightTime.Api", environment.IsDevelopment(), hasDatabase: true);
 
         // Account and consent mail (Email:*), composed from the shared catalogue with the
         // tenant's wording, and sent after the response.

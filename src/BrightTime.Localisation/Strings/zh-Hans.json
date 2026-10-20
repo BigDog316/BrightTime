@@ -570,6 +570,7 @@
   "error.passkey.expired": "该请求已过期。请重试。",
   "error.passkey.invalid": "无法验证这个通行密钥。请重试。",
   "error.passkey.wrong_account": "这个通行密钥请求是由另一个账户发起的。",
+  "error.password.breached": "这个密码曾在其他网站的数据泄露中出现，攻击者会尝试它。请换一个。",
   "error.password.weak": "请选择更安全的密码。",
   "error.password_reset.invalid": "这个链接已过期或已被使用。请重新获取一个。",
   "error.preferences.quiet_hours": "请同时设置免打扰时段的开始和结束时间，或都不设置。",

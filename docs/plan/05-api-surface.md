@@ -160,8 +160,10 @@ agreement to the current terms (409 `terms.stale` for another version).
 sign-in needed); `POST /auth/passkeys/assert/options` and `POST /auth/passkeys/assert`, which
 give tokens; `GET /me/passkeys`; `DELETE /me/passkeys/{id}`.
 
-Still to come: the forgot-password route in the API, external sign-in through the API, and
-export and delete requests.
+*Built (2026-10-20, D39):* `POST /auth/password/forgot {email}` (202 for any well-formed
+address) and `POST /auth/password/reset {token, password}`.
+
+Still to come: external sign-in through the API, and export and delete requests.
 
 Consent scopes are the enum in `identity.parental_consent.scope`:
 `account`, `enrollment`, `attendance_photo`, `community_participation`,

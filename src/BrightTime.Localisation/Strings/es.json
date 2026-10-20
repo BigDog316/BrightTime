@@ -570,6 +570,7 @@
   "error.passkey.expired": "Esa solicitud venció. Inténtalo de nuevo.",
   "error.passkey.invalid": "No se pudo comprobar esa llave de acceso. Inténtalo de nuevo.",
   "error.passkey.wrong_account": "Esa solicitud de llave de acceso la empezó otra cuenta.",
+  "error.password.breached": "Esa contraseña apareció en una filtración de datos en otro sitio, y los atacantes la prueban. Elige otra.",
   "error.password.weak": "Elige una contraseña más segura.",
   "error.password_reset.invalid": "Este enlace venció o ya se usó. Pide uno nuevo.",
   "error.preferences.quiet_hours": "Indica el inicio y el fin de las horas de silencio, o ninguno.",

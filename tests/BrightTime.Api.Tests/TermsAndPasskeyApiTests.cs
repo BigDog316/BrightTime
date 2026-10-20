@@ -19,7 +19,7 @@ namespace BrightTime.Api.Tests;
 /// The terms of use (D37) and passkeys from the app (D38), through the API. Passkeys are made and
 /// used by a software authenticator, so the server's WebAuthn checks run for real.
 /// </summary>
-/// <remarks>Admins 55 to 57; the young person is registered fresh.</remarks>
+/// <remarks>Admins 55, 56 and 58; the young person is registered fresh.</remarks>
 [Collection(ApiDatabase.Name)]
 public sealed class TermsAndPasskeyApiTests(ApiFixture api)
 {
@@ -127,6 +127,33 @@ public sealed class TermsAndPasskeyApiTests(ApiFixture api)
         JsonNode after = (await (await app.PostAsync(new Uri("api/v1/auth/passkeys/assert/options", UriKind.Relative), null, Ct)).Content.ReadFromJsonAsync<JsonNode>(Ct))!;
         (await app.PostAsJsonAsync("api/v1/auth/passkeys/assert",
             new JsonObject { ["state"] = after["state"]!.GetValue<string>(), ["credential"] = key.Get(after["options"]!) }, Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task A_forgotten_password_is_reset_through_the_api_once()
+    {
+        RequireDatabase();
+        string email = Admin(58);
+        await api.SetPasswordAsync(email);
+        using HttpClient app = api.Client();
+        int seen = api.Mail.To(email).Count;
+
+        (await app.PostAsJsonAsync("api/v1/auth/password/forgot", new { email }, Ct)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await app.PostAsJsonAsync("api/v1/auth/password/forgot", new { email = "nobody-" + Guid.NewGuid().ToString("N") + "@example.net" }, Ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted, "the same answer for an address with no account");
+        string body = (await api.Mail.WaitForAsync(email, seen)).TextBody;
+        string token = Uri.UnescapeDataString(System.Text.RegularExpressions.Regex.Match(body, @"/account/reset\?token=([A-Za-z0-9_%-]+)").Groups[1].Value);
+        token.ShouldNotBeEmpty();
+
+        HttpResponseMessage weak = await app.PostAsJsonAsync("api/v1/auth/password/reset", new { token, password = "short" }, Ct);
+        (await ProblemTypeAsync(weak)).ShouldBe("urn:brighttime:problem:password.weak");
+
+        const string NewPassword = "harbour lantern gravel 82";
+        (await app.PostAsJsonAsync("api/v1/auth/password/reset", new { token, password = NewPassword }, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await api.SignInAsync(email, NewPassword)).AccessToken.ShouldNotBeNullOrEmpty();
+
+        HttpResponseMessage again = await app.PostAsJsonAsync("api/v1/auth/password/reset", new { token, password = "another long passphrase 7" }, Ct);
+        (await ProblemTypeAsync(again)).ShouldBe("urn:brighttime:problem:password_reset.invalid");
     }
 
     [Fact]

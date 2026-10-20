@@ -2,10 +2,17 @@ using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Jobs;
 using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Persistence;
+using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Identity.Consent;
+using BrightTime.Modules.Identity.Contracts;
+using BrightTime.Modules.Identity.Persistence;
+using BrightTime.Modules.Notifications;
+using BrightTime.Modules.Notifications.Persistence;
 using BrightTime.Modules.Opportunities.Persistence;
+using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Modules.Opportunities.Projection;
 using BrightTime.Modules.Platform.Contracts;
 using BrightTime.Modules.Platform.Persistence;
@@ -28,9 +35,10 @@ public static class JobsComposition
 {
     public const string ConnectionStringName = "Jobs";
 
-    public static IServiceCollection AddBrightTimeWorker(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddBrightTimeWorker(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(environment);
 
         string connection = configuration.GetConnectionString(ConnectionStringName)
             ?? throw new InvalidOperationException(
@@ -63,6 +71,24 @@ public static class JobsComposition
         services.AddHostedService(sp => sp.GetRequiredService<AuditPartitionMaintenance>());
 
         services.AddListingProjection();
+
+        // Guardianship: the capability recompute booked for the day a child's age band changes.
+        // Its audit rows have no request behind them, so no client hashes.
+        services.AddBrightTimeDbContext<IdentityDbContext>(
+            connection, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
+        services.AddScoped(sp => new AuditTrail(
+            sp.GetRequiredService<ITenantContext>(), NoAuditRequestInfo.Instance, sp.GetRequiredService<IClock>(), sp.GetRequiredService<NpgsqlDataSource>()));
+        services.AddSingleton<IAuditRequestInfo>(NoAuditRequestInfo.Instance);
+        services.AddGuardianshipJobs();
+        services.AddScoped<IIdentityQueries, IdentityQueries>();
+
+        // Reminders, and delivering what modules ask to be told: the inbox and pushes. Push tokens are
+        // decrypted under the tenant's data key (D32).
+        services.AddReminderJobs();
+        services.AddBrightTimeDbContext<NotificationsDbContext>(
+            connection, NotificationsDbContext.SchemaName, NotificationsDbContext.MigrationsHistoryTable);
+        services.AddFieldEncryption(configuration, environment.IsDevelopment());
+        services.AddNotificationDelivery();
 
         return services;
     }

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+    <ProjectReference Include="../BrightTime.Abstractions/BrightTime.Abstractions.csproj" />
+    <ProjectReference Include="../BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Notifications.Contracts/BrightTime.Modules.Notifications.Contracts.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

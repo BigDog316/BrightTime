@@ -18,6 +18,7 @@
     <ProjectReference Include="../BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Notifications/BrightTime.Modules.Notifications.csproj" />
   </ItemGroup>
 
 </Project>

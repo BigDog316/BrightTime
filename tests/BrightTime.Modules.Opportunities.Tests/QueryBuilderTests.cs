@@ -52,6 +52,35 @@ public sealed class QueryBuilderTests
     }
 
     [Fact]
+    public void Every_parameter_the_statement_names_is_bound()
+    {
+        // An unbound @name reaches Postgres as the @ operator on a column that does not exist.
+        // Interests went unbound until the feed first sent them; check every shape at once.
+        BuiltQuery query = SearchQueryBuilder.Build(Browse() with
+        {
+            Text = "robotics",
+            TextSearchConfig = "platform.ts_en",
+            InterestTokens = ["int:robotics"],
+            AnyFacets = ["cat:stem"],
+            AllFacets = ["age:12"],
+            Kinds = ["program"],
+            OrganisationId = Guid.NewGuid(),
+            ListingIds = [Guid.NewGuid()],
+            WindowStart = At,
+            WindowEnd = At.AddDays(7),
+            MaxCostCents = 2_500,
+            FreeOnly = true,
+            Origin = new SharedKernel.Geo.Coordinate(41.0, -73.9),
+            Radius = new SharedKernel.Geo.Distance(5_000),
+            After = new Cursor("0.5", Guid.CreateVersion7(), At),
+        });
+
+        string[] named = [.. System.Text.RegularExpressions.Regex.Matches(query.Sql, @"(?<![@\w])@([a-z_]+)").Select(m => m.Groups[1].Value).Distinct()];
+        named.Where(n => !query.Parameters.ContainsKey(n)).ShouldBeEmpty();
+        query.Parameters["interest_tokens"].ShouldBe(new[] { "int:robotics" });
+    }
+
+    [Fact]
     public void A_text_search_adds_the_text_predicate_and_binds_the_text()
     {
         BuiltQuery query = SearchQueryBuilder.Build(Browse() with { Text = "robotics", TextSearchConfig = "platform.ts_en" });

@@ -135,6 +135,11 @@ public static class SearchQueryBuilder
             parameters["ts_config"] = query.TextSearchConfig;
         }
 
+        if (query.InterestTokens is { Count: > 0 } interests)
+        {
+            parameters["interest_tokens"] = interests.ToArray();
+        }
+
         if (hasOrigin)
         {
             parameters["origin_lat"] = query.Origin!.Value.Latitude;

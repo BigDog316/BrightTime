@@ -172,6 +172,11 @@ DELETE /api/v1/me/reminders/{id}
 PUT    /api/v1/me/search-preferences
 ```
 
+*Built (2026-10-19, D33):*
+- **Saved items, feed, reminders and search preferences:** everything listed above.
+- **Also:** `GET` and `PUT /me/interests`, `GET /me/search-preferences` and `GET /me/reminders`.
+- **Feed:** answers as `{ items, nextCursor, notices }`, with each item's "why".
+
 ---
 
 ## Directory
@@ -473,3 +478,9 @@ GET    /api/v1/geocode?q=                        proxied; never logged, never st
 The tile and geocode proxies exist so the client never talks to a third party
 directly — no third-party request means no third-party log of what a young
 person searched for or where they are.
+
+*Built (2026-10-19, D33):*
+- **Devices:** `POST /devices` and `DELETE /devices/{id}`.
+- **Settings and inbox:** `GET` and `PUT /me/notification-preferences` (choices by kind and
+  channel, and one quiet window); `GET /me/notifications`; `POST /me/notifications/{id}/read`.
+- **Waiting:** sync and the tile and geocode proxies wait on offline attendance (M3) and Q7.

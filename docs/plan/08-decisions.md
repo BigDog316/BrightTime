@@ -693,6 +693,62 @@ M2's consent core, on the schema the plan laid down. Q3 was answered as recommen
   which the app needs anyway. That's the next slice. Until then, links are verified only
   by signed form.
 
+### D32 — Field-encryption keys: a vault reference per version, a derived key per tenant (**proposed 2026-10-19; implemented, reversible**)
+
+The schema encrypts fields such as `push_device.token_enc` with AES-256-GCM in the
+application (07-threat-model). Until now, no host had a key provider.
+- **Vault:** `IKeyVault` resolves a key by reference.
+  - `ConfiguredKeyVault` reads `Security:Keys:<ref>` (base64, 32 bytes or more), for local
+    use and single-server installs.
+  - Production binds a managed vault behind the same interface. References never change.
+- **Tenant keys:** each tenant's data key is HKDF-SHA256 of the version's master key, with
+  the tenant id as salt and the version in the info. None is stored, and nothing is
+  provisioned when a tenant is created.
+- **Rotation:** `Security:DataKeys` lists the versions held. The newest encrypts, and every
+  listed version decrypts.
+- **Development:** without configuration, Development makes up version 1 for the life of
+  the process, as the audit hash key and token signing keys do. Anywhere else, a missing
+  key stops the first encryption.
+- **Tokens:** opaque tokens (push tokens) are found by an exact, purpose-separated HMAC
+  under the tenant key (`HmacTokenHasher`). The blind indexer folds case, which would merge
+  two case-sensitive tokens.
+- **Limit:** destroying one tenant's data by destroying its key needs a wrapped key per
+  tenant, not derivation. That provider can replace this one if offboarding requires it.
+
+### D33 — The app's personal data, reminders and notifications (**proposed 2026-10-19; implemented, reversible**)
+
+- **Personal data on the server:** saved listings, interests, a search anchor and a feed,
+  under `/me/*`.
+  - Up to 200 saved listings, each with an optional note, follow a signed-in person between
+    devices. The web keeps its device cookie (D22).
+  - Interests are codes from the region's vocabulary, weighted 1 to 5.
+  - The anchor is a neighbourhood, never an address (D8). The feed searches from its centre.
+  - The feed is the finder, with the person's interests as ranking tokens, which is where
+    each item's "why" comes from. With no interests, it shows what starts soonest nearby.
+- **Age recompute:** every capability recompute books the next one for the day the age band
+  changes, keyed so a repeat books nothing twice. Nothing scans every account nightly.
+  - A child profile keeps the under-13 floor after 13: the calculator reads its kind, and
+    protections hold until the young person has a sign-in of their own.
+  - The day is audited (`consent.turned_13`).
+- **Reminders:** up to 50 waiting, before a listing's next deadline or next session. Each
+  books a job for its moment. The job publishes `NotificationRequested`, which lives in
+  Platform's contracts so any module can ask without referencing Notifications.
+- **Notifications module** (planned as its own module, D1; depends on Platform and Identity):
+  - Push devices store the token encrypted (D32). A phone that changes hands moves to the
+    account now signed in on it.
+  - Preferences cover each kind and channel, with one quiet window for pushes.
+  - Delivery always writes the inbox (unless that kind is off there), and pushes outside
+    quiet hours to accounts that may be messaged.
+  - It's idempotent: the notification id is derived from the tenant and the request's dedupe
+    key, so a retry inserts nothing and pushes nothing.
+- **Text:** notification titles are catalogue keys, which the app renders as it does search
+  results' "why". The `notify.*` strings join the shared catalogues with the app's own.
+- **Not yet:**
+  - A real push provider: Firebase and APNs need your accounts. Until then
+    `LoggingPushSender` logs the kind and platform, never the token or content.
+  - Email delivery, which waits on the shared mail library.
+  - SMS, which waits on Q9.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

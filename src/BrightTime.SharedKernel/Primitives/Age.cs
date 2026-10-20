@@ -53,4 +53,27 @@ public static class Age
         DateOnly latestPossibleBirthDate = birthMonth.AddMonths(1).AddDays(-1);
         return AgeBandExtensions.ForAge(Math.Max(YearsOn(latestPossibleBirthDate, asOf), 0));
     }
+
+    /// <summary>The ages at which <see cref="AgeBandExtensions.ForAge"/> moves to the next band.</summary>
+    private static readonly int[] BandStarts = [6, 9, 13, 15, 18, 25];
+
+    /// <summary>
+    /// The first day on which <see cref="BandFromBirthMonth"/> gives a different band than it does
+    /// on <paramref name="asOf"/>, or null once the band can no longer change. Same younger reading:
+    /// the change lands on the anniversary of the month's last day, never earlier.
+    /// </summary>
+    public static DateOnly? NextBandChange(DateOnly birthMonth, DateOnly asOf)
+    {
+        DateOnly latestPossibleBirthDate = birthMonth.AddMonths(1).AddDays(-1);
+        int age = YearsOn(latestPossibleBirthDate, asOf);
+        foreach (int start in BandStarts)
+        {
+            if (start > age)
+            {
+                return AnniversaryIn(latestPossibleBirthDate, latestPossibleBirthDate.Year + start);
+            }
+        }
+
+        return null;
+    }
 }

@@ -1,8 +1,8 @@
 # Handoff
 
 Where the work stands, for picking it up on another machine or in a new session.
-Written 2026-10-18 at commit c97444d. Updated the same day on the Windows machine, after the
-compose gate.
+Written 2026-10-18 at commit c97444d. Updated on the Windows machine through 2026-10-19 (M2 server
+work).
 
 ## State
 
@@ -30,13 +30,23 @@ is merged (`cec1ed6`).
 - **Slice 1, the public read API** (D30): `/api/v1/public/**` serves the finder to the app.
 - **Slice 2, the consent core** (D31): child profiles, scoped grant and revoke, organiser
   attestation of signed forms, and capability recomputation with `/me/capabilities`.
-- **Next:** move localisation and account mail out of the web host into a shared library.
-  That unlocks the email-plus round trip, guardian registration through the API, and the
-  MAUI app's own strings.
+- **Personal data and reminders** (D33): saved items, interests, a neighbourhood anchor, the
+  personalised feed, and reminders booked as jobs.
+- **Notifications** (D33): the new `notify` module holds encrypted push devices, preferences
+  with one quiet window, the inbox, and delivery from `NotificationRequested`. Push goes
+  through `LoggingPushSender` until the Firebase and Apple accounts exist.
+- **Keys** (D32): `IKeyVault` with HKDF tenant data keys. The worker also runs the job that
+  recomputes capabilities on birthdays.
+- **Waiting on the localisation session:** moving localisation and account mail out of the web
+  host into a shared library. That unlocks the email-plus round trip, guardian and youth
+  registration through the API, the text of email and push messages (the `notify.*` keys), and
+  the MAUI app's own strings.
+- **Not started:** the MAUI app.
 
 ## Waiting on Sam
 
-Every decision through D31 is accepted (D30 and D31 on 2026-10-19). Q3 is answered (email plus, with a signed-form
+Every decision through D31 is accepted (D30 and D31 on 2026-10-19). **D32 (keys) and D33
+(personal data, reminders, notifications) are proposed and await acceptance.** Q3 is answered (email plus, with a signed-form
 fallback), and the youth 30-minute refresh idle stays for now.
 
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a
@@ -78,6 +88,13 @@ These have not been asked for yet:
      ```bash
      PATH="/c/Program Files/PostgreSQL/18/bin:$PATH" db/apply-schema.sh brighttime 127.0.0.1 5434 postgres
      ```
+   - **Two checkouts, one cluster:** the other Windows session changes `brighttime`'s
+     schema, so this checkout tests against its own database, `brighttime_main`. Apply the
+     schema to it the same way, and set `Database=brighttime_main`.
+   - **API test accounts:** each API test signs in as its own seeded admin, chosen by index,
+     so parallel classes don't collide. Indices 20–29 are consent, 30–35 belong to the other
+     session, 40–44 are the personal finder and 45–49 are notifications. Pick a new range for a
+     new class.
    - **No connection string:** without `BRIGHTTIME_TEST_CONNECTION`, the integration project
      starts its own PostGIS container through Testcontainers, and the web and API tests skip.
 3. **Apply the schema:**

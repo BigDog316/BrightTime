@@ -9,6 +9,8 @@
     <Project Path="src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
     <Project Path="src/BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <Project Path="src/BrightTime.Modules.Notifications.Contracts/BrightTime.Modules.Notifications.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Notifications/BrightTime.Modules.Notifications.csproj" />
     <Project Path="src/BrightTime.Modules.Opportunities.Contracts/BrightTime.Modules.Opportunities.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
     <Project Path="src/BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />

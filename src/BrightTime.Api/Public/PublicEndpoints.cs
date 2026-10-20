@@ -253,7 +253,7 @@ public static class PublicEndpoints
     private static SearchQuery Everything(ITenantContext tenant) =>
         new() { TenantId = tenant.TenantId.Value, TextSearchConfig = tenant.Locale.TextSearchConfig };
 
-    private static async Task<IReadOnlyList<ListingSummaryResponse>> SummariesAsync(
+    internal static async Task<IReadOnlyList<ListingSummaryResponse>> SummariesAsync(
         IReadOnlyList<FinderItem> items, IOrganisationProfiles organisations, CancellationToken ct)
     {
         IReadOnlyDictionary<OrganisationId, OrganisationLink> links = items.Count == 0

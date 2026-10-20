@@ -6,7 +6,7 @@ namespace BrightTime.Architecture.Tests;
 
 public sealed partial class PersistenceConventionTests
 {
-    private static readonly string[] ModuleNames = ["Platform", "Identity", "Directory", "Opportunities"];
+    private static readonly string[] ModuleNames = ["Platform", "Identity", "Directory", "Opportunities", "Notifications"];
 
     [Fact]
     public void Every_module_context_derives_from_the_base_context()

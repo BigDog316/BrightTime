@@ -61,6 +61,35 @@ public sealed class AgeTests
     }
 
     [Fact]
+    public void The_next_band_change_is_the_first_day_the_band_differs_and_no_sooner()
+    {
+        // Every birth month over thirty years, from a fixed day: the band holds right up to the
+        // change and is different on it, so a scheduled recompute lands on the right day.
+        var asOf = new DateOnly(2026, 10, 19);
+        for (DateOnly month = new(1996, 1, 1); month <= new DateOnly(2026, 10, 1); month = month.AddMonths(1))
+        {
+            AgeBand now = Age.BandFromBirthMonth(month, asOf);
+            DateOnly? change = Age.NextBandChange(month, asOf);
+            if (change is not { } day)
+            {
+                now.ShouldBe(AgeBand.Adult, month.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture));
+                continue;
+            }
+
+            day.ShouldBeGreaterThan(asOf);
+            Age.BandFromBirthMonth(month, day.AddDays(-1)).ShouldBe(now, month.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture));
+            Age.BandFromBirthMonth(month, day).ShouldNotBe(now, month.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    [Fact]
+    public void A_child_born_in_June_2014_turns_13_on_the_last_day_of_June_2027()
+    {
+        // The younger reading: any day in June could be the birthday, so the 30th it is.
+        Age.NextBandChange(new DateOnly(2014, 6, 1), new DateOnly(2026, 10, 19)).ShouldBe(new DateOnly(2027, 6, 30));
+    }
+
+    [Fact]
     public void Database_values_match_the_schema_check_constraint()
     {
         // ck_app_user_age_band lists these exactly. A mismatch is a runtime

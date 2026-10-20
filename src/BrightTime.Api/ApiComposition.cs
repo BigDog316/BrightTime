@@ -7,6 +7,7 @@ using BrightTime.Hosting.Auth;
 using BrightTime.Hosting.Health;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Persistence;
+using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
@@ -15,10 +16,13 @@ using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Persistence;
 using BrightTime.Modules.Identity.SignIn;
+using BrightTime.Modules.Notifications;
+using BrightTime.Modules.Notifications.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Curation;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Modules.Opportunities.Persistence;
+using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Modules.Opportunities.Search;
 using BrightTime.Modules.Platform.Contracts;
 using BrightTime.Modules.Platform.Persistence;
@@ -82,12 +86,20 @@ public static class ApiComposition
         services.AddScoped<IListingDetails, SqlListingDetails>();
         services.AddScoped<ICurationQueries, CurationQueries>();
         services.AddScoped<IOrganisationProfiles, OrganisationProfiles>();
+        services.AddScoped<PersonalFinder>();
+        services.AddScoped<ListingReminders>();
 
         // Guardianship and consent: the identity context as brighttime_app, under the tenant's RLS
         // and the actor guard; who is whose guardian is decided by Guardianship itself (D4).
         services.AddBrightTimeDbContext<IdentityDbContext>(app, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
         services.AddScoped<IIdentityQueries, IdentityQueries>();
         services.AddScoped<Guardianship>();
+
+        // Notifications: devices, preferences and the inbox. Push tokens are encrypted under the
+        // tenant's data key (D32).
+        services.AddBrightTimeDbContext<NotificationsDbContext>(app, NotificationsDbContext.SchemaName, NotificationsDbContext.MigrationsHistoryTable);
+        services.AddFieldEncryption(configuration, environment.IsDevelopment());
+        services.AddNotifications();
 
         // The authentication path's login: Identity stores only.
         services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth));

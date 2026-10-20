@@ -75,6 +75,10 @@ public sealed class ConsentApiTests(ApiFixture api)
 
         (await api.ScalarAsync<long>("select count(*) from platform.audit_event where action = @a and subject_ids = array[@c]",
             ("a", Guardianship.ChildCreated), ("c", id))).ShouldBe(1);
+
+        // Age moves on its own: the day the band next changes, a recompute is already booked.
+        (await api.ScalarAsync<long>("select count(*) from platform.job where unique_key like @k and state = 'ready' and run_after > now()",
+            ("k", $"{RecomputeCapabilitiesHandler.JobType}:{id:N}:%"))).ShouldBe(1);
     }
 
     [Fact]

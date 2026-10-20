@@ -50,6 +50,14 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<NeighbourhoodPageBlockRecord> NeighbourhoodPageBlocks => Set<NeighbourhoodPageBlockRecord>();
 
+    public DbSet<SavedItemRecord> SavedItems => Set<SavedItemRecord>();
+
+    public DbSet<UserInterestRecord> UserInterests => Set<UserInterestRecord>();
+
+    public DbSet<ListingReminderRecord> ListingReminders => Set<ListingReminderRecord>();
+
+    public DbSet<UserSearchPreferenceRecord> UserSearchPreferences => Set<UserSearchPreferenceRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -190,6 +198,35 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.Property(x => x.Payload).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<SavedItemRecord>(b =>
+        {
+            b.ToTable("saved_item");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.UserId, x.ListingId }).IsUnique();
+        });
+
+        modelBuilder.Entity<UserInterestRecord>(b =>
+        {
+            b.ToTable("user_interest");
+            b.HasKey(x => new { x.UserId, x.TermId });
+        });
+
+        modelBuilder.Entity<ListingReminderRecord>(b =>
+        {
+            b.ToTable("listing_reminder");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<UserSearchPreferenceRecord>(b =>
+        {
+            b.ToTable("user_search_preference");
+            b.HasKey(x => x.UserId);
+            b.Property(x => x.UserId).ValueGeneratedNever();
+            b.Property(x => x.MaxDistanceM).HasColumnName("max_distance_m");
         });
 
         modelBuilder.ApplySnakeCaseNames();

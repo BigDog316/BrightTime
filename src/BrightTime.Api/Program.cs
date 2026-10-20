@@ -2,6 +2,7 @@ using BrightTime.Api;
 using BrightTime.Api.Auth;
 using BrightTime.Api.Consent;
 using BrightTime.Api.Me;
+using BrightTime.Api.Notifications;
 using BrightTime.Api.Public;
 using BrightTime.Hosting.Auditing;
 using BrightTime.Hosting.Auth;
@@ -47,6 +48,8 @@ v1.MapTokenEndpoints();
 v1.MapMeEndpoints();
 v1.MapPublicEndpoints();
 v1.MapConsentEndpoints();
+v1.MapMeFinderEndpoints();
+v1.MapNotificationEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

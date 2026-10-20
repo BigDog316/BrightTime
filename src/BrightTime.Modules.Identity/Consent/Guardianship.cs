@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using BrightTime.Infrastructure.Auditing;
+using BrightTime.Infrastructure.Jobs;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Domain;
@@ -57,6 +58,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
     public const string LinkRevoked = "consent.link_revoked";
     public const string ConsentGranted = "consent.granted";
     public const string ConsentRevoked = "consent.revoked";
+    public const string Turned13 = "consent.turned_13";
 
     private TimeZoneInfo Zone => tenant.TimeZone;
 
@@ -393,6 +395,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
         });
 
         YouthCapabilityRecord? record = await db.YouthCapabilities.FirstOrDefaultAsync(c => c.UserId == userId, ct).ConfigureAwait(false);
+        bool turned13 = AgeBandExtensions.FromDbValue(user.AgeBand).IsCoppaProtected() && !band.IsCoppaProtected();
         if (record is null)
         {
             record = new YouthCapabilityRecord { UserId = userId, TenantId = user.TenantId };
@@ -400,8 +403,59 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
         }
 
         YouthCapabilityCalculator.ApplyTo(record, capabilities, now);
+
+        // The stored band follows the birth month, so age-band search and eligibility see it too.
+        if (user.BirthMonth is not null && user.AgeBand != band.ToDbValue())
+        {
+            AppUser tracked = await db.Users.FirstAsync(u => u.Id == userId, ct).ConfigureAwait(false);
+            tracked.AgeBand = band.ToDbValue();
+            tracked.UpdatedAt = now;
+        }
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await ScheduleNextRecomputeAsync(user, ct).ConfigureAwait(false);
+
+        // A child profile keeps the under-13 floor after 13 (the calculator reads its kind):
+        // protections hold until the young person has a sign-in of their own. The day is on record.
+        if (turned13 && user.BirthMonth is not null)
+        {
+            await AuditAsync(Turned13, userId, new() { ["age_band"] = band.ToDbValue() }, ct).ConfigureAwait(false);
+        }
+
         return capabilities;
+    }
+
+    /// <summary>
+    /// Recomputes one account's capabilities: for the job that runs when its age band changes,
+    /// and for anything else that changes what the account may do.
+    /// </summary>
+    public Task<YouthCapabilities> RecomputeAsync(UserId user, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => RecomputeCoreAsync(user.Value, ct), cancellationToken);
+
+    /// <summary>
+    /// Capabilities depend on age, which changes without anyone doing anything. Rather than scan
+    /// every account each night, each recompute books the next one for the day the band changes,
+    /// in the same transaction, keyed so a repeat books nothing twice.
+    /// </summary>
+    private async Task ScheduleNextRecomputeAsync(AppUser user, CancellationToken ct)
+    {
+        if (user.AccountKind == AccountKind.Adult || user.BirthMonth is not { } month
+            || Age.NextBandChange(month, clock.TodayIn(Zone)) is not { } day)
+        {
+            return;
+        }
+
+        // Local midnight in the tenant's zone, the moment the younger reading says the band moves.
+        DateTimeOffset runAfter = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(day.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), Zone);
+        await db.EnqueueJobAsync(new JobRequest
+        {
+            JobType = RecomputeCapabilitiesHandler.JobType,
+            TenantId = new TenantId(user.TenantId),
+            Payload = new RecomputeCapabilitiesHandler.Payload(user.Id),
+            UniqueKey = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{RecomputeCapabilitiesHandler.JobType}:{user.Id:N}:{day:yyyy-MM-dd}"),
+            RunAfter = runAfter,
+        }, ct).ConfigureAwait(false);
     }
 
     private ParentalConsent Record(GuardianLink link, ConsentScope scope, DateTimeOffset now) => new()

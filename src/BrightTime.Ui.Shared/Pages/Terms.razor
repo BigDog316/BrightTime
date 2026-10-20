@@ -1,0 +1,81 @@
+@page "/terms"
+@* The terms of use (D37), in their exact words, and agreeing to them. A young person's agreement
+   is what lets them sign up for programs on their own; the server decides, and the capabilities
+   are read again after. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.terms.title"]</h1>
+
+<ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+@if (_terms is null && _problem is null)
+{
+    <Busy />
+}
+else if (_terms is { } terms)
+{
+    @if (T.Locale.Code != "en")
+    {
+        <p class="hint">@T["email.consent.disclosure_in_english"]</p>
+    }
+    <div class="disclosure" lang="en" dir="ltr">
+        @foreach (string paragraph in terms.Text.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            <p>@paragraph</p>
+        }
+    </div>
+
+    @if (!Session.IsSignedIn)
+    {
+        <p>@T["app.terms.sign_in"]</p>
+        <a class="button" href="sign-in?returnUrl=%2Fterms">@T["account.sign_in.title"]</a>
+    }
+    else if (_mine?.AcceptedAt is { } at && _mine.Hash == terms.Hash)
+    {
+        <p class="notice success" role="status">@T.Format("app.terms.accepted_on", ("date", T.DateShort(at)))</p>
+    }
+    else
+    {
+        <p>@T["app.terms.why"]</p>
+        <button type="button" class="primary" @onclick="AcceptAsync" disabled="@_busy">@T["app.terms.accept"]</button>
+    }
+}
+
+@code {
+    private TermsDocument? _terms;
+    private MyTerms? _mine;
+    private ApiProblem? _problem;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<TermsDocument> terms = await Api.TermsAsync();
+        _terms = terms.Value;
+        _problem = terms.Problem;
+        if (Session.IsSignedIn && await Api.MyTermsAsync() is { IsSuccess: true, Value: { } mine })
+        {
+            _mine = mine;
+        }
+    }
+
+    private async Task AcceptAsync()
+    {
+        _busy = true;
+        ApiResult<MyTerms> accepted = await Api.AcceptTermsAsync(_terms!.Hash);
+        _busy = false;
+        if (!accepted.IsSuccess)
+        {
+            // The terms changed while they were open: show the new ones.
+            _problem = accepted.Problem!.Code == "terms.stale" ? null : accepted.Problem;
+            await LoadAsync();
+            return;
+        }
+
+        _mine = accepted.Value;
+        await Session.RefreshCapabilitiesAsync();
+    }
+}

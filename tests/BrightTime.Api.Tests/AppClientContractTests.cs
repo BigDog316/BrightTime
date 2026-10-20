@@ -13,7 +13,7 @@ namespace BrightTime.Api.Tests;
 /// every shape it reads. The app's records are written separately from the server's, so this is
 /// what keeps the two in step.
 /// </summary>
-/// <remarks>Admin 54 is the parent; the young person is registered fresh.</remarks>
+/// <remarks>Admins 54 and 57 are parents; the young person is registered fresh.</remarks>
 [Collection(ApiDatabase.Name)]
 public sealed class AppClientContractTests(ApiFixture api)
 {
@@ -129,6 +129,47 @@ public sealed class AppClientContractTests(ApiFixture api)
         session.IsSignedIn.ShouldBeFalse();
         (await secrets.GetAsync(AppSession.RefreshTokenKey)).ShouldBeNull();
         (await client.SavedAsync(Ct)).Problem!.Status.ShouldBe(401);
+    }
+
+    [Fact]
+    public async Task A_parent_adds_a_passkey_in_the_app_and_signs_in_with_it_later()
+    {
+        RequireDatabase();
+        string email = Admin(57);
+        string password = await api.SetPasswordAsync(email);
+        using BrightTime.Web.Tests.SoftwarePasskey key = new("https://kettle.localhost", "kettle.localhost");
+        SoftwareAuthenticator authenticator = new(key);
+        await using ServiceProvider app = App();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        AppSession session = app.GetRequiredService<AppSession>();
+        BrightTimeApi client = app.GetRequiredService<BrightTimeApi>();
+
+        (await session.SignInAsync(email, password, Ct)).ShouldBeNull();
+        PasskeyCeremony ceremony = Ok(await client.PasskeyRegistrationAsync(Ct));
+        PasskeyOutcome made = await authenticator.CreateAsync(ceremony.Options.GetRawText(), Ct);
+        Ok(await client.AddPasskeyAsync(ceremony.State, made.CredentialJson!, "Pixel", Ct));
+        Ok(await client.PasskeysAsync(Ct)).ShouldHaveSingleItem().Name.ShouldBe("Pixel");
+
+        // The terms, read and agreed to through the app's client.
+        TermsDocument terms = Ok(await client.TermsAsync(Ct));
+        Ok(await client.AcceptTermsAsync(terms.Hash, Ct)).AcceptedAt.ShouldNotBeNull();
+        Ok(await client.MyTermsAsync(Ct)).Hash.ShouldBe(terms.Hash);
+
+        await session.SignOutAsync(Ct);
+        (await session.SignInWithPasskeyAsync(authenticator, Ct)).ShouldBeNull();
+        session.Me!.UserName.ShouldBe(email, StringCompareShould.IgnoreCase);
+    }
+
+    /// <summary>The software authenticator behind the app's passkey interface, as Credential Manager would answer.</summary>
+    private sealed class SoftwareAuthenticator(BrightTime.Web.Tests.SoftwarePasskey key) : IPasskeyAuthenticator
+    {
+        public bool IsSupported => true;
+
+        public Task<PasskeyOutcome> CreateAsync(string optionsJson, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PasskeyOutcome(key.Create(System.Text.Json.Nodes.JsonNode.Parse(optionsJson)!).ToJsonString()));
+
+        public Task<PasskeyOutcome> GetAsync(string optionsJson, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PasskeyOutcome(key.Get(System.Text.Json.Nodes.JsonNode.Parse(optionsJson)!).ToJsonString()));
     }
 
     [Fact]

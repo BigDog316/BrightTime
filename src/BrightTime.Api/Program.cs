@@ -45,8 +45,10 @@ if (app.Environment.IsDevelopment())
 
 RouteGroupBuilder v1 = app.MapGroup("/api/v1");
 v1.MapTokenEndpoints();
+v1.MapPasskeyEndpoints();
 v1.MapRegistrationEndpoints();
 v1.MapMeEndpoints();
+v1.MapTermsEndpoints();
 v1.MapPublicEndpoints();
 v1.MapConsentEndpoints();
 v1.MapMeFinderEndpoints();

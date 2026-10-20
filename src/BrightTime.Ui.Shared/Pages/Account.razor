@@ -36,6 +36,8 @@ else
             <li><a href="interests">@T["app.interests.title"]</a></li>
             <li><a href="place">@T["app.place.title"]</a></li>
             <li><a href="notifications/settings">@T["app.notifications.settings"]</a></li>
+            <li><a href="terms">@T["app.terms.title"]</a></li>
+            <li><a href="account/passkeys">@T["account.passkey.heading"]</a></li>
             @if (me.IsAdult)
             {
                 <li><a href="family">@T["app.family.title"]</a></li>
@@ -48,7 +50,13 @@ else
         <section aria-labelledby="can">
             <h2 id="can">@T["app.account.can_heading"]</h2>
             <ul class="capabilities">
-                <li>@(can.CanSelfEnroll ? T["app.can.enroll"] : T["app.cannot.enroll"])</li>
+                <li>
+                    @(can.CanSelfEnroll ? T["app.can.enroll"] : T["app.cannot.enroll"])
+                    @if (!can.CanSelfEnroll)
+                    {
+                        <a href="terms">@T["app.terms.why"]</a>
+                    }
+                </li>
                 <li>@(can.CanUploadMedia ? T["app.can.upload"] : T["app.cannot.upload"])</li>
                 <li>@(can.CanPostInCommunity ? T["app.can.post"] : T["app.cannot.post"])</li>
                 <li>@(can.CanBeMessagedByOrganisation ? T["app.can.be_messaged"] : T["app.cannot.be_messaged"])</li>

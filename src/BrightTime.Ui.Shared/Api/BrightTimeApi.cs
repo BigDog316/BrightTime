@@ -49,6 +49,33 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> RegisterAsync(string email, string birthMonth, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, "auth/register", new { email, birthMonth }, signedIn: false, ct);
 
+    // ---- passkeys (D38) ----------------------------------------------------------------------
+
+    /// <summary>Options to add a passkey. Needs a recent sign-in: an older session gets 403.</summary>
+    public Task<ApiResult<PasskeyCeremony>> PasskeyRegistrationAsync(CancellationToken ct = default) =>
+        SendAsync<PasskeyCeremony>(HttpMethod.Post, "auth/passkeys/options", null, signedIn: true, ct);
+
+    /// <summary>The authenticator's answer to <see cref="PasskeyRegistrationAsync"/>, as the platform gave it.</summary>
+    public Task<ApiResult> AddPasskeyAsync(string state, string credentialJson, string? name, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, "auth/passkeys", new { state, credential = JsonDocument.Parse(credentialJson).RootElement, name }, signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<PasskeyInfo>>> PasskeysAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PasskeyInfo>>("me/passkeys", signedIn: true, ct);
+
+    public Task<ApiResult> RemovePasskeyAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"me/passkeys/{id:D}", null, signedIn: true, ct);
+
+    /// <summary>The terms of use, which anyone may read (D37).</summary>
+    public Task<ApiResult<TermsDocument>> TermsAsync(CancellationToken ct = default) =>
+        GetAsync<TermsDocument>("terms", signedIn: false, ct);
+
+    public Task<ApiResult<MyTerms>> MyTermsAsync(CancellationToken ct = default) =>
+        GetAsync<MyTerms>("me/terms", signedIn: true, ct);
+
+    /// <summary>Agrees to the terms the person was shown, by their hash; a stale hash is refused.</summary>
+    public Task<ApiResult<MyTerms>> AcceptTermsAsync(string hash, CancellationToken ct = default) =>
+        SendAsync<MyTerms>(HttpMethod.Post, "me/terms", new { hash }, signedIn: true, ct);
+
     /// <summary>Ends every session this person has, on every device.</summary>
     public Task<ApiResult> SignOutEverywhereAsync(CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, "me/sessions", null, signedIn: true, ct);

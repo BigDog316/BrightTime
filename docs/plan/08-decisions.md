@@ -957,6 +957,73 @@ M2's app, as docs/plan/01 lays it out.
   - **Physical devices:** M2's acceptance asks for physical iOS and Android devices. Only the
     emulator has run it so far.
 
+### D37 — The terms of use, agreed to by version (**proposed 2026-10-20; implemented, reversible**)
+
+Self-enrolment for a young person needed the terms accepted (the calculator's `TermsAccepted`),
+and nothing could accept them.
+- **One current version**, kept in code (`AccountTerms.Current`) and pinned by the SHA-256 of
+  its exact words, as a parental consent's disclosure is (D31).
+- **The record:** agreeing writes a `consent_record` (`terms`, the version, the hash, the client
+  address's hash), the table the schema already had for a person's own agreements. It is now
+  mapped. `app_user.terms_accepted_at` is set too.
+- **Capabilities read agreement to the current hash, not to any version.** A new version is
+  agreed to afresh before self-enrolment works again.
+  - Accounts recompute when they agree.
+  - Stored rows from before a new version change only at the next recompute. A deployment that
+    changes the terms should book one for every youth account; that step isn't built yet.
+- **The API:**
+  - `GET /api/v1/terms` (anyone) gives the words, version and hash.
+  - `GET /api/v1/me/terms` says where the person stands.
+  - `POST /api/v1/me/terms {hash}` records agreement. A stale hash gets 409 `terms.stale`.
+    Agreeing twice changes nothing.
+  - A child profile can't agree, since it has no sign-in; its guardian consents for it.
+  - The recompute runs in the request, as the person is signed in.
+- **The app:** a terms page, linked from Account and from the "can't sign up yourself yet" line.
+- **The text is a draft.** It is plain-language, written for a 13-year-old, and English only
+  until counsel reviews it and it is translated (Q13). The web shows no terms page yet.
+- Audited as `account.terms_accepted`, with the version.
+
+### D38 — Passkeys from the app (**proposed 2026-10-20; implemented, reversible**)
+
+docs/plan/05's `/auth/passkeys` routes, which T21 prefers for young people.
+- **The same passkeys as the web.** The same store (`user_credential`) and the same relying party:
+  the region's site, by host. A passkey made on the web signs in to the app, and the other way
+  round.
+- **The app's origins:** iOS ceremonies come from the site's origin, through the associated
+  domain (D35's `webcredentials`). Android's come from `android:apk-key-hash:<signing cert hash>`,
+  which `Passkeys:AppOrigins` lists. D35's `assetlinks.json` (`get_login_creds`) lets Android
+  use them.
+- **The API:**
+  - `POST /auth/passkeys/options` and `POST /auth/passkeys` add a passkey.
+  - `POST /auth/passkeys/assert/options` and `POST /auth/passkeys/assert` sign in for tokens, as
+    the password grant does.
+  - `GET /me/passkeys` lists them, and `DELETE /me/passkeys/{id}` revokes one.
+  - With no cookies, a ceremony's options travel back as `state`: sealed by data protection,
+    bound to their purpose (and for a registration, to the account), and good for 5 minutes.
+  - **The API host's data protection keys are its default, per instance.** That works for one
+    instance. Several need shared keys, or a ceremony started on one fails on another.
+  - Adding and removing a passkey need a sign-in in the last 15 minutes (T21's step-up), read
+    from the token's `auth_time`, which a refresh keeps. An older session gets 403, and the app
+    asks the person to sign in again.
+  - Every failed sign-in gets the password grant's single refusal (`invalid-grant`) and is
+    audited as on the web.
+- **The app:**
+  - "Sign in with a passkey" comes first on sign-in where the phone has passkeys.
+  - The passkeys page lists, adds and removes them.
+  - `IPasskeyAuthenticator` is the platform's part. On Android it is Credential Manager
+    (`Xamarin.AndroidX.Credentials` 1.5.0.3, the newest that agrees with MAUI 10.0.110's AndroidX
+    versions), which takes and returns WebAuthn JSON untouched.
+- **Tested** with a software authenticator against the real API: adding, signing in, a tampered
+  signature, a foreign origin, replayed state, revoking, and the step-up refusal. One test runs
+  the app's own client end to end.
+- **Not yet:**
+  - **Android on a device:** Credential Manager needs a Google account on the phone, and a
+    region whose `assetlinks.json` Android can fetch over HTTPS. Neither is possible on this
+    emulator against `kettle.localhost`, so the Android path is compiled but not run.
+  - **iOS:** passkeys need AuthenticationServices code, which can't be compiled here, so the
+    buttons stay hidden on iOS.
+  - **Several API instances** need shared data protection keys (above).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

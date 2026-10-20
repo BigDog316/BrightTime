@@ -98,6 +98,7 @@ public static class ApiComposition
         services.AddScoped<IIdentityQueries, IdentityQueries>();
         services.AddScoped<Guardianship>();
         services.AddScoped<AccountClaims>();
+        services.AddScoped<AccountTerms>();
 
         // Notifications: devices, preferences and the inbox. Push tokens are encrypted under the
         // tenant's data key (D32).
@@ -112,6 +113,13 @@ public static class ApiComposition
         services.AddSingleton(sp => new TokenSessions(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
         services.AddSingleton(sp => new AccountProvisioning(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
         services.AddScoped<BrightTimePrincipalFactory>();
+
+        // Passkeys (D38): the web's store, with this request's region as the relying party and
+        // the app's origins besides; the options a ceremony started with are sealed by data protection.
+        services.Configure<ApiPasskeyOptions>(configuration.GetSection(ApiPasskeyOptions.SectionName));
+        services.AddScoped(sp => PasskeyEndpoints.Fido2For(sp.GetRequiredService<SiteContext>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiPasskeyOptions>>().Value));
+        services.AddScoped(sp => new Passkeys(sp.GetRequiredService<Fido2NetLib.IFido2>(), sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
+        services.AddDataProtection();
 
         // Account and consent mail (Email:*), composed from the shared catalogue with the
         // tenant's wording, and sent after the response.
@@ -185,7 +193,10 @@ public static class ApiComposition
             });
         services.AddAuthorizationBuilder()
             .AddPolicy(ConsentEndpoints.AttestPolicy, p => p.RequireAuthenticatedUser()
-                .AddRequirements(new PermissionRequirement(Permissions.Consent.AttestSignedForm)));
+                .AddRequirements(new PermissionRequirement(Permissions.Consent.AttestSignedForm)))
+            .AddPolicy(PasskeyEndpoints.ManagePolicy, p => p.RequireAuthenticatedUser()
+                .AddRequirements(new RecentAuthenticationRequirement(PasskeyEndpoints.StepUpWindow)));
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RecentAuthenticationHandler>();
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PermissionHandler>();
     }
 }

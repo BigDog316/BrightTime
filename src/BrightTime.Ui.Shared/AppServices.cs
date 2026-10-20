@@ -50,6 +50,7 @@ public static class AppServices
         services.TryAddSingleton<IOfflineStore, MemoryOfflineStore>();
         services.TryAddSingleton<ILocationProvider, NoLocation>();
         services.TryAddSingleton<IPushRegistrar, NoPush>();
+        services.TryAddSingleton<IPasskeyAuthenticator, NoPasskeys>();
         services.TryAddSingleton<IShareService, NoShare>();
         services.TryAddSingleton<IExternalLauncher, NoLauncher>();
 

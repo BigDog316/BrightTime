@@ -27,6 +27,8 @@
   <ItemGroup Label="Mobile (BrightTime.Mobile; the MAUI workload's version)">
     <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.110" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.110" />
+    <PackageVersion Include="Xamarin.AndroidX.Credentials" Version="1.5.0.3" />
+    <PackageVersion Include="Xamarin.AndroidX.Credentials.PlayServicesAuth" Version="1.5.0.3" />
   </ItemGroup>
 
   <ItemGroup Label="Extensions">

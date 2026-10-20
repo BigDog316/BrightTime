@@ -1,0 +1,156 @@
+@page "/account/passkeys"
+@* The account's passkeys (D38), the same ones the web lists: add one on this phone, remove any.
+   Changing how the account signs in needs a recent sign-in (T21), so an older session is asked
+   to sign in again first. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject IPasskeyAuthenticator Passkey
+@inject NavigationManager Navigation
+
+<h1>@T["account.passkey.heading"]</h1>
+<p>@T["account.passkey.explain"]</p>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in?returnUrl=%2Faccount%2Fpasskeys">@T["account.sign_in.title"]</a>
+}
+else
+{
+    @if (_status is not null)
+    {
+        <p class="notice" role="status">@_status</p>
+    }
+    @if (_signInAgain)
+    {
+        <p class="notice">@T["app.passkey.sign_in_again"]</p>
+        <button type="button" @onclick="SignInAgainAsync">@T["account.sign_in.title"]</button>
+    }
+
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+    @if (_passkeys is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_passkeys is not null)
+    {
+        @if (_passkeys.Count == 0)
+        {
+            <p>@T["account.passkey.none"]</p>
+        }
+        <ul class="cards">
+            @foreach (PasskeyInfo p in _passkeys)
+            {
+                <li class="card" @key="p.Id">
+                    <h2>@p.Name</h2>
+                    <p class="hint">
+                        @T.Format("account.passkey.added_on", ("date", T.DateShort(p.CreatedAt)))
+                        · @(p.LastUsedAt is { } used ? T.Format("account.passkey.last_used", ("date", T.DateShort(used))) : T["account.passkey.not_used"])
+                        @if (p.IsBackedUp)
+                        {
+                            <text> · @T["account.passkey.synced"]</text>
+                        }
+                    </p>
+                    <button type="button" @onclick="() => RemoveAsync(p)" disabled="@_busy">@T["account.passkey.remove"]</button>
+                </li>
+            }
+        </ul>
+
+        @if (Passkey.IsSupported)
+        {
+            <form class="stack" @onsubmit="AddAsync">
+                <div class="field">
+                    <label for="name">@T["account.passkey.name_label"]</label>
+                    <p class="hint" id="name-hint">@T["account.passkey.name_hint"]</p>
+                    <input id="name" maxlength="60" @bind="_name" aria-describedby="name-hint" />
+                </div>
+                <button type="submit" class="primary" disabled="@_busy">@T["account.passkey.add"]</button>
+            </form>
+        }
+    }
+}
+
+@code {
+    private IReadOnlyList<PasskeyInfo>? _passkeys;
+    private ApiProblem? _problem;
+    private string? _status;
+    private string _name = "";
+    private bool _busy;
+    private bool _signInAgain;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<PasskeyInfo>> mine = await Api.PasskeysAsync();
+        _passkeys = mine.Value;
+        _problem = mine.Problem;
+    }
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        _status = null;
+        try
+        {
+            ApiResult<PasskeyCeremony> ceremony = await Api.PasskeyRegistrationAsync();
+            if (!ceremony.IsSuccess)
+            {
+                Refused(ceremony.Problem!);
+                return;
+            }
+
+            PasskeyOutcome made = await Passkey.CreateAsync(ceremony.Value!.Options.GetRawText());
+            if (made.CredentialJson is not { } credential)
+            {
+                _status = made.Cancelled ? T["account.passkey.cancelled"] : T["account.passkey.went_wrong"];
+                return;
+            }
+
+            ApiResult added = await Api.AddPasskeyAsync(ceremony.Value.State, credential, string.IsNullOrWhiteSpace(_name) ? null : _name.Trim());
+            if (!added.IsSuccess)
+            {
+                Refused(added.Problem!);
+                return;
+            }
+
+            _name = "";
+            _status = T["account.passkey.added"];
+            await LoadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync(PasskeyInfo passkey)
+    {
+        _busy = true;
+        ApiResult removed = await Api.RemovePasskeyAsync(passkey.Id);
+        _busy = false;
+        if (removed.IsSuccess)
+        {
+            _status = T["account.passkey.removed"];
+            await LoadAsync();
+        }
+        else
+        {
+            Refused(removed.Problem!);
+        }
+    }
+
+    // A 403 here is the step-up: the session is older than the window, not a refusal of the person.
+    private void Refused(ApiProblem problem)
+    {
+        _signInAgain = problem.Status == 403;
+        _status = _signInAgain ? null : Words.Problem(T, problem);
+    }
+
+    private async Task SignInAgainAsync()
+    {
+        await Session.SignOutAsync();
+        Navigation.NavigateTo("sign-in?returnUrl=%2Faccount%2Fpasskeys");
+    }
+}

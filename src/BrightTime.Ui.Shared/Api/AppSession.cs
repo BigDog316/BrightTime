@@ -86,6 +86,47 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         return null;
     }
 
+    /// <summary>
+    /// Signs in with a passkey (D38): the server's options go to the platform's prompt, and its
+    /// answer back. Null on success; <see cref="PasskeyDeclined"/> when the person closed the prompt.
+    /// </summary>
+    public async Task<ApiProblem?> SignInWithPasskeyAsync(IPasskeyAuthenticator authenticator, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authenticator);
+        ApiResult<PasskeyCeremony> ceremony = await PostAsync<PasskeyCeremony>("auth/passkeys/assert/options", new { }, cancellationToken).ConfigureAwait(false);
+        if (!ceremony.IsSuccess)
+        {
+            return ceremony.Problem;
+        }
+
+        PasskeyOutcome answer = await authenticator.GetAsync(ceremony.Value!.Options.GetRawText(), cancellationToken).ConfigureAwait(false);
+        if (answer.CredentialJson is not { } credential)
+        {
+            return answer.Cancelled ? PasskeyDeclined : new ApiProblem(ApiProblem.Prefix + "passkey.failed", null, 0);
+        }
+
+        string device = await DeviceIdAsync().ConfigureAwait(false);
+        using JsonDocument parsed = JsonDocument.Parse(credential);
+        ApiResult<TokenPair> issued = await PostAsync<TokenPair>(
+            "auth/passkeys/assert", new { state = ceremony.Value.State, credential = parsed.RootElement, deviceId = device }, cancellationToken).ConfigureAwait(false);
+        if (!issued.IsSuccess)
+        {
+            return issued.Problem;
+        }
+
+        Accept(issued.Value!);
+        if (!await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+        {
+            await ForgetAsync().ConfigureAwait(false);
+            return new ApiProblem(ApiProblem.UnreadableType, null, 0);
+        }
+
+        return null;
+    }
+
+    /// <summary>The person closed the passkey prompt: nothing to say.</summary>
+    public static ApiProblem PasskeyDeclined { get; } = new("urn:brighttime:app:passkey-declined", null, 0);
+
     /// <summary>Signs out here: the refresh token is ended on the server and forgotten on the device.</summary>
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {

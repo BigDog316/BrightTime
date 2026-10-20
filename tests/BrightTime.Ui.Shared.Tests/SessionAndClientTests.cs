@@ -117,6 +117,33 @@ public sealed class SessionAndClientTests
     }
 
     [Fact]
+    public async Task Closing_the_passkey_prompt_says_nothing_and_sends_nothing()
+    {
+        using FakeApi api = SignedInApi("adult")
+            .Json(HttpMethod.Post, "auth/passkeys/assert/options", """{"options":{"challenge":"abc"},"state":"sealed"}""");
+        await using ServiceProvider app = api.Services();
+
+        ApiProblem? outcome = await app.GetRequiredService<AppSession>().SignInWithPasskeyAsync(new DecliningAuthenticator(), Ct);
+
+        outcome.ShouldBe(AppSession.PasskeyDeclined);
+        api.Requests.ShouldNotContain(r => r.RequestUri!.AbsolutePath.EndsWith("auth/passkeys/assert", StringComparison.Ordinal));
+        app.GetRequiredService<AppSession>().IsSignedIn.ShouldBeFalse();
+    }
+
+    private sealed class DecliningAuthenticator : IPasskeyAuthenticator
+    {
+        public bool IsSupported => true;
+
+        public Task<PasskeyOutcome> CreateAsync(string optionsJson, CancellationToken cancellationToken = default) => Task.FromResult(PasskeyOutcome.Declined);
+
+        public Task<PasskeyOutcome> GetAsync(string optionsJson, CancellationToken cancellationToken = default)
+        {
+            optionsJson.ShouldContain("\"challenge\":\"abc\"", Case.Sensitive, "the server's options reach the prompt as they were sent");
+            return Task.FromResult(PasskeyOutcome.Declined);
+        }
+    }
+
+    [Fact]
     public async Task The_device_language_is_used_when_the_region_offers_it()
     {
         using FakeApi api = new FakeApi().Json(HttpMethod.Get, "public/tenant", FakeApi.Tenant);

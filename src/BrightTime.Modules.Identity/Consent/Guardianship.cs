@@ -629,6 +629,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             .ToListAsync(ct).ConfigureAwait(false);
 
         AgeBand band = user.BirthMonth is { } month ? Age.BandFromBirthMonth(month, clock.TodayIn(Zone)) : AgeBand.Unknown;
+        byte[] currentTerms = AccountTerms.Current.Hash;
         YouthCapabilities capabilities = YouthCapabilityCalculator.Calculate(new CapabilityInputs
         {
             UserId = user.UserId,
@@ -639,7 +640,9 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             LiveConsents = scopes.Select(s => ConsentScopeExtensions.TryFromDbValue(s, out ConsentScope c) ? (ConsentScope?)c : null)
                 .OfType<ConsentScope>().ToHashSet(),
             PhoneConfirmed = user.PhoneConfirmed,
-            TermsAccepted = user.TermsAcceptedAt is not null,
+            // The current terms, by their hash: a new version is agreed to afresh (D37).
+            TermsAccepted = await db.ConsentRecords.AsNoTracking().AnyAsync(
+                r => r.UserId == userId && r.DocumentKind == ConsentDocumentKind.Terms && r.DocumentHash == currentTerms, ct).ConfigureAwait(false),
         });
 
         YouthCapabilityRecord? record = await db.YouthCapabilities.FirstOrDefaultAsync(c => c.UserId == userId, ct).ConfigureAwait(false);

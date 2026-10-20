@@ -1,7 +1,8 @@
 @page "/sign-in"
-@* Email and password (D28's token endpoint). A forgotten password is reset on the web, as the
-   emailed links are. Passkeys in the app come later. *@
+@* A passkey first where the phone has them (D38; T21 prefers them), then email and password
+   (D28's token endpoint). A forgotten password is reset on the web, as the emailed links are. *@
 @inject AppSession Session
+@inject IPasskeyAuthenticator Passkey
 @inject AppEndpoints Endpoints
 @inject IExternalLauncher Launcher
 @inject NavigationManager Navigation
@@ -11,6 +12,14 @@
 @if (_problem is not null)
 {
     <p class="notice error" role="alert" id="sign-in-error">@_problem</p>
+}
+
+@if (Passkey.IsSupported)
+{
+    <div class="actions">
+        <button type="button" class="primary" @onclick="PasskeyAsync" disabled="@_busy">@T["account.sign_in.with_passkey"]</button>
+    </div>
+    <p>@T["account.sign_in.or_password"]</p>
 }
 
 <form class="stack" @onsubmit="SignInAsync">
@@ -24,7 +33,7 @@
         <input id="password" type="password" autocomplete="current-password" required @bind="_password" />
     </div>
     <div class="actions">
-        <button type="submit" class="primary" disabled="@_busy">@T["account.sign_in.submit"]</button>
+        <button type="submit" class="@(Passkey.IsSupported ? "" : "primary")" disabled="@_busy">@T["account.sign_in.submit"]</button>
     </div>
 </form>
 
@@ -52,7 +61,26 @@
         }
 
         _password = "";
-        // Only a path inside the app: never a link elsewhere.
-        Navigation.NavigateTo(ReturnUrl is { Length: > 1 } back && back[0] == '/' && back[1] != '/' ? back : "/");
+        Back();
     }
+
+    private async Task PasskeyAsync()
+    {
+        _busy = true;
+        _problem = null;
+        ApiProblem? failed = await Session.SignInWithPasskeyAsync(Passkey);
+        _busy = false;
+        if (failed is null)
+        {
+            Back();
+        }
+        else if (failed != AppSession.PasskeyDeclined)
+        {
+            _problem = failed.Type is ApiProblem.OfflineType ? Words.Problem(T, failed) : T["account.passkey.sign_in_failed"];
+        }
+    }
+
+    // Only a path inside the app: never a link elsewhere.
+    private void Back() =>
+        Navigation.NavigateTo(ReturnUrl is { Length: > 1 } back && back[0] == '/' && back[1] != '/' ? back : "/");
 }

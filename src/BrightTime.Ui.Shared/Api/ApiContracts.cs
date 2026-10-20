@@ -164,6 +164,20 @@ public sealed record Child(
 /// <summary>What a consent scope means, in the exact words a grant is recorded against (its <see cref="Hash"/>).</summary>
 public sealed record Disclosure(string Scope, string Version, string Text, string Hash, IReadOnlyList<string> Methods, bool AvailableUnder13);
 
+/// <summary>
+/// A passkey ceremony (D38): <see cref="Options"/> as the platform's passkey API takes them
+/// (WebAuthn JSON), and <see cref="State"/> to send back with its answer.
+/// </summary>
+public sealed record PasskeyCeremony(JsonElement Options, string State);
+
+public sealed record PasskeyInfo(Guid Id, string Name, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, bool IsBackedUp);
+
+/// <summary>The terms of use: the exact words, and the hash agreeing to them names (D37).</summary>
+public sealed record TermsDocument(string Kind, string Version, string Text, string Hash);
+
+/// <summary>Where the signed-in person stands with the current terms.</summary>
+public sealed record MyTerms(string Version, string Hash, DateTimeOffset? AcceptedAt);
+
 /// <summary>An RFC 9457 problem from the API, or one the app makes for a request that never arrived.</summary>
 public sealed record ApiProblem(string Type, string? Title, int Status, IReadOnlyDictionary<string, string[]>? Errors = null)
 {

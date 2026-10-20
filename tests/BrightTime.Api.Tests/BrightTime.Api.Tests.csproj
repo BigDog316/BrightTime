@@ -12,4 +12,9 @@
     <ProjectReference Include="../../src/BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The software authenticator the web's passkey tests use, for the API's. -->
+    <Compile Include="../BrightTime.Web.Tests/SoftwarePasskey.cs" Link="SoftwarePasskey.cs" />
+  </ItemGroup>
+
 </Project>

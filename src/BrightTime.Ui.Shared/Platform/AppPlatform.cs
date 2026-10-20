@@ -71,6 +71,38 @@ public interface IPushRegistrar
     Task<PushRegistration?> RegisterAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>What a passkey prompt came to: the credential, as WebAuthn JSON, or why there is none.</summary>
+public sealed record PasskeyOutcome(string? CredentialJson, bool Cancelled = false)
+{
+    public static PasskeyOutcome Declined { get; } = new(CredentialJson: null, Cancelled: true);
+
+    public static PasskeyOutcome Failed { get; } = new(CredentialJson: null);
+}
+
+/// <summary>
+/// The platform's passkeys (Android's Credential Manager, iOS's AuthenticationServices): takes the
+/// server's WebAuthn options as JSON and gives back the authenticator's answer as JSON.
+/// </summary>
+public interface IPasskeyAuthenticator
+{
+    /// <summary>False where the platform has no passkeys; the screens then offer none.</summary>
+    bool IsSupported { get; }
+
+    Task<PasskeyOutcome> CreateAsync(string optionsJson, CancellationToken cancellationToken = default);
+
+    Task<PasskeyOutcome> GetAsync(string optionsJson, CancellationToken cancellationToken = default);
+}
+
+/// <summary>No passkeys on this platform.</summary>
+public sealed class NoPasskeys : IPasskeyAuthenticator
+{
+    public bool IsSupported => false;
+
+    public Task<PasskeyOutcome> CreateAsync(string optionsJson, CancellationToken cancellationToken = default) => Task.FromResult(PasskeyOutcome.Failed);
+
+    public Task<PasskeyOutcome> GetAsync(string optionsJson, CancellationToken cancellationToken = default) => Task.FromResult(PasskeyOutcome.Failed);
+}
+
 /// <summary>An <see cref="ISecretStore"/> that forgets on exit: for tests, and a host with no keychain.</summary>
 public sealed class MemorySecretStore : ISecretStore
 {

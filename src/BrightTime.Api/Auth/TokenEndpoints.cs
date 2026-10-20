@@ -135,7 +135,7 @@ public static class TokenEndpoints
         return Results.NoContent();
     }
 
-    private static IResult Issued(AccessTokens tokens, ClaimsPrincipal principal, SiteContext site, IssuedRefreshToken refresh, DateTimeOffset now, TokenOptions options)
+    internal static IResult Issued(AccessTokens tokens, ClaimsPrincipal principal, SiteContext site, IssuedRefreshToken refresh, DateTimeOffset now, TokenOptions options)
     {
         Uri issuer = site.BaseUrl ?? throw new InvalidOperationException("The API issues tokens only for a tenant with an address.");
         (string access, _) = tokens.Issue(principal, issuer, now);
@@ -143,12 +143,12 @@ public static class TokenEndpoints
     }
 
     /// <summary>The one answer every refused grant gets.</summary>
-    private static IResult InvalidGrant() => Results.Problem(
+    internal static IResult InvalidGrant() => Results.Problem(
         statusCode: StatusCodes.Status400BadRequest,
         type: InvalidGrantType,
         title: "Those details did not work. Check them and try again, or reset your password.");
 
-    private static Dictionary<string, string> Channel(string? method)
+    internal static Dictionary<string, string> Channel(string? method)
     {
         Dictionary<string, string> detail = new(StringComparer.Ordinal) { ["channel"] = "api" };
         if (method is not null)

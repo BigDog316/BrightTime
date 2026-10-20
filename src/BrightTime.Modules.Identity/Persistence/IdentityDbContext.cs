@@ -32,6 +32,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 
     public DbSet<AppUserClaim> UserClaims => Set<AppUserClaim>();
 
+    public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -115,6 +117,14 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             b.HasKey(c => c.Id);
             b.Property(c => c.Id).UseIdentityAlwaysColumn();
             b.HasIndex(c => new { c.UserId, c.ClaimType, c.ClaimValue }).IsUnique();
+        });
+
+        modelBuilder.Entity<ConsentRecord>(b =>
+        {
+            b.ToTable("consent_record");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).ValueGeneratedNever();
+            b.HasIndex(r => new { r.UserId, r.DocumentKind });
         });
 
         modelBuilder.ApplySnakeCaseNames();

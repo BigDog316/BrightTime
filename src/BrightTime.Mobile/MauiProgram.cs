@@ -20,6 +20,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILocationProvider, DeviceLocation>();
         builder.Services.AddSingleton<IShareService, DeviceShare>();
         builder.Services.AddSingleton<IExternalLauncher, DeviceLauncher>();
+#if ANDROID
+        builder.Services.AddSingleton<IPasskeyAuthenticator, AndroidPasskeys>();
+#endif
 
         builder.Services.AddBrightTimeApp(
             new AppEndpoints(new Uri(BuildConfig.ApiBase), new Uri(BuildConfig.SiteBase)),

@@ -54,6 +54,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
   </ItemGroup>
 
+  <!-- Passkeys on Android (D38): Credential Manager, and Play services for Android 13 and older. -->
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+    <PackageReference Include="Xamarin.AndroidX.Credentials" />
+    <PackageReference Include="Xamarin.AndroidX.Credentials.PlayServicesAuth" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
   </ItemGroup>

@@ -153,7 +153,15 @@ API's versioning: `GET /health/live` and `GET /health/ready`.
   signs in as theirs. On the web the same link opens `/account/claim`.
 - A child's view gains `accountKind` (`child`, or `youth` once claimed).
 
-Still to come: passwords and passkeys through the API, and export and delete requests.
+*Built (2026-10-20, D37):* `GET /terms`; `GET /me/terms`; `POST /me/terms {hash}`, which records
+agreement to the current terms (409 `terms.stale` for another version).
+
+*Built (2026-10-20, D38):* `POST /auth/passkeys/options` and `POST /auth/passkeys` (a recent
+sign-in needed); `POST /auth/passkeys/assert/options` and `POST /auth/passkeys/assert`, which
+give tokens; `GET /me/passkeys`; `DELETE /me/passkeys/{id}`.
+
+Still to come: the forgot-password route in the API, external sign-in through the API, and
+export and delete requests.
 
 Consent scopes are the enum in `identity.parental_consent.scope`:
 `account`, `enrollment`, `attendance_photo`, `community_participation`,

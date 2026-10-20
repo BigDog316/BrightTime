@@ -46,6 +46,18 @@
     <!-- "Near me" only, when tapped. No background location (docs/plan/06). -->
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>To find activities near you when you tap "near me". Your location stays on your phone.</string>
+    <!-- The web hands an external sign-in back here (D41). -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>org.brighttime.app</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>org.brighttime.app</string>
+            </array>
+        </dict>
+    </array>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>XSAppIconAssets</key>

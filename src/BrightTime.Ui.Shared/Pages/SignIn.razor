@@ -3,6 +3,9 @@
    (D28's token endpoint). A forgotten password is asked for here; its link opens the web's page. *@
 @inject AppSession Session
 @inject IPasskeyAuthenticator Passkey
+@inject IExternalAuthenticator Browser
+@inject BrightTimeApi Api
+@inject AppEndpoints Endpoints
 @inject NavigationManager Navigation
 
 <h1>@T["account.sign_in.title"]</h1>
@@ -18,6 +21,16 @@
         <button type="button" class="primary" @onclick="PasskeyAsync" disabled="@_busy">@T["account.sign_in.with_passkey"]</button>
     </div>
     <p>@T["account.sign_in.or_password"]</p>
+}
+
+@if (Browser.IsSupported && _providers.Count > 0)
+{
+    <div class="actions">
+        @foreach (ExternalProvider provider in _providers)
+        {
+            <button type="button" @onclick="() => ExternalAsync(provider)" disabled="@_busy">@T.Format("account.sign_in.with_provider", ("provider", Text.Name(provider.Name)))</button>
+        }
+    </div>
 }
 
 <form class="stack" @onsubmit="SignInAsync">
@@ -60,6 +73,41 @@
 
         _password = "";
         Back();
+    }
+
+    private IReadOnlyList<ExternalProvider> _providers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Browser.IsSupported && await Api.ExternalProvidersAsync() is { Value: { } providers })
+        {
+            _providers = providers;
+        }
+    }
+
+    // The provider's flow runs on the web in the system browser (D41); only an account already
+    // connected to it signs in, and connecting happens on the web.
+    private async Task ExternalAsync(ExternalProvider provider)
+    {
+        _busy = true;
+        _problem = null;
+        ApiProblem? failed = await Session.SignInExternallyAsync(Browser, Endpoints, provider.Key);
+        _busy = false;
+        if (failed is null)
+        {
+            Back();
+        }
+        else if (failed != AppSession.PasskeyDeclined)
+        {
+            _problem = failed switch
+            {
+                { Type: ApiProblem.OfflineType } => Words.Problem(T, failed),
+                // A problem code, not a catalogue key: kept off the localising line below.
+                { Code: "external.unconnected" } =>
+                    T.Format("account.external.unconnected", ("provider", Text.Name(provider.Name))),
+                _ => T["account.external.failed"],
+            };
+        }
     }
 
     private async Task PasskeyAsync()

@@ -71,6 +71,27 @@ public interface IPushRegistrar
     Task<PushRegistration?> RegisterAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// The system browser for a sign-in that happens on the web (D41): opens <c>start</c>, waits for
+/// the redirect to the app's <c>callback</c> scheme, and gives back its fragment's values. Null when
+/// the person closed the browser.
+/// </summary>
+public interface IExternalAuthenticator
+{
+    bool IsSupported { get; }
+
+    Task<IReadOnlyDictionary<string, string>?> AuthenticateAsync(Uri start, Uri callback, CancellationToken cancellationToken = default);
+}
+
+/// <summary>No system browser to sign in with.</summary>
+public sealed class NoExternalAuthenticator : IExternalAuthenticator
+{
+    public bool IsSupported => false;
+
+    public Task<IReadOnlyDictionary<string, string>?> AuthenticateAsync(Uri start, Uri callback, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, string>?>(null);
+}
+
 /// <summary>What a passkey prompt came to: the credential, as WebAuthn JSON, or why there is none.</summary>
 public sealed record PasskeyOutcome(string? CredentialJson, bool Cancelled = false)
 {

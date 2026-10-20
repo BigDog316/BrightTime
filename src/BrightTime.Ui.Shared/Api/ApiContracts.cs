@@ -170,6 +170,9 @@ public sealed record Disclosure(string Scope, string Version, string Text, strin
 /// </summary>
 public sealed record PasskeyCeremony(JsonElement Options, string State);
 
+/// <summary>An external provider the region signs in with (D41): its key, for the web's start route, and its name.</summary>
+public sealed record ExternalProvider(string Key, string Name);
+
 public sealed record PasskeyInfo(Guid Id, string Name, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, bool IsBackedUp);
 
 /// <summary>The terms of use: the exact words, and the hash agreeing to them names (D37).</summary>

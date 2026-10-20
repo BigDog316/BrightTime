@@ -14,6 +14,8 @@ using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Enrollment.Family;
+using BrightTime.Modules.Enrollment.Persistence;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
@@ -107,12 +109,18 @@ public static class ApiComposition
         services.AddFieldEncryption(configuration, environment.IsDevelopment());
         services.AddNotifications();
 
+        // Enrollment (M3a): the family profile, owned by its account and encrypted under the
+        // tenant's data key (D32, D43).
+        services.AddBrightTimeDbContext<EnrollmentDbContext>(app, EnrollmentDbContext.SchemaName, EnrollmentDbContext.MigrationsHistoryTable);
+        services.AddEnrollment();
+
         // The authentication path's login: Identity stores only.
         services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth));
         services.AddSingleton(sp => new AccountReader(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
         services.AddSingleton(sp => new PasswordAccounts(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
         services.AddSingleton(sp => new TokenSessions(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
         services.AddSingleton(sp => new AccountProvisioning(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
+        services.AddSingleton(sp => new AppSignInCodes(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
         services.AddScoped<BrightTimePrincipalFactory>();
 
         // New passwords set from the app (a reset, a claim) are checked against Have I Been Pwned's

@@ -125,6 +125,8 @@ public static class ConsoleServices
                     TimestampDriftTolerance = 300_000,
                 });
             });
+            services.AddSingleton(sp => new AppSignInCodes(
+                sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             services.AddSingleton(sp => new ExternalLogins(
                 sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
             ExternalSignIn.AddProviders(authentication, auth, environment);

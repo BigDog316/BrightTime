@@ -43,6 +43,12 @@ public sealed class AuthOptions
     /// and never create or connect one by themselves.
     /// </summary>
     public Dictionary<string, ExternalProviderOptions> External { get; init; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Where an external sign-in started from the app hands its one-time code (D41): the app's own
+    /// scheme, as RFC 8252 has native apps receive it. The default is the app's id.
+    /// </summary>
+    public Uri AppCallback { get; set; } = new("org.brighttime.app://external");
 }
 
 /// <summary>One external OpenID Connect provider.</summary>

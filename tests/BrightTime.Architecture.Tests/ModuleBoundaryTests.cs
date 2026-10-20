@@ -23,6 +23,7 @@ public sealed class ModuleBoundaryTests
         ["Directory"] = ["Platform", "Identity"],
         ["Opportunities"] = ["Platform", "Identity", "Directory"],
         ["Notifications"] = ["Platform", "Identity"],
+        ["Enrollment"] = ["Platform", "Identity", "Directory", "Opportunities"],
     };
 
     private static IEnumerable<Assembly> ModuleAssemblies =>

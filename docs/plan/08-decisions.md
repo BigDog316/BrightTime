@@ -1082,6 +1082,103 @@ Three loose ends from D37 and D38.
   there as in the app, through the same `AccountTerms`, by the hash of the words shown. Every
   page's footer links to it, and the axe gate covers it.
 
+### D41 — External sign-in from the app, through the web, by one-time code (**proposed 2026-10-20; implemented, reversible**)
+
+docs/plan/05's `/auth/external` for the app, done the way RFC 8252 has native apps do it: the
+provider's flow runs in the system browser, never in the app.
+- **The flow:**
+  - The app makes a PKCE verifier and its S256 challenge (RFC 7636), and a state.
+  - It opens the system browser at the web's `GET /sign-in/external/app/{provider}?challenge&state`.
+  - The web runs the provider's flow exactly as for itself (D17), then hands
+    `org.brighttime.app://external#code&state` to the app's own scheme.
+  - The app checks the state, then trades the code and verifier for tokens at
+    `POST /api/v1/auth/external/token`.
+- **The code** is 256 random bits, kept only as a hash in `app_user_token` with the challenge. It
+  lasts two minutes and is spent on the first attempt, right or wrong.
+  - Without the verifier it buys nothing, so another app that claims the scheme and catches the
+    redirect gains nothing.
+  - Starting a flow for someone else (a GET, so with no antiforgery token) gains nothing either:
+    the code goes to the device that finishes the flow, bound to a verifier only the starter holds.
+- **D17 holds:** only an account already connected to the provider gets a code. An unconnected
+  one hands back `error=unconnected`, and the app says to connect it on the web. Nothing is
+  created or matched by email.
+- **Providers:**
+  - `GET /api/v1/auth/external/providers` lists the web's `Auth:External`, so a deployment gives
+    both hosts the same section.
+  - `Auth:AppCallback` names the app's scheme, `org.brighttime.app://external` by default.
+- **The app:**
+  - Sign-in shows "Sign in with {provider}" for each provider.
+  - MAUI's WebAuthenticator runs it: a Custom Tab on Android, an ephemeral authentication session
+    on iOS, so a shared device doesn't stay signed in to the provider.
+  - Android's `ExternalSignInCallbackActivity` claims the scheme, and iOS's `Info.plist` declares
+    it.
+- **Tested** with the web's fake OpenID provider through to the hand-back (connected,
+  unconnected, malformed starts), the redemption (wrong verifier, replay), the API's exchange,
+  and the app's state check and S256.
+- **Not yet:** a run on a device against a real provider. That needs a configured provider and
+  the region's real host.
+
+### D42 — M3 is split in two, and built in slices (**proposed 2026-10-20; reversible**)
+
+docs/plan/09's sequencing note, taken: M3 is the riskiest milestone, so it ships as two.
+- **M3a, registration:** the family profile, forms, eligibility, applications, waivers,
+  decisions and waitlists. No money, no offline.
+- **M3b, operations:** attendance with offline sync, messaging, payments and reports.
+- **M3a's slices, in order:**
+  1. the family profile (D43);
+  2. `profile_share`, per-organisation and revocable;
+  3. form definitions and the listing's form;
+  4. applications (draft, idempotent submit, withdraw) with eligibility;
+  5. waivers with e-signature;
+  6. decisions, seat claims under `FOR UPDATE`, waitlists and offers.
+- **Why:** a usable registration flow reaches providers a month earlier, which is where the
+  requirements feedback is. Money and offline sync each carry their own risk, and neither
+  should hold up the other.
+- **The new module** is `BrightTime.Modules.Enrollment`, with its own `.Contracts`. It may
+  reference the Platform, Identity, Directory and Opportunities contracts, and the
+  architecture tests hold it to that.
+
+### D43 — The family profile: owned, encrypted, audited (**proposed 2026-10-20; implemented, reversible**)
+
+M3a's first slice: a household entered once and reused for every application.
+- **Ownership:** one profile per account, made by its owner and read or changed by that owner
+  only. The check is in `FamilyProfiles`, row by row (D4), on top of RLS's tenant isolation
+  and actor guard.
+  - A child account can't hold one (`family.child_account`). A guardian's profile lists the
+    child instead.
+  - Organisations get nothing here. They see a profile only through `profile_share`, which is
+    the next slice.
+- **What it holds:**
+  - The household: size, primary language, and whether it needs an interpreter.
+  - Up to 15 members: role, names, date of birth, grade, pronouns, and relationship. A youth
+    or child needs a date of birth (the table's own check).
+  - Each member's support needs, up to 10. Each says whether programs may see it.
+  - Up to 10 contacts, each marked as an emergency contact and/or allowed to pick up.
+- **Encryption (D32):**
+  - Encrypted under the tenant's data key: names, dates of birth, support details, and
+    contacts' names, phones and emails.
+  - In the clear: the birth month (for age checks without decrypting, as for accounts),
+    preferred name, pronouns and relationship.
+  - A contact's phone also gets a blind index. A provider can find a contact by number
+    without decrypting every row.
+- **Audit:** every read is one `enrollment.family.read` row, and every change is one
+  `enrollment.family.changed` row naming the change. Both are written in the same transaction
+  as the change.
+  - Every endpoint declares `[YouthRecord]`, and the response types are `[YouthData]`, so the
+    boot guard holds them to it.
+  - A refusal is audited too, as a `deny` row whose reason is the error code.
+- **API changes from docs/plan/05:**
+  - A member is changed with `PUT`, not `PATCH`. The encrypted fields are rewritten whole, so
+    a partial update would only hide that.
+  - The members come back inside `GET /family-profile`, with no separate list.
+  - Contacts get their own routes: `/family-profile/contacts`.
+- **Not yet:**
+  - linking a member to their own account (`family_member.user_id`), which comes with
+    applications;
+  - school and neighbourhood on a member;
+  - the app's screens;
+  - support needs being seen by an enrolling program.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

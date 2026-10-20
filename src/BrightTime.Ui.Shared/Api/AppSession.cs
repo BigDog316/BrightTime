@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using BrightTime.Ui.Shared.Platform;
 
@@ -123,6 +125,56 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
 
         return null;
     }
+
+    /// <summary>
+    /// Signs in with an external provider (D41): the system browser runs the provider's flow on the
+    /// web, which hands back a one-time code; the code and this sign-in's PKCE verifier buy tokens.
+    /// A state that is not the one sent, or a code without the verifier, gets nothing.
+    /// </summary>
+    public async Task<ApiProblem?> SignInExternallyAsync(IExternalAuthenticator browser, AppEndpoints endpoints, string provider, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(browser);
+        ArgumentNullException.ThrowIfNull(endpoints);
+        string verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
+        string challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        string state = Base64Url(RandomNumberGenerator.GetBytes(24));
+
+        IReadOnlyDictionary<string, string>? answer = await browser.AuthenticateAsync(
+            endpoints.ExternalStart(provider, challenge, state), endpoints.AppCallback, cancellationToken).ConfigureAwait(false);
+        if (answer is null)
+        {
+            return PasskeyDeclined;
+        }
+
+        if (!answer.TryGetValue("state", out string? returned) || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(returned), Encoding.ASCII.GetBytes(state)))
+        {
+            return new ApiProblem(ApiProblem.Prefix + "external.failed", null, 0);
+        }
+
+        if (answer.TryGetValue("error", out string? error))
+        {
+            return new ApiProblem(ApiProblem.Prefix + (error == "unconnected" ? "external.unconnected" : "external.failed"), null, 0);
+        }
+
+        string device = await DeviceIdAsync().ConfigureAwait(false);
+        ApiResult<TokenPair> issued = await PostAsync<TokenPair>(
+            "auth/external/token", new { code = answer.GetValueOrDefault("code"), verifier, deviceId = device }, cancellationToken).ConfigureAwait(false);
+        if (!issued.IsSuccess)
+        {
+            return issued.Problem!.Type == ApiProblem.OfflineType ? issued.Problem : new ApiProblem(ApiProblem.Prefix + "external.failed", null, 0);
+        }
+
+        Accept(issued.Value!);
+        if (!await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+        {
+            await ForgetAsync().ConfigureAwait(false);
+            return new ApiProblem(ApiProblem.UnreadableType, null, 0);
+        }
+
+        return null;
+    }
+
+    private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     /// <summary>The person closed the passkey prompt: nothing to say.</summary>
     public static ApiProblem PasskeyDeclined { get; } = new("urn:brighttime:app:passkey-declined", null, 0);

@@ -49,6 +49,10 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> RegisterAsync(string email, string birthMonth, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, "auth/register", new { email, birthMonth }, signedIn: false, ct);
 
+    /// <summary>The external providers the region signs in with (D41).</summary>
+    public Task<ApiResult<IReadOnlyList<ExternalProvider>>> ExternalProvidersAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ExternalProvider>>("auth/external/providers", signedIn: false, ct);
+
     // ---- passkeys (D38) ----------------------------------------------------------------------
 
     /// <summary>Options to add a passkey. Needs a recent sign-in: an older session gets 403.</summary>

@@ -42,7 +42,12 @@ public static partial class ExternalSignIn
     public const string LinkPath = "/account/external/link";
     public const string FinishPath = "/sign-in/external/done";
 
+    /// <summary>The app's start (D41): a GET the system browser opens, with the app's PKCE challenge and state.</summary>
+    public const string AppStartPath = "/sign-in/external/app/{provider}";
+
     private const string ProviderItem = "brighttime.provider";
+    private const string AppChallengeItem = "brighttime.app.challenge";
+    private const string AppStateItem = "brighttime.app.state";
     private const string LinkItem = "brighttime.link";
     private const string ReturnItem = "brighttime.return";
 
@@ -128,6 +133,14 @@ public static partial class ExternalSignIn
             return Challenge(provider, link: null, returnUrl: form["returnUrl"]);
         });
 
+        // From the app (D41): a GET, because the system browser opens it. Starting one for someone
+        // else gets nothing: the code goes to the device that finishes it, bound to a challenge
+        // whose verifier only the starting app holds.
+        endpoints.MapGet(AppStartPath, (string provider, string? challenge, string? state, IOptions<AuthOptions> options) =>
+            !options.Value.External.ContainsKey(provider) || !AppSignInCodes.IsChallenge(challenge) || !AppState().IsMatch(state ?? string.Empty)
+                ? Results.BadRequest()
+                : Challenge(provider, link: null, returnUrl: null, app: (challenge!, state!)));
+
         endpoints.MapPost(LinkPath, async (HttpContext http, IAntiforgery antiforgery, IOptions<AuthOptions> options) =>
         {
             IFormCollection? form = await ValidFormAsync(http, antiforgery).ConfigureAwait(false);
@@ -145,12 +158,18 @@ public static partial class ExternalSignIn
             ITenantContext tenant,
             IOptions<AuthOptions> options,
             ExternalLogins logins,
+            AppSignInCodes codes,
             BrightTimePrincipalFactory factory,
             IClock clock,
             AuditTrail audit) =>
         {
             AuthenticateResult external = await http.AuthenticateAsync(ExternalScheme).ConfigureAwait(false);
             await http.SignOutAsync(ExternalScheme).ConfigureAwait(false);
+            (string Challenge, string State)? app =
+                external.Properties?.Items.TryGetValue(AppChallengeItem, out string? challenge) == true && challenge is not null
+                && external.Properties.Items.TryGetValue(AppStateItem, out string? appState) && appState is not null
+                    ? (challenge, appState)
+                    : null;
 
             if (!external.Succeeded
                 || external.Properties?.Items.TryGetValue(ProviderItem, out string? provider) != true
@@ -159,7 +178,7 @@ public static partial class ExternalSignIn
                 || external.Principal.FindFirst("sub") is not { Value.Length: > 0 } sub)
             {
                 audit.Record(AuthAudit.Refused(AuthAudit.SignIn, null, "external_flow_failed", AuthenticationMethods.External));
-                return Results.LocalRedirect("/sign-in?external=failed");
+                return app is { } failed ? ToApp(options.Value, failed.State, ("error", "failed")) : Results.LocalRedirect("/sign-in?external=failed");
             }
 
             // The issuer the handler validated the token against, not anything the token body says.
@@ -184,6 +203,21 @@ public static partial class ExternalSignIn
             }
 
             UserId? user = await logins.FindAsync(tenant.TenantId, issuer, sub.Value, http.RequestAborted).ConfigureAwait(false);
+
+            // From the app: no cookie here. A one-time code, bound to the app's challenge, goes to
+            // the app, and the API turns it into tokens (D41). An unconnected account gets nothing.
+            if (app is { } fromApp)
+            {
+                if (user is not { } appUser || await factory.CreateAsync(tenant.TenantId, appUser, new AuthenticationEvent(AuthenticationMethods.External, clock.UtcNow), http.RequestAborted).ConfigureAwait(false) is null)
+                {
+                    audit.Record(AuthAudit.Refused(AuthAudit.SignIn, user, "external_account_not_connected", AuthenticationMethods.External));
+                    return ToApp(options.Value, fromApp.State, ("error", "unconnected"), ("provider", provider));
+                }
+
+                string code = await codes.IssueAsync(tenant.TenantId, appUser, AuthenticationMethods.External, fromApp.Challenge, http.RequestAborted).ConfigureAwait(false);
+                return ToApp(options.Value, fromApp.State, ("code", code));
+            }
+
             ClaimsPrincipal? principal = user is { } id
                 ? await factory.CreateAsync(tenant.TenantId, id, new AuthenticationEvent(AuthenticationMethods.External, clock.UtcNow), http.RequestAborted).ConfigureAwait(false)
                 : null;
@@ -202,10 +236,16 @@ public static partial class ExternalSignIn
         return endpoints;
     }
 
-    private static IResult Challenge(string provider, Guid? link, string? returnUrl)
+    private static IResult Challenge(string provider, Guid? link, string? returnUrl, (string Challenge, string State)? app = null)
     {
         var properties = new AuthenticationProperties { RedirectUri = FinishPath };
         properties.Items[ProviderItem] = provider;
+        if (app is { } fromApp)
+        {
+            properties.Items[AppChallengeItem] = fromApp.Challenge;
+            properties.Items[AppStateItem] = fromApp.State;
+        }
+
         if (link is { } user)
         {
             properties.Items[LinkItem] = user.ToString("N");
@@ -218,6 +258,14 @@ public static partial class ExternalSignIn
 
         return Results.Challenge(properties, [SchemeFor(provider)]);
     }
+
+    /// <summary>
+    /// Back to the app's scheme, everything in the fragment, which no server log sees. Not a local
+    /// redirect, by design: the configured callback is the one place this site sends anyone away.
+    /// </summary>
+    private static IResult ToApp(AuthOptions options, string state, params (string Name, string Value)[] values) =>
+        Results.Redirect(options.AppCallback.GetLeftPart(UriPartial.Path) + "#"
+            + string.Join('&', values.Append((Name: "state", Value: state)).Select(v => v.Name + "=" + Uri.EscapeDataString(v.Value))));
 
     private static async Task<IFormCollection?> ValidFormAsync(HttpContext http, IAntiforgery antiforgery)
     {
@@ -240,4 +288,8 @@ public static partial class ExternalSignIn
 
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,31}$")]
     private static partial Regex ProviderKey();
+
+    /// <summary>The app's state: opaque to this site, base64url, long enough to be unguessable.</summary>
+    [GeneratedRegex("^[A-Za-z0-9_-]{16,128}$")]
+    private static partial Regex AppState();
 }

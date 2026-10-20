@@ -163,7 +163,11 @@ give tokens; `GET /me/passkeys`; `DELETE /me/passkeys/{id}`.
 *Built (2026-10-20, D39):* `POST /auth/password/forgot {email}` (202 for any well-formed
 address) and `POST /auth/password/reset {token, password}`.
 
-Still to come: external sign-in through the API, and export and delete requests.
+*Built (2026-10-20, D41):* `GET /auth/external/providers`; `POST /auth/external/token {code,
+verifier, deviceId}`, which redeems the one-time code the web's
+`/sign-in/external/app/{provider}` hands the app. The provider's flow itself stays on the web.
+
+Still to come: export and delete requests.
 
 Consent scopes are the enum in `identity.parental_consent.scope`:
 `account`, `enrollment`, `attendance_photo`, `community_participation`,
@@ -261,7 +265,15 @@ POST   /api/v1/org/{orgId}/applications/{id}/decide      accept | decline | wait
 POST   /api/v1/org/{orgId}/applications/bulk-decide
 GET    /api/v1/org/{orgId}/listings/{lid}/waitlist
 POST   /api/v1/org/{orgId}/listings/{lid}/waitlist/offer
+```
 
+*Built (2026-10-20, D43):* `GET` and `PUT /family-profile`; `POST /family-profile/members`,
+`PUT` and `DELETE /family-profile/members/{id}`; `PUT /family-profile/members/{id}/support-needs`;
+`POST /family-profile/contacts`, `PUT` and `DELETE /family-profile/contacts/{id}`. A member is
+replaced with `PUT` rather than patched, and the members come back inside the profile. Shares
+come next (D42).
+
+```
 GET    /api/v1/enrollments
 GET    /api/v1/enrollments/{id}
 POST   /api/v1/enrollments/{id}/withdraw

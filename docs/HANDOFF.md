@@ -2,7 +2,7 @@
 
 Where the work stands, for picking it up on another machine or in a new session.
 Written 2026-10-18 at commit c97444d. Updated on the Windows machine through 2026-10-20 (M2's
-server work: D30 to D35).
+server work: D30 to D41; M3 from D42).
 
 ## State
 
@@ -70,12 +70,22 @@ is merged (`cec1ed6`).
 - **Push through FCM, terms on the web** (D40, proposed): `FcmPushSender` sends once
   `Push:Fcm:*` is set, and revokes devices FCM has forgotten. The app's push registration waits
   for the Firebase project's config files. The web has `/terms`.
+- **External sign-in from the app** (D41, proposed): the provider's flow runs on the web in the
+  system browser and hands the app a one-time code, bound to its PKCE challenge, which
+  `POST /auth/external/token` redeems. Only accounts already connected to the provider get one.
+
+**M3 has started** (D42, proposed): M3a is registration (no money, no offline), M3b is
+operations. The new `Enrollment` module holds:
+- **The family profile** (D43, proposed): a household, its members, their support needs and its
+  contacts, under `/api/v1/family-profile`. The owner alone reads or changes it, the youth fields
+  are encrypted, and every read, change and refusal is audited. Next comes `profile_share`.
+
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
-**D40 (push through FCM, terms on the web) is proposed.**
+**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split) and D43 (the family profile).
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 
@@ -94,7 +104,6 @@ Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minut
 
 These have not been asked for yet:
 
-- passkey and external sign-in through the API;
 - D15 pending revisions (edits currently go live and are recorded as revisions);
 - curation screens;
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see

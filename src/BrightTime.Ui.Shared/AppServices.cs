@@ -12,6 +12,13 @@ namespace BrightTime.Ui.Shared;
 /// <param name="SiteBase">The region's web address, for pages the app opens outside itself.</param>
 public sealed record AppEndpoints(Uri ApiBase, Uri SiteBase)
 {
+    /// <summary>Where the web hands an external sign-in back to the app (D41): the app's own scheme.</summary>
+    public Uri AppCallback { get; init; } = new("org.brighttime.app://external");
+
+    /// <summary>The web's start of an external sign-in for the app, with its PKCE challenge and state.</summary>
+    public Uri ExternalStart(string provider, string challenge, string state) =>
+        new(SiteBase, $"/sign-in/external/app/{Uri.EscapeDataString(provider)}?challenge={challenge}&state={state}");
+
     /// <summary>A listing's calendar file, which the phone's calendar opens.</summary>
     public Uri Calendar(string slug) => new(SiteBase, $"/listings/{Uri.EscapeDataString(slug)}/calendar.ics");
 
@@ -48,6 +55,7 @@ public static class AppServices
         services.TryAddSingleton<ILocationProvider, NoLocation>();
         services.TryAddSingleton<IPushRegistrar, NoPush>();
         services.TryAddSingleton<IPasskeyAuthenticator, NoPasskeys>();
+        services.TryAddSingleton<IExternalAuthenticator, NoExternalAuthenticator>();
         services.TryAddSingleton<IShareService, NoShare>();
         services.TryAddSingleton<IExternalLauncher, NoLauncher>();
 

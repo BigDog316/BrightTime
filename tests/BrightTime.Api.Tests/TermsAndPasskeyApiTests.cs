@@ -19,7 +19,7 @@ namespace BrightTime.Api.Tests;
 /// The terms of use (D37) and passkeys from the app (D38), through the API. Passkeys are made and
 /// used by a software authenticator, so the server's WebAuthn checks run for real.
 /// </summary>
-/// <remarks>Admins 55, 56 and 58; the young person is registered fresh.</remarks>
+/// <remarks>Admins 55, 56, 58 and 59; the young person is registered fresh.</remarks>
 [Collection(ApiDatabase.Name)]
 public sealed class TermsAndPasskeyApiTests(ApiFixture api)
 {
@@ -154,6 +154,36 @@ public sealed class TermsAndPasskeyApiTests(ApiFixture api)
 
         HttpResponseMessage again = await app.PostAsJsonAsync("api/v1/auth/password/reset", new { token, password = "another long passphrase 7" }, Ct);
         (await ProblemTypeAsync(again)).ShouldBe("urn:brighttime:problem:password_reset.invalid");
+    }
+
+    [Fact]
+    public async Task A_code_from_the_webs_external_sign_in_buys_tokens_once_and_only_with_its_verifier()
+    {
+        RequireDatabase();
+        string email = Admin(59);
+        string verifier = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string challenge = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier)))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        Modules.Identity.SignIn.AppSignInCodes codes = api.Factory.Services.GetRequiredService<Modules.Identity.SignIn.AppSignInCodes>();
+        TenantId tenant = new(api.Data.TenantId);
+        using HttpClient app = api.Client();
+
+        (await app.GetFromJsonAsync<JsonElement>("api/v1/auth/external/providers", Ct)).ValueKind.ShouldBe(JsonValueKind.Array);
+
+        // The web issued this code after the provider's flow (D41); the app redeems it with its verifier.
+        string code = await codes.IssueAsync(tenant, new UserId(SeedIds.For("user/" + email)), "external", challenge, Ct);
+        HttpResponseMessage wrong = await app.PostAsJsonAsync("api/v1/auth/external/token", new { code, verifier = verifier[..^1] + (verifier[^1] == 'A' ? "B" : "A") }, Ct);
+        (await ProblemTypeAsync(wrong)).ShouldBe(TokenEndpoints.InvalidGrantType);
+
+        string fresh = await codes.IssueAsync(tenant, new UserId(SeedIds.For("user/" + email)), "external", challenge, Ct);
+        HttpResponseMessage issued = await app.PostAsJsonAsync("api/v1/auth/external/token", new { code = fresh, verifier }, Ct);
+        issued.StatusCode.ShouldBe(HttpStatusCode.OK);
+        TokenPair tokens = (await issued.Content.ReadFromJsonAsync<TokenPair>(Ct))!;
+        using HttpClient signedIn = ApiFixture.WithBearer(api.Client(), tokens.AccessToken);
+        (await signedIn.GetFromJsonAsync<JsonElement>("api/v1/me", Ct)).GetProperty("id").GetGuid().ShouldBe(SeedIds.For("user/" + email));
+
+        HttpResponseMessage replay = await app.PostAsJsonAsync("api/v1/auth/external/token", new { code = fresh, verifier }, Ct);
+        (await ProblemTypeAsync(replay)).ShouldBe(TokenEndpoints.InvalidGrantType);
     }
 
     [Fact]

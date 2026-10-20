@@ -130,6 +130,55 @@ public sealed class SessionAndClientTests
         app.GetRequiredService<AppSession>().IsSignedIn.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task An_external_sign_in_checks_its_state_and_sends_its_verifier()
+    {
+        string? sentVerifier = null;
+        using FakeApi api = SignedInApi("adult").On(HttpMethod.Post, "auth/external/token", r =>
+        {
+            using System.Text.Json.JsonDocument body = System.Text.Json.JsonDocument.Parse(r.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            sentVerifier = body.RootElement.GetProperty("verifier").GetString();
+            return FakeApi.Respond(HttpStatusCode.OK, FakeApi.Tokens);
+        });
+        await using ServiceProvider app = api.Services();
+        AppSession session = app.GetRequiredService<AppSession>();
+        AppEndpoints endpoints = app.GetRequiredService<AppEndpoints>();
+
+        // A hand-back whose state is not the one sent: refused before anything is redeemed.
+        (await session.SignInExternallyAsync(new Browser(_ => new Dictionary<string, string> { ["code"] = "c", ["state"] = "forged" }), endpoints, "google", Ct))!
+            .Code.ShouldBe("external.failed");
+        sentVerifier.ShouldBeNull();
+
+        // The provider's account is not connected: said as such.
+        (await session.SignInExternallyAsync(new Browser(start => new Dictionary<string, string> { ["error"] = "unconnected", ["state"] = StateOf(start) }), endpoints, "google", Ct))!
+            .Code.ShouldBe("external.unconnected");
+
+        // The real hand-back: the verifier whose S256 is the challenge the browser was started with.
+        string? challenge = null;
+        (await session.SignInExternallyAsync(new Browser(start =>
+        {
+            challenge = System.Web.HttpUtility.ParseQueryString(start.Query)["challenge"];
+            start.AbsolutePath.ShouldBe("/sign-in/external/app/google");
+            return new Dictionary<string, string> { ["code"] = "c", ["state"] = StateOf(start) };
+        }), endpoints, "google", Ct)).ShouldBeNull();
+        session.IsSignedIn.ShouldBeTrue();
+        string s256 = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(sentVerifier!))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        s256.ShouldBe(challenge);
+    }
+
+    private static string StateOf(Uri start) => System.Web.HttpUtility.ParseQueryString(start.Query)["state"]!;
+
+    private sealed class Browser(Func<Uri, Dictionary<string, string>> answer) : IExternalAuthenticator
+    {
+        public bool IsSupported => true;
+
+        public Task<IReadOnlyDictionary<string, string>?> AuthenticateAsync(Uri start, Uri callback, CancellationToken cancellationToken = default)
+        {
+            (callback.Scheme, callback.Host).ShouldBe(("org.brighttime.app", "external"));
+            return Task.FromResult<IReadOnlyDictionary<string, string>?>(answer(start));
+        }
+    }
+
     private sealed class DecliningAuthenticator : IPasskeyAuthenticator
     {
         public bool IsSupported => true;

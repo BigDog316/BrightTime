@@ -8,6 +8,8 @@
     <Project Path="src/BrightTime.Localisation/BrightTime.Localisation.csproj" />
     <Project Path="src/BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
+    <Project Path="src/BrightTime.Modules.Enrollment.Contracts/BrightTime.Modules.Enrollment.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Enrollment/BrightTime.Modules.Enrollment.csproj" />
     <Project Path="src/BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
     <Project Path="src/BrightTime.Modules.Notifications.Contracts/BrightTime.Modules.Notifications.Contracts.csproj" />

@@ -62,7 +62,7 @@ is merged (`cec1ed6`).
   - Passkeys work through the API, sharing the web's store and relying party.
   - In the app: a terms page, "Sign in with a passkey", and a passkeys page. Android uses
     Credential Manager (compiled, not run on a device).
-- **Shared key ring, terms sweep, passwords from the app** (D39, proposed):
+- **Shared key ring, terms sweep, passwords from the app** (D39):
   - The data protection keys are in `platform.data_protection_key`, encrypted under
     `Security:Keys:data-protection`, which production must set in both hosts.
   - The worker recomputes capabilities left stale by a terms change.
@@ -71,8 +71,7 @@ is merged (`cec1ed6`).
 
 ## Waiting on Sam
 
-Every decision through D38 is accepted (D30 and D31 on 2026-10-19, D32 to D38 on 2026-10-20).
-**D39 (shared key ring, terms sweep, passwords from the app) is proposed.**
+Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 

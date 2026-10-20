@@ -1026,7 +1026,7 @@ docs/plan/05's `/auth/passkeys` routes, which T21 prefers for young people.
     buttons stay hidden on iOS.
   - **Several API instances** need shared data protection keys (above). *Done in D39.*
 
-### D39 — A shared, encrypted key ring, the terms sweep, and passwords from the app (**proposed 2026-10-20; implemented, reversible**)
+### D39 — A shared, encrypted key ring, the terms sweep, and passwords from the app (**accepted 2026-10-20**)
 
 Three loose ends from D37 and D38.
 - **The key ring** (ASP.NET Core data protection, which seals cookies, antiforgery tokens and

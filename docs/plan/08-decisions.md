@@ -692,7 +692,7 @@ M2's consent core, on the schema the plan laid down. Q3 was answered as recommen
 - **Email plus** (the consent email and its confirmation) came next, in D34, once account
   mail and localisation had moved out of the web host.
 
-### D32 — Field-encryption keys: a vault reference per version, a derived key per tenant (**proposed 2026-10-19; implemented, reversible**)
+### D32 — Field-encryption keys: a vault reference per version, a derived key per tenant (**accepted 2026-10-20**)
 
 The schema encrypts fields such as `push_device.token_enc` with AES-256-GCM in the
 application (07-threat-model). Until now, no host had a key provider.
@@ -714,7 +714,7 @@ application (07-threat-model). Until now, no host had a key provider.
 - **Limit:** destroying one tenant's data by destroying its key needs a wrapped key per
   tenant, not derivation. That provider can replace this one if offboarding requires it.
 
-### D33 — The app's personal data, reminders and notifications (**proposed 2026-10-19; implemented, reversible**)
+### D33 — The app's personal data, reminders and notifications (**accepted 2026-10-20**)
 
 - **Personal data on the server:** saved listings, interests, a search anchor and a feed,
   under `/me/*`.
@@ -748,7 +748,7 @@ application (07-threat-model). Until now, no host had a key provider.
   - Email delivery, which waits on the shared mail library.
   - SMS, which waits on Q9.
 
-### D34 — Shared words and mail, email plus, and registration from the app (**proposed 2026-10-19; implemented, reversible**)
+### D34 — Shared words and mail, email plus, and registration from the app (**accepted 2026-10-20**)
 
 M2's third slice: what the API host and the app need from the web host, and the email-plus
 round trip D31 left for it.

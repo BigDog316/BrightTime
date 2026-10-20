@@ -48,11 +48,9 @@ is merged (`cec1ed6`).
 
 ## Waiting on Sam
 
-Every decision through D31 is accepted (D30 and D31 on 2026-10-19). Q3 is answered (email plus, with a signed-form
-fallback), and the youth 30-minute refresh idle stays for now.
+Every decision through D34 is accepted (D30 and D31 on 2026-10-19, D32 to D34 on 2026-10-20).
+Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 
-- **Accept or reject D32** (keys), **D33** (personal data, reminders, notifications) **and
-  D34** (shared words and mail, email plus, registration).
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a
   child's information. Also review the draft consent texts (`ConsentDisclosures`) and the
   consent, confirmation and registration emails (each catalogue's `@@drafts`) before launch.

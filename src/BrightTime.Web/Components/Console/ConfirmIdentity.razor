@@ -11,7 +11,7 @@
 
 <h1>@T["account.confirm.title"]</h1>
 
-<p>@T.Format("account.confirm.explain", ("name", Localisation.Text.Name(User.Identity?.Name ?? "")))</p>
+<p>@T.Format("account.confirm.explain", ("name", BrightTime.Localisation.Text.Name(User.Identity?.Name ?? "")))</p>
 
 @if (_failed)
 {

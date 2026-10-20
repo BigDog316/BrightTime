@@ -13,14 +13,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The interface strings. WithCulture=false: a file named zh-Hans.json is a catalogue, not a satellite resource. -->
-    <EmbeddedResource Include="Localisation/Strings/*.json" WithCulture="false" LogicalName="BrightTime.Strings.%(Filename)%(Extension)" />
-    <Content Remove="Localisation/Strings/*.json" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="../BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
     <ProjectReference Include="../BrightTime.Hosting/BrightTime.Hosting.csproj" />
+    <ProjectReference Include="../BrightTime.Localisation/BrightTime.Localisation.csproj" />
     <ProjectReference Include="../BrightTime.Ui.Shared/BrightTime.Ui.Shared.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
@@ -33,6 +28,9 @@
     <Using Include="BrightTime.Hosting.Auditing" />
     <Using Include="BrightTime.Hosting.Auth" />
     <Using Include="BrightTime.Hosting.Tenancy" />
+    <Using Include="BrightTime.Hosting.Mail" />
+    <!-- Text and the catalogue, shared with the API host and the app since M2. -->
+    <Using Include="BrightTime.Localisation" />
   </ItemGroup>
 
 </Project>

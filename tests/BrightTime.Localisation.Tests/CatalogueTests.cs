@@ -1,8 +1,7 @@
 using System.Text.RegularExpressions;
 using BrightTime.SharedKernel.Primitives;
-using BrightTime.Web.Localisation;
 
-namespace BrightTime.Web.Tests.Localisation;
+namespace BrightTime.Localisation.Tests;
 
 /// <summary>
 /// The shipped catalogue, held to its contract: every locale complete, every translation using
@@ -57,6 +56,31 @@ public sealed partial class CatalogueTests
         Shipped.Metadata[locale]["locale"].ShouldBe(locale);
         Shipped.Metadata[locale].ShouldContainKey("review");
     }
+
+    /// <summary>
+    /// <c>@@drafts</c> lists the keys (or key prefixes ending in '.') whose wording is not yet
+    /// approved: legal copy waiting for counsel as well as a translator (Q13). The list is how a
+    /// launch check finds them, so it must name real strings and be the same in every locale.
+    /// </summary>
+    [Fact]
+    public void Draft_strings_are_named_alike_in_every_locale_and_exist()
+    {
+        string[] english = Drafts(Locale.English.Code);
+        english.ShouldNotBeEmpty();
+        foreach (string locale in Shipped.LocaleCodes)
+        {
+            Drafts(locale).ShouldBe(english, $"{locale} flags different drafts from English");
+            Shipped.Metadata[locale].ShouldContainKey("drafts_review");
+        }
+
+        english.Where(d => !Shipped.Keys.Any(k => d.EndsWith('.') ? k.StartsWith(d, StringComparison.Ordinal) : k == d))
+            .ShouldBeEmpty("a draft flag that names no string flags nothing");
+    }
+
+    private static string[] Drafts(string locale) =>
+        Shipped.Metadata[locale].TryGetValue("drafts", out string? drafts)
+            ? [.. drafts.Split(' ', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal)]
+            : [];
 
     [Fact]
     public void No_string_points_a_direction_that_flips_in_arabic()

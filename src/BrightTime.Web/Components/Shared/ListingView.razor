@@ -196,7 +196,7 @@
                         <p class="place-name" dir="auto">@p.Name</p>
                         @if (HoodCode(p) is { } hoodCode && p.NeighbourhoodName is { } hoodName)
                         {
-                            <p class="note"><a href="/neighbourhoods/@hoodCode">@T.Format("org.more_in_area", ("area", Localisation.Text.Name(hoodName)))</a></p>
+                            <p class="note"><a href="/neighbourhoods/@hoodCode">@T.Format("org.more_in_area", ("area", BrightTime.Localisation.Text.Name(hoodName)))</a></p>
                         }
                         @if (p.IsAddressPublic)
                         {
@@ -212,7 +212,7 @@
                             <p>
                                 @if (p.NeighbourhoodName is { } hood)
                                 {
-                                    @T.Format("listing.places.area", ("area", Localisation.Text.Name(hood)))
+                                    @T.Format("listing.places.area", ("area", BrightTime.Localisation.Text.Name(hood)))
                                     @(" ")
                                 }
                                 @T["listing.places.address_after_registering"]
@@ -302,7 +302,7 @@
     private bool IsJob => l.Kind == ListingKind.Job;
 
     /// <summary>The organisation's name, isolated for use inside a sentence.</summary>
-    private string Org => Localisation.Text.Name(l.OrganisationName);
+    private string Org => BrightTime.Localisation.Text.Name(l.OrganisationName);
 
     /// <summary>
     /// A lang attribute only where the content's language differs from the page's, so screen

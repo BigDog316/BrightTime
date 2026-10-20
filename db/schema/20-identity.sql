@@ -200,12 +200,23 @@ create table guardian_link (
   revoked_at          timestamptz,
   revoked_reason      text,
   created_at          timestamptz not null default now(),
+  -- Email plus (D31): the SHA-256 of the single-use token in the guardian's consent email,
+  -- never the token. Only a pending link has one; verifying (by either method) or revoking
+  -- clears it, and a new email replaces it.
+  email_token_hash       bytea,
+  email_token_issued_at  timestamptz,
+  email_token_expires_at timestamptz,
   constraint ux_guardian_link unique (guardian_user_id, child_user_id),
   constraint ck_guardian_link_self check (guardian_user_id <> child_user_id),
   constraint ck_guardian_relationship check (relationship in
     ('parent','legal_guardian','foster_parent','kinship_caregiver','case_worker','other')),
   constraint ck_guardian_status check (status in ('pending','verified','rejected','revoked','expired')),
   constraint ck_guardian_verified check ((status = 'verified') = (verified_at is not null)),
+  constraint ck_guardian_email_token check (
+    (email_token_hash is null) = (email_token_issued_at is null)
+    and (email_token_hash is null) = (email_token_expires_at is null)
+    and (email_token_hash is null or (status = 'pending' and revoked_at is null
+                                      and email_token_expires_at > email_token_issued_at))),
   constraint ck_guardian_method check (verification_method is null or verification_method in
     ('email_plus','payment_card_verification','government_id_match','signed_form_review','org_attested','district_roster'))
 );

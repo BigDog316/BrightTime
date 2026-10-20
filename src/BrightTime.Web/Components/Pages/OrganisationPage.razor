@@ -82,11 +82,11 @@
                             }
                             else if (Hood(s.NeighbourhoodId) is { } hood)
                             {
-                                <p>@T.Format("listing.places.area", ("area", Localisation.Text.Name(hood.Name))) @T["listing.places.address_after_registering"]</p>
+                                <p>@T.Format("listing.places.area", ("area", BrightTime.Localisation.Text.Name(hood.Name))) @T["listing.places.address_after_registering"]</p>
                             }
                             @if (Hood(s.NeighbourhoodId) is { } area)
                             {
-                                <p class="note"><a href="/neighbourhoods/@area.Code">@T.Format("org.more_in_area", ("area", Localisation.Text.Name(area.Name)))</a></p>
+                                <p class="note"><a href="/neighbourhoods/@area.Code">@T.Format("org.more_in_area", ("area", BrightTime.Localisation.Text.Name(area.Name)))</a></p>
                             }
                             @if (s.TransitNote is { Length: > 0 } transit)
                             {

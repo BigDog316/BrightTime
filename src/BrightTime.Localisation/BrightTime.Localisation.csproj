@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The interface's words: the six catalogues, the ICU subset they are written in, and Text,
+    which renders them with a tenant's wording overrides. Shared by the web host, the API host
+    (account and consent mail) and the MAUI app (M2), so it depends on the shared kernel and
+    logging abstractions only: nothing here may need ASP.NET Core, EF or a database. Where
+    overrides come from is the host's business (IWordingOverrides).
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WithCulture=false: a file named zh-Hans.json is a catalogue, not a satellite resource. -->
+    <EmbeddedResource Include="Strings/*.json" WithCulture="false" LogicalName="BrightTime.Strings.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

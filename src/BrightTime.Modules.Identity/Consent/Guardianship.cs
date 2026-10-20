@@ -15,6 +15,25 @@ public sealed record GuardianLinkView(Guid Id, string Relationship, string Statu
 
 public sealed record ConsentView(ConsentScope Scope, string Method, DateTimeOffset GrantedAt);
 
+/// <summary>
+/// The guardian's consent email (email plus, D31): to whom, about which child, and the
+/// single-use token that answers it. The token is in the email only; the database holds its hash.
+/// </summary>
+public sealed record ConsentEmail(Guid LinkId, UserId ChildId, string GuardianEmail, string? GuardianLocale, string ChildGivenName, string Token, DateTimeOffset ExpiresAt)
+{
+    /// <summary>Never the token or the address, so a logged value gives nothing away.</summary>
+    public override string ToString() => $"ConsentEmail {{ LinkId = {LinkId} }}";
+}
+
+/// <summary>The confirmatory email after email-plus consent: the "plus".</summary>
+public sealed record ConsentConfirmation(Guid LinkId, UserId ChildId, string GuardianEmail, string? GuardianLocale, string ChildGivenName)
+{
+    public override string ToString() => $"ConsentConfirmation {{ LinkId = {LinkId} }}";
+}
+
+/// <summary>A child profile just made, and the consent email its guardian is to be sent.</summary>
+public sealed record NewChild(ChildView Child, ConsentEmail ConsentEmail);
+
 /// <summary>A child profile as its guardian sees it.</summary>
 public sealed record ChildView(
     UserId Id,
@@ -46,6 +65,13 @@ public sealed record ChildView(
 /// <c>account</c> consent and activates it: the schema refuses an active child account without
 /// that row (<c>identity.enforce_child_consent</c>).
 /// </para>
+/// <para>
+/// Email plus (16 CFR 312.5(b)(2)(vi)): making a profile issues a single-use token for the
+/// guardian's consent email, kept as a SHA-256 hash on the link. The guardian answers it while
+/// signed in as themselves (<see cref="VerifyByEmailAsync"/>), so a forwarded email is no use
+/// to anyone else; the host then sends the confirmatory email. A signed form reviewed in person
+/// is the fallback (<see cref="AttestSignedFormAsync"/>).
+/// </para>
 /// </remarks>
 public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, AuditTrail audit, IAuditRequestInfo request, IClock clock)
 {
@@ -58,52 +84,72 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
     public const string ConsentGranted = "consent.granted";
     public const string ConsentRevoked = "consent.revoked";
 
+    /// <summary>Recorded by the host once a consent email has gone (or failed to).</summary>
+    public const string ConsentEmailSent = "consent.email_sent";
+
+    /// <summary>Recorded by the host once the confirmatory email has gone (or failed to).</summary>
+    public const string ConfirmationSent = "consent.confirmation_sent";
+
+    /// <summary>
+    /// How long a consent email's link works. Long enough for a parent to get to it after a
+    /// few working days; the token is no use without the guardian's own sign-in.
+    /// </summary>
+    public static readonly TimeSpan EmailTokenLifetime = TimeSpan.FromDays(3);
+
+    /// <summary>A new consent email at most this often, so the endpoint cannot be used to flood an inbox.</summary>
+    public static readonly TimeSpan EmailResendInterval = TimeSpan.FromMinutes(1);
+
+    private const int TokenBytes = 32;
+
     private TimeZoneInfo Zone => tenant.TimeZone;
 
-    /// <summary>A guardian makes a child profile. It does nothing until the guardian's link is verified.</summary>
-    public Task<Result<ChildView>> CreateChildAsync(UserId guardian, string givenName, DateOnly birthMonth, string relationship, CancellationToken cancellationToken = default) =>
+    /// <summary>
+    /// A guardian makes a child profile. It does nothing until the guardian's link is verified.
+    /// Also issues the token for the consent email, which the caller sends.
+    /// </summary>
+    public Task<Result<NewChild>> CreateChildAsync(UserId guardian, string givenName, DateOnly birthMonth, string relationship, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             string name = (givenName ?? string.Empty).Trim();
             if (name.Length is 0 or > MaxGivenNameLength || name.Any(char.IsControl))
             {
-                return Result<ChildView>.Failure(Error.Validation("consent.invalid_given_name", $"A first name or nickname of 1 to {MaxGivenNameLength} characters."));
+                return Result<NewChild>.Failure(Error.Validation("consent.invalid_given_name", $"A first name or nickname of 1 to {MaxGivenNameLength} characters."));
             }
 
             if (!GuardianRelationshipKind.All.Contains(relationship))
             {
-                return Result<ChildView>.Failure(Error.Validation("consent.invalid_relationship", "One of " + string.Join(", ", GuardianRelationshipKind.All) + "."));
+                return Result<NewChild>.Failure(Error.Validation("consent.invalid_relationship", "One of " + string.Join(", ", GuardianRelationshipKind.All) + "."));
             }
 
             DateOnly today = clock.TodayIn(Zone);
             if (birthMonth.Day != 1 || birthMonth > today)
             {
-                return Result<ChildView>.Failure(Error.Validation("consent.invalid_birth_month", "The first of a month, not in the future."));
+                return Result<NewChild>.Failure(Error.Validation("consent.invalid_birth_month", "The first of a month, not in the future."));
             }
 
             AgeBand band = Age.BandFromBirthMonth(birthMonth, today);
             if (!band.IsCoppaProtected())
             {
                 // 13 and over: a young person makes their own account and consents for themselves.
-                return Result<ChildView>.Failure(Error.Validation("consent.not_under_13", "Child profiles are for children under 13."));
+                return Result<NewChild>.Failure(Error.Validation("consent.not_under_13", "Child profiles are for children under 13."));
             }
 
             AppUser? adult = await db.Users.FirstOrDefaultAsync(u => u.Id == guardian.Value, ct).ConfigureAwait(false);
             if (adult is not { AccountKind: AccountKind.Adult, Status: UserStatus.Active })
             {
-                return Result<ChildView>.Failure(Error.Forbidden("consent.not_an_adult_account", "Only an adult account can be a guardian."));
+                return Result<NewChild>.Failure(Error.Forbidden("consent.not_an_adult_account", "Only an adult account can be a guardian."));
             }
 
             if (!adult.EmailConfirmed)
             {
                 // Email plus starts from an address the guardian has shown they control.
-                return Result<ChildView>.Failure(Error.Precondition("consent.email_unconfirmed", "Confirm your email address first."));
+                return Result<NewChild>.Failure(Error.Precondition("consent.email_unconfirmed", "Confirm your email address first."));
             }
 
             int existing = await db.GuardianLinks.CountAsync(l => l.GuardianUserId == guardian.Value && l.RevokedAt == null, ct).ConfigureAwait(false);
             if (existing >= MaxChildrenPerGuardian)
             {
-                return Result<ChildView>.Failure(Error.Conflict("consent.too_many_children", "This account has as many child profiles as it can have."));
+                return Result<NewChild>.Failure(Error.Conflict("consent.too_many_children", "This account has as many child profiles as it can have."));
             }
 
             DateTimeOffset now = clock.UtcNow;
@@ -143,13 +189,114 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             // has no relationships for EF to order the inserts by.
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             db.UserClaims.Add(new AppUserClaim { UserId = childId, ClaimType = AppUserClaimType.GivenName, ClaimValue = name });
+            string token = IssueEmailToken(link, now);
             db.GuardianLinks.Add(link);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
             YouthCapabilities capabilities = await RecomputeCoreAsync(childId, ct).ConfigureAwait(false);
             await AuditAsync(ChildCreated, childId, new() { ["relationship"] = relationship }, ct).ConfigureAwait(false);
 
-            return Result<ChildView>.Success(new ChildView(child.UserId, name, birthMonth, child.Status, View(link), [], capabilities));
+            return Result<NewChild>.Success(new NewChild(
+                new ChildView(child.UserId, name, birthMonth, child.Status, View(link), [], capabilities),
+                new ConsentEmail(link.Id, child.UserId, adult.Email!, adult.Locale, name, token, link.EmailTokenExpiresAt!.Value)));
+        }, cancellationToken);
+
+    /// <summary>
+    /// A fresh consent email for a pending link: the guardian lost the first, or let it run out.
+    /// The new token replaces the old, which stops working.
+    /// </summary>
+    public Task<Result<ConsentEmail>> ResendConsentEmailAsync(UserId guardian, Guid linkId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            GuardianLink? link = await LockOwnLinkAsync(guardian, linkId, ct).ConfigureAwait(false);
+            if (link is null)
+            {
+                return Result<ConsentEmail>.Failure(LinkNotFound());
+            }
+
+            if (link.Status == GuardianLinkStatus.Verified)
+            {
+                return Result<ConsentEmail>.Failure(AlreadyVerified());
+            }
+
+            if (link.Status != GuardianLinkStatus.Pending)
+            {
+                return Result<ConsentEmail>.Failure(RevokedLinkError());
+            }
+
+            DateTimeOffset now = clock.UtcNow;
+            if (link.EmailTokenIssuedAt is { } issued && now - issued < EmailResendInterval)
+            {
+                return Result<ConsentEmail>.Failure(new Error(ErrorKind.RateLimited, "consent.email_recently_sent",
+                    "A consent email was sent a moment ago. Wait a minute before asking again."));
+            }
+
+            AppUser? adult = await ActiveGuardianAsync(guardian, ct).ConfigureAwait(false);
+            if (adult is null)
+            {
+                return Result<ConsentEmail>.Failure(NotAnAdult());
+            }
+
+            string token = IssueEmailToken(link, now);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            string name = await GivenNameAsync(link.ChildUserId, ct).ConfigureAwait(false);
+            return Result<ConsentEmail>.Success(new ConsentEmail(
+                link.Id, new UserId(link.ChildUserId), adult.Email!, adult.Locale, name, token, link.EmailTokenExpiresAt!.Value));
+        }, cancellationToken);
+
+    /// <summary>
+    /// The guardian answers their consent email (email plus): verifies the link, records the
+    /// <c>account</c> consent to the disclosure the email carried, and activates the profile.
+    /// The caller sends the confirmatory email this returns.
+    /// </summary>
+    /// <remarks>
+    /// The caller must be the link's guardian, signed in: anyone else holding the email gets
+    /// nothing from it. A wrong, replaced or spent token reads the same; only the right token
+    /// says it has run out. The link is locked for the check, so a double tap verifies once.
+    /// </remarks>
+    public Task<Result<ConsentConfirmation>> VerifyByEmailAsync(UserId guardian, Guid linkId, string? token, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            GuardianLink? link = await LockOwnLinkAsync(guardian, linkId, ct).ConfigureAwait(false);
+            if (link is null)
+            {
+                return Result<ConsentConfirmation>.Failure(LinkNotFound());
+            }
+
+            if (link.Status == GuardianLinkStatus.Verified)
+            {
+                return Result<ConsentConfirmation>.Failure(AlreadyVerified());
+            }
+
+            if (link.Status != GuardianLinkStatus.Pending)
+            {
+                return Result<ConsentConfirmation>.Failure(RevokedLinkError());
+            }
+
+            if (link.EmailTokenHash is not { } stored || !TryDecodeToken(token, out byte[] presented)
+                || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(presented), stored))
+            {
+                return Result<ConsentConfirmation>.Failure(Error.Forbidden("consent.token_invalid",
+                    "That consent link is not valid. Use the newest email, or ask for another."));
+            }
+
+            if (clock.UtcNow >= link.EmailTokenExpiresAt)
+            {
+                return Result<ConsentConfirmation>.Failure(Error.Precondition("consent.token_expired",
+                    "That consent link has run out. Ask for a new email."));
+            }
+
+            // Email plus rests on an address the guardian still controls.
+            AppUser? adult = await ActiveGuardianAsync(guardian, ct).ConfigureAwait(false);
+            if (adult is null)
+            {
+                return Result<ConsentConfirmation>.Failure(NotAnAdult());
+            }
+
+            await VerifyCoreAsync(link, VerificationMethod.EmailPlus, null, ct).ConfigureAwait(false);
+            string name = await GivenNameAsync(link.ChildUserId, ct).ConfigureAwait(false);
+            return Result<ConsentConfirmation>.Success(new ConsentConfirmation(
+                link.Id, new UserId(link.ChildUserId), adult.Email!, adult.Locale, name));
         }, cancellationToken);
 
     /// <summary>
@@ -291,6 +438,7 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             // ck_guardian_verified: verified_at is set exactly while the link is verified. When
             // and how it was verified stays on record in the audit log (consent.link_verified).
             link.VerifiedAt = null;
+            ClearEmailToken(link);
 
             List<ParentalConsent> given = await db.ParentalConsents
                 .Where(c => c.GuardianLinkId == link.Id && c.RevokedAt == null)
@@ -351,6 +499,9 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
             link.VerifiedAt = now;
             link.VerifiedBy = verifiedBy?.Value;
         }
+
+        // Spent, whichever way the link was verified.
+        ClearEmailToken(link);
 
         if (!await HasLiveAccountConsentAsync(link.ChildUserId, now, ct).ConfigureAwait(false))
         {
@@ -420,6 +571,62 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
         UserAgentHash = request.UserAgentHash,
     };
 
+    /// <summary>Mints a token for the consent email and keeps its hash on the link, replacing any earlier one.</summary>
+    private static string IssueEmailToken(GuardianLink link, DateTimeOffset now)
+    {
+        byte[] secret = RandomNumberGenerator.GetBytes(TokenBytes);
+        link.EmailTokenHash = SHA256.HashData(secret);
+        link.EmailTokenIssuedAt = now;
+        link.EmailTokenExpiresAt = now + EmailTokenLifetime;
+        return Convert.ToBase64String(secret).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static void ClearEmailToken(GuardianLink link)
+    {
+        link.EmailTokenHash = null;
+        link.EmailTokenIssuedAt = null;
+        link.EmailTokenExpiresAt = null;
+    }
+
+    private static bool TryDecodeToken(string? token, out byte[] secret)
+    {
+        secret = [];
+        if (string.IsNullOrEmpty(token) || token.Length > 64)
+        {
+            return false;
+        }
+
+        string base64 = token.Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight(base64.Length + ((4 - (base64.Length % 4)) % 4), '=');
+        byte[] buffer = new byte[48];
+        if (!Convert.TryFromBase64String(base64, buffer, out int written) || written != TokenBytes)
+        {
+            return false;
+        }
+
+        secret = buffer[..written];
+        return true;
+    }
+
+    /// <summary>The guardian's own open link, locked for the rest of the transaction.</summary>
+    private async Task<GuardianLink?> LockOwnLinkAsync(UserId guardian, Guid linkId, CancellationToken ct)
+    {
+        List<GuardianLink> locked = await db.GuardianLinks
+            .FromSql($"select * from identity.guardian_link where id = {linkId} for update")
+            .ToListAsync(ct).ConfigureAwait(false);
+        return locked is [{ } link] && link.GuardianUserId == guardian.Value && link.RevokedAt is null ? link : null;
+    }
+
+    private Task<AppUser?> ActiveGuardianAsync(UserId guardian, CancellationToken ct) =>
+        db.Users.AsNoTracking().FirstOrDefaultAsync(
+            u => u.Id == guardian.Value && u.AccountKind == AccountKind.Adult && u.Status == UserStatus.Active && u.EmailConfirmed && u.Email != null, ct);
+
+    private async Task<string> GivenNameAsync(Guid child, CancellationToken ct) =>
+        await db.UserClaims.AsNoTracking()
+            .Where(c => c.UserId == child && c.ClaimType == AppUserClaimType.GivenName)
+            .Select(c => c.ClaimValue)
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false) ?? string.Empty;
+
     private Task<GuardianLink?> VerifiedLinkAsync(UserId guardian, UserId child, CancellationToken ct) =>
         db.GuardianLinks.FirstOrDefaultAsync(
             l => l.GuardianUserId == guardian.Value && l.ChildUserId == child.Value
@@ -473,6 +680,18 @@ public sealed class Guardianship(IdentityDbContext db, ITenantContext tenant, Au
         }, ct);
 
     private static GuardianLinkView View(GuardianLink l) => new(l.Id, l.Relationship, l.Status, l.VerificationMethod, l.VerifiedAt);
+
+    private static Error LinkNotFound() =>
+        Error.NotFound("consent.link_not_found", "You have no open link with that id.");
+
+    private static Error RevokedLinkError() =>
+        Error.Conflict("consent.link_revoked", "This link was revoked; the guardian makes a new one.");
+
+    private static Error AlreadyVerified() =>
+        Error.Conflict("consent.already_verified", "This link is already verified.");
+
+    private static Error NotAnAdult() =>
+        Error.Forbidden("consent.not_an_adult_account", "Only an adult account can be a guardian.");
 
     private static Error NotYourChild() =>
         Error.Forbidden("consent.not_guardian", "You are not this child's verified guardian.");

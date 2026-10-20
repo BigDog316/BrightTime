@@ -1,19 +1,24 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
+using BrightTime.Abstractions.Messaging;
 using BrightTime.Infrastructure.Security;
 using BrightTime.Seed;
 using BrightTime.Seed.Kettle;
 using BrightTime.SharedKernel.Time;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace BrightTime.Api.Tests;
 
 /// <summary>
 /// The API host against a seeded database of its own (<c>brighttime_apitest</c>), addressed as
-/// the Kettle tenant's host, with test-only signing and audit keys.
+/// the Kettle tenant's host, with test-only signing and audit keys. Mail is captured, not sent.
 /// </summary>
 public sealed class ApiFixture : IAsyncLifetime
 {
@@ -27,6 +32,8 @@ public sealed class ApiFixture : IAsyncLifetime
     public string? SuperuserConnection { get; } = Environment.GetEnvironmentVariable("BRIGHTTIME_TEST_CONNECTION");
 
     public bool IsAvailable => SuperuserConnection is not null;
+
+    public CapturedMail Mail { get; } = new();
 
     public string Connection => new NpgsqlConnectionStringBuilder(SuperuserConnection) { Database = DatabaseName }.ConnectionString;
 
@@ -59,6 +66,7 @@ public sealed class ApiFixture : IAsyncLifetime
             b.UseSetting("Auth:Tokens:SigningKeys:0:Id", "test-1");
             b.UseSetting("Auth:Tokens:SigningKeys:0:Key", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
             b.UseSetting("Auth:SignInAttemptsPerMinute", "1000");
+            b.ConfigureTestServices(s => s.AddSingleton<IEmailSender>(Mail));
         });
     }
 
@@ -160,6 +168,50 @@ public sealed class ApiFixture : IAsyncLifetime
             """, connection);
         await command.ExecuteNonQueryAsync(ct);
     }
+}
+
+/// <summary>Captures outgoing email so a test can read the link a person would follow.</summary>
+public sealed partial class CapturedMail : IEmailSender
+{
+    private readonly ConcurrentQueue<EmailMessage> _sent = new();
+
+    public Task<DeliveryReceipt> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
+    {
+        _sent.Enqueue(message);
+        return Task.FromResult(new DeliveryReceipt(true, Guid.NewGuid().ToString("N")));
+    }
+
+    public IReadOnlyList<EmailMessage> To(string address) =>
+        [.. _sent.Where(m => string.Equals(m.To, address, StringComparison.OrdinalIgnoreCase))];
+
+    /// <summary>The newest message to an address once there are more than <paramref name="alreadySeen"/>, waiting briefly: mail is sent after the response.</summary>
+    public async Task<EmailMessage> WaitForAsync(string address, int alreadySeen = 0)
+    {
+        for (int i = 0; i < 100; i++)
+        {
+            IReadOnlyList<EmailMessage> messages = To(address);
+            if (messages.Count > alreadySeen)
+            {
+                return messages[^1];
+            }
+
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+
+        throw new ShouldAssertException($"No email number {alreadySeen + 1} reached {address}.");
+    }
+
+    /// <summary>The guardian link and token a consent email's link carries.</summary>
+    public static (Guid Link, string Token) ConsentLink(EmailMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        Match m = ConsentLinkPattern().Match(message.TextBody);
+        m.Success.ShouldBeTrue("The email has no consent link.");
+        return (Guid.Parse(m.Groups[1].Value), Uri.UnescapeDataString(m.Groups[2].Value));
+    }
+
+    [GeneratedRegex(@"/app/guardian-links/([0-9a-f-]{36})/verify#token=([A-Za-z0-9_%-]+)")]
+    private static partial Regex ConsentLinkPattern();
 }
 
 public sealed record TokenPair(string AccessToken, string TokenType, int ExpiresIn, string RefreshToken, DateTimeOffset RefreshTokenExpiresAt);

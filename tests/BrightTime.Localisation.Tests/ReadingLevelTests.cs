@@ -1,8 +1,7 @@
 using System.Text.RegularExpressions;
 using BrightTime.SharedKernel.Primitives;
-using BrightTime.Web.Localisation;
 
-namespace BrightTime.Web.Tests.Localisation;
+namespace BrightTime.Localisation.Tests;
 
 /// <summary>
 /// The plan's reading-level target (docs/plan/06-screens.md): Flesch-Kincaid grade 8 or below on

@@ -128,9 +128,22 @@ GET    /api/v1/guardian-links
 `GET /children/{id}`; `POST /children/{id}/consents` (scope and the disclosure hash shown);
 `DELETE /children/{id}/consents/{scope}`; `POST /guardian-links/{id}/revoke`; and
 `GET /consent/disclosures`, which gives each scope's text, hash and accepted methods. An organiser
-verifies a link with `POST /organiser/guardian-links/{id}/attest`. Still to come: registration,
-the email-plus round trip (`/guardian-links/{id}/verify`), and export and delete requests. Health, outside the
+verifies a link with `POST /organiser/guardian-links/{id}/attest`. Health, outside the
 API's versioning: `GET /health/live` and `GET /health/ready`.
+
+*Built (2026-10-19, D32):*
+- `POST /auth/register {email}`: an adult account, for a guardian. It answers 202 for any
+  well-formed address, and sends the set-password link after the response.
+- `POST /guardian-links/{id}/verify {token}`: email plus. The guardian, signed in, sends the
+  token from the consent email that making a child profile sent them. It answers with the
+  child, now active, and a confirmatory email follows. A bad token gets 403
+  `consent.token_invalid`, an expired one 412 `consent.token_expired`, and a verified link
+  409 `consent.already_verified`.
+- `POST /guardian-links/{id}/consent-email`: a new consent email that replaces the last
+  (202), at most once a minute (429).
+
+Still to come: youth (13+) registration, passwords and passkeys through the API, and export
+and delete requests.
 
 Consent scopes are the enum in `identity.parental_consent.scope`:
 `account`, `enrollment`, `attendance_photo`, `community_participation`,

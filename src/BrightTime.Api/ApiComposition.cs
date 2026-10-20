@@ -5,6 +5,8 @@ using BrightTime.Api.Public;
 using BrightTime.Hosting.Auditing;
 using BrightTime.Hosting.Auth;
 using BrightTime.Hosting.Health;
+using BrightTime.Hosting.Localisation;
+using BrightTime.Hosting.Mail;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
@@ -32,7 +34,8 @@ namespace BrightTime.Api;
 
 /// <summary>
 /// Wires the API host: two logins (the application's and the authentication path's), tenant
-/// resolution by host, bearer tokens, the audit trail, rate limits and health.
+/// resolution by host, bearer tokens, the audit trail, account and consent mail, rate limits
+/// and health.
 /// </summary>
 /// <remarks>
 /// <c>ConnectionStrings:App</c> logs in as a member of <c>brighttime_app</c>, under the tenant
@@ -94,7 +97,14 @@ public static class ApiComposition
         services.AddSingleton(sp => new AccountReader(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
         services.AddSingleton(sp => new PasswordAccounts(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
         services.AddSingleton(sp => new TokenSessions(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey), sp.GetRequiredService<IClock>()));
+        services.AddSingleton(sp => new AccountProvisioning(sp.GetRequiredKeyedService<NpgsqlDataSource>(AuthDataSourceKey)));
         services.AddScoped<BrightTimePrincipalFactory>();
+
+        // Account and consent mail (Email:*), composed from the shared catalogue with the
+        // tenant's wording, and sent after the response.
+        services.AddBrightTimeText(hasDatabase: true);
+        services.AddBrightTimeEmail(configuration);
+        services.AddAccountMail();
 
         services.Configure<TenancyOptions>(configuration.GetSection(TenancyOptions.SectionName));
         services.AddSingleton(sp => new SqlTenantLookup(sp.GetRequiredService<NpgsqlDataSource>()));

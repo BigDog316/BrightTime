@@ -5,6 +5,7 @@
     <Project Path="src/BrightTime.Hosting/BrightTime.Hosting.csproj" />
     <Project Path="src/BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
     <Project Path="src/BrightTime.Jobs/BrightTime.Jobs.csproj" />
+    <Project Path="src/BrightTime.Localisation/BrightTime.Localisation.csproj" />
     <Project Path="src/BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
     <Project Path="src/BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
@@ -25,6 +26,7 @@
     <Project Path="tests/BrightTime.E2E.Tests/BrightTime.E2E.Tests.csproj" />
     <Project Path="tests/BrightTime.Infrastructure.Tests/BrightTime.Infrastructure.Tests.csproj" />
     <Project Path="tests/BrightTime.IntegrationTests/BrightTime.IntegrationTests.csproj" />
+    <Project Path="tests/BrightTime.Localisation.Tests/BrightTime.Localisation.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Directory.Tests/BrightTime.Modules.Directory.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Identity.Tests/BrightTime.Modules.Identity.Tests.csproj" />
     <Project Path="tests/BrightTime.Modules.Opportunities.Tests/BrightTime.Modules.Opportunities.Tests.csproj" />

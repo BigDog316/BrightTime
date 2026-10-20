@@ -4,7 +4,7 @@ using System.Text.Json;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Text;
 
-namespace BrightTime.Web.Localisation;
+namespace BrightTime.Localisation;
 
 /// <summary>
 /// The interface's strings, one flat JSON file per locale in <c>Localisation/Strings</c>,

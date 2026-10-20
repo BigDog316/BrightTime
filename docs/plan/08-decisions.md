@@ -369,7 +369,8 @@ files, one per locale, using a subset of ICU MessageFormat.
   - Translation tools (Crowdin, Weblate, Lokalise) read flat JSON with ICU directly.
   - A tenant override has to be checked against the shipped string's arguments, which needs
     the template parsed. Here it is.
-- **What it costs:** about 500 lines of parser, catalogue and service (`BrightTime.Web/Localisation`),
+- **What it costs:** about 500 lines of parser, catalogue and service (`BrightTime.Localisation`
+  since D32),
   tested on their own. Apostrophes are ordinary characters, unlike ICU, which quotes with them
   and turns "don't" into a silent bug.
 - **Rules CI enforces:**
@@ -688,10 +689,69 @@ M2's consent core, on the schema the plan laid down. Q3 was answered as recommen
   - Revoking a link ends every consent given through it.
   - `ck_guardian_verified` makes a revoked link drop `verified_at`, and the audit log keeps
     when and how it was verified.
-- **Not yet:** the email-plus round trip, meaning the consent email and its confirmation.
-  It needs account mail and localisation moved out of the web host into a shared library,
-  which the app needs anyway. That's the next slice. Until then, links are verified only
-  by signed form.
+- **Email plus** (the consent email and its confirmation) came next, in D32, once account
+  mail and localisation had moved out of the web host.
+
+### D32 — Shared words and mail, email plus, and registration from the app (**proposed 2026-10-19; implemented, reversible**)
+
+M2's third slice: what the API host and the app need from the web host, and the email-plus
+round trip D31 left for it.
+- **The words move to `BrightTime.Localisation`,** a new plain library. It holds the six
+  catalogues, the ICU subset, `Catalogue`, `Text` and the wording-set types. It depends on the
+  shared kernel and logging abstractions only.
+  - **Why not `BrightTime.Hosting`:** Hosting is an ASP.NET Core library over Infrastructure
+    (EF, Npgsql), and the MAUI app can reference neither. The app needs the same catalogues,
+    for D30's "why it matched" keys and for its own strings.
+  - **The server half stays in Hosting.** `Text` reads its tenant, locale and time zone through
+    `ITextContext`. Hosting adapts the tenant context to it, reads overrides from
+    `platform.resource_override` (`SqlWordingOverrides`) and registers it all with
+    `AddBrightTimeText`. The app will bring its own context, and no overrides for now.
+  - The web keeps its locale middleware, cookie and pages. The catalogue, template and
+    reading-level tests move to `tests/BrightTime.Localisation.Tests`.
+- **Account mail moves to `BrightTime.Hosting/Mail`:** `AccountMailDispatcher`, plus
+  `AddBrightTimeEmail` (`Email:*`, `SmtpEmailSender`) and `AddAccountMail`. The web's mail is
+  unchanged. The API host registers both, and compose points it at mailpit.
+- **Email plus:**
+  - **The token.** Making a child profile issues a 256-bit token. Only its SHA-256 is stored,
+    on `guardian_link` (`email_token_hash`, `email_token_issued_at`, `email_token_expires_at`).
+    `ck_guardian_email_token` allows one on a pending link only, and verifying by either
+    method, or revoking, clears it. It lasts 3 days.
+  - **The consent email** carries the `account` disclosure word for word, since its hash is
+    what the consent row records. Its link is `https://{tenant}/app/guardian-links/{id}/verify#token=…`.
+    The token is in the fragment, which no server or proxy log sees.
+  - **The answer.** `POST /api/v1/guardian-links/{id}/verify {token}` must come from that
+    link's guardian, signed in, so a forwarded email is no use to anyone else.
+    - Wrong, replaced and spent tokens are all refused the same way (403 `consent.token_invalid`).
+    - Only the right token can learn it has expired (412 `consent.token_expired`).
+    - A verified link answers 409, and the row is locked for the check, so a double tap
+      verifies once.
+  - **The plus.** On success `VerifyCoreAsync` records the `account` consent with method
+    `email_plus`. A confirmatory email then says consent was given, repeats the disclosure and
+    says how to withdraw it.
+  - Both emails are audited, as `consent.email_sent` and `consent.confirmation_sent`, with
+    whether the mail server took them.
+  - `POST /guardian-links/{id}/consent-email` replaces a lost or expired email, at most once a
+    minute (429).
+- **Registration from the app:** `POST /api/v1/auth/register {email}` answers 202 for every
+  well-formed address, as D23 does.
+  - The account is found or made (`FindOrCreateAdultAsync`), and the email composed, after
+    the response, so neither the answer nor its timing says whether the address had an account.
+  - A new account gets a set-password link. An existing one gets a reset link and a line
+    saying it already exists, in the email only its owner reads. A youth or child address
+    gets nothing.
+  - Audited as `auth.registration.requested`, with whether the account was made.
+- **Drafts (Q13):** the new email and error strings are machine-drafted in five languages and
+  listed in each catalogue's `@@drafts`, which a test keeps the same everywhere. The disclosure
+  itself stays English: translating it means a disclosure version per language, each with its
+  own hash, which waits on counsel and Q13. A non-English email says so and marks that
+  paragraph `lang="en"`.
+- **Not yet:**
+  - The app's page for `/app/guardian-links/{id}/verify`, and the app-link files
+    (`apple-app-site-association`, `assetlinks.json`). Until then the link is a 404 on the web.
+  - A forgot-password route in the API. The set-password link opens the web's
+    `/account/reset`, as D23's does.
+  - Mail is queued in process, as on the web, so a restart loses a queued email and the
+    person asks again.
 
 ## Open questions
 

@@ -17,7 +17,7 @@ namespace BrightTime.Web.Tests;
 /// The web's side of D35: the page a consent email's link opens when no app claims it, the page
 /// a claim email's link opens, and the files that let the app claim <c>/app/</c> links.
 /// </summary>
-/// <remarks>Guardians are the admins of the organisations at sorted indices 40 to 43, used by no other web test.</remarks>
+/// <remarks>The admins of the organisations at sorted indices 40 to 45, used by no other web test.</remarks>
 [Collection(ConsoleDatabase.Name)]
 public sealed partial class YouthAccountPagesTests(ConsoleFixture db)
 {
@@ -109,6 +109,34 @@ public sealed partial class YouthAccountPagesTests(ConsoleFixture db)
         await browser.GetAsync(page);
         await browser.PostAsync(page, "claim", ("token", issue.Claim.Token), ("password", StrongPassword), ("confirm", StrongPassword));
         browser.Html.ShouldContain("expired or has already been used");
+    }
+
+    [Fact]
+    public async Task Anyone_reads_the_terms_and_a_signed_in_person_agrees_on_the_web()
+    {
+        RequireDatabase();
+        using (Browser visitor = db.NewBrowser())
+        {
+            (await visitor.GetAsync("/terms")).StatusCode.ShouldBe(HttpStatusCode.OK);
+            visitor.Html.ShouldContain("We never keep your home address");
+            visitor.Html.ShouldContain("/sign-in?returnUrl=%2Fterms");
+        }
+
+        string email = Admin(44);
+        using Browser browser = db.NewBrowser();
+        await browser.SignInAsync(email);
+        await browser.GetAsync("/terms");
+        (await browser.PostAsync("/terms", "terms", ("hash", Modules.Identity.Consent.AccountTerms.Current.HashHex))).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        await browser.GetAsync("/terms");
+        browser.Html.ShouldContain("You agreed to these terms");
+        (await db.ScalarAsync<long>("select count(*) from identity.consent_record where user_id = @u and document_kind = 'terms'", ("u", UserOf(email)))).ShouldBe(1);
+
+        // A version that changed while the page was open is refused, not recorded.
+        using Browser stale = db.NewBrowser();
+        await stale.SignInAsync(Admin(45));
+        await stale.GetAsync("/terms");
+        (await stale.PostAsync("/terms", "terms", ("hash", new string('0', 64)))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        stale.Html.ShouldContain("The terms have changed");
     }
 
     [Fact]

@@ -71,6 +71,7 @@ public static class FinderServices
             services.AddBrightTimeDbContext<IdentityDbContext>(
                 connection, IdentityDbContext.SchemaName, IdentityDbContext.MigrationsHistoryTable);
             services.AddScoped<Guardianship>();
+            services.AddScoped<AccountTerms>();
 
             services.AddScoped<IDirectoryQueries, DirectoryQueries>();
             services.AddScoped<PlatformQueries>();

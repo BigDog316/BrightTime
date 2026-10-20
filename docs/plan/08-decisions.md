@@ -744,7 +744,8 @@ application (07-threat-model). Until now, no host had a key provider.
   results' "why". The `notify.*` strings join the shared catalogues with the app's own.
   *Amended by D35: the server words pushes and the inbox.*
 - **Not yet:**
-  - A real push provider: Firebase and APNs need your accounts. Until then
+  - A real push provider: Firebase and APNs need your accounts. *The server side is built in
+    D40.* Until then
     `LoggingPushSender` logs the kind and platform, never the token or content.
   - Email delivery, which waits on the shared mail library.
   - SMS, which waits on Q9.
@@ -982,6 +983,7 @@ and nothing could accept them.
 - **The app:** a terms page, linked from Account and from the "can't sign up yourself yet" line.
 - **The text is a draft.** It is plain-language, written for a 13-year-old, and English only
   until counsel reviews it and it is translated (Q13). The web shows no terms page yet.
+  *It does since D40.*
 - Audited as `account.terms_accepted`, with the version.
 
 ### D38 — Passkeys from the app (**accepted 2026-10-20**)
@@ -1057,6 +1059,28 @@ Three loose ends from D37 and D38.
   - The app asks for the link itself and no longer opens the web's form.
   - The API now checks new passwords, from a reset or a claim, against Have I Been Pwned by hash
     prefix when `Auth:CheckBreachedPasswords` is on, as the web does (D34 and D38 noted the gap).
+
+### D40 — Push through FCM, and the terms on the web (**proposed 2026-10-20; implemented, reversible**)
+
+- **FCM, ready for the account:** `FcmPushSender` sends through Firebase Cloud Messaging's HTTP
+  v1 API. It handles Android directly, and iOS through APNs once the app registers with Firebase
+  there.
+  - It is configured by `Push:Fcm:ProjectId` and `Push:Fcm:ServiceAccountJson` (the service
+    account's key file, a secret from the deployment's store). While unset, pushes are only
+    logged, as before.
+  - The OAuth access token is minted from the service account (an RS256-signed JWT exchanged at
+    Google's token endpoint, RFC 7523) and reused until 5 minutes before it runs out.
+  - A message carries the words, already in the phone's language (D35), the kind and an in-app
+    path, and nothing personal beyond that.
+- **Forgotten tokens:** `IPushSender` now says what became of a push (sent, failed, or
+  unregistered). A token FCM no longer knows (`UNREGISTERED`: the app was removed, or the token
+  was replaced) revokes that device, so nothing is pushed to it again.
+- **The app's side waits for the account:** registering for a token needs the Firebase project's
+  `google-services.json` (and `GoogleService-Info.plist` on iOS). Until then the app's
+  `IPushRegistrar` stays `NoPush`, so the inbox works and the phone gets no pushes.
+- **The terms on the web:** `/terms` shows the current terms to anyone. A signed-in person agrees
+  there as in the app, through the same `AccountTerms`, by the hash of the words shown. Every
+  page's footer links to it, and the axe gate covers it.
 
 ## Open questions
 

@@ -1,0 +1,77 @@
+@page "/terms"
+@using BrightTime.Modules.Identity.Consent
+@using BrightTime.SharedKernel.Primitives
+@inherits ConsoleComponent
+
+@* The terms of use (D37), in their exact words, for anyone; a signed-in person agrees here as in the
+   app. A young person's agreement is what lets them sign up for programs on their own. *@
+
+<PageTitle>@T["app.terms.title"] · BrightTime</PageTitle>
+
+<h1>@T["app.terms.title"]</h1>
+
+@if (T.Locale != Locale.English)
+{
+    <p class="hint">@T["email.consent.disclosure_in_english"]</p>
+}
+<div class="terms" lang="en" dir="ltr">
+    @foreach (string paragraph in AccountTerms.Current.Text.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        <p>@paragraph</p>
+    }
+</div>
+
+@if (!Availability.CanSignIn)
+{
+    @* No sign-in on this site: the words are all there is. *@
+}
+else if (User.Identity?.IsAuthenticated != true)
+{
+    <p>@T["app.terms.sign_in"]</p>
+    <p><a href="/sign-in?returnUrl=%2Fterms">@T["account.sign_in.title"]</a></p>
+}
+else if (_acceptedAt is { } at)
+{
+    <p class="notice success" role="status">@T.Format("app.terms.accepted_on", ("date", T.DateShort(at)))</p>
+}
+else
+{
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert" id="terms-error">@_problem</p>
+    }
+    <form method="post" class="editor" @formname="terms" @onsubmit="AcceptAsync">
+        <AntiforgeryToken />
+        <input type="hidden" name="hash" value="@AccountTerms.Current.HashHex" />
+        <p>@T["app.terms.why"]</p>
+        <div class="actions">
+            <button type="submit">@T["app.terms.accept"]</button>
+        </div>
+    </form>
+}
+
+@code {
+    private DateTimeOffset? _acceptedAt;
+    private string? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.CanSignIn && User.Identity?.IsAuthenticated == true && !IsPost)
+        {
+            _acceptedAt = (await Get<AccountTerms>().StateAsync(Actor, HttpContext.RequestAborted)).AcceptedAt;
+        }
+    }
+
+    private async Task AcceptAsync()
+    {
+        // The hash of the words this page showed: a version that changed meanwhile is refused.
+        Result<TermsState> accepted = await Get<AccountTerms>().AcceptAsync(Actor, FormValue("hash"), HttpContext.RequestAborted);
+        if (!accepted.IsSuccess)
+        {
+            _problem = T.Error(accepted.Error);
+            return;
+        }
+
+        Navigation.NavigateTo("/terms");
+    }
+}

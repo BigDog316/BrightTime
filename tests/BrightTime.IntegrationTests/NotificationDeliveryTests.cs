@@ -37,11 +37,14 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
     {
         public ConcurrentQueue<PushMessage> Sent { get; } = new();
 
-        public Task<bool> SendAsync(PushMessage message, CancellationToken cancellationToken)
+        public Task<PushOutcome> SendAsync(PushMessage message, CancellationToken cancellationToken)
         {
             Sent.Enqueue(message);
-            return Task.FromResult(true);
+            return Task.FromResult(Gone.Contains(message.Token) ? PushOutcome.Unregistered : PushOutcome.Sent);
         }
+
+        /// <summary>Tokens the provider says it no longer knows.</summary>
+        public HashSet<string> Gone { get; } = new(StringComparer.Ordinal);
     }
 
     [Fact]
@@ -136,6 +139,16 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
         await HandleAsync(worker, tenant, Request(user, "quiet-" + Guid.NewGuid().ToString("N")));
         (await Sql.ScalarAsync<long>(check, null, "select count(*) from notify.notification where user_id = @u", [("u", user)])).ShouldBe(2);
         push.Sent.Count.ShouldBe(2);
+
+        // Out of quiet hours again, and the provider has forgotten the Spanish phone's token: that
+        // device is revoked, and the next notification goes to the other phone alone.
+        await Sql.ExecAsync(check, null, "delete from notify.preference where user_id = @u", [("u", user)]);
+        push.Gone.Add(SpanishToken);
+        await HandleAsync(worker, tenant, Request(user, "gone-" + Guid.NewGuid().ToString("N")));
+        (await Sql.ScalarAsync<bool>(check, null, "select revoked_at is not null from notify.push_device where token_hash = @h", [("h", spanishHash)])).ShouldBeTrue();
+        int before = push.Sent.Count;
+        await HandleAsync(worker, tenant, Request(user, "after-" + Guid.NewGuid().ToString("N")));
+        push.Sent.Skip(before).ShouldHaveSingleItem().Token.ShouldBe(Token);
     }
 
     private static Modules.Platform.Contracts.Messages.NotificationRequested Request(Guid user, string dedupe) =>

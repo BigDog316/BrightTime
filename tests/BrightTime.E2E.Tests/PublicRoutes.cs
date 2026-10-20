@@ -32,6 +32,7 @@ public static class PublicRoutes
         "/account/forgot",
         "/account/reset",
         "/account/claim",
+        "/terms",
         "/app/guardian-links/00000000-0000-0000-0000-000000000001/verify",
         "/access-denied",
         "/listings/no-such-listing",

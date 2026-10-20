@@ -15,7 +15,9 @@ using BrightTime.SharedKernel.Messaging;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace BrightTime.Modules.Notifications;
@@ -36,20 +38,32 @@ public sealed record PushMessage(string Platform, string Token, string Kind, str
     public override string ToString() => $"PushMessage {{ Platform = {Platform}, Kind = {Kind} }}";
 }
 
-/// <summary>Sends a push to one device. Firebase and APNs adapters arrive with their accounts; until then pushes are logged.</summary>
+/// <summary>What became of one push.</summary>
+public enum PushOutcome
+{
+    Sent,
+
+    /// <summary>Not sent this time (the provider refused or was unreachable); the inbox still has it.</summary>
+    Failed,
+
+    /// <summary>The provider no longer knows the token: the app was removed, or the token replaced. The device is forgotten.</summary>
+    Unregistered,
+}
+
+/// <summary>Sends a push to one device: through FCM once configured (D40), else only logged.</summary>
 public interface IPushSender
 {
-    Task<bool> SendAsync(PushMessage message, CancellationToken cancellationToken);
+    Task<PushOutcome> SendAsync(PushMessage message, CancellationToken cancellationToken);
 }
 
 /// <summary>Logs that a push would go, and to which platform: never the token, never the content.</summary>
 public sealed partial class LoggingPushSender(ILogger<LoggingPushSender> logger) : IPushSender
 {
-    public Task<bool> SendAsync(PushMessage message, CancellationToken cancellationToken)
+    public Task<PushOutcome> SendAsync(PushMessage message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message);
         LogPush(logger, message.Kind, message.Platform);
-        return Task.FromResult(true);
+        return Task.FromResult(PushOutcome.Sent);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Push ({Kind}) to a {Platform} device; no push provider is configured, so nothing was sent.")]
@@ -328,7 +342,15 @@ public sealed class NotificationRequestedHandler(
             // In the phone's language, which may not be the language of whoever else uses the account.
             Text text = await words.ForAsync(device.Locale, cancellationToken).ConfigureAwait(false);
             NotificationWords said = NotificationText.Render(text, message.TitleKey, message.Arguments);
-            await push.SendAsync(new PushMessage(device.PlatformKind, token, message.Kind, said.Title, said.Body, message.DeepLink), cancellationToken).ConfigureAwait(false);
+            PushOutcome outcome = await push.SendAsync(new PushMessage(device.PlatformKind, token, message.Kind, said.Title, said.Body, message.DeepLink), cancellationToken).ConfigureAwait(false);
+            if (outcome == PushOutcome.Unregistered)
+            {
+                // The phone no longer has the app, or has a new token: stop pushing to this one.
+                DateTimeOffset now = clock.UtcNow;
+                await db.InTransactionAsync(ct => db.PushDevices
+                    .Where(d => d.Id == device.Id && d.RevokedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(d => d.RevokedAt, now), ct), cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -366,11 +388,29 @@ public static class NotificationsModule
         return services;
     }
 
-    /// <summary>The worker side: delivering requested notifications. Needs the shared catalogue and wording overrides.</summary>
-    public static IServiceCollection AddNotificationDelivery(this IServiceCollection services)
+    /// <summary>
+    /// The worker side: delivering requested notifications. Needs the shared catalogue and wording
+    /// overrides. Pushes go through FCM when <c>Push:Fcm</c> is configured (D40), else are logged.
+    /// </summary>
+    public static IServiceCollection AddNotificationDelivery(this IServiceCollection services, IConfiguration? configuration = null)
     {
         services.AddScoped<NotificationTextFactory>();
-        services.AddSingleton<IPushSender, LoggingPushSender>();
+        FcmOptions fcm = configuration?.GetSection(FcmOptions.SectionName).Get<FcmOptions>() ?? new();
+        if (fcm.IsConfigured)
+        {
+            services.TryAddSingleton(TimeProvider.System);
+            services.AddHttpClient(nameof(FcmPushSender), c => c.Timeout = TimeSpan.FromSeconds(15));
+            services.AddSingleton<IPushSender>(sp => new FcmPushSender(
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(FcmPushSender)),
+                fcm,
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<FcmPushSender>>()));
+        }
+        else
+        {
+            services.AddSingleton<IPushSender, LoggingPushSender>();
+        }
+
         services.AddMessageHandler<NotificationRequested, NotificationRequestedHandler>();
         return services;
     }

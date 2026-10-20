@@ -67,11 +67,15 @@ is merged (`cec1ed6`).
     `Security:Keys:data-protection`, which production must set in both hosts.
   - The worker recomputes capabilities left stale by a terms change.
   - `/auth/password/forgot` and `/auth/password/reset`, with the breached-password check.
+- **Push through FCM, terms on the web** (D40, proposed): `FcmPushSender` sends once
+  `Push:Fcm:*` is set, and revokes devices FCM has forgotten. The app's push registration waits
+  for the Firebase project's config files. The web has `/terms`.
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
+**D40 (push through FCM, terms on the web) is proposed.**
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 

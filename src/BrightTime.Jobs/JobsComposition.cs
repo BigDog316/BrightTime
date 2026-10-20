@@ -93,7 +93,7 @@ public static class JobsComposition
             connection, NotificationsDbContext.SchemaName, NotificationsDbContext.MigrationsHistoryTable);
         services.AddFieldEncryption(configuration, environment.IsDevelopment());
         services.AddBrightTimeText(hasDatabase: true);
-        services.AddNotificationDelivery();
+        services.AddNotificationDelivery(configuration);
 
         return services;
     }

@@ -10,7 +10,7 @@ namespace BrightTime.SharedKernel.Text;
 /// <remarks>
 /// <para>
 /// Modules return phrases rather than sentences, so they never choose a language. The host
-/// renders one in the reader's locale from its catalogue (<c>BrightTime.Web/Localisation</c>),
+/// renders one in the reader's locale from its catalogue (<c>BrightTime.Localisation</c>),
 /// where the English, and every translation, lives.
 /// </para>
 /// <para>

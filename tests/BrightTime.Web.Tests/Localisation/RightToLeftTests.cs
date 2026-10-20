@@ -11,7 +11,7 @@ public sealed partial class RightToLeftTests
     [Fact]
     public void No_stylesheet_uses_a_physical_direction()
     {
-        string src = Path.Combine(CatalogueTests.RepositoryRoot(), "src");
+        string src = Path.Combine(RepositoryRoot(), "src");
         string[] offenders =
         [
             .. Directory.EnumerateFiles(src, "*.css", SearchOption.AllDirectories)
@@ -23,6 +23,17 @@ public sealed partial class RightToLeftTests
         ];
 
         offenders.ShouldBeEmpty();
+    }
+
+    private static string RepositoryRoot()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "BrightTime.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new InvalidOperationException("Run from inside the repository.");
     }
 
     [GeneratedRegex(@"(?<![-\w])(margin|padding|border)-(left|right)\b|(?<![-\w])(left|right)\s*:|text-align\s*:\s*(left|right)|float\s*:\s*(left|right)|clear\s*:\s*(left|right)")]

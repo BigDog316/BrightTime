@@ -1,6 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Unicode;
-using BrightTime.Modules.Platform.Localisation;
+using BrightTime.Hosting.Localisation;
 using BrightTime.Web.Composition;
 
 namespace BrightTime.Web.Localisation;
@@ -15,21 +15,8 @@ public static class LocalisationServices
         // Arabic, Bengali or Chinese letter into a numeric entity: correct, and several times the
         // size, on a site meant to work on a 2G connection. Markup characters are still encoded.
         services.AddWebEncoders(o => o.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All));
-        services.AddMemoryCache();
-        services.AddSingleton(Catalogue.Load());
-        services.AddScoped<Text>();
 
         FinderOptions finder = configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>() ?? new();
-        if (finder.Mode == FinderMode.Sql)
-        {
-            services.AddScoped<ResourceOverrides>();
-            services.AddScoped<IWordingOverrides, SqlWordingOverrides>();
-        }
-        else
-        {
-            services.AddSingleton<IWordingOverrides, NoWordingOverrides>();
-        }
-
-        return services;
+        return services.AddBrightTimeText(hasDatabase: finder.Mode == FinderMode.Sql);
     }
 }

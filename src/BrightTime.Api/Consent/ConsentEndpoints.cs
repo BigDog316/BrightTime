@@ -1,6 +1,9 @@
 using System.Globalization;
 using System.Security.Claims;
 using BrightTime.Hosting.Auth;
+using BrightTime.Hosting.Mail;
+using BrightTime.Hosting.Tenancy;
+using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
@@ -12,6 +15,9 @@ namespace BrightTime.Api.Consent;
 public sealed record CreateChildRequest(string? GivenName, string? BirthMonth, string? Relationship);
 
 public sealed record GrantConsentRequest(string? Scope, string? DisclosureHash);
+
+/// <summary>The token from the guardian's consent email (the fragment of its link).</summary>
+public sealed record VerifyLinkRequest(string? Token);
 
 public sealed record LinkResponse(Guid Id, string Relationship, string Status, string? VerificationMethod, DateTimeOffset? VerifiedAt);
 
@@ -51,9 +57,17 @@ public sealed record DisclosureResponse(string Scope, string Version, string Tex
 /// <see cref="Guardianship"/>, which decides who may do what.
 /// </summary>
 /// <remarks>
-/// A guardian is any adult account. A child profile does nothing until the guardian's link is
-/// verified: by email plus (sent once account mail moves to a shared library) or by a signed
-/// form an organiser reviews in person (<c>POST /organiser/guardian-links/{id}/attest</c>).
+/// <para>
+/// A guardian is any adult account with a confirmed address. A child profile does nothing until
+/// the guardian's link is verified: by email plus, or by a signed form an organiser reviews in
+/// person (<c>POST /organiser/guardian-links/{id}/attest</c>).
+/// </para>
+/// <para>
+/// Email plus: making a profile sends the guardian a consent email with the account disclosure
+/// and a single-use link. The app answers it with <c>POST /guardian-links/{id}/verify</c>,
+/// signed in as that guardian, and a confirmatory email follows. A lost or expired email is
+/// replaced with <c>POST /guardian-links/{id}/consent-email</c>.
+/// </para>
 /// </remarks>
 public static class ConsentEndpoints
 {
@@ -72,6 +86,8 @@ public static class ConsentEndpoints
         children.MapPost("/{id:guid}/consents", GrantAsync);
         children.MapDelete("/{id:guid}/consents/{scope}", RevokeAsync);
 
+        api.MapPost("/guardian-links/{id:guid}/verify", VerifyLinkAsync).RequireAuthorization();
+        api.MapPost("/guardian-links/{id:guid}/consent-email", ResendConsentEmailAsync).RequireAuthorization();
         api.MapPost("/guardian-links/{id:guid}/revoke", RevokeLinkAsync).RequireAuthorization();
         api.MapPost("/organiser/guardian-links/{id:guid}/attest", AttestAsync).RequireAuthorization(AttestPolicy);
 
@@ -84,7 +100,14 @@ public static class ConsentEndpoints
         .Select(d => new DisclosureResponse(d.Scope.ToDbValue(), d.Version, d.Text, d.HashHex, [.. d.Methods.Order(StringComparer.Ordinal)], d.AvailableUnder13))
         .ToList());
 
-    private static async Task<IResult> CreateAsync(CreateChildRequest body, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
+    private static async Task<IResult> CreateAsync(
+        CreateChildRequest body,
+        ClaimsPrincipal user,
+        Guardianship guardianship,
+        AccountMailDispatcher mail,
+        ITenantContext tenant,
+        SiteContext site,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
         if (!DateOnly.TryParseExact(body.BirthMonth, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly month))
@@ -92,10 +115,14 @@ public static class ConsentEndpoints
             return ApiProblems.Validation(new Dictionary<string, string[]> { ["birthMonth"] = ["A month as yyyy-MM."] });
         }
 
-        Result<ChildView> made = await guardianship.CreateChildAsync(Actor(user), body.GivenName ?? string.Empty, month, body.Relationship ?? string.Empty, ct);
-        return made.IsSuccess
-            ? Results.Created($"/api/v1/children/{made.Value.Id.Value}", Child(made.Value))
-            : ApiProblems.From(made.Error);
+        Result<NewChild> made = await guardianship.CreateChildAsync(Actor(user), body.GivenName ?? string.Empty, month, body.Relationship ?? string.Empty, ct);
+        if (!made.IsSuccess)
+        {
+            return ApiProblems.From(made.Error);
+        }
+
+        mail.RequestConsent(tenant.TenantId, made.Value.ConsentEmail, SiteUrl(site), tenant.Locale);
+        return Results.Created($"/api/v1/children/{made.Value.Child.Id.Value}", Child(made.Value.Child));
     }
 
     private static async Task<IResult> ListAsync(ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct) =>
@@ -131,6 +158,51 @@ public static class ConsentEndpoints
         return revoked.IsSuccess ? Results.NoContent() : ApiProblems.From(revoked.Error);
     }
 
+    /// <summary>The guardian's answer to their consent email. Answers with the child, now active.</summary>
+    private static async Task<IResult> VerifyLinkAsync(
+        Guid id,
+        VerifyLinkRequest body,
+        ClaimsPrincipal user,
+        Guardianship guardianship,
+        AccountMailDispatcher mail,
+        ITenantContext tenant,
+        SiteContext site,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        UserId guardian = Actor(user);
+        Result<ConsentConfirmation> verified = await guardianship.VerifyByEmailAsync(guardian, id, body.Token, ct);
+        if (!verified.IsSuccess)
+        {
+            return ApiProblems.From(verified.Error);
+        }
+
+        // The "plus" of email plus: a confirmatory email to the same address.
+        mail.RequestConsentConfirmation(tenant.TenantId, verified.Value, SiteUrl(site), tenant.Locale);
+        return await guardianship.ChildAsync(guardian, verified.Value.ChildId, ct) is { } child
+            ? Results.Ok(Child(child))
+            : ApiProblems.NotFound("You have no child profile with that id.");
+    }
+
+    private static async Task<IResult> ResendConsentEmailAsync(
+        Guid id,
+        ClaimsPrincipal user,
+        Guardianship guardianship,
+        AccountMailDispatcher mail,
+        ITenantContext tenant,
+        SiteContext site,
+        CancellationToken ct)
+    {
+        Result<ConsentEmail> issued = await guardianship.ResendConsentEmailAsync(Actor(user), id, ct);
+        if (!issued.IsSuccess)
+        {
+            return ApiProblems.From(issued.Error);
+        }
+
+        mail.RequestConsent(tenant.TenantId, issued.Value, SiteUrl(site), tenant.Locale);
+        return Results.Accepted();
+    }
+
     private static async Task<IResult> RevokeLinkAsync(Guid id, ClaimsPrincipal user, Guardianship guardianship, CancellationToken ct)
     {
         Result revoked = await guardianship.RevokeLinkAsync(Actor(user), id, ct);
@@ -146,6 +218,10 @@ public static class ConsentEndpoints
     /// <summary>What the signed-in person may do, so the app gates on the server's answer rather than its own guess.</summary>
     private static async Task<IResult> CapabilitiesAsync(ClaimsPrincipal user, IIdentityQueries identity, CancellationToken ct) =>
         Results.Ok(CapabilitiesResponse.From(await identity.GetCapabilitiesAsync(Actor(user), ct)));
+
+    /// <summary>The tenant's own address, which every link in an email is built from; never the request's Host.</summary>
+    private static Uri SiteUrl(SiteContext site) =>
+        site.BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
 
     private static UserId Actor(ClaimsPrincipal user) =>
         new(user.GetUserId() ?? throw new InvalidOperationException("An authorised request has a user."));

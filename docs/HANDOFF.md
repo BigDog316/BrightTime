@@ -2,11 +2,11 @@
 
 Where the work stands, for picking it up on another machine or in a new session.
 Written 2026-10-18 at commit c97444d. Updated on the Windows machine through 2026-10-19 (M2 server
-work).
+work and the shared localisation slice, D34).
 
 ## State
 
-M1 feature slices are built, with 932 tests passing against PostgreSQL 18.6 + PostGIS 3.6.4.
+M1 feature slices are built; the full suite passes (2026-10-19, after D34) against PostgreSQL 18.6 + PostGIS 3.6.4.
 They cover tenancy, the finder, consoles, sign-in, audit, localisation, provider management,
 organiser review, the tenant-isolation matrix, the finder plan gate, the outbox, the API host
 with token auth, and health endpoints.
@@ -37,20 +37,25 @@ is merged (`cec1ed6`).
   through `LoggingPushSender` until the Firebase and Apple accounts exist.
 - **Keys** (D32): `IKeyVault` with HKDF tenant data keys. The worker also runs the job that
   recomputes capabilities on birthdays.
-- **Waiting on the localisation session:** moving localisation and account mail out of the web
-  host into a shared library. That unlocks the email-plus round trip, guardian and youth
-  registration through the API, the text of email and push messages (the `notify.*` keys), and
-  the MAUI app's own strings.
-- **Not started:** the MAUI app.
+- **Shared words and mail** (D34): the catalogues and `Text` are in
+  `BrightTime.Localisation` (no ASP.NET, so the app can use them), account mail is in
+  `BrightTime.Hosting/Mail`, and the API host sends mail. On top of that: the email-plus round
+  trip (consent email, `POST /guardian-links/{id}/verify`, confirmatory email) and
+  `POST /auth/register`.
+- **Next:** the text of push and inbox messages (the `notify.*` keys, now that the catalogues
+  are shared), youth registration, the app's page for the consent link
+  (`/app/guardian-links/{id}/verify`) and its app-link files, and the MAUI shell.
 
 ## Waiting on Sam
 
-Every decision through D31 is accepted (D30 and D31 on 2026-10-19). **D32 (keys) and D33
-(personal data, reminders, notifications) are proposed and await acceptance.** Q3 is answered (email plus, with a signed-form
+Every decision through D31 is accepted (D30 and D31 on 2026-10-19). Q3 is answered (email plus, with a signed-form
 fallback), and the youth 30-minute refresh idle stays for now.
 
+- **Accept or reject D32** (keys), **D33** (personal data, reminders, notifications) **and
+  D34** (shared words and mail, email plus, registration).
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a
-  child's information. Also review the draft consent texts (`ConsentDisclosures`) before launch.
+  child's information. Also review the draft consent texts (`ConsentDisclosures`) and the
+  consent, confirmation and registration emails (each catalogue's `@@drafts`) before launch.
 - **Open questions:**
   - Q7 (map tiles and geocoding) and Q13 (translations).
   - Q4 retention; 30 days is proposed for processed outbox rows.
@@ -92,9 +97,9 @@ These have not been asked for yet:
      schema, so this checkout tests against its own database, `brighttime_main`. Apply the
      schema to it the same way, and set `Database=brighttime_main`.
    - **API test accounts:** each API test signs in as its own seeded admin, chosen by index,
-     so parallel classes don't collide. Indices 20–29 are consent, 30–35 belong to the other
-     session, 40–44 are the personal finder and 45–49 are notifications. Pick a new range for a
-     new class.
+     so parallel classes don't collide. Indices 20–29 are consent, 30–37 are email plus and
+     registration, 40–44 are the personal finder and 45–49 are notifications. Pick a new range
+     for a new class.
    - **No connection string:** without `BRIGHTTIME_TEST_CONNECTION`, the integration project
      starts its own PostGIS container through Testcontainers, and the web and API tests skip.
 3. **Apply the schema:**
@@ -137,8 +142,14 @@ These have not been asked for yet:
   RLS tenancy is set per transaction.
 - **Schema drift.** `SchemaDriftTests` fails if a mapped table differs from the DDL in
   either direction.
-- **UI text.** New UI text goes into all six catalogues under
-  `src/BrightTime.Web/Localisation/Strings/`, or `CatalogueTests` fails.
+- **UI text.** New UI and email text goes into all six catalogues under
+  `src/BrightTime.Localisation/Strings/`, or `CatalogueTests` fails. Copy that needs legal
+  review goes in each catalogue's `@@drafts` as well.
+- **Mail in tests.** Web and API fixtures capture mail with `CapturedMail`. It is sent after
+  the response, so wait with `WaitForAsync(address, alreadySeen)`.
+- **API test accounts.** API tests each sign in as their own seeded admin:
+  `TokenAuthTests` uses 0 to 8, `ConsentApiTests` 20 to 29, `EmailPlusTests` 30 to 36, and
+  `RegistrationTests` 37.
 - **Static SSR forms.** A form's handler runs only if that form renders during its own POST.
 - **Draining queues in tests.** Tests that publish module messages drain with
   `TestHost.DrainAsync`, not `JobRunner.DrainAsync` alone.

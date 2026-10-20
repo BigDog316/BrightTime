@@ -1,9 +1,9 @@
 using System.Globalization;
-using BrightTime.Infrastructure.Tenancy;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Text;
+using Microsoft.Extensions.Logging;
 
-namespace BrightTime.Web.Localisation;
+namespace BrightTime.Localisation;
 
 /// <summary>
 /// The interface's words for this request: in its locale, with the tenant's overrides, and
@@ -18,11 +18,15 @@ namespace BrightTime.Web.Localisation;
 /// <para>
 /// A string is looked up in the tenant's override for the locale, then the catalogue for the
 /// locale, then English (override, then catalogue). <see cref="LoadAsync"/> must run first,
-/// which <see cref="LocaleMiddleware"/> does for every request, because Razor reads strings
+/// which the web host's locale middleware does for every request, because Razor reads strings
 /// synchronously.
 /// </para>
+/// <para>
+/// Whose words and which language come from <see cref="ITextContext"/>: the request's tenant on
+/// a server, the app's own region and setting on a phone.
+/// </para>
 /// </remarks>
-public sealed partial class Text(Catalogue catalogue, ITenantContext tenant, IWordingOverrides overrides, ILogger<Text> logger)
+public sealed partial class Text(Catalogue catalogue, ITextContext tenant, IWordingOverrides overrides, ILogger<Text> logger)
 {
     private static readonly IReadOnlyDictionary<string, object> NoArguments = new Dictionary<string, object>();
 

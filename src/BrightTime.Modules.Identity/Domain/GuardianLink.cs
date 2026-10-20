@@ -44,6 +44,13 @@ public sealed class GuardianLink
 
     public DateTimeOffset CreatedAt { get; init; }
 
+    /// <summary>SHA-256 of the email-plus token; the token is only ever in the guardian's email.</summary>
+    public byte[]? EmailTokenHash { get; set; }
+
+    public DateTimeOffset? EmailTokenIssuedAt { get; set; }
+
+    public DateTimeOffset? EmailTokenExpiresAt { get; set; }
+
     public bool IsVerified => Status == GuardianLinkStatus.Verified && RevokedAt is null;
 }
 

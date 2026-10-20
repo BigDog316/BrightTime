@@ -99,7 +99,7 @@
 @if (_organisation is { } org)
 {
     <p class="filter-chip">
-        @T.Format("finder.filter.organisation", ("organisation", Localisation.Text.Name(org.DisplayName)))
+        @T.Format("finder.filter.organisation", ("organisation", BrightTime.Localisation.Text.Name(org.DisplayName)))
         <a href="@Href(org: null)">@T["finder.filter.remove"]</a>
     </p>
 }

@@ -1,7 +1,6 @@
 using System.Globalization;
-using BrightTime.Web.Localisation;
 
-namespace BrightTime.Web.Tests.Localisation;
+namespace BrightTime.Localisation.Tests;
 
 public sealed class MessageTemplateTests
 {

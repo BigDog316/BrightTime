@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using BrightTime.SharedKernel.Text;
 
-namespace BrightTime.Web.Localisation;
+namespace BrightTime.Localisation;
 
 /// <summary>
 /// A catalogue string, parsed: the subset of ICU MessageFormat the interface needs.

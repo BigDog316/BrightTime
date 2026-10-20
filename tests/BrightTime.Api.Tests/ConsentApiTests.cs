@@ -163,13 +163,12 @@ public sealed class ConsentApiTests(ApiFixture api)
     public async Task Email_plus_cannot_stand_behind_a_consent_that_discloses()
     {
         RequireDatabase();
-        using HttpClient guardian = await SignedInAsync(Admin(24));
+        string email = Admin(24);
+        using HttpClient guardian = await SignedInAsync(email);
         JsonElement made = await CreateChildAsync(guardian);
         Guid id = made.GetProperty("id").GetGuid();
-        Guid link = made.GetProperty("link").GetProperty("id").GetGuid();
-        await AttestAsync(link);
-        // As if verified by email plus, which arrives with account mail in the next step.
-        await api.ExecuteAsync("update identity.guardian_link set verification_method = 'email_plus' where id = @l", ("l", link));
+        (Guid link, string token) = CapturedMail.ConsentLink(await api.Mail.WaitForAsync(email));
+        (await guardian.PostAsJsonAsync($"api/v1/guardian-links/{link}/verify", new { token }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await GrantAsync(guardian, id, ConsentScope.MediaCapture)).StatusCode.ShouldBe(HttpStatusCode.OK);
 

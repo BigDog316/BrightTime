@@ -18,6 +18,9 @@ public static class AuthAudit
     public const string SignOut = "auth.sign_out";
     public const string ResetRequested = "auth.password_reset.requested";
     public const string ResetCompleted = "auth.password_reset.completed";
+
+    /// <summary>A registration from the app reached an adult account, made for it or already there (detail <c>created</c>).</summary>
+    public const string RegistrationRequested = "auth.registration.requested";
     public const string PasskeyAdded = "auth.passkey.added";
     public const string PasskeyRemoved = "auth.passkey.removed";
     public const string ExternalConnected = "auth.external.connected";

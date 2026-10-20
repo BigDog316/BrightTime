@@ -263,8 +263,8 @@ phone on a weak connection.
 *Implemented in M1 (D20).*
 
 - **Catalogue:**
-  - One flat JSON file per locale in `src/BrightTime.Web/Localisation/Strings`, embedded in the
-    assembly.
+  - One flat JSON file per locale in `src/BrightTime.Localisation/Strings`, embedded in that
+    library, which the web host, the API host and the app share (D34).
   - Keys are stable names (`finder.results.count`), never the English, so overrides and
     translations survive edits to the English.
   - Values use a subset of ICU MessageFormat: `{name}`, `plural` with CLDR categories and

@@ -145,12 +145,10 @@ public static class ConsoleServices
         }
 
         services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
-        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
-        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        services.AddBrightTimeEmail(configuration);
         if (canSignIn)
         {
-            services.AddSingleton<AccountMailDispatcher>();
-            services.AddHostedService(sp => sp.GetRequiredService<AccountMailDispatcher>());
+            services.AddAccountMail();
         }
 
         // T21: every authentication route is rate limited per client address, on top of the

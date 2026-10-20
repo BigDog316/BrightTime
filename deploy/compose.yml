@@ -113,6 +113,9 @@ services:
         Include Error Detail=true;Max Auto Prepare=32
       ConnectionStrings__Auth: >-
         Host=postgres;Database=brighttime;Username=bt_auth_login;Password=local-only-not-a-secret;GSS Encryption Mode=Disable
+      # Registration and consent emails (D31), into mailpit like the web's.
+      Email__Host: mailpit
+      Email__Port: 1025
       Tenancy__PublicScheme: http
       Tenancy__PublicPort: 8000
       Network__TrustedNetworks__0: 172.16.0.0/12

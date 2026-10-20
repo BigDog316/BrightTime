@@ -631,7 +631,7 @@ seeded Kettle County site at `http://kettle.localhost:8000` in about 30 seconds 
   - Dev sign-in reaches the organiser console.
   - Approving a listing there projects it through the jobs container into search.
 
-### D30 — The app's public read API (**proposed 2026-10-19; implemented, reversible**)
+### D30 — The app's public read API (**accepted 2026-10-19**)
 
 `/api/v1/public/**` serves the finder to the app with no account. It covers listings
 (search and detail), collections, neighbourhoods, organisations, taxonomy and the tenant.
@@ -657,7 +657,7 @@ published.
   no page, feed or API has to remember to hide it.
 - **Not yet:** a separate OpenAPI document and CORS policy for third parties.
 
-### D31 — Child profiles and scoped parental consent (**proposed 2026-10-19; implemented, reversible**)
+### D31 — Child profiles and scoped parental consent (**accepted 2026-10-19**)
 
 M2's consent core, on the schema the plan laid down. Q3 was answered as recommended.
 - **Child profiles:** a guardian is any adult account with a confirmed email.

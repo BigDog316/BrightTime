@@ -36,10 +36,9 @@ is merged (`cec1ed6`).
 
 ## Waiting on Sam
 
-Every decision through D29 is accepted. Q3 is answered (email plus, with a signed-form
+Every decision through D31 is accepted (D30 and D31 on 2026-10-19). Q3 is answered (email plus, with a signed-form
 fallback), and the youth 30-minute refresh idle stays for now.
 
-- **Accept or reject D30** (the public read API) **and D31** (child profiles and consent).
 - **Counsel:** confirm D31's rule that email plus covers only scopes that don't disclose a
   child's information. Also review the draft consent texts (`ConsentDisclosures`) before launch.
 - **Open questions:**

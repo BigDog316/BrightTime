@@ -22,6 +22,8 @@
     <ProjectReference Include="../../src/BrightTime.Modules.Notifications.Contracts/BrightTime.Modules.Notifications.Contracts.csproj" />
     <ProjectReference Include="../../src/BrightTime.Modules.Enrollment/BrightTime.Modules.Enrollment.csproj" />
     <ProjectReference Include="../../src/BrightTime.Modules.Enrollment.Contracts/BrightTime.Modules.Enrollment.Contracts.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Attendance/BrightTime.Modules.Attendance.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Attendance.Contracts/BrightTime.Modules.Attendance.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

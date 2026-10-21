@@ -1,5 +1,6 @@
 using BrightTime.Api;
 using BrightTime.Api.Applications;
+using BrightTime.Api.Attendance;
 using BrightTime.Api.Auth;
 using BrightTime.Api.Consent;
 using BrightTime.Api.Decisions;
@@ -65,6 +66,7 @@ v1.MapEligibilityEndpoints();
 v1.MapApplicationEndpoints();
 v1.MapWaiverEndpoints();
 v1.MapDecisionEndpoints();
+v1.MapAttendanceEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

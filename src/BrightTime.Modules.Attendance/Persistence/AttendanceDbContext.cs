@@ -1,0 +1,115 @@
+using BrightTime.Infrastructure.Persistence;
+using BrightTime.Infrastructure.Tenancy;
+using Microsoft.EntityFrameworkCore;
+
+namespace BrightTime.Modules.Attendance.Persistence;
+
+// The attendance tables (db/schema/55-attendance.sql). note_enc holds AES-256-GCM ciphertext
+// under the tenant's data key (D32); only this module encrypts and decrypts it.
+
+/// <summary>One young person at one meeting. Corrections supersede; nothing is edited in place.</summary>
+public sealed class AttendanceRecordRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid OrgId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public Guid EnrollmentId { get; init; }
+
+    public DateTimeOffset OccurrenceStartsAt { get; init; }
+
+    public required string State { get; init; }
+
+    public short? MinutesAttended { get; init; }
+
+    public DateTimeOffset? CheckedInAt { get; init; }
+
+    public DateTimeOffset? CheckedOutAt { get; init; }
+
+    public required string Method { get; init; }
+
+    public Guid? RecordedBy { get; init; }
+
+    public DateTimeOffset RecordedAt { get; init; }
+
+    public string? DeviceId { get; init; }
+
+    public Guid? ClientRecordId { get; init; }
+
+    public DateTimeOffset? SyncedAt { get; init; }
+
+    public byte[]? NoteEnc { get; init; }
+
+    public Guid? SupersededBy { get; set; }
+}
+
+/// <summary>One offline batch from one device, with what became of it.</summary>
+public sealed class AttendanceSyncBatchRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public required string DeviceId { get; init; }
+
+    public Guid? SubmittedBy { get; init; }
+
+    public DateTimeOffset ReceivedAt { get; init; }
+
+    public DateTimeOffset? CapturedFrom { get; init; }
+
+    public DateTimeOffset? CapturedTo { get; init; }
+
+    public int ItemCount { get; set; }
+
+    public int AppliedCount { get; set; }
+
+    public int ConflictCount { get; set; }
+
+    public string? AppVersion { get; init; }
+}
+
+/// <summary>The Attendance module's context (M3b, D49): records and sync batches so far.</summary>
+public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> options, ITenantContext tenantContext)
+    : BrightTimeDbContext(options, tenantContext)
+{
+    public const string SchemaName = "attendance";
+    public const string MigrationsHistoryTable = "__ef_migrations_attendance";
+
+    public override string Schema => SchemaName;
+
+    public DbSet<AttendanceRecordRecord> Records => Set<AttendanceRecordRecord>();
+
+    public DbSet<AttendanceSyncBatchRecord> SyncBatches => Set<AttendanceSyncBatchRecord>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<AttendanceRecordRecord>(b =>
+        {
+            b.ToTable("attendance_record");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.EnrollmentId, x.OccurrenceStartsAt }).IsUnique().HasFilter("superseded_by is null");
+            b.HasIndex(x => new { x.DeviceId, x.ClientRecordId }).IsUnique().HasFilter("client_record_id is not null");
+            b.HasIndex(x => new { x.ListingId, x.OccurrenceStartsAt }).HasFilter("superseded_by is null");
+            b.HasIndex(x => new { x.OrgId, x.OccurrenceStartsAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<AttendanceSyncBatchRecord>(b =>
+        {
+            b.ToTable("attendance_sync_batch");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.DeviceId, x.ReceivedAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.ApplySnakeCaseNames();
+    }
+}

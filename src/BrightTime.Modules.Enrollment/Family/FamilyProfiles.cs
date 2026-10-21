@@ -536,6 +536,7 @@ public static class EnrollmentModule
         services.AddScoped<Applications.SealedAnswers>();
         services.AddScoped<Decisions.SeatLedger>();
         services.AddScoped<Decisions.Decisions>();
+        services.AddScoped<IEnrolmentQueries, Roster.EnrolmentQueries>();
         return services;
     }
 }

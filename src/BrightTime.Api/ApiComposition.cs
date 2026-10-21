@@ -12,6 +12,8 @@ using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Attendance.Persistence;
+using BrightTime.Modules.Attendance.Records;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Enrollment.Family;
@@ -90,6 +92,7 @@ public static class ApiComposition
         services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddSingleton<IListingFinder>(sp => new SqlListingFinder(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>()));
         services.AddScoped<IListingDetails, SqlListingDetails>();
+        services.AddScoped<IListingOccurrences, ListingOccurrences>();
         services.AddScoped<ICurationQueries, CurationQueries>();
         services.AddScoped<IOrganisationProfiles, OrganisationProfiles>();
         services.AddScoped<PersonalFinder>();
@@ -113,6 +116,11 @@ public static class ApiComposition
         // tenant's data key (D32, D43).
         services.AddBrightTimeDbContext<EnrollmentDbContext>(app, EnrollmentDbContext.SchemaName, EnrollmentDbContext.MigrationsHistoryTable);
         services.AddEnrollment();
+
+        // Attendance (M3b): where a named child was at a given hour, so every read is audited and
+        // the staff note encrypted (D49).
+        services.AddBrightTimeDbContext<AttendanceDbContext>(app, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
+        services.AddAttendance();
 
         // The authentication path's login: Identity stores only.
         services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth));

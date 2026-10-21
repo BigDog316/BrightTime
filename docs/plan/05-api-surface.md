@@ -340,6 +340,11 @@ GET    /api/v1/me/attendance                           youth / guardian view
 Duplicates are a success, not an error — that is the point of
 `ux_attendance_client_record`.
 
+*Built (2026-10-21, D49):* the roster, `POST /attendance`, `POST /attendance/batch`
+(`{deviceId, appVersion, items}`, outcomes `applied|duplicate|conflict|rejected`),
+`GET /attendance` (`from`, `to`, `listingId`, `history`), `PATCH /attendance/{id}` (a correction
+with a reason, superseding) and `GET /me/attendance`. Check-in tokens and kiosk devices come next.
+
 ---
 
 ## Learning

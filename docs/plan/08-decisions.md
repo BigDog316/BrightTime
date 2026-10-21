@@ -1424,6 +1424,78 @@ M3a's last slice: an organisation decides its applications, and seats are counte
   - notifications to the family on a decision;
   - the console's queue screens.
 
+### D49 — Attendance: rosters, records, offline sync and supersede (**proposed 2026-10-21; implemented, reversible**)
+
+M3b starts with attendance, the platform's highest-risk dataset (docs/plan/07, T4). It comes
+in slices:
+1. rosters, records, offline batch sync and corrections, and a family's view (this decision);
+2. rotating QR check-in and kiosk mode (`checkin_token`);
+3. kiosk devices: enrolment, revocation and remote wipe (`kiosk_device`);
+4. the app's offline roster (an encrypted store with a sync queue), and the 72-hour rule.
+
+- **A new module,** `BrightTime.Modules.Attendance`, with its own contracts. It may reference
+  the Platform, Identity, Directory, Opportunities and Enrollment contracts.
+  - **Two new contracts feed it:**
+    - `IListingOccurrences` (Opportunities): the meetings that exist and aren't cancelled;
+    - `IEnrolmentQueries` (Enrollment): enrolments, rosters and a family's enrolments.
+  - Attendance never reads another module's tables.
+- **The roster:** `GET /org/{orgId}/listings/{id}/roster?occurrence=` lists every enrolled
+  young person, with that meeting's record if there is one.
+  - Each line shows only a display name (first name and last initial), and only where the
+    family's live share names the young person.
+- **Records:** `POST /org/{orgId}/attendance`. A record is taken for:
+  - an active, seated enrolment at the organisation;
+  - a meeting that exists and isn't cancelled, starts at most an hour from now, and started at
+    most 30 days ago.
+
+  A second record for the same meeting is `attendance.exists`; correct the first instead. The
+  staff note is encrypted (`note_enc`).
+- **Offline sync:** `POST /org/{orgId}/attendance/batch {deviceId, items}`, up to 500 items.
+  Each item gets its own outcome:
+  - `applied`;
+  - `duplicate`, when `(device_id, client_record_id)` has been seen before. A replay is a
+    success and writes nothing;
+  - `conflict`, when someone recorded that meeting first. Theirs stands, and the server id is
+    returned;
+  - `rejected`, with the error code.
+
+  Each batch leaves an `attendance_sync_batch` row with its counts.
+- **Concurrency:** an organisation's attendance writes are serialised by a transaction
+  advisory lock. Two phones syncing the same meeting can't race past `ux_attendance_live`
+  into a 500.
+- **Corrections supersede:** `PATCH /org/{orgId}/attendance/{id}` with a reason makes a new
+  record, and the old one points at it.
+  - The old record steps out of the live index (pointing at itself) before the new one goes
+    in, so the immediate foreign key holds.
+  - A superseded record can't be corrected again.
+  - The reason is in the audit row, since the schema has no column for it.
+- **Reading:** `GET /org/{orgId}/attendance?from&to&listingId&history` covers a window of up
+  to 31 days, current records only unless history is asked for.
+  - Records of an enrolment that ended more than 180 days ago are left out. That is the
+    youth-access grace (T4); the grant itself waits on members having accounts.
+- **Families:** `GET /me/attendance` shows the current records of everyone on the family's
+  profile, never the staff's notes.
+- **Who:** three new permissions, held by program staff and provider admins at their own
+  organisation: `attendance.record`, `attendance.view_roster` and `attendance.offline_sync`.
+  Mentors (assigned) come with M5.
+- **Audit:** every read and write is audited with the organisation as `actor_org_id`:
+  - `attendance.roster.read`;
+  - `attendance.read`;
+  - `attendance.recorded`;
+  - `attendance.corrected`;
+  - `attendance.synced`;
+  - `attendance.family_read`.
+
+  Refusals are audited too.
+- `StoredNow()` moved to SharedKernel, since both modules round times to PostgreSQL's
+  microsecond.
+- **Tests:** the seeded staff accounts ran out. `ApiFixture.NewAdultAsync` registers a fresh
+  adult through the API, so new tests stop competing for seeded accounts.
+- **Not yet:**
+  - retention (400 days, then aggregate-and-delete);
+  - minutes derived from check-in and check-out;
+  - the console's attendance screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

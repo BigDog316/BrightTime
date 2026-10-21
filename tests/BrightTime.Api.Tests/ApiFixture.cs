@@ -100,6 +100,26 @@ public sealed class ApiFixture : IAsyncLifetime
         return password;
     }
 
+    /// <summary>
+    /// A fresh adult account, registered through the API as anyone would and with its address
+    /// confirmed, for a test that needs one of its own rather than a seeded account. Give it a
+    /// password with <see cref="SetPasswordAsync"/>.
+    /// </summary>
+    public async Task<string> NewAdultAsync(string prefix = "family")
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string email = $"{prefix}-{Guid.NewGuid():N}@example.org";
+        using HttpClient client = Client();
+        (await client.PostAsJsonAsync("api/v1/auth/register", new { email }, ct)).EnsureSuccessStatusCode();
+        for (int i = 0; i < 100 && await ScalarAsync<long>("select count(*) from identity.app_user where normalized_email = upper(@e)", ("e", email)) == 0; i++)
+        {
+            await Task.Delay(50, ct);
+        }
+
+        await ExecuteAsync("update identity.app_user set email_confirmed = true where normalized_email = upper(@e)", ("e", email));
+        return email;
+    }
+
     public async Task<TokenPair> SignInAsync(string email, string password, string host = Host)
     {
         using HttpClient client = Client(host);

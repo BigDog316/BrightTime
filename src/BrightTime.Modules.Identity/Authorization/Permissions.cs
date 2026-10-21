@@ -82,6 +82,18 @@ public static class Permissions
         public const string Decide = "applications.decide";
     }
 
+    public static class Attendance
+    {
+        /// <summary>Recording and correcting attendance for the organisation's enrolments.</summary>
+        public const string Record = "attendance.record";
+
+        /// <summary>Reading a meeting's roster and the organisation's attendance records.</summary>
+        public const string ViewRoster = "attendance.view_roster";
+
+        /// <summary>Sending a phone's offline queue of records.</summary>
+        public const string OfflineSync = "attendance.offline_sync";
+    }
+
     public static class Consent
     {
         /// <summary>
@@ -130,6 +142,7 @@ public static class Permissions
         Clearances.Record, Clearances.ViewStatus,
         Youth.ReadRecord, Youth.ReadSupportNeeds,
         Applications.View, Applications.Decide,
+        Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

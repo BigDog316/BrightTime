@@ -22,7 +22,9 @@ namespace BrightTime.Ui.Shared.Api;
 /// <para>
 /// Offline is not signed out. An adult's last-read person is kept beside the refresh token, so an
 /// app opened without a signal still knows who is there (the offline roster, D52); the first
-/// request that reaches the server refreshes the tokens and reads the person afresh.
+/// request that reaches the server refreshes the tokens and reads the person afresh. Only the
+/// server's word ends a session: a refused refresh, or a 401 for a token it has just issued. No
+/// signal, a timeout or a server error part-way keeps the tokens and the kept person.
 /// </para>
 /// <para>
 /// Refreshing is serialised: two requests that find the access token stale refresh once, since
@@ -48,6 +50,10 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
     // Me is the kept copy from an offline start, to be read afresh once the server answers.
     private bool _personStale;
 
+    // The refresh token came from the secret store, which holds only adults': until the person is
+    // read, its renewal goes back there.
+    private bool _restored;
+
     /// <summary>The signed-in person, or null.</summary>
     public Me? Me { get; private set; }
 
@@ -71,17 +77,30 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         }
 
         _refreshToken = kept;
+        _restored = true;
         if (await RefreshAsync(cancellationToken).ConfigureAwait(false))
         {
-            await LoadPersonAsync(cancellationToken).ConfigureAwait(false);
+            switch (await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+            {
+                case PersonRead.Read:
+                    return;
+                case PersonRead.Refused:
+                    await ForgetAsync().ConfigureAwait(false);
+                    return;
+            }
+        }
+
+        // A refused token was forgotten; one still held means the server wasn't reached, or the
+        // person couldn't be read after the refresh. Either way the kept person stands in.
+        if (_refreshToken is null)
+        {
             return;
         }
 
-        // A refused token was forgotten by RefreshAsync; one still held means the server wasn't reached.
-        if (_refreshToken is not null && await KeptPersonAsync().ConfigureAwait(false) is { } person)
+        _personStale = true;
+        if (await KeptPersonAsync().ConfigureAwait(false) is { } person)
         {
             Me = person;
-            _personStale = true;
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -97,7 +116,7 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         }
 
         Accept(issued.Value!);
-        if (!await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+        if (await LoadPersonAsync(cancellationToken).ConfigureAwait(false) != PersonRead.Read)
         {
             await ForgetAsync().ConfigureAwait(false);
             return new ApiProblem(ApiProblem.UnreadableType, null, 0);
@@ -135,7 +154,7 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         }
 
         Accept(issued.Value!);
-        if (!await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+        if (await LoadPersonAsync(cancellationToken).ConfigureAwait(false) != PersonRead.Read)
         {
             await ForgetAsync().ConfigureAwait(false);
             return new ApiProblem(ApiProblem.UnreadableType, null, 0);
@@ -183,7 +202,7 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         }
 
         Accept(issued.Value!);
-        if (!await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+        if (await LoadPersonAsync(cancellationToken).ConfigureAwait(false) != PersonRead.Read)
         {
             await ForgetAsync().ConfigureAwait(false);
             return new ApiProblem(ApiProblem.UnreadableType, null, 0);
@@ -212,20 +231,26 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
     /// <summary>A current access token, refreshed first if it is about to run out; null when no one is signed in.</summary>
     public async Task<string?> AccessTokenAsync(CancellationToken cancellationToken = default)
     {
-        if (_accessToken is not null && time.GetUtcNow() < _accessExpiresAt - RefreshMargin)
-        {
-            return _accessToken;
-        }
-
-        if (_refreshToken is null || !await RefreshAsync(cancellationToken).ConfigureAwait(false))
+        if ((_accessToken is null || time.GetUtcNow() >= _accessExpiresAt - RefreshMargin)
+            && (_refreshToken is null || !await RefreshAsync(cancellationToken).ConfigureAwait(false)))
         {
             return null;
         }
 
+        // The kept person stands in: read it afresh now the server answers. Cleared first, since
+        // reading the person asks for a token too.
         if (_personStale)
         {
             _personStale = false;
-            await LoadPersonAsync(cancellationToken).ConfigureAwait(false);
+            switch (await LoadPersonAsync(cancellationToken).ConfigureAwait(false))
+            {
+                case PersonRead.Refused:
+                    await ForgetAsync().ConfigureAwait(false);
+                    return null;
+                case PersonRead.Failed:
+                    _personStale = true;
+                    break;
+            }
         }
 
         return _accessToken;
@@ -233,7 +258,8 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
 
     /// <summary>
     /// Exchanges the refresh token for a new pair. False when it no longer works (expired, used,
-    /// or the session was ended elsewhere), which signs the person out.
+    /// or the session was ended elsewhere), which signs the person out; false too when the server
+    /// wasn't reached or failed, which keeps the token for another try.
     /// </summary>
     public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default)
     {
@@ -260,8 +286,9 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
                 return true;
             }
 
-            // Offline is not signed out: keep the token for when the network returns.
-            if (renewed.Problem!.Type != ApiProblem.OfflineType)
+            // Only a refusal signs out (invalid-grant is a 400). Offline, a timeout or a server
+            // error keeps the token for when the server answers.
+            if (renewed.Problem!.Status is 400 or 401)
             {
                 await ForgetAsync().ConfigureAwait(false);
             }
@@ -297,38 +324,62 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         {
             // Offline: keep what was read last; the server enforces regardless.
         }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient's own timeout: as above.
+        }
     }
 
     public void Dispose() => _gate.Dispose();
 
-    private async Task<bool> LoadPersonAsync(CancellationToken cancellationToken)
+    private enum PersonRead
+    {
+        Read,
+
+        /// <summary>A 401: the server no longer takes the token it has just issued.</summary>
+        Refused,
+
+        /// <summary>Not reached, timed out, or an answer that was not the person: nothing said about the session.</summary>
+        Failed,
+    }
+
+    private async Task<PersonRead> LoadPersonAsync(CancellationToken cancellationToken)
     {
         if (_accessToken is not { } token)
         {
-            return false;
+            return PersonRead.Failed;
         }
 
         using HttpRequestMessage request = new(HttpMethod.Get, "me");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Me? read;
         try
         {
             using HttpResponseMessage response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return false;
+                return response.StatusCode == HttpStatusCode.Unauthorized ? PersonRead.Refused : PersonRead.Failed;
             }
 
-            Me = await response.Content.ReadFromJsonAsync<Me>(Json, cancellationToken).ConfigureAwait(false);
+            read = await response.Content.ReadFromJsonAsync<Me>(Json, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException
+            || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            return false;
+            return PersonRead.Failed;
         }
 
+        if (read is null)
+        {
+            return PersonRead.Failed;
+        }
+
+        Me = read;
+        _personStale = false;
         await KeepAsync().ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
         await RefreshCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-        return Me is not null;
+        return PersonRead.Read;
     }
 
     private void Accept(TokenPair pair)
@@ -338,13 +389,17 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         _accessExpiresAt = time.GetUtcNow().AddSeconds(pair.ExpiresIn);
     }
 
-    /// <summary>An adult's refresh token and person are kept; a young person's never are.</summary>
+    /// <summary>
+    /// An adult's refresh token and person are kept; a young person's never are. A restored token
+    /// whose person is not yet read is an adult's, so its renewal replaces it: the one kept must
+    /// be the one the server will still take.
+    /// </summary>
     private async Task KeepAsync()
     {
-        if (Me is { IsAdult: true } me && _refreshToken is { } refresh)
+        if ((Me?.IsAdult ?? _restored) && _refreshToken is { } refresh)
         {
             await secrets.SetAsync(RefreshTokenKey, refresh).ConfigureAwait(false);
-            if (!_personStale)
+            if (Me is { } me && !_personStale)
             {
                 await secrets.SetAsync(PersonKey, JsonSerializer.Serialize(me, Json)).ConfigureAwait(false);
             }
@@ -381,6 +436,7 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         Me = null;
         Capabilities = null;
         _personStale = false;
+        _restored = false;
         await secrets.RemoveAsync(RefreshTokenKey).ConfigureAwait(false);
         await secrets.RemoveAsync(PersonKey).ConfigureAwait(false);
         if (was)
@@ -418,6 +474,11 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         }
         catch (HttpRequestException)
         {
+            return ApiResult<T>.Failure(ApiProblem.Offline);
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient's own timeout: as good as offline.
             return ApiResult<T>.Failure(ApiProblem.Offline);
         }
         catch (JsonException)

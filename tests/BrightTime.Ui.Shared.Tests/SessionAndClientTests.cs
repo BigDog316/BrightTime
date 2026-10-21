@@ -88,6 +88,58 @@ public sealed class SessionAndClientTests
     }
 
     [Fact]
+    public async Task Losing_the_signal_after_the_refresh_keeps_the_renewed_token_and_the_kept_person()
+    {
+        using FakeApi api = SignedInApi("adult");
+        await using ServiceProvider first = api.Services();
+        await first.GetRequiredService<AppState>().StartAsync(Ct);
+        (await first.GetRequiredService<AppSession>().SignInAsync("sam@example.net", "pw", Ct)).ShouldBeNull();
+        ISecretStore secrets = first.GetRequiredService<ISecretStore>();
+        IOfflineStore offline = first.GetRequiredService<IOfflineStore>();
+
+        // Opened again: the refresh answers (refresh-1 is spent), then the signal drops before "me".
+        api.On(HttpMethod.Get, "me", _ => throw new HttpRequestException("No route to host."));
+        await using ServiceProvider later = api.Services(s => s.AddSingleton(secrets).AddSingleton(offline));
+        await later.GetRequiredService<AppState>().StartAsync(Ct);
+        AppSession session = later.GetRequiredService<AppSession>();
+        session.IsSignedIn.ShouldBeTrue();
+        session.Me!.UserName.ShouldBe("sam@example.net");
+        (await secrets.GetAsync(AppSession.RefreshTokenKey)).ShouldBe("refresh-2", "the one kept must be the one the server will still take");
+        (await secrets.GetAsync(AppSession.PersonKey)).ShouldNotBeNull();
+
+        // The signal returns: the next request reads the person afresh on the token it already has.
+        api.Json(HttpMethod.Get, "me", FakeApi.Me("adult")).Json(HttpMethod.Get, "me/saved-items", "[]");
+        (await later.GetRequiredService<BrightTimeApi>().SavedAsync(Ct)).IsSuccess.ShouldBeTrue();
+        session.Capabilities.ShouldNotBeNull();
+        api.Requests.Count(r => r.RequestUri!.AbsolutePath.EndsWith("auth/token/refresh", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Only_the_servers_refusal_ends_a_restored_session()
+    {
+        // A 401 for the token the refresh has just issued: the session is over.
+        using FakeApi refused = SignedInApi("adult").On(HttpMethod.Get, "me", _ => FakeApi.Respond(HttpStatusCode.Unauthorized));
+        await using ServiceProvider app = refused.Services();
+        ISecretStore secrets = app.GetRequiredService<ISecretStore>();
+        await secrets.SetAsync(AppSession.RefreshTokenKey, "refresh-0");
+        await secrets.SetAsync(AppSession.PersonKey, FakeApi.Me("adult"));
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        app.GetRequiredService<AppSession>().IsSignedIn.ShouldBeFalse();
+        (await secrets.GetAsync(AppSession.RefreshTokenKey)).ShouldBeNull();
+        (await secrets.GetAsync(AppSession.PersonKey)).ShouldBeNull();
+
+        // A server error on the refresh says nothing about the token: kept, and the kept person stands in.
+        using FakeApi failing = SignedInApi("adult").On(HttpMethod.Post, "auth/token/refresh", _ => FakeApi.Problem(HttpStatusCode.ServiceUnavailable, "unavailable"));
+        await using ServiceProvider again = failing.Services();
+        ISecretStore kept = again.GetRequiredService<ISecretStore>();
+        await kept.SetAsync(AppSession.RefreshTokenKey, "refresh-0");
+        await kept.SetAsync(AppSession.PersonKey, FakeApi.Me("adult"));
+        await again.GetRequiredService<AppState>().StartAsync(Ct);
+        again.GetRequiredService<AppSession>().IsSignedIn.ShouldBeTrue();
+        (await kept.GetAsync(AppSession.RefreshTokenKey)).ShouldBe("refresh-0");
+    }
+
+    [Fact]
     public async Task A_401_refreshes_once_and_retries_with_the_new_token()
     {
         int saved = 0;

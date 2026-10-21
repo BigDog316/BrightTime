@@ -1563,7 +1563,7 @@ phones and kiosks.
     runs under a signed-in staff member;
   - the app's purge and its 72-hour refusal, which come with the offline roster (slice 4).
 
-### D52 — The app's offline roster: sealed on the phone, synced once, wiped on word (**proposed 2026-10-21; implemented, reversible**)
+### D52 — The app's offline roster: sealed on the phone, synced once, wiped on word (**accepted 2026-10-21**)
 
 M3b's fourth attendance slice, and the last: the staff roster in the app, working without a
 signal.

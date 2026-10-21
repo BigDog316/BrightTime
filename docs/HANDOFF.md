@@ -121,7 +121,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 - **Devices** (D51): phones and kiosks register to sync. Sync refuses unknown or
   revoked devices. Revoking asks for a wipe, which the device learns on contact without
   signing in.
-- **The app's offline roster** (D52, proposed): staff take today's roster onto the phone and mark
+- **The app's offline roster** (D52): staff take today's roster onto the phone and mark
   it without a signal. Marks are sealed (AES-GCM, with the key in the keychain), synced once,
   and wiped when the server says revoked. The roster locks after 72 hours without contact. The
   Android build compiles; it hasn't been run on a phone yet.
@@ -131,7 +131,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D51 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D51 on 2026-10-21). **D52 (the app's offline roster) is proposed.**
+Every decision through D52 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D52 on 2026-10-21).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

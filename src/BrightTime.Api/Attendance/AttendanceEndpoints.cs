@@ -53,6 +53,7 @@ public static class AttendanceEndpoints
         ArgumentNullException.ThrowIfNull(api);
 
         RouteGroupBuilder org = api.MapGroup("/org/{orgId:guid}").RequireAuthorization();
+        org.MapGet("/attendance/meetings", MeetingsAsync);
         org.MapGet("/listings/{listingId:guid}/roster", RosterAsync).Audits(AttendanceRecords.RosterRead).Produces<RosterView>();
         org.MapPost("/attendance", RecordAsync).Audits(AttendanceRecords.Recorded).Produces<AttendanceView>(StatusCodes.Status201Created);
         org.MapPost("/attendance/batch", SyncAsync).Audits(AttendanceRecords.Synced).Produces<IReadOnlyList<SyncOutcome>>();
@@ -70,6 +71,20 @@ public static class AttendanceEndpoints
     }
 
     private static RouteHandlerBuilder Audits(this RouteHandlerBuilder builder, string action) => builder.WithMetadata(new YouthRecordAttribute(action));
+
+    /// <summary>The organisation's meetings, by default from six hours ago to eighteen ahead: the day's rosters to pick from.</summary>
+    private static async Task<IResult> MeetingsAsync(Guid orgId, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, IAuthorizationService authorization, AttendanceRecords attendance, BrightTime.SharedKernel.Time.IClock clock, CancellationToken ct)
+    {
+        if (!await CanAsync(user, orgId, Permissions.Attendance.ViewRoster, authorization))
+        {
+            return ApiProblems.From(Forbidden());
+        }
+
+        DateTimeOffset now = clock.UtcNow;
+        Result<IReadOnlyList<Modules.Opportunities.Contracts.OrganisationMeeting>> meetings =
+            await attendance.MeetingsAsync(new OrganisationId(orgId), from ?? now.AddHours(-6), to ?? now.AddHours(18), ct);
+        return meetings.IsSuccess ? Results.Ok(meetings.Value) : ApiProblems.From(meetings.Error);
+    }
 
     private static async Task<IResult> RosterAsync(Guid orgId, Guid listingId, DateTimeOffset occurrence, ClaimsPrincipal user, IAuthorizationService authorization, AttendanceRecords attendance, AuditTrail audit, CancellationToken ct)
     {

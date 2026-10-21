@@ -89,6 +89,47 @@ internal sealed class DeviceOfflineStore : IOfflineStore
 }
 
 /// <summary>
+/// The sealed store's ciphertext (D52), in its own folder of the app's private data, kept out of
+/// the platform's cloud backups. Only ciphertext arrives here; the key is in the keychain.
+/// </summary>
+internal sealed class DeviceBlobStore : IBlobStore
+{
+    private static string Folder => Path.Combine(FileSystem.AppDataDirectory, "sealed");
+
+    public async Task WriteAsync(string name, byte[] bytes)
+    {
+        Directory.CreateDirectory(Folder);
+#if IOS
+        // Android's backups are off (android:allowBackup="false"); iOS backs up app data unless told not to.
+        Foundation.NSUrl.FromFilename(Folder).SetResource(Foundation.NSUrl.IsExcludedFromBackupKey, Foundation.NSNumber.FromBoolean(true));
+#endif
+        string path = PathFor(name);
+        string temporary = path + ".tmp";
+        await File.WriteAllBytesAsync(temporary, bytes).ConfigureAwait(false);
+        File.Move(temporary, path, overwrite: true);
+    }
+
+    public async Task<byte[]?> ReadAsync(string name)
+    {
+        string path = PathFor(name);
+        return File.Exists(path) ? await File.ReadAllBytesAsync(path).ConfigureAwait(false) : null;
+    }
+
+    public Task DeleteAllAsync()
+    {
+        if (Directory.Exists(Folder))
+        {
+            Directory.Delete(Folder, recursive: true);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string PathFor(string name) =>
+        Path.Combine(Folder, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(name))) + ".bin");
+}
+
+/// <summary>
 /// The phone's position, asked for only when the person taps "near me" (docs/plan/06): the
 /// when-in-use permission, a coarse fix, and nothing in the background.
 /// </summary>

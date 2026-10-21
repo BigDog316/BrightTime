@@ -100,6 +100,25 @@ public sealed record TokenPair(string AccessToken, string TokenType, int Expires
 
 public sealed record MeOrganisation(Guid OrganisationId, string Role);
 
+// ---- attendance (D49, D51, D52) --------------------------------------------------------------
+
+/// <summary>One meeting of one of an organisation's listings: a roster a staff member can take.</summary>
+public sealed record AttendanceMeeting(Guid ListingId, string Title, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
+
+/// <summary>A roster line: the enrolment, and a display name only where the family's share names the young person.</summary>
+public sealed record AttendanceRosterLine(Guid EnrollmentId, string? DisplayName, Guid? RecordId, string? State);
+
+public sealed record AttendanceRoster(Guid ListingId, DateTimeOffset OccurrenceStartsAt, DateTimeOffset OccurrenceEndsAt, IReadOnlyList<AttendanceRosterLine> Lines);
+
+/// <summary>One mark from the offline queue, with the device's own id for it so a replay is recognised.</summary>
+public sealed record AttendanceSyncItem(Guid ClientRecordId, Guid EnrollmentId, DateTimeOffset OccurrenceStartsAt, string State, DateTimeOffset CapturedAt);
+
+/// <summary>What became of one mark: applied, duplicate, conflict or rejected (with the error code).</summary>
+public sealed record AttendanceSyncOutcome(Guid ClientRecordId, string Status, Guid? ServerId, string? Reason);
+
+/// <summary>What the server tells a device on contact: whether to wipe, and how long it may stay offline.</summary>
+public sealed record AttendanceDeviceContact(bool Registered, bool Wipe, int MaxOfflineHours);
+
 /// <summary>The signed-in person: who, what kind of account (<c>adult</c>, <c>youth</c>), and what they may do.</summary>
 public sealed record Me(
     Guid Id,

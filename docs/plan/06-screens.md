@@ -141,7 +141,7 @@ Mobile specifics worth stating now:
   and never in background. There is no always-on location permission in
   either store listing.
 - The offline roster holds the minimum: enrollment id, display name, and the
-  occurrence. No DOB, no support needs, no contact details. It purges on
+  occurrence (built in D52 as sealed documents rather than SQLCipher; see there). No DOB, no support needs, no contact details. It purges on
   `wipe_requested_at`, and refuses to open after 72 hours without server
   contact.
 - Youth accounts get no "remember me" by default and a 30-minute idle

@@ -355,6 +355,9 @@ with a reason, superseding) and `GET /me/attendance`.
 `POST /attendance/devices/contact {deviceId}`, which needs no sign-in and says whether to wipe.
 Offline sync now accepts batches only from a registered, unrevoked device.
 
+*Built (2026-10-21, D52):* `GET /org/{orgId}/attendance/meetings?from&to`, the organisation's
+meetings (by default from six hours ago to eighteen ahead), for the app's roster screen.
+
 ---
 
 ## Learning

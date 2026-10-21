@@ -1,5 +1,6 @@
 using BrightTime.Localisation;
 using BrightTime.Ui.Shared.Api;
+using BrightTime.Ui.Shared.Attendance;
 using BrightTime.Ui.Shared.Platform;
 using BrightTime.Ui.Shared.State;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,6 +53,7 @@ public static class AppServices
         services.TryAddSingleton<ISecretStore, MemorySecretStore>();
         services.TryAddSingleton<IAppPreferences, MemoryPreferences>();
         services.TryAddSingleton<IOfflineStore, MemoryOfflineStore>();
+        services.TryAddSingleton<IBlobStore, MemoryBlobStore>();
         services.TryAddSingleton<ILocationProvider, NoLocation>();
         services.TryAddSingleton<IPushRegistrar, NoPush>();
         services.TryAddSingleton<IPasskeyAuthenticator, NoPasskeys>();
@@ -70,6 +72,8 @@ public static class AppServices
         services.AddSingleton<AppState>();
         services.AddSingleton<AppLinks>();
         services.AddSingleton<PendingConsent>();
+        services.AddSingleton<SealedStore>();
+        services.AddSingleton<OfflineRoster>();
         return services;
     }
 

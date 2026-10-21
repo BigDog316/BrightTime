@@ -112,6 +112,30 @@ public sealed class UiTests
         html.ShouldContain("signed out when you close the app");
     }
 
+    [Fact]
+    public async Task The_attendance_screen_lists_todays_meetings_at_each_organisation_the_person_works_for()
+    {
+        const string Org = "0a0a0000-0000-0000-0000-00000000000a";
+        using FakeApi api = new FakeApi()
+            .Json(HttpMethod.Get, "public/tenant", FakeApi.Tenant)
+            .Json(HttpMethod.Post, "auth/token", FakeApi.Tokens)
+            .Json(HttpMethod.Get, "me", $$"""
+                {"id":"0b3c8f5e-0000-0000-0000-000000000002","userName":"staff@example.net","accountKind":"adult","locale":null,"roles":["program_staff"],
+                 "permissions":["attendance.view_roster","attendance.record","attendance.offline_sync"],"organisations":[{"organisationId":"{{Org}}","role":"staff"}]}
+                """)
+            .Json(HttpMethod.Get, "me/capabilities", FakeApi.Capabilities)
+            .Json(HttpMethod.Post, "attendance/devices/contact", """{"registered":false,"wipe":false,"maxOfflineHours":72}""")
+            .Json(HttpMethod.Get, $"org/{Org}/attendance/meetings", """
+                [{"listingId":"1b1b0000-0000-0000-0000-00000000001b","title":"Robotics Club","startsAt":"2026-10-21T19:00:00Z","endsAt":"2026-10-21T20:00:00Z"}]
+                """);
+        string html = await RenderAsync<Pages.Attendance>(api, signIn: true);
+
+        html.ShouldContain("Meetings today");
+        html.ShouldContain("Robotics Club");
+        html.ShouldContain("Take roster");
+        html.ShouldNotContain("app.attendance");
+    }
+
     private static async Task<string> RenderAsync<TComponent>(FakeApi api, bool signIn = false)
         where TComponent : IComponent
     {

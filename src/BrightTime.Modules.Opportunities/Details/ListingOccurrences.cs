@@ -14,4 +14,13 @@ public sealed class ListingOccurrences(OpportunitiesDbContext db) : IListingOccu
                 .OrderBy(o => o.StartsAt)
                 .Select(o => new ListingTime(o.StartsAt, o.EndsAt))
                 .ToListAsync(ct).ConfigureAwait(false)], cancellationToken);
+
+    public Task<IReadOnlyList<OrganisationMeeting>> ForOrganisationAsync(Guid orgId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<OrganisationMeeting>>(async ct =>
+            [.. await (from o in db.Occurrences.AsNoTracking()
+                       join l in db.Listings.AsNoTracking() on o.ListingId equals l.Id
+                       where l.OrgId == orgId && l.Status == "published" && !o.IsCancelled && o.StartsAt >= @from && o.StartsAt < to
+                       orderby o.StartsAt, l.Title
+                       select new OrganisationMeeting(l.Id, l.Title, o.StartsAt, o.EndsAt))
+                .Take(200).ToListAsync(ct).ConfigureAwait(false)], cancellationToken);
 }

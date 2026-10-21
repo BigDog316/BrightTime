@@ -38,6 +38,10 @@ else
             <li><a href="notifications/settings">@T["app.notifications.settings"]</a></li>
             <li><a href="terms">@T["app.terms.title"]</a></li>
             <li><a href="account/passkeys">@T["account.passkey.heading"]</a></li>
+            @if (me.Permissions.Contains("attendance.view_roster"))
+            {
+                <li><a href="attendance">@T["app.attendance.title"]</a></li>
+            }
             @if (me.IsAdult)
             {
                 <li><a href="family">@T["app.family.title"]</a></li>

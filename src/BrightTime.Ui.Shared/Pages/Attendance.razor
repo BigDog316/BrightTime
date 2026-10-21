@@ -1,0 +1,249 @@
+@page "/attendance"
+@* The staff roster (D52): today's meetings, taken onto the phone, marked with or without a
+   signal, sent when the signal returns. What names a child stays sealed on the phone, and the
+   roster won't open after too long without the server, or after the phone is revoked. *@
+@using BrightTime.Ui.Shared.Attendance
+@inject OfflineRoster Roster
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.attendance.title"]</h1>
+
+@if (Session.Me is not { } me)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (_gate is null)
+{
+    <Busy />
+}
+else if (_gate == RosterGate.Locked)
+{
+    <p role="alert">@T["app.attendance.locked"]</p>
+}
+else if (_gate == RosterGate.Wiped)
+{
+    <p role="alert">@T["app.attendance.wiped"]</p>
+}
+else if (_pack is { } pack)
+{
+    <p><button type="button" class="link" @onclick="() => _pack = null">@T["app.attendance.back"]</button></p>
+    <h2>@pack.Title</h2>
+    <p>@T.DayTime(pack.StartsAt)</p>
+    <ul class="roster">
+        @foreach (PackLine line in pack.Lines)
+        {
+            string? mark = _marks.GetValueOrDefault(line.EnrollmentId);
+            <li @key="line.EnrollmentId">
+                <span>@(line.DisplayName ?? T["app.attendance.unnamed"])</span>
+                <span class="choices">
+                    <button type="button" aria-pressed="@(mark == "present")" @onclick="() => MarkAsync(line, PresentState)">@T["app.attendance.present"]</button>
+                    <button type="button" aria-pressed="@(mark == "late")" @onclick="() => MarkAsync(line, LateState)">@T["app.attendance.late"]</button>
+                    <button type="button" aria-pressed="@(mark == "absent")" @onclick="() => MarkAsync(line, AbsentState)">@T["app.attendance.absent"]</button>
+                    <button type="button" aria-pressed="@(mark == "excused")" @onclick="() => MarkAsync(line, ExcusedState)">@T["app.attendance.excused"]</button>
+                </span>
+            </li>
+        }
+    </ul>
+    @Sending
+}
+else
+{
+    @Sending
+    <ProblemNotice Problem="_problem" Retry="LoadMeetingsAsync" />
+    @if (_packs.Count > 0)
+    {
+        <h2>@T["app.attendance.on_phone"]</h2>
+        <ul>
+            @foreach (RosterPack held in _packs)
+            {
+                <li @key="(held.ListingId, held.StartsAt)">
+                    <button type="button" class="link" @onclick="() => OpenPackAsync(held)">@held.Title, @T.DayTime(held.StartsAt)</button>
+                </li>
+            }
+        </ul>
+    }
+
+    <h2>@T["app.attendance.today"]</h2>
+    @if (_meetings is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_meetings is { Count: 0 })
+    {
+        <p>@T["app.attendance.none_today"]</p>
+    }
+    else if (_meetings is not null)
+    {
+        <ul>
+            @foreach ((Guid org, AttendanceMeeting meeting) in _meetings)
+            {
+                <li @key="(meeting.ListingId, meeting.StartsAt)">
+                    <span>@meeting.Title, @T.DayTime(meeting.StartsAt)</span>
+                    <button type="button" @onclick="() => TakeAsync(org, meeting)">@T["app.attendance.take"]</button>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private const string PresentState = "present";
+    private const string LateState = "late";
+    private const string AbsentState = "absent";
+    private const string ExcusedState = "excused";
+
+    private RosterGate? _gate;
+    private List<(Guid Org, AttendanceMeeting Meeting)>? _meetings;
+    private IReadOnlyList<RosterPack> _packs = [];
+    private RosterPack? _pack;
+    private IReadOnlyDictionary<Guid, string> _marks = new Dictionary<Guid, string>();
+    private int _pending;
+    private IReadOnlyList<SyncProblem> _problems = [];
+    private string? _message;
+    private Guid? _register;
+    private string _label = "";
+    private ApiProblem? _problem;
+
+    /// <summary>The waiting marks, the send button, what the last send said, and anything it couldn't send.</summary>
+    private RenderFragment Sending => @<section class="sending">
+        @if (_message is not null)
+        {
+            <p role="status">@_message</p>
+        }
+
+        @if (_pending > 0)
+        {
+            <p>@T.Format("app.attendance.pending", ("count", _pending))</p>
+            <button type="button" class="primary" @onclick="SyncAsync">@T["app.attendance.sync"]</button>
+        }
+
+        @if (_register is not null)
+        {
+            <p>@T["app.attendance.register_intro"]</p>
+            <label>@T["app.attendance.register_label"] <input @bind="_label" maxlength="80" /></label>
+            <button type="button" @onclick="RegisterAsync">@T["app.attendance.register"]</button>
+        }
+
+        @if (_problems.Count > 0)
+        {
+            <h2>@T["app.attendance.problems"]</h2>
+            <ul>
+                @foreach (SyncProblem problem in _problems)
+                {
+                    <li>
+                        @(problem.DisplayName ?? T["app.attendance.unnamed"]):
+                        @(problem.Status == "conflict" ? T["app.attendance.problem.conflict"] : T["app.attendance.problem.rejected"])
+                    </li>
+                }
+            </ul>
+            <button type="button" @onclick="DismissAsync">@T["app.attendance.dismiss"]</button>
+        }
+    </section>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.Me is null)
+        {
+            return;
+        }
+
+        _gate = await Roster.OpenAsync();
+        if (_gate == RosterGate.Open)
+        {
+            await RefreshAsync();
+            await LoadMeetingsAsync();
+        }
+    }
+
+    /// <summary>Today's meetings at every organisation this person takes attendance for.</summary>
+    private async Task LoadMeetingsAsync()
+    {
+        _problem = null;
+        List<(Guid, AttendanceMeeting)> found = [];
+        foreach (MeOrganisation org in Session.Me?.Organisations ?? [])
+        {
+            ApiResult<IReadOnlyList<AttendanceMeeting>> meetings = await Api.MeetingsAsync(org.OrganisationId);
+            if (meetings.Problem is { Type: ApiProblem.OfflineType } offline)
+            {
+                _problem = offline;
+                _meetings = null;
+                return;
+            }
+
+            found.AddRange((meetings.Value ?? []).Select(m => (org.OrganisationId, m)));
+        }
+
+        _meetings = [.. found.OrderBy(m => m.Item2.StartsAt)];
+    }
+
+    private async Task TakeAsync(Guid org, AttendanceMeeting meeting)
+    {
+        ApiResult<RosterPack> taken = await Roster.DownloadAsync(org, meeting);
+        _problem = taken.Problem;
+        if (taken.Value is { } pack)
+        {
+            await OpenPackAsync(pack);
+        }
+    }
+
+    private async Task OpenPackAsync(RosterPack pack)
+    {
+        _pack = pack;
+        _marks = await Roster.MarksForAsync(pack);
+    }
+
+    private async Task MarkAsync(PackLine line, string state)
+    {
+        await Roster.MarkAsync(_pack!, line.EnrollmentId, state);
+        _marks = await Roster.MarksForAsync(_pack!);
+        await RefreshAsync();
+    }
+
+    private async Task SyncAsync()
+    {
+        SyncSummary sent = await Roster.SyncAsync();
+        if (sent.Wiped)
+        {
+            _gate = RosterGate.Wiped;
+            return;
+        }
+
+        _register = sent.NeedsRegistration.Count > 0 ? sent.NeedsRegistration[0] : null;
+        _message = sent.Offline ? T["app.attendance.offline"] : T.Format("app.attendance.synced", ("count", sent.Accepted));
+        await RefreshAsync();
+        if (_pack is { } open)
+        {
+            _marks = await Roster.MarksForAsync(open);
+        }
+    }
+
+    private async Task RegisterAsync()
+    {
+        if (_register is not { } org || _label.Trim().Length == 0)
+        {
+            return;
+        }
+
+        ApiResult registered = await Roster.RegisterAsync(org, _label.Trim());
+        _problem = registered.Problem;
+        if (registered.IsSuccess)
+        {
+            _register = null;
+            await SyncAsync();
+        }
+    }
+
+    private async Task DismissAsync()
+    {
+        await Roster.DismissProblemsAsync();
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _packs = await Roster.PacksAsync();
+        _pending = (await Roster.QueueAsync()).Count;
+        _problems = await Roster.ProblemsAsync();
+    }
+}

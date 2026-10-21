@@ -51,7 +51,7 @@ public interface IExternalLauncher
 
 /// <summary>
 /// Small documents kept on the device so a screen can show its last copy offline (saved items).
-/// Not for anything a stolen phone should not reveal: rosters wait for the encrypted store (M3).
+/// Not for anything a stolen phone should not reveal: rosters go in the sealed store (D52).
 /// </summary>
 public interface IOfflineStore
 {
@@ -60,6 +60,19 @@ public interface IOfflineStore
     Task<string?> LoadAsync(string key);
 
     Task ClearAsync();
+}
+
+/// <summary>
+/// Raw bytes in the app's private storage, for the sealed store to keep its ciphertext in (D52).
+/// It never sees plaintext; the host only stores and deletes.
+/// </summary>
+public interface IBlobStore
+{
+    Task WriteAsync(string name, byte[] bytes);
+
+    Task<byte[]?> ReadAsync(string name);
+
+    Task DeleteAllAsync();
 }
 
 /// <summary>This device's push token, when a push provider is configured.</summary>
@@ -178,6 +191,28 @@ public sealed class MemoryOfflineStore : IOfflineStore
     public Task ClearAsync()
     {
         _values.Clear();
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class MemoryBlobStore : IBlobStore
+{
+    private readonly Dictionary<string, byte[]> _blobs = new(StringComparer.Ordinal);
+
+    /// <summary>What is stored, for a test to look inside.</summary>
+    public IReadOnlyDictionary<string, byte[]> Blobs => _blobs;
+
+    public Task WriteAsync(string name, byte[] bytes)
+    {
+        _blobs[name] = bytes;
+        return Task.CompletedTask;
+    }
+
+    public Task<byte[]?> ReadAsync(string name) => Task.FromResult(_blobs.GetValueOrDefault(name));
+
+    public Task DeleteAllAsync()
+    {
+        _blobs.Clear();
         return Task.CompletedTask;
     }
 }

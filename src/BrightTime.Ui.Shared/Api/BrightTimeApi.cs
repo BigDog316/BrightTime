@@ -183,6 +183,26 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
 
     // ---- plumbing ------------------------------------------------------------------------------
 
+    // ---- attendance (D49, D51, D52) ----------------------------------------------------------
+
+    /// <summary>The organisation's meetings around today, for a staff member to pick a roster.</summary>
+    public Task<ApiResult<IReadOnlyList<AttendanceMeeting>>> MeetingsAsync(Guid org, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<AttendanceMeeting>>($"org/{org:D}/attendance/meetings", signedIn: true, ct);
+
+    public Task<ApiResult<AttendanceRoster>> RosterAsync(Guid org, Guid listing, DateTimeOffset occurrence, CancellationToken ct = default) =>
+        GetAsync<AttendanceRoster>($"org/{org:D}/listings/{listing:D}/roster?occurrence={Uri.EscapeDataString(occurrence.ToString("O", CultureInfo.InvariantCulture))}", signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<AttendanceSyncOutcome>>> SyncAttendanceAsync(Guid org, string deviceId, string? appVersion, IReadOnlyList<AttendanceSyncItem> items, CancellationToken ct = default) =>
+        SendAsync<IReadOnlyList<AttendanceSyncOutcome>>(HttpMethod.Post, $"org/{org:D}/attendance/batch", new { deviceId, appVersion, items }, signedIn: true, ct);
+
+    /// <summary>Registers this phone with an organisation so it may sync (D51).</summary>
+    public Task<ApiResult> RegisterAttendanceDeviceAsync(Guid org, string deviceId, string label, string? appVersion, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"org/{org:D}/kiosk-devices", new { deviceId, label, appVersion }, signedIn: true, ct);
+
+    /// <summary>Asks whether to wipe. Works signed out too: a phone whose user has left must still learn it.</summary>
+    public Task<ApiResult<AttendanceDeviceContact>> DeviceContactAsync(string deviceId, string? appVersion, CancellationToken ct = default) =>
+        SendAsync<AttendanceDeviceContact>(HttpMethod.Post, "attendance/devices/contact", new { deviceId, appVersion }, signedIn: session.IsSignedIn, ct);
+
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);
 

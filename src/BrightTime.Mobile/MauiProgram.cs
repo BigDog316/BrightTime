@@ -17,6 +17,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<ISecretStore, DeviceSecretStore>();
         builder.Services.AddSingleton<IAppPreferences, DevicePreferences>();
         builder.Services.AddSingleton<IOfflineStore, DeviceOfflineStore>();
+        builder.Services.AddSingleton<IBlobStore, DeviceBlobStore>();
         builder.Services.AddSingleton<ILocationProvider, DeviceLocation>();
         builder.Services.AddSingleton<IShareService, DeviceShare>();
         builder.Services.AddSingleton<IExternalLauncher, DeviceLauncher>();

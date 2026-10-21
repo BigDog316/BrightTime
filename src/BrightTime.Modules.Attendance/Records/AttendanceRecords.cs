@@ -127,6 +127,12 @@ public sealed class AttendanceRecords(
             return Result<RosterView>.Success(new RosterView(listingId, meeting.StartsAt, meeting.EndsAt, lines));
         }, cancellationToken);
 
+    /// <summary>The organisation's meetings in a window of up to a week: what a staff member can take a roster for.</summary>
+    public async Task<Result<IReadOnlyList<OrganisationMeeting>>> MeetingsAsync(OrganisationId org, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default) =>
+        to <= from || to - from > TimeSpan.FromDays(7)
+            ? Result<IReadOnlyList<OrganisationMeeting>>.Failure(Error.Validation("attendance.range", "A window of up to 7 days."))
+            : Result<IReadOnlyList<OrganisationMeeting>>.Success(await occurrences.ForOrganisationAsync(org.Value, from, to, cancellationToken).ConfigureAwait(false));
+
     // ---- writing -----------------------------------------------------------------------------
 
     public Task<Result<AttendanceView>> RecordAsync(OrganisationId org, UserId actor, AttendanceInput input, CancellationToken cancellationToken = default) =>

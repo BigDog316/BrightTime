@@ -1563,6 +1563,51 @@ phones and kiosks.
     runs under a signed-in staff member;
   - the app's purge and its 72-hour refusal, which come with the offline roster (slice 4).
 
+### D52 — The app's offline roster: sealed on the phone, synced once, wiped on word (**proposed 2026-10-21; implemented, reversible**)
+
+M3b's fourth attendance slice, and the last: the staff roster in the app, working without a
+signal.
+- **The screen** (`/attendance`, linked from Account for anyone with `attendance.view_roster`):
+  - lists today's meetings at every organisation the person works for. They come from a new
+    `GET /org/{orgId}/attendance/meetings`: published listings' meetings, by default from six
+    hours ago to eighteen hours ahead;
+  - "take roster" brings a meeting onto the phone;
+  - marks (present, late, absent, excused) are kept on the phone, with or without a signal;
+  - "send now" syncs them.
+- **What the phone holds** is docs/plan/06's minimum: the enrolment, the display name (only if
+  the family shared it), and the meeting. It never holds a date of birth, support needs or
+  contacts.
+- **Sealed at rest:** packs, the queue of marks and the problems are AES-256-GCM documents.
+  - The key is in the keychain or Keystore (`ISecretStore`); only ciphertext is in the app's
+    storage (`IBlobStore`).
+  - Each document's name is its associated data. A document that won't open counts as absent.
+  - The sealed folder is out of backups: Android's backups are off, and iOS marks the folder
+    excluded.
+  - **A deviation from docs/plan/06, which named SQLCipher.** A pack and a queue are a few
+    kilobytes read and written whole. Sealed documents protect them the same way without a
+    native database, and the encryption is tested in the shared library rather than trusted
+    to a binding.
+- **Sync** is D49's batch under a device id of the roster's own, not the sign-in one, registered
+  with each organisation (D51).
+  - Every mark has a fresh client id. A batch whose answer was lost is resent safely, since the
+    server says `duplicate`. A mark changed before sending is replaced under a new id, so an id
+    once sent never carries different words.
+  - Applied and duplicate marks leave the queue. Conflicts and refusals become problems, shown
+    by name until dismissed.
+  - Anything unsent stays. An unregistered organisation prompts the person to set up the phone
+    with a label, then sends.
+- **Wipe and lock (T12):**
+  - **Wipe:** the server can say wipe, on contact or by refusing a batch as revoked. Then the
+    key goes first, then every document, and the device takes a new id.
+  - **Lock:** without contact for longer than the server's limit (72 hours, as it reports),
+    the roster refuses to open. The marks wait; they aren't wiped.
+  - **Expiry:** a pack is let go a day after its meeting, unless marks for it still wait.
+- **Not yet:**
+  - a run on a phone, in airplane mode, against the compose stack. The Android build compiles;
+    the iOS build needs the Mac;
+  - correcting a conflict from the phone (it's shown; staff correct it on the web or online);
+  - the kiosk screens (badge and kiosk codes, D50), which come with the app's QR scanning.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

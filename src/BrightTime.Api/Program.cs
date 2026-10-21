@@ -2,6 +2,7 @@ using BrightTime.Api;
 using BrightTime.Api.Applications;
 using BrightTime.Api.Auth;
 using BrightTime.Api.Consent;
+using BrightTime.Api.Decisions;
 using BrightTime.Api.Family;
 using BrightTime.Api.Forms;
 using BrightTime.Api.Me;
@@ -63,6 +64,7 @@ v1.MapFormEndpoints();
 v1.MapEligibilityEndpoints();
 v1.MapApplicationEndpoints();
 v1.MapWaiverEndpoints();
+v1.MapDecisionEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

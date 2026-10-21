@@ -533,6 +533,9 @@ public static class EnrollmentModule
         services.AddScoped<Eligibility.EligibilityRules>();
         services.AddScoped<Applications.Applications>();
         services.AddScoped<Waivers.Waivers>();
+        services.AddScoped<Applications.SealedAnswers>();
+        services.AddScoped<Decisions.SeatLedger>();
+        services.AddScoped<Decisions.Decisions>();
         return services;
     }
 }

@@ -294,6 +294,12 @@ and an end date. On the organisation's side, `GET /org/{orgId}/family-shares` an
 application: `GET /applications/{id}/waivers` and `POST
 /applications/{id}/waivers/{waiverId}/sign`, not `/waivers/{id}/sign`.
 
+*Built (2026-10-21, D48):* `GET` and `PUT /org/{orgId}/listings/{id}/seats`;
+`GET /org/{orgId}/listings/{id}/applications`; `GET /org/{orgId}/applications/{id}`;
+`POST /org/{orgId}/applications/{id}/decide` (accept | waitlist | decline | review);
+`POST /org/{orgId}/applications/bulk-decide`; `POST /org/{orgId}/listings/{id}/waitlist/offer`;
+and for families `POST /applications/{id}/offer/accept` and `/offer/decline`.
+
 ```
 GET    /api/v1/enrollments
 GET    /api/v1/enrollments/{id}

@@ -321,7 +321,68 @@ public sealed class WaiverSignatureRecord
     public byte[]? UserAgentHash { get; init; }
 }
 
-/// <summary>The Enrollment module's context (M3a): the family profile, shares, forms, eligibility, applications and waivers so far.</summary>
+/// <summary>
+/// A listing's seats and waitlist (D48): a counter row taken under <c>FOR UPDATE</c>, so the last
+/// seat and waitlist order are right without SERIALIZABLE.
+/// </summary>
+public sealed class SeatPoolRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public required string Label { get; init; }
+
+    public int Capacity { get; set; }
+
+    public int SeatsTaken { get; set; }
+
+    public int? WaitlistCapacity { get; set; }
+
+    public int WaitlistTaken { get; set; }
+
+    public int NextWaitlistPosition { get; set; }
+}
+
+/// <summary>A young person's place in a listing: enrolled, or on its waitlist.</summary>
+public sealed class EnrollmentRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public Guid? SeatPoolId { get; init; }
+
+    public Guid? ApplicationId { get; init; }
+
+    public Guid FamilyMemberId { get; init; }
+
+    public Guid? YouthUserId { get; init; }
+
+    public Guid OrgId { get; init; }
+
+    public required string SeatKind { get; set; }
+
+    public int? WaitlistPosition { get; set; }
+
+    public required string Status { get; set; }
+
+    public DateOnly? StartsOn { get; init; }
+
+    public DateOnly? EndsOn { get; init; }
+
+    public DateTimeOffset EnrolledAt { get; set; }
+
+    public DateTimeOffset? EndedAt { get; set; }
+
+    public string? EndReason { get; set; }
+}
+
+/// <summary>The Enrollment module's context (M3a): the family profile, shares, forms, eligibility, applications, waivers, seats and enrolments.</summary>
 public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -355,6 +416,10 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
     public DbSet<ListingWaiverRecord> ListingWaivers => Set<ListingWaiverRecord>();
 
     public DbSet<WaiverSignatureRecord> WaiverSignatures => Set<WaiverSignatureRecord>();
+
+    public DbSet<SeatPoolRecord> SeatPools => Set<SeatPoolRecord>();
+
+    public DbSet<EnrollmentRecord> Enrollments => Set<EnrollmentRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -470,6 +535,25 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => x.FamilyMemberId);
             b.HasIndex(x => new { x.WaiverId, x.FamilyMemberId, x.BodyHashSigned }).IsUnique();
+        });
+
+        modelBuilder.Entity<SeatPoolRecord>(b =>
+        {
+            b.ToTable("seat_pool");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.ListingId, x.Label }).IsUnique();
+        });
+
+        modelBuilder.Entity<EnrollmentRecord>(b =>
+        {
+            b.ToTable("enrollment");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.ListingId, x.FamilyMemberId }).IsUnique().HasFilter("status = 'active'");
+            b.HasIndex(x => new { x.SeatPoolId, x.WaitlistPosition }).IsUnique().HasFilter("seat_kind = 'waitlist' and status = 'active'");
+            b.HasIndex(x => new { x.OrgId, x.ListingId }).HasFilter("status = 'active'");
+            b.HasIndex(x => x.YouthUserId).HasFilter("youth_user_id is not null");
         });
 
         modelBuilder.ApplySnakeCaseNames();

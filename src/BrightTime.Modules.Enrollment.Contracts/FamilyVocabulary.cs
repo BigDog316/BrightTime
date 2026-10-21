@@ -65,8 +65,8 @@ public static class ApplicationStatuses
     public const string Expired = "expired";
     public const string Rejected = "rejected";
 
-    /// <summary>States a family may still withdraw from.</summary>
-    public static IReadOnlySet<string> Withdrawable { get; } = new HashSet<string>([Submitted, UnderReview, Waitlisted, Offered], StringComparer.Ordinal);
+    /// <summary>States a family may still withdraw from, giving back any seat or place held.</summary>
+    public static IReadOnlySet<string> Withdrawable { get; } = new HashSet<string>([Submitted, UnderReview, Waitlisted, Offered, Accepted], StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -80,4 +80,22 @@ public static class EligibilityRuleKinds
     public const string NeighbourhoodIn = "neighbourhood_in";
 
     public static IReadOnlySet<string> Supported { get; } = new HashSet<string>([AgeAtStart, GradeRange, NeighbourhoodIn], StringComparer.Ordinal);
+}
+
+/// <summary>An enrolment row's kind (<c>ck_enrollment_seat_kind</c>).</summary>
+public static class EnrollmentKinds
+{
+    public const string Enrolled = "enrolled";
+    public const string Waitlist = "waitlist";
+}
+
+/// <summary>An enrolment row's states (<c>ck_enrollment_status</c>).</summary>
+public static class EnrollmentStatuses
+{
+    public const string Active = "active";
+    public const string Completed = "completed";
+    public const string Withdrawn = "withdrawn";
+    public const string NoShow = "no_show";
+    public const string Removed = "removed";
+    public const string Expired = "expired";
 }

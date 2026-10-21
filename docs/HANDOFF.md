@@ -98,13 +98,24 @@ operations. The new `Enrollment` module holds:
     append-only evidence.
   - Submitting needs every required waiver signed.
   - Someone 18 or over signs for themselves, which waits on account linking.
-  - Next come decisions, seats and waitlists, the last M3a slice.
+- **Decisions, seats and waitlists** (D48, proposed):
+  - Staff review, accept, waitlist and decline, singly or in bulk.
+  - Seats are taken under a `FOR UPDATE` row lock, so the last seat goes to exactly one
+    applicant.
+  - Freed seats are offered to the front of the waitlist, and the family takes or declines
+    them.
+  - The organisation sees who applied only through the family's live share.
+  - New permissions: `applications.view` and `applications.decide`.
+
+**M3a is built** (2026-10-21): family profile, shares, forms, eligibility, applications,
+waivers, decisions. M3b (attendance with offline sync, messaging, payments, reports) is next.
+Rebuild the compose volume first: the schema and the role permissions changed.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
-Every decision through D46 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20). **D47 (waivers) is proposed.**
+Every decision through D46 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20). **D47 (waivers) and D48 (decisions, seats and waitlists) are proposed.**
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

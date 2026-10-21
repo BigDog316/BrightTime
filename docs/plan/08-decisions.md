@@ -1375,6 +1375,55 @@ M3a's fifth slice: e-signature for the releases a program needs before a young p
   - the organisation's view of who signed (with decisions);
   - re-signing on enrolment.
 
+### D48 — Decisions, seats and waitlists, under a row lock (**proposed 2026-10-21; implemented, reversible**)
+
+M3a's last slice: an organisation decides its applications, and seats are counted right.
+- **Seats:** one `seat_pool` per listing, `default`.
+  - Only owners and admins set it: `PUT /org/{orgId}/listings/{id}/seats {capacity,
+    waitlistCapacity}`. It can never go below what is already taken (`seats.below_taken`).
+  - **Every change takes the pool's row `FOR UPDATE` first,** then moves the enrolment and
+    the counters together. Two staff accepting different applicants for the last seat at
+    once give it to exactly one; the other gets `seats.full`. The test races them.
+  - `ck_seat_pool_taken` turns anything that slips past into a violation, never an oversell.
+- **Decisions:** `POST /org/{orgId}/applications/{id}/decide {decision, note}`, and
+  `bulk-decide` for up to 100, each reported on its own.
+  - `review` moves a submitted application to under review.
+  - `accept` takes a seat and makes an active enrolment.
+  - `waitlist` takes the next position.
+  - `decline` gives back a waitlist place if one is held.
+
+  A decision that doesn't fit the application's state is `decision.not_allowed`.
+- **Offers:** `POST /org/{orgId}/listings/{id}/waitlist/offer {count}` offers free seats to
+  the front of the waitlist, holding a seat for each.
+  - The family answers with `POST /applications/{id}/offer/accept`, which enrols, or
+    `/offer/decline`, which gives the seat back.
+  - Offers don't expire yet; that needs a job and a deadline the schema doesn't have.
+- **Releasing:** a family withdrawing an accepted, offered or waitlisted application gives back
+  what it held. Its enrolment row ends with the reason.
+- **Statuses:** `declined` is the organisation's no. A family turning down an offer is
+  `withdrawn`. `rejected` is left unused.
+- **Who:** two permissions are new in code, `applications.view` and `applications.decide`.
+  Program staff and provider admins hold them at their own organisation, as docs/plan/04
+  has it.
+- **What the organisation sees:**
+  - submitted applications only, never drafts, oldest first;
+  - the eligibility verdict;
+  - the answers, sensitive ones unsealed, since the family gave them to this organisation;
+  - the applicant's name and birth date only through the family's live share (D44). Revoke
+    the share, and the application stays but who it's from goes.
+
+  Every read and decision is audited with the organisation as `actor_org_id`, and refusals
+  too, bulk items included.
+- **A fix to D46:** a second child's submission to the same listing used to replace the
+  family's share, cutting the organisation off from the first child. It now joins the share:
+  the members and the fields are the union, which the family can see and narrow.
+- **Not yet:**
+  - a youth access grant on enrolment, which needs the member linked to an account;
+  - offer deadlines;
+  - several seat pools per listing (cohorts);
+  - notifications to the family on a decision;
+  - the console's queue screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

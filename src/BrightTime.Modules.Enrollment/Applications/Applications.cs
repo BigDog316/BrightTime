@@ -6,6 +6,7 @@ using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Enrollment.Contracts;
+using BrightTime.Modules.Enrollment.Decisions;
 using BrightTime.Modules.Enrollment.Eligibility;
 using BrightTime.Modules.Enrollment.Family;
 using BrightTime.Modules.Enrollment.Forms;
@@ -74,12 +75,12 @@ public sealed partial class Applications(
     IListingDetails listings,
     EligibilityRules eligibility,
     ProfileShares shares,
-    Waivers.Waivers waivers)
+    Waivers.Waivers waivers,
+    SealedAnswers sealedAnswers,
+    SeatLedger seats)
 {
     public const string Read = "enrollment.application.read";
     public const string Changed = "enrollment.application.changed";
-
-    private const string SealedProperty = "sealed";
 
     /// <summary>A new draft, or the one this key already made. The flag says which.</summary>
     public Task<Result<(ApplicationView View, bool Created)>> CreateAsync(UserId owner, Guid listingId, Guid memberId, string idempotencyKey, CancellationToken cancellationToken = default) =>
@@ -282,9 +283,22 @@ public sealed partial class Applications(
                     new Dictionary<string, object>(StringComparer.Ordinal) { ["rules"] = string.Join(',', judged.Rules.Where(r => r.IsHard && r.Met == false).Select(r => r.Kind)) }));
             }
 
+            // A family holds one live share per organisation and listing, so a second child's
+            // submission joins it rather than replacing it: replacing would cut the organisation
+            // off from the first child (D48). The fields are the union; the family sees them, and
+            // can narrow or end the share, under /family-profile/shares.
             ListingDetail listing = (await listings.GetForReviewAsync(tenant.TenantId, application.ListingId, Locale.Default.Code, ct).ConfigureAwait(false))!;
-            Result<ShareView> shared = await shares.GrantAsync(owner,
-                new ShareInput(listing.OrganisationId!.Value.Value, application.ListingId, [member.Id], input.ShareFields, input.ShareExpiresAt), ct).ConfigureAwait(false);
+            Guid org = listing.OrganisationId!.Value.Value;
+            DateTimeOffset asOf = clock.StoredNow();
+            ProfileShareRecord? existing = await db.ProfileShares.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.FamilyProfileId == application.FamilyProfileId && s.OrgId == org && s.ListingId == application.ListingId
+                                          && s.RevokedAt == null && (s.ExpiresAt == null || s.ExpiresAt > asOf), ct).ConfigureAwait(false);
+            Result<ShareView> shared = await shares.GrantAsync(owner, new ShareInput(
+                org,
+                application.ListingId,
+                [.. (existing?.MemberIds ?? []).Append(member.Id).Distinct()],
+                [.. (existing?.SharedFields ?? []).Concat(input.ShareFields).Distinct(StringComparer.Ordinal)],
+                input.ShareExpiresAt ?? existing?.ExpiresAt), ct).ConfigureAwait(false);
             if (!shared.IsSuccess)
             {
                 return Fail<ApplicationView>(shared.Error);
@@ -333,12 +347,62 @@ public sealed partial class Applications(
                 return Result.Failure(Error.Conflict("application.not_withdrawable", "This application has already ended."));
             }
 
+            // Any seat or waitlist place it holds goes back first (D48).
+            await seats.ReleaseAsync(application, EnrollmentStatuses.Withdrawn, "family_withdrew", ct).ConfigureAwait(false);
             DateTimeOffset now = clock.StoredNow();
             application.Status = ApplicationStatuses.Withdrawn;
             application.WithdrawnAt = now;
             application.UpdatedAt = now;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Changed, application.Id, "withdrawn", ct).ConfigureAwait(false);
+            return Result.Success();
+        }, cancellationToken);
+
+    /// <summary>Takes a seat offered from the waitlist: the young person is enrolled (D48).</summary>
+    public Task<Result<ApplicationView>> TakeOfferAsync(UserId owner, Guid id, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await OwnAsync(owner, id, ct).ConfigureAwait(false) is not { } application)
+            {
+                return Fail<ApplicationView>(NotFound());
+            }
+
+            if (application.Status != ApplicationStatuses.Offered)
+            {
+                return Fail<ApplicationView>(Error.Conflict("application.no_offer", "There's no seat on offer for this application."));
+            }
+
+            await seats.TakeOfferAsync(application, ct).ConfigureAwait(false);
+            DateTimeOffset now = clock.StoredNow();
+            application.Status = ApplicationStatuses.Accepted;
+            application.DecidedAt ??= now;
+            application.UpdatedAt = now;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Changed, application.Id, "offer_taken", ct).ConfigureAwait(false);
+            return Result<ApplicationView>.Success(await ViewAsync(application, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>Turns down a seat offered from the waitlist; the seat goes back for the next family.</summary>
+    public Task<Result> DeclineOfferAsync(UserId owner, Guid id, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await OwnAsync(owner, id, ct).ConfigureAwait(false) is not { } application)
+            {
+                return Result.Failure(NotFound());
+            }
+
+            if (application.Status != ApplicationStatuses.Offered)
+            {
+                return Result.Failure(Error.Conflict("application.no_offer", "There's no seat on offer for this application."));
+            }
+
+            await seats.ReleaseAsync(application, EnrollmentStatuses.Withdrawn, "offer_declined", ct).ConfigureAwait(false);
+            DateTimeOffset now = clock.StoredNow();
+            application.Status = ApplicationStatuses.Withdrawn;
+            application.WithdrawnAt = now;
+            application.UpdatedAt = now;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Changed, application.Id, "offer_declined", ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 
@@ -387,23 +451,10 @@ public sealed partial class Applications(
         return new Applicant(dob is null ? null : DateOnly.ParseExact(dob, "yyyy-MM-dd", CultureInfo.InvariantCulture), member.Grade, member.NeighbourhoodId);
     }
 
-    /// <summary>The snapshot with sensitive answers unsealed.</summary>
-    private async Task<Dictionary<string, JsonElement>> AnswersAsync(ApplicationRecord application, CancellationToken ct)
-    {
-        Dictionary<string, JsonElement> answers = new(StringComparer.Ordinal);
-        using JsonDocument snapshot = JsonDocument.Parse(application.AnswersSnapshot);
-        foreach (JsonProperty p in snapshot.RootElement.EnumerateObject())
-        {
-            answers[p.Name] = p.Value.ValueKind == JsonValueKind.Object && p.Value.TryGetProperty(SealedProperty, out JsonElement sealedValue)
-                ? JsonDocument.Parse(await cipher.DecryptAsync(tenant.TenantId, Convert.FromBase64String(sealedValue.GetString()!), ct).ConfigureAwait(false) ?? "null").RootElement.Clone()
-                : p.Value.Clone();
-        }
+    private Task<Dictionary<string, JsonElement>> AnswersAsync(ApplicationRecord application, CancellationToken ct) =>
+        sealedAnswers.ReadAsync(application.AnswersSnapshot, ct);
 
-        return answers;
-    }
-
-    private async Task<JsonNode> SealAsync(JsonElement value, CancellationToken ct) =>
-        new JsonObject { [SealedProperty] = Convert.ToBase64String((await cipher.EncryptAsync(tenant.TenantId, value.GetRawText(), ct).ConfigureAwait(false))!) };
+    private Task<JsonNode> SealAsync(JsonElement value, CancellationToken ct) => sealedAnswers.SealAsync(value, ct);
 
     private async Task<string> TitleAsync(Guid listingId, CancellationToken ct) =>
         (await listings.GetForReviewAsync(tenant.TenantId, listingId, tenant.Locale.Code, ct).ConfigureAwait(false))?.Title ?? "";

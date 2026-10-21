@@ -37,6 +37,8 @@ public static class ApplicationEndpoints
         applications.MapPatch("/{id:guid}", SaveAnswersAsync).Changes().Produces<ApplicationView>();
         applications.MapPost("/{id:guid}/submit", SubmitAsync).Changes().Produces<ApplicationView>();
         applications.MapPost("/{id:guid}/withdraw", WithdrawAsync).Changes();
+        applications.MapPost("/{id:guid}/offer/accept", TakeOfferAsync).Changes().Produces<ApplicationView>();
+        applications.MapPost("/{id:guid}/offer/decline", DeclineOfferAsync).Changes();
         applications.MapGet("/{id:guid}/waivers", WaiversAsync).Reads().Produces<IReadOnlyList<ApplicationWaiver>>();
         applications.MapPost("/{id:guid}/waivers/{waiverId:guid}/sign", SignAsync).Changes().Produces<SignatureView>();
         return api;
@@ -97,6 +99,21 @@ public static class ApplicationEndpoints
 
         Result withdrawn = await applications.WithdrawAsync(Owner(user), id, ct);
         return withdrawn.IsSuccess ? Results.NoContent() : Refused(audit, Modules.Enrollment.Applications.Applications.Changed, withdrawn.Error);
+    }
+
+    private static async Task<IResult> TakeOfferAsync(Guid id, ClaimsPrincipal user, Modules.Enrollment.Applications.Applications applications, AuditTrail audit, CancellationToken ct) =>
+        ChildRefused(user, audit, Modules.Enrollment.Applications.Applications.Changed)
+            ?? Answer(audit, Modules.Enrollment.Applications.Applications.Changed, await applications.TakeOfferAsync(Owner(user), id, ct));
+
+    private static async Task<IResult> DeclineOfferAsync(Guid id, ClaimsPrincipal user, Modules.Enrollment.Applications.Applications applications, AuditTrail audit, CancellationToken ct)
+    {
+        if (ChildRefused(user, audit, Modules.Enrollment.Applications.Applications.Changed) is { } refused)
+        {
+            return refused;
+        }
+
+        Result declined = await applications.DeclineOfferAsync(Owner(user), id, ct);
+        return declined.IsSuccess ? Results.NoContent() : Refused(audit, Modules.Enrollment.Applications.Applications.Changed, declined.Error);
     }
 
     private static async Task<IResult> WaiversAsync(Guid id, ClaimsPrincipal user, Waivers waivers, AuditTrail audit, CancellationToken ct)

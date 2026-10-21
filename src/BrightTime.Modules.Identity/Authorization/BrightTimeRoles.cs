@@ -60,6 +60,8 @@ public static class BrightTimeRoles
                 Permissions.Sites.Manage,
                 Permissions.Clearances.ViewStatus,
                 Permissions.Youth.ReadRecord,
+                Permissions.Applications.View,
+                Permissions.Applications.Decide,
             ],
 
             [ProviderAdmin] =
@@ -76,6 +78,8 @@ public static class BrightTimeRoles
                 Permissions.Clearances.ViewStatus,
                 Permissions.Youth.ReadRecord,
                 Permissions.Youth.ReadSupportNeeds,
+                Permissions.Applications.View,
+                Permissions.Applications.Decide,
                 Permissions.Audit.Read,
             ],
 

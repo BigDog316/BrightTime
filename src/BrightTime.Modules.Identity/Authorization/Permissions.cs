@@ -73,6 +73,15 @@ public static class Permissions
         public const string ReadSupportNeeds = "support_needs.read";
     }
 
+    public static class Applications
+    {
+        /// <summary>An organisation's applications: who applied (as far as their share shows), their answers, the verdict.</summary>
+        public const string View = "applications.view";
+
+        /// <summary>Accepting, waitlisting and declining an organisation's applications, and offering freed seats.</summary>
+        public const string Decide = "applications.decide";
+    }
+
     public static class Consent
     {
         /// <summary>
@@ -120,6 +129,7 @@ public static class Permissions
         Staff.Invite,
         Clearances.Record, Clearances.ViewStatus,
         Youth.ReadRecord, Youth.ReadSupportNeeds,
+        Applications.View, Applications.Decide,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

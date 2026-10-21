@@ -515,6 +515,7 @@ public static class EnrollmentModule
     {
         services.AddScoped<FamilyProfiles>();
         services.AddScoped<ProfileShares>();
+        services.AddScoped<Forms.FormDefinitions>();
         return services;
     }
 }

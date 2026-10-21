@@ -2,6 +2,7 @@ using System.Text.Json;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
+using BrightTime.Modules.Enrollment.Forms;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Platform.Contracts;
 using BrightTime.Modules.Platform.Tenancy;
@@ -48,6 +49,7 @@ public static class PublicEndpoints
 
         pub.MapGet("/listings", SearchAsync);
         pub.MapGet("/listings/{slug}", ListingAsync);
+        pub.MapGet("/listings/{slug}/form", ListingFormAsync);
         pub.MapGet("/collections", CollectionsAsync);
         pub.MapGet("/collections/{slug}", CollectionAsync);
         pub.MapGet("/neighbourhoods", NeighbourhoodsAsync);
@@ -81,6 +83,12 @@ public static class PublicEndpoints
         IReadOnlyList<ListingSummaryResponse> items = await SummariesAsync(page.Items, organisations, ct).ConfigureAwait(false);
         return Results.Ok(new PageResponse<ListingSummaryResponse>(items, page.NextCursor, [.. parsed.Notices.Select(PhraseResponse.From)]));
     }
+
+    /// <summary>The form a published listing's registration asks for (D45), in the request's language.</summary>
+    private static async Task<IResult> ListingFormAsync(string slug, ITenantContext tenant, FormDefinitions forms, CancellationToken ct) =>
+        await forms.ForListingAsync(slug, tenant.Locale.Code, ct).ConfigureAwait(false) is { } form
+            ? Results.Ok(form)
+            : ApiProblems.NotFound("No published listing at that address asks for a form.");
 
     private static async Task<IResult> ListingAsync(string slug, ITenantContext tenant, IListingDetails details, IOrganisationProfiles organisations, CancellationToken ct)
     {

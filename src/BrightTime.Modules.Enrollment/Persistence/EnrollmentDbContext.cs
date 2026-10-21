@@ -132,7 +132,41 @@ public sealed class ProfileShareRecord
     public DateTimeOffset? RevokedAt { get; set; }
 }
 
-/// <summary>The Enrollment module's context (M3a): the family profile and its shares so far.</summary>
+/// <summary>A provider's registration form, one version of it (D45). Published versions never change.</summary>
+public sealed class FormDefinitionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? OrgId { get; init; }
+
+    public required string Name { get; set; }
+
+    public int Version { get; init; }
+
+    public required string Status { get; set; }
+
+    public required string SchemaJson { get; set; }
+
+    public required byte[] SchemaHash { get; set; }
+
+    public Guid? CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset? PublishedAt { get; set; }
+}
+
+/// <summary>The form a listing's registration asks families to fill in.</summary>
+public sealed class ListingFormRecord
+{
+    public Guid ListingId { get; init; }
+
+    public Guid FormDefinitionId { get; set; }
+}
+
+/// <summary>The Enrollment module's context (M3a): the family profile, its shares, and forms so far.</summary>
 public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -150,6 +184,10 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
     public DbSet<FamilyContactRecord> FamilyContacts => Set<FamilyContactRecord>();
 
     public DbSet<ProfileShareRecord> ProfileShares => Set<ProfileShareRecord>();
+
+    public DbSet<FormDefinitionRecord> FormDefinitions => Set<FormDefinitionRecord>();
+
+    public DbSet<ListingFormRecord> ListingForms => Set<ListingFormRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -195,6 +233,22 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.OrgId, x.GrantedAt }).IsDescending(false, true).HasFilter("revoked_at is null");
+        });
+
+        modelBuilder.Entity<FormDefinitionRecord>(b =>
+        {
+            b.ToTable("form_definition");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.SchemaJson).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.TenantId, x.OrgId, x.Name, x.Version }).IsUnique();
+        });
+
+        modelBuilder.Entity<ListingFormRecord>(b =>
+        {
+            b.ToTable("listing_form");
+            b.HasKey(x => x.ListingId);
+            b.Property(x => x.ListingId).ValueGeneratedNever();
         });
 
         modelBuilder.ApplySnakeCaseNames();

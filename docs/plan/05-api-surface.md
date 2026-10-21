@@ -277,6 +277,11 @@ replaced with `PUT` rather than patched, and the members come back inside the pr
 and an end date. On the organisation's side, `GET /org/{orgId}/family-shares` and
 `GET /org/{orgId}/family-shares/{id}` return only what a live share covers.
 
+*Built (2026-10-20, D45):* `GET` and `POST /org/{orgId}/forms`; `GET` and `PUT
+/org/{orgId}/forms/{id}` (drafts only); `POST /org/{orgId}/forms/{id}/publish`, `/revise` and
+`/retire`; `PUT` and `DELETE /org/{orgId}/listings/{listingId}/form`. Families read
+`GET /public/listings/{slug}/form` rather than `/listings/{id}/form`.
+
 ```
 GET    /api/v1/enrollments
 GET    /api/v1/enrollments/{id}

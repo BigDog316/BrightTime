@@ -1227,6 +1227,50 @@ everything".
   - the provider console's screen;
   - the app's screens.
 
+### D45 — Registration forms: typed questions, fixed once published (**proposed 2026-10-20; implemented, reversible**)
+
+M3a's third slice: an organisation writes the questions its registration asks, beyond what
+the family profile already holds.
+- **The schema** (`form_definition.schema_json`) is a typed model, `FormSchema`, checked whole
+  before it is stored. Nothing a provider writes is ever run.
+  - **Kinds:** `short_text`, `long_text`, `number`, `date`, `yes_no`, `single_choice`,
+    `multi_choice`, and `consent` (a statement the family must tick).
+  - **Each question:**
+    - a key (`^[a-z][a-z0-9_]{0,39}$`, unique on the form), which is what
+      `application_answer.question_key` will hold;
+    - a label, in English plus any of the other five languages;
+    - optional help text;
+    - `required`, and `sensitive`.
+  - **Limits:** 1 to 60 questions, 2 to 30 choices on a choice question, a length limit only
+    on text, a range only on numbers. A consent question is always required.
+  - **`sensitive`** marks answers kept out of every report, export and aggregate
+    (`application_answer.is_sensitive`). The family is shown the flag too.
+  - **Stored canonically** (trimmed, dictionaries in key order), with its SHA-256 in
+    `schema_hash`, so equal forms hash equal.
+- **Lifecycle:**
+  - A form starts as a draft (version 1), which can be edited.
+  - Publishing fixes it. An application will record the version it answered, so "what were
+    we asked?" has one answer.
+  - `revise` makes the next version as a draft holding the same questions, one draft at a
+    time.
+  - `retire` stops a published version being attached anywhere new, and is refused while a
+    listing still uses it.
+  - The name is set when the form is made, and stays with it through its versions.
+- **Listings:** `PUT` and `DELETE /org/{orgId}/listings/{listingId}/form` attach a published
+  form to one of the organisation's own listings, or take it off.
+- **Who:** only an organisation's owners and admins (`organisations.edit` at admin role or
+  above) manage its forms. Staff run programs; they don't decide what families are asked.
+- **Families:** `GET /api/v1/public/listings/{slug}/form` gives the published form in the
+  request's language, falling back to English per question, with a 60-second public cache.
+  - It sits under `/public/listings/{slug}` (D30), not docs/plan/05's `/listings/{id}/form`,
+    so the app reaches a listing and its form the same way.
+- **Not audited:** a form definition holds no one's data. Answers will be audited, with
+  applications.
+- **Not yet:**
+  - the console's form builder;
+  - forms shared across organisations (`org_id` null, a tenant-wide intake form);
+  - pre-filling answers from the family profile.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

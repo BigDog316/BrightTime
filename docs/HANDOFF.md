@@ -82,14 +82,18 @@ operations. The new `Enrollment` module holds:
 - **Profile shares** (D44, proposed): the family shares chosen members and fields with an
   approved organisation, optionally for one listing and until a date. The organisation's
   staff read exactly that, while the share is live, under `/api/v1/org/{orgId}/family-shares`.
-  `profile_share` gained `member_ids`. Next come form definitions and the listing's form.
+  `profile_share` gained `member_ids`.
+- **Registration forms** (D45, proposed): an organisation's admins draft typed questions, then
+  publish (fixed from then on), revise into new versions, and attach a published form to a
+  listing. Families read it in their language at `/api/v1/public/listings/{slug}/form`.
+  Next come applications with eligibility.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
-**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split), D43 (the family profile) and D44 (profile shares).
+**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split), D43 (the family profile), D44 (profile shares) and D45 (registration forms).
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 

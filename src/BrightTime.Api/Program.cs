@@ -2,6 +2,7 @@ using BrightTime.Api;
 using BrightTime.Api.Auth;
 using BrightTime.Api.Consent;
 using BrightTime.Api.Family;
+using BrightTime.Api.Forms;
 using BrightTime.Api.Me;
 using BrightTime.Api.Notifications;
 using BrightTime.Api.Public;
@@ -57,6 +58,7 @@ v1.MapConsentEndpoints();
 v1.MapMeFinderEndpoints();
 v1.MapNotificationEndpoints();
 v1.MapFamilyEndpoints();
+v1.MapFormEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

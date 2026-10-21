@@ -2,6 +2,8 @@ using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Enrollment.Persistence;
+using BrightTime.Modules.Opportunities.Contracts;
+using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,8 +13,46 @@ namespace BrightTime.Modules.Enrollment.Roster;
 /// Enrolments for other modules (D49). Names leave this module only as a roster's display name,
 /// and only where the family's live share with the organisation names the young person.
 /// </summary>
-public sealed class EnrolmentQueries(EnrollmentDbContext db, IFieldCipher cipher, ITenantContext tenant, IClock clock) : IEnrolmentQueries
+public sealed class EnrolmentQueries(EnrollmentDbContext db, IFieldCipher cipher, ITenantContext tenant, IClock clock, IListingDetails listings) : IEnrolmentQueries
 {
+    public Task<FamilyContact?> FamilyOfAsync(Guid? enrollmentId, Guid? applicationId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<FamilyContact?>(async ct =>
+        {
+            if (enrollmentId is { } e)
+            {
+                var found = await (from en in db.Enrollments.AsNoTracking()
+                                   join m in db.FamilyMembers on en.FamilyMemberId equals m.Id
+                                   join p in db.FamilyProfiles on m.FamilyProfileId equals p.Id
+                                   where en.Id == e
+                                   select new { p.OwnerUserId, en.OrgId, en.ListingId }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+                return found is null ? null : new FamilyContact(found.OwnerUserId, found.OrgId, found.ListingId);
+            }
+
+            if (applicationId is { } a)
+            {
+                var found = await (from ap in db.Applications.AsNoTracking()
+                                   join p in db.FamilyProfiles on ap.FamilyProfileId equals p.Id
+                                   where ap.Id == a && ap.Status != ApplicationStatuses.Draft
+                                   select new { p.OwnerUserId, ap.ListingId }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+                if (found is null || (await listings.GetForReviewAsync(tenant.TenantId, found.ListingId, Locale.Default.Code, ct).ConfigureAwait(false))?.OrganisationId is not { } org)
+                {
+                    return null;
+                }
+
+                return new FamilyContact(found.OwnerUserId, org.Value, found.ListingId);
+            }
+
+            return null;
+        }, cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> FamilyOwnersAsync(Guid listingId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<Guid>>(async ct =>
+            [.. await (from en in db.Enrollments.AsNoTracking()
+                       join m in db.FamilyMembers on en.FamilyMemberId equals m.Id
+                       join p in db.FamilyProfiles on m.FamilyProfileId equals p.Id
+                       where en.ListingId == listingId && en.Status == EnrollmentStatuses.Active && en.SeatKind == EnrollmentKinds.Enrolled
+                       select p.OwnerUserId).Distinct().ToListAsync(ct).ConfigureAwait(false)], cancellationToken);
+
     public Task<IReadOnlyList<EnrolmentSummary>> GetAsync(IReadOnlyCollection<Guid> enrollmentIds, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(enrollmentIds);

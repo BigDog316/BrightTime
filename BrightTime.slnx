@@ -6,6 +6,8 @@
     <Project Path="src/BrightTime.Infrastructure/BrightTime.Infrastructure.csproj" />
     <Project Path="src/BrightTime.Jobs/BrightTime.Jobs.csproj" />
     <Project Path="src/BrightTime.Localisation/BrightTime.Localisation.csproj" />
+    <Project Path="src/BrightTime.Modules.Community.Contracts/BrightTime.Modules.Community.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Community/BrightTime.Modules.Community.csproj" />
     <Project Path="src/BrightTime.Modules.Directory.Contracts/BrightTime.Modules.Directory.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
     <Project Path="src/BrightTime.Modules.Attendance.Contracts/BrightTime.Modules.Attendance.Contracts.csproj" />

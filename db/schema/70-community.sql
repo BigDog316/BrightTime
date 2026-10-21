@@ -216,6 +216,28 @@ create table conversation_participant (
 );
 create index ix_participant_user on conversation_participant (user_id) where removed_at is null;
 
+-- Who is a minor is the database's answer, not the caller's (D53): a youth or
+-- child account is a minor whatever is_minor says, so no write can pass a minor
+-- off as an adult to make a pair look like a group. A participant whose account
+-- isn't visible is refused rather than guessed at.
+create or replace function community.set_participant_minor() returns trigger
+  language plpgsql as $fn$
+declare
+  v_kind text;
+begin
+  select account_kind into v_kind from identity.app_user where id = new.user_id;
+  if v_kind is null then
+    raise exception 'conversation participant % is not a known account', new.user_id
+      using errcode = '23503';
+  end if;
+  new.is_minor := v_kind in ('youth', 'child');
+  return new;
+end
+$fn$;
+create trigger conversation_participant_minor
+  before insert or update of user_id, is_minor on conversation_participant
+  for each row execute function community.set_participant_minor();
+
 -- Maintains conversation.includes_minor / adult_participant_count and
 -- rejects the adult-minor pair shape outright.
 create or replace function community.enforce_safe_conversation() returns trigger

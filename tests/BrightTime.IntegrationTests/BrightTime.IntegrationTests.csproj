@@ -18,6 +18,7 @@
     <ProjectReference Include="../../src/BrightTime.Modules.Notifications/BrightTime.Modules.Notifications.csproj" />
     <ProjectReference Include="../../src/BrightTime.Modules.Enrollment/BrightTime.Modules.Enrollment.csproj" />
     <ProjectReference Include="../../src/BrightTime.Modules.Attendance/BrightTime.Modules.Attendance.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Community/BrightTime.Modules.Community.csproj" />
     <ProjectReference Include="../../src/BrightTime.Seed/BrightTime.Seed.csproj" />
   </ItemGroup>
 

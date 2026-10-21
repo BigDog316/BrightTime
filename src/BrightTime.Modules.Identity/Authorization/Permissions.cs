@@ -94,6 +94,16 @@ public static class Permissions
         public const string OfflineSync = "attendance.offline_sync";
     }
 
+    public static class Messages
+    {
+        /// <summary>
+        /// Opening and writing conversations with the families of the organisation's enrolments and
+        /// applications (D53). There is deliberately no permission to message a young person alone:
+        /// docs/plan/04's <c>messages.send_to_youth_1to1</c> is a permanent never, with no row to grant.
+        /// </summary>
+        public const string SendToFamily = "messages.send_to_family";
+    }
+
     public static class Consent
     {
         /// <summary>
@@ -143,6 +153,7 @@ public static class Permissions
         Youth.ReadRecord, Youth.ReadSupportNeeds,
         Applications.View, Applications.Decide,
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
+        Messages.SendToFamily,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

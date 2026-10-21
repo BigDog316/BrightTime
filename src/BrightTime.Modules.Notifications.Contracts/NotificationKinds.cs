@@ -7,13 +7,16 @@ public static class NotificationKinds
     public const string SessionReminder = "session_reminder";
     public const string SavedItemUpdate = "saved_item_update";
     public const string ConsentRequest = "consent_request";
+
+    /// <summary>A message in a conversation (D53). The push says only that there is one, and from whom.</summary>
+    public const string NewMessage = "new_message";
     public const string System = "system";
 
     /// <summary>
     /// The kinds a person can switch on or off in M2. The rest arrive with the features that send
     /// them (applications, messaging, badges).
     /// </summary>
-    public static readonly IReadOnlyList<string> UserConfigurable = [DeadlineReminder, SessionReminder, SavedItemUpdate];
+    public static readonly IReadOnlyList<string> UserConfigurable = [DeadlineReminder, SessionReminder, SavedItemUpdate, NewMessage];
 }
 
 /// <summary>Delivery channels, as in <c>ck_preference_channel</c>.</summary>

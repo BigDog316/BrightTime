@@ -14,6 +14,8 @@ using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Attendance.Persistence;
 using BrightTime.Modules.Attendance.Records;
+using BrightTime.Modules.Community.Messaging;
+using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Enrollment.Family;
@@ -121,6 +123,10 @@ public static class ApiComposition
         // the staff note encrypted (D49).
         services.AddBrightTimeDbContext<AttendanceDbContext>(app, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
         services.AddAttendance();
+
+        // Messaging (M3b): conversations with families, never a pair with a minor (D53, T1).
+        services.AddBrightTimeDbContext<CommunityDbContext>(app, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);
+        services.AddCommunity();
 
         // The authentication path's login: Identity stores only.
         services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth));

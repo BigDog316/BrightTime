@@ -65,6 +65,7 @@ public static class BrightTimeRoles
                 Permissions.Attendance.Record,
                 Permissions.Attendance.ViewRoster,
                 Permissions.Attendance.OfflineSync,
+                Permissions.Messages.SendToFamily,
             ],
 
             [ProviderAdmin] =
@@ -86,6 +87,7 @@ public static class BrightTimeRoles
                 Permissions.Attendance.Record,
                 Permissions.Attendance.ViewRoster,
                 Permissions.Attendance.OfflineSync,
+                Permissions.Messages.SendToFamily,
                 Permissions.Audit.Read,
             ],
 

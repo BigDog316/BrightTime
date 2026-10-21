@@ -1608,6 +1608,64 @@ signal.
   - correcting a conflict from the phone (it's shown; staff correct it on the web or online);
   - the kiosk screens (badge and kiosk codes, D50), which come with the app's QR scanning.
 
+### D53 — Messaging: organisations and families, never a pair with a minor (**proposed 2026-10-21; implemented, reversible**)
+
+M3b's messaging, first slice: conversations between an organisation and a family, with
+docs/plan/07's T1 enforced at every layer. Broadcasts come next (D54); SMS waits on Q9.
+- **A new module,** `BrightTime.Modules.Community`, for the `community` schema, with its own
+  contracts. It may reference the Platform, Identity, Directory, Opportunities and Enrollment
+  contracts.
+  - **New contract methods:**
+    - `IDirectoryQueries.GetOrganisationMembersAsync`, to find a second adult;
+    - `IEnrolmentQueries.FamilyOfAsync`, for the account behind an enrolment or submitted
+      application;
+    - `IEnrolmentQueries.FamilyOwnersAsync`, for D54.
+- **Starting a conversation:** `POST /org/{orgId}/conversations {enrollmentId | applicationId,
+  subject, body}`, by holders of the new `messages.send_to_family` (program staff and provider
+  admins at their own organisation).
+  - It opens a conversation with the account that owns that family's profile.
+  - There is still no permission to message a young person alone; docs/plan/04's
+    `messages.send_to_youth_1to1` stays a permanent never, with no row to grant.
+- **When the family's account is a young person's:**
+  - their consent must allow messages from organisations (`messaging.not_messageable`);
+  - no contact restriction may keep the staff member away (`messaging.restricted`);
+  - an admin of the organisation joins as `org_admin_observer`. With no second adult to add,
+    it is refused: `messaging.unsafe_shape` (409; docs/plan/05 said 422, which `ApiProblems`
+    has no kind for). The remedy is to ask the programme coordinator to join.
+  - The thread tells everyone in it that the organisation reads it (`readByOrganisation`).
+- **The database is the guarantee.** `enforce_safe_conversation()` checks every participant
+  change at commit. New in this slice, `set_participant_minor()` makes `is_minor` the database's
+  answer from the account (youth or child), whatever the write says. Before it, a lying update
+  could pass a minor off as an adult and make a pair look like a group.
+  - **Integration tests try every route to a pair, and each fails at the database:**
+    - the direct insert;
+    - removing adults one by one;
+    - deleting participants;
+    - the guardian and the observer leaving together;
+    - declaring the minor an adult;
+    - adding a second minor as staff.
+  - The fourth route T1 names, a mentor added to a two-person space, waits for spaces.
+- **Screening:** an adult's message into a conversation with a minor is checked for an attempt
+  to move it off the platform. That means a phone number, an email address, a link, a social
+  handle, another messaging app's name, or a request to be contacted privately.
+  - A flagged message is held (`state = held`, with the reasons in `screen_result`), never
+    silently dropped. Only its sender sees it, marked held, until a moderator decides; the
+    moderation queue is a later slice. It errs towards holding.
+- **Reading and writing:** `GET /conversations` (with unread counts), `GET /conversations/{id}`
+  (which marks it read), and `POST /conversations/{id}/messages`, for participants only.
+  - An announcement (`org_broadcast`, D54) takes no replies from families.
+  - Every read, send and refusal is audited.
+- **Notifications:** a sent message requests a `new_message` notification for every other
+  participant except observers, and families can switch these off.
+  - The push says only who wrote: "{org} sent you a message", with a link into the app. Never
+    what the message says (T13).
+- **Not yet:**
+  - broadcasts (D54);
+  - the moderation queue and releasing held messages;
+  - closing a conversation;
+  - the app's and the console's message screens;
+  - SMS (Q9).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -7,6 +7,7 @@ using BrightTime.Api.Decisions;
 using BrightTime.Api.Family;
 using BrightTime.Api.Forms;
 using BrightTime.Api.Me;
+using BrightTime.Api.Messaging;
 using BrightTime.Api.Notifications;
 using BrightTime.Api.Public;
 using BrightTime.Hosting.Auditing;
@@ -68,6 +69,7 @@ v1.MapWaiverEndpoints();
 v1.MapDecisionEndpoints();
 v1.MapAttendanceEndpoints();
 v1.MapDeviceEndpoints();
+v1.MapMessagingEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

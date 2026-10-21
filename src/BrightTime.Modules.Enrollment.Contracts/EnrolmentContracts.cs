@@ -12,6 +12,12 @@ public sealed record RosterEntry(Guid EnrollmentId, string? DisplayName);
 /// <summary>An enrolment of someone on the asking account's family profile.</summary>
 public sealed record FamilyEnrolment(Guid EnrollmentId, Guid MemberId, string MemberFirstName, Guid ListingId, string Status);
 
+/// <summary>
+/// The family behind an enrolment or a submitted application, as messaging needs it: the account
+/// that owns the family profile, and the organisation and listing it concerns (D53).
+/// </summary>
+public sealed record FamilyContact(Guid OwnerUserId, Guid OrgId, Guid ListingId);
+
 /// <summary>Enrolments, for the modules that hang records off them (attendance first).</summary>
 public interface IEnrolmentQueries
 {
@@ -22,4 +28,10 @@ public interface IEnrolmentQueries
 
     /// <summary>The enrolments of everyone on <paramref name="ownerUserId"/>'s family profile.</summary>
     Task<IReadOnlyList<FamilyEnrolment>> ForOwnerAsync(Guid ownerUserId, CancellationToken cancellationToken = default);
+
+    /// <summary>The family behind an enrolment, or behind a submitted (never a draft) application; null when there is none.</summary>
+    Task<FamilyContact?> FamilyOfAsync(Guid? enrollmentId, Guid? applicationId, CancellationToken cancellationToken = default);
+
+    /// <summary>The accounts owning the family profiles of a listing's active, enrolled young people (D54).</summary>
+    Task<IReadOnlyList<Guid>> FamilyOwnersAsync(Guid listingId, CancellationToken cancellationToken = default);
 }

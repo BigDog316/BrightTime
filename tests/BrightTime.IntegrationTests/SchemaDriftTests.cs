@@ -2,6 +2,7 @@ using System.Text;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Attendance.Persistence;
+using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Enrollment.Persistence;
 using BrightTime.Modules.Identity.Persistence;
@@ -45,6 +46,7 @@ public sealed class SchemaDriftTests(DatabaseFixture database)
         nameof(NotificationsDbContext),
         nameof(EnrollmentDbContext),
         nameof(AttendanceDbContext),
+        nameof(CommunityDbContext),
     ];
 
     [Theory]
@@ -133,6 +135,7 @@ public sealed class SchemaDriftTests(DatabaseFixture database)
             nameof(NotificationsDbContext) => new NotificationsDbContext(Options<NotificationsDbContext>(connectionString), tenant),
             nameof(EnrollmentDbContext) => new EnrollmentDbContext(Options<EnrollmentDbContext>(connectionString), tenant),
             nameof(AttendanceDbContext) => new AttendanceDbContext(Options<AttendanceDbContext>(connectionString), tenant),
+            nameof(CommunityDbContext) => new CommunityDbContext(Options<CommunityDbContext>(connectionString), tenant),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "Unknown context."),
         };
     }

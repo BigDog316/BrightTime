@@ -125,13 +125,18 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   it without a signal. Marks are sealed (AES-GCM, with the key in the keychain), synced once,
   and wiped when the server says revoked. The roster locks after 72 hours without contact. The
   Android build compiles; it hasn't been run on a phone yet.
-- Next in M3b: messaging, then payments, then reports.
+- **Messaging** (D53, proposed): staff open conversations with families. A young person is never
+  in one with a single adult: an admin observes, or it is refused, and the database decides who
+  is a minor. Every route to a pair is tested at the database. Contact-exchange attempts to a
+  minor are held. Pushes say only who wrote.
+- Next in M3b: broadcasts, then payments, then reports. Rebuild the compose volume: the schema
+  and the role permissions changed.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
-Every decision through D52 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D52 on 2026-10-21).
+Every decision through D52 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D52 on 2026-10-21). **D53 (messaging) is proposed.**
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

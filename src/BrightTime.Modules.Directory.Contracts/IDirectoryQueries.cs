@@ -54,6 +54,11 @@ public interface IDirectoryQueries
         UserId userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>An organisation's active members, owners first: who else can be an adult in a conversation (D53).</summary>
+    Task<IReadOnlyList<OrganisationMembership>> GetOrganisationMembersAsync(
+        OrganisationId organisationId,
+        CancellationToken cancellationToken = default);
+
     Task<string?> GetOrganisationRoleAsync(
         OrganisationId organisationId,
         UserId userId,

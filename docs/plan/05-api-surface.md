@@ -430,6 +430,11 @@ POST   /api/v1/org/{orgId}/showcase/{itemId}/approve
 outcome — the client is expected to offer "add your program coordinator" as
 the remedy.
 
+*Built (2026-10-21, D53):* `GET /conversations`, `GET /conversations/{id}`,
+`POST /conversations/{id}/messages`, and `POST /org/{orgId}/conversations {enrollmentId |
+applicationId, subject, body}` (staff open a conversation with a family). The unsafe shape is
+`409 urn:brighttime:problem:messaging.unsafe_shape`.
+
 ---
 
 ## Workforce

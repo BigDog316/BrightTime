@@ -31,6 +31,26 @@ public sealed class DirectoryQueries(DirectoryDbContext db, IClock clock) : IDir
                 .ConfigureAwait(false),
             cancellationToken);
 
+    public Task<IReadOnlyList<OrganisationMembership>> GetOrganisationMembersAsync(
+        OrganisationId organisationId,
+        CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<OrganisationMembership>>(async ct =>
+            [.. (await db.Memberships
+                .AsNoTracking()
+                .Where(m => m.OrgId == organisationId.Value
+                            && m.Status == MembershipStatus.Active
+                            && m.EndedAt == null)
+                .Select(m => new OrganisationMembership(
+                    new OrganisationId(m.OrgId),
+                    new UserId(m.UserId),
+                    m.OrgRole,
+                    m.JoinedAt!.Value))
+                .ToListAsync(ct)
+                .ConfigureAwait(false))
+                .OrderBy(m => m.OrgRole switch { "owner" => 0, "admin" => 1, "staff" => 2, _ => 3 })
+                .ThenBy(m => m.JoinedAt)],
+            cancellationToken);
+
     public Task<string?> GetOrganisationRoleAsync(
         OrganisationId organisationId,
         UserId userId,

@@ -105,7 +105,7 @@ public static class FormEndpoints
     private static IResult Answer(Result<FormView> result) => result.IsSuccess ? Results.Ok(result.Value) : ApiProblems.From(result.Error);
 
     /// <summary>An owner or admin of the organisation, able to edit it.</summary>
-    private static async Task<IResult?> RefusedAsync(ClaimsPrincipal user, Guid orgId, IAuthorizationService authorization)
+    internal static async Task<IResult?> RefusedAsync(ClaimsPrincipal user, Guid orgId, IAuthorizationService authorization)
     {
         AuthorizationResult result = await authorization.AuthorizeAsync(
             user, new AuthorizationTarget { OrganisationId = new OrganisationId(orgId) }, new OrganisationScopeRequirement(Permissions.Organisations.Edit, OrganisationRoles.Admin));

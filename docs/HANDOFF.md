@@ -86,14 +86,20 @@ operations. The new `Enrollment` module holds:
 - **Registration forms** (D45, proposed): an organisation's admins draft typed questions, then
   publish (fixed from then on), revise into new versions, and attach a published form to a
   listing. Families read it in their language at `/api/v1/public/listings/{slug}/form`.
-  Next come applications with eligibility.
+- **Applications and eligibility** (D46, proposed):
+  - Age, grade and neighbourhood rules, with a provider dry run and a public view.
+  - Families draft against the listing's form, then submit once. Submitting checks
+    completeness and the hard rules, and shares the applicant as the family chose.
+  - Sensitive answers are sealed.
+  - `waiver_signature`'s references now restrict deletes.
+  - Next come waivers, then decisions, seats and waitlists.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
-**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split), D43 (the family profile), D44 (profile shares) and D45 (registration forms).
+**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split), D43 (the family profile), D44 (profile shares), D45 (registration forms) and D46 (applications and eligibility). D46 also reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 

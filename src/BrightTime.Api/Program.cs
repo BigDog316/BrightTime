@@ -1,4 +1,5 @@
 using BrightTime.Api;
+using BrightTime.Api.Applications;
 using BrightTime.Api.Auth;
 using BrightTime.Api.Consent;
 using BrightTime.Api.Family;
@@ -59,6 +60,8 @@ v1.MapMeFinderEndpoints();
 v1.MapNotificationEndpoints();
 v1.MapFamilyEndpoints();
 v1.MapFormEndpoints();
+v1.MapEligibilityEndpoints();
+v1.MapApplicationEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

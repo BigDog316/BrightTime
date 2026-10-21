@@ -50,3 +50,34 @@ public static class ProfileShareFields
         [Household, MemberNames, MemberBirthDates, MemberGrade, MemberPronouns, Contacts, SupportNeeds],
         StringComparer.Ordinal);
 }
+
+/// <summary>An application's states (<c>ck_application_status</c>).</summary>
+public static class ApplicationStatuses
+{
+    public const string Draft = "draft";
+    public const string Submitted = "submitted";
+    public const string UnderReview = "under_review";
+    public const string Waitlisted = "waitlisted";
+    public const string Offered = "offered";
+    public const string Accepted = "accepted";
+    public const string Declined = "declined";
+    public const string Withdrawn = "withdrawn";
+    public const string Expired = "expired";
+    public const string Rejected = "rejected";
+
+    /// <summary>States a family may still withdraw from.</summary>
+    public static IReadOnlySet<string> Withdrawable { get; } = new HashSet<string>([Submitted, UnderReview, Waitlisted, Offered], StringComparer.Ordinal);
+}
+
+/// <summary>
+/// The eligibility rule kinds this build evaluates (D46). The table allows more
+/// (<c>ck_eligibility_rule_kind</c>); each arrives with the data it needs.
+/// </summary>
+public static class EligibilityRuleKinds
+{
+    public const string AgeAtStart = "age_at_start";
+    public const string GradeRange = "grade_range";
+    public const string NeighbourhoodIn = "neighbourhood_in";
+
+    public static IReadOnlySet<string> Supported { get; } = new HashSet<string>([AgeAtStart, GradeRange, NeighbourhoodIn], StringComparer.Ordinal);
+}

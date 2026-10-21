@@ -1271,6 +1271,70 @@ the family profile already holds.
   - forms shared across organisations (`org_id` null, a tenant-wide intake form);
   - pre-filling answers from the family profile.
 
+### D46 — Applications, judged by declarative rules, submitted once (**proposed 2026-10-20; implemented, reversible**)
+
+M3a's fourth slice: a family applies for one young person to one listing.
+- **Eligibility rules** (`eligibility_rule`): a kind with a typed config, hard or advisory.
+  They are evaluated here, never by provider code.
+  - **This build evaluates three kinds:**
+    - `age_at_start` (`min`/`max`, on an optional date, today otherwise);
+    - `grade_range`;
+    - `neighbourhood_in`.
+  - **The other kinds wait for their data:** `school_in` and `district_resident` need a school
+    lookup, `prior_enrollment` needs enrolments, and the badge and playlist kinds need M4.
+  - **Each outcome** is met, not met, or not known. The verdict is false when a hard rule is
+    not met, null when none fails but one can't be decided, and true otherwise. Advisory
+    rules never change it.
+  - **Organisation side** (owners and admins, as for forms):
+    - `GET` and `PUT /org/{orgId}/listings/{id}/eligibility`;
+    - `POST …/eligibility/preview`, a dry run against a made-up young person, with the saved
+      rules or with rules not yet saved.
+  - **Family side:** `GET /public/listings/{slug}/eligibility` shows the rules before
+    applying.
+  - Family members gain an optional neighbourhood, which must be one of the tenant's. It is
+    coarse, never an address.
+- **Applications:**
+  - **Create:** `POST /applications {listingId, memberId}` needs an `Idempotency-Key`, and
+    the same key returns the same draft.
+    - The listing must be published and take registrations here (`builtin` or
+      `waitlist_only`), and the member must be a young person in the household.
+    - One live application per member and listing (the table's own index).
+  - **Draft:** pinned to the listing's published form at the time. `PATCH` saves some
+    answers at a time, each checked against its question; null clears one.
+  - **Submit:**
+    - checks every required question is answered and every required consent is ticked;
+    - evaluates the rules. A failed hard rule stops it (`application.ineligible`, naming the
+      kinds); an undecided one doesn't, and the provider decides;
+    - shares the applicant with the organisation for that listing, with the fields the family
+      chose (D44). These must include the name, because an organisation can't consider an
+      application from no one;
+    - stores the verdict and writes the reporting rows. Submitting again returns the same
+      application.
+  - **Withdraw:** withdraws a submitted application. A draft, never sent, is thrown away.
+    The share stays until the family revokes it.
+  - **Audit:** every read, change and refusal is audited (`enrollment.application.*`).
+- **Sensitive answers are sealed.** Under the tenant's data key, they are stored in the
+  snapshot as `{"sealed": …}`.
+  - Their `application_answer` rows say only that the question was answered.
+  - The original schema stored them in the clear. Reports exclude them anyway, so sealing
+    costs reporting nothing.
+- **A schema fix:** `waiver_signature.application_id` and `enrollment_id` restrict deletes
+  instead of setting null.
+  - The table is append-only, and its statement-level trigger refused the cascaded update
+    even when no row matched. So no application or enrolment could ever be deleted.
+  - Now a signed waiver keeps pointing at what was signed, and an unsigned draft can go.
+- **Found, not fixed:** `organisation_vetting_event`, `listing_revision` and
+  `moderation_action` are append-only too. Their `on delete cascade` / `set null` references
+  make deleting an organisation, a listing or a community report fail the same way. Nothing
+  deletes those today; it needs deciding before anything does.
+- **Times** the module returns are rounded to the microsecond PostgreSQL keeps, so a value
+  returned on write equals the value read back.
+- **Not yet:**
+  - the organisation's queue and decisions, and seats and waitlists (slice 6);
+  - waivers (slice 5);
+  - a guardian applying for a child who has their own account;
+  - expiring stale drafts.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

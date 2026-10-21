@@ -166,7 +166,96 @@ public sealed class ListingFormRecord
     public Guid FormDefinitionId { get; set; }
 }
 
-/// <summary>The Enrollment module's context (M3a): the family profile, its shares, and forms so far.</summary>
+/// <summary>One eligibility rule on a listing (D46): a kind and its typed config, hard or advisory.</summary>
+public sealed class EligibilityRuleRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public required string RuleKind { get; init; }
+
+    public required string Config { get; init; }
+
+    public bool IsHard { get; init; }
+
+    public string? MessageKey { get; init; }
+
+    public short SortOrder { get; init; }
+}
+
+/// <summary>A family's application for one member to one listing (D46).</summary>
+public sealed class ApplicationRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public Guid? SeatPoolId { get; set; }
+
+    public Guid FamilyProfileId { get; init; }
+
+    public Guid FamilyMemberId { get; init; }
+
+    public Guid? SubmittedByUserId { get; set; }
+
+    public Guid? FormDefinitionId { get; init; }
+
+    public required string Status { get; set; }
+
+    /// <summary>The answers as given. Sensitive ones are sealed under the tenant's data key.</summary>
+    public required string AnswersSnapshot { get; set; }
+
+    public required string EligibilityResult { get; set; }
+
+    public bool? IsEligible { get; set; }
+
+    public decimal? PriorityScore { get; set; }
+
+    public DateTimeOffset StartedAt { get; init; }
+
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    public DateTimeOffset? DecidedAt { get; set; }
+
+    public Guid? DecidedBy { get; set; }
+
+    public string? DecisionNote { get; set; }
+
+    public DateTimeOffset? WithdrawnAt { get; set; }
+
+    public string? IdempotencyKey { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>One answer, normalised for reporting. A sensitive answer's row records only that it was answered.</summary>
+public sealed class ApplicationAnswerRecord
+{
+    public Guid ApplicationId { get; init; }
+
+    public required string QuestionKey { get; init; }
+
+    public string? ValueText { get; init; }
+
+    public decimal? ValueNumber { get; init; }
+
+    public DateOnly? ValueDate { get; init; }
+
+    public bool? ValueBool { get; init; }
+
+    public string[]? ValueChoices { get; init; }
+
+    public bool IsSensitive { get; init; }
+}
+
+/// <summary>The Enrollment module's context (M3a): the family profile, shares, forms, eligibility and applications so far.</summary>
 public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -188,6 +277,12 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
     public DbSet<FormDefinitionRecord> FormDefinitions => Set<FormDefinitionRecord>();
 
     public DbSet<ListingFormRecord> ListingForms => Set<ListingFormRecord>();
+
+    public DbSet<EligibilityRuleRecord> EligibilityRules => Set<EligibilityRuleRecord>();
+
+    public DbSet<ApplicationRecord> Applications => Set<ApplicationRecord>();
+
+    public DbSet<ApplicationAnswerRecord> ApplicationAnswers => Set<ApplicationAnswerRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -249,6 +344,37 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
             b.ToTable("listing_form");
             b.HasKey(x => x.ListingId);
             b.Property(x => x.ListingId).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<EligibilityRuleRecord>(b =>
+        {
+            b.ToTable("eligibility_rule");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Config).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.ListingId, x.SortOrder });
+        });
+
+        modelBuilder.Entity<ApplicationRecord>(b =>
+        {
+            b.ToTable("application");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.AnswersSnapshot).HasColumnType("jsonb");
+            b.Property(x => x.EligibilityResult).HasColumnType("jsonb");
+            b.Property(x => x.PriorityScore).HasPrecision(8, 3);
+            b.HasIndex(x => new { x.ListingId, x.FamilyMemberId }).IsUnique()
+                .HasFilter("status not in ('withdrawn','expired','declined','rejected')");
+            b.HasIndex(x => new { x.TenantId, x.IdempotencyKey }).IsUnique().HasFilter("idempotency_key is not null");
+            b.HasIndex(x => new { x.ListingId, x.Status, x.SubmittedAt });
+            b.HasIndex(x => new { x.FamilyMemberId, x.SubmittedAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<ApplicationAnswerRecord>(b =>
+        {
+            b.ToTable("application_answer");
+            b.HasKey(x => new { x.ApplicationId, x.QuestionKey });
+            b.HasIndex(x => x.QuestionKey).HasFilter("not is_sensitive");
         });
 
         modelBuilder.ApplySnakeCaseNames();

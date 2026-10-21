@@ -282,6 +282,12 @@ and an end date. On the organisation's side, `GET /org/{orgId}/family-shares` an
 `/retire`; `PUT` and `DELETE /org/{orgId}/listings/{listingId}/form`. Families read
 `GET /public/listings/{slug}/form` rather than `/listings/{id}/form`.
 
+*Built (2026-10-20, D46):* `POST /applications` (Idempotency-Key required), `GET /applications`
+(mine), `GET` and `PATCH /applications/{id}` (draft answers), `POST /applications/{id}/submit
+{shareFields, shareExpiresAt}` and `/withdraw`. Eligibility: `GET` and `PUT
+/org/{orgId}/listings/{id}/eligibility`, `POST …/eligibility/preview`, and
+`GET /public/listings/{slug}/eligibility`.
+
 ```
 GET    /api/v1/enrollments
 GET    /api/v1/enrollments/{id}

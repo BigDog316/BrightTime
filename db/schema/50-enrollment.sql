@@ -324,12 +324,16 @@ create table listing_waiver (
   constraint pk_listing_waiver primary key (listing_id, waiver_id)
 );
 
+-- Append-only evidence (99-rls-and-grants.sql), so its references restrict rather than set
+-- null: a set-null would rewrite a signature, and the append-only trigger refuses it even
+-- when no row matches, which made every application and enrolment undeletable (D46). A
+-- signed waiver keeps pointing at what it was signed for; an unsigned draft can go.
 create table waiver_signature (
   id               uuid primary key,
   tenant_id        uuid not null references platform.tenant(id) on delete restrict,
   waiver_id        uuid not null references waiver(id) on delete restrict,
-  enrollment_id    uuid references enrollment(id) on delete set null,
-  application_id   uuid references application(id) on delete set null,
+  enrollment_id    uuid references enrollment(id) on delete restrict,
+  application_id   uuid references application(id) on delete restrict,
   family_member_id uuid not null references family_member(id) on delete restrict,
   signed_by_user_id uuid not null references identity.app_user(id) on delete restrict,
   signer_role      text not null,

@@ -4,6 +4,7 @@ using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Enrollment.Persistence;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -23,7 +24,8 @@ public sealed record MemberInput(
     DateOnly? DateOfBirth,
     short? Grade,
     string? Pronouns,
-    string? Relationship);
+    string? Relationship,
+    Guid? NeighbourhoodId = null);
 
 public sealed record SupportNeedInput(string Kind, string? Detail, bool ShareWithProviders);
 
@@ -43,6 +45,7 @@ public sealed record MemberView(
     short? Grade,
     string? Pronouns,
     string? Relationship,
+    Guid? NeighbourhoodId,
     IReadOnlyList<SupportNeedView> SupportNeeds);
 
 [YouthData]
@@ -68,7 +71,7 @@ public sealed record FamilyView(Guid Id, short? HouseholdSize, string? PrimaryLa
 /// records").
 /// </para>
 /// </remarks>
-public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, IBlindIndexer blind, ITenantContext tenant, AuditTrail audit, IClock clock)
+public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, IBlindIndexer blind, ITenantContext tenant, AuditTrail audit, IClock clock, IGeographyQueries geography)
 {
     public const int MaxMembers = 15;
     public const int MaxContacts = 10;
@@ -111,7 +114,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
                 return Result<FamilyView>.Failure(Error.Validation("family.language", "A language tag, such as es or zh-Hans."));
             }
 
-            DateTimeOffset now = clock.UtcNow;
+            DateTimeOffset now = clock.StoredNow();
             FamilyProfileRecord profile = await ProfileAsync(owner, ct).ConfigureAwait(false) ?? Add(new FamilyProfileRecord
             {
                 Id = UuidV7.NewId(),
@@ -131,7 +134,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
     public Task<Result<MemberView>> AddMemberAsync(UserId owner, MemberInput input, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
-            if (Check(input) is { } invalid)
+            if ((Check(input) ?? await NeighbourhoodAsync(input, ct).ConfigureAwait(false)) is { } invalid)
             {
                 return Result<MemberView>.Failure(invalid);
             }
@@ -146,7 +149,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
                 return Result<MemberView>.Failure(Error.Conflict("family.too_many_members", $"At most {MaxMembers} members."));
             }
 
-            DateTimeOffset now = clock.UtcNow;
+            DateTimeOffset now = clock.StoredNow();
             FamilyMemberRecord member = new()
             {
                 Id = UuidV7.NewId(),
@@ -167,7 +170,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
     public Task<Result<MemberView>> UpdateMemberAsync(UserId owner, Guid memberId, MemberInput input, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
-            if (Check(input) is { } invalid)
+            if ((Check(input) ?? await NeighbourhoodAsync(input, ct).ConfigureAwait(false)) is { } invalid)
             {
                 return Result<MemberView>.Failure(invalid);
             }
@@ -178,7 +181,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             }
 
             member.MemberRole = input.Role;
-            await ApplyAsync(member, input, clock.UtcNow, ct).ConfigureAwait(false);
+            await ApplyAsync(member, input, clock.StoredNow(), ct).ConfigureAwait(false);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Changed, member.FamilyProfileId, ct, "member_changed").ConfigureAwait(false);
             List<SupportNeedRecord> needs = await db.SupportNeeds.AsNoTracking().Where(n => n.FamilyMemberId == member.Id).ToListAsync(ct).ConfigureAwait(false);
@@ -229,7 +232,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             }
 
             await db.SupportNeeds.Where(n => n.FamilyMemberId == member.Id).ExecuteDeleteAsync(ct).ConfigureAwait(false);
-            DateTimeOffset now = clock.UtcNow;
+            DateTimeOffset now = clock.StoredNow();
             List<SupportNeedRecord> saved = [];
             foreach (SupportNeedInput need in needs)
             {
@@ -376,6 +379,15 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             : null;
     }
 
+    /// <summary>
+    /// A member's neighbourhood, one of the tenant's own: coarse enough for eligibility
+    /// ("lives in Eastgate") and never an address (docs/plan/07).
+    /// </summary>
+    private async Task<Error?> NeighbourhoodAsync(MemberInput input, CancellationToken ct) =>
+        input.NeighbourhoodId is { } id && !(await geography.GetNeighbourhoodNamesAsync([id], Locale.Default.Code, ct).ConfigureAwait(false)).ContainsKey(id)
+            ? Error.Validation("family.member_neighbourhood", "One of the county's neighbourhoods, or none.")
+            : null;
+
     private static bool Named(string? name) =>
         name?.Trim() is { Length: > 0 and <= MaxNameLength } trimmed && !trimmed.Any(char.IsControl);
 
@@ -393,6 +405,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
         member.Grade = input.Grade;
         member.Pronouns = Blank(input.Pronouns);
         member.RelationshipToOwner = Blank(input.Relationship);
+        member.NeighbourhoodId = input.NeighbourhoodId;
         member.UpdatedAt = now;
     }
 
@@ -477,6 +490,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             member.Grade,
             member.Pronouns,
             member.RelationshipToOwner,
+            member.NeighbourhoodId,
             needViews);
     }
 
@@ -516,6 +530,8 @@ public static class EnrollmentModule
         services.AddScoped<FamilyProfiles>();
         services.AddScoped<ProfileShares>();
         services.AddScoped<Forms.FormDefinitions>();
+        services.AddScoped<Eligibility.EligibilityRules>();
+        services.AddScoped<Applications.Applications>();
         return services;
     }
 }

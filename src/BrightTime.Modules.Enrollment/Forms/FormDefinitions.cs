@@ -108,7 +108,7 @@ public sealed class FormDefinitions(EnrollmentDbContext db, ITenantContext tenan
                 SchemaJson = schema.ToCanonicalJson(),
                 SchemaHash = schema.Hash(),
                 CreatedBy = author.Value,
-                CreatedAt = clock.UtcNow,
+                CreatedAt = clock.StoredNow(),
             };
             db.FormDefinitions.Add(form);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -155,7 +155,7 @@ public sealed class FormDefinitions(EnrollmentDbContext db, ITenantContext tenan
             }
 
             form.Status = Published;
-            form.PublishedAt = clock.UtcNow;
+            form.PublishedAt = clock.StoredNow();
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             return Result<FormView>.Success(await ViewAsync(form, ct).ConfigureAwait(false));
         }, cancellationToken);
@@ -192,7 +192,7 @@ public sealed class FormDefinitions(EnrollmentDbContext db, ITenantContext tenan
                 SchemaJson = source.SchemaJson,
                 SchemaHash = source.SchemaHash,
                 CreatedBy = author.Value,
-                CreatedAt = clock.UtcNow,
+                CreatedAt = clock.StoredNow(),
             };
             db.FormDefinitions.Add(next);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);

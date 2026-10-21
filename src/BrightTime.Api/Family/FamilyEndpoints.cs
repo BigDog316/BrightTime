@@ -19,7 +19,8 @@ public sealed record MemberRequest(
     DateOnly? DateOfBirth,
     short? Grade,
     string? Pronouns,
-    string? Relationship);
+    string? Relationship,
+    Guid? NeighbourhoodId = null);
 
 public sealed record SupportNeedRequest(string? Kind, string? Detail, bool ShareWithProviders);
 
@@ -248,7 +249,7 @@ public static class FamilyEndpoints
     private static MemberInput Input(MemberRequest body)
     {
         ArgumentNullException.ThrowIfNull(body);
-        return new(body.Role ?? string.Empty, body.FirstName ?? string.Empty, body.LastName ?? string.Empty, body.PreferredName, body.DateOfBirth, body.Grade, body.Pronouns, body.Relationship);
+        return new(body.Role ?? string.Empty, body.FirstName ?? string.Empty, body.LastName ?? string.Empty, body.PreferredName, body.DateOfBirth, body.Grade, body.Pronouns, body.Relationship, body.NeighbourhoodId);
     }
 
     private static ContactInput Input(ContactRequest body)

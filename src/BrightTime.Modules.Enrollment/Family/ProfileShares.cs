@@ -110,7 +110,7 @@ public sealed class ProfileShares(
         db.InTransactionAsync(async ct =>
         {
             ArgumentNullException.ThrowIfNull(input);
-            DateTimeOffset now = clock.UtcNow;
+            DateTimeOffset now = clock.StoredNow();
             if (input.Fields.Count == 0 || input.Fields.Any(f => !ProfileShareFields.All.Contains(f)))
             {
                 return Result<ShareView>.Failure(Error.Validation("family.share_fields",
@@ -195,7 +195,7 @@ public sealed class ProfileShares(
                 return Result.Failure(Error.NotFound("family.share_not_found", "You have no live share with that id."));
             }
 
-            share.RevokedAt = clock.UtcNow;
+            share.RevokedAt = clock.StoredNow();
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditOwnerAsync(FamilyProfiles.Changed, share.FamilyProfileId, "share_revoked", ct, share.OrgId).ConfigureAwait(false);
             return Result.Success();
@@ -208,7 +208,7 @@ public sealed class ProfileShares(
     public Task<IReadOnlyList<SharedFamilyView>> ForOrganisationAsync(OrganisationId org, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<IReadOnlyList<SharedFamilyView>>(async ct =>
         {
-            DateTimeOffset now = clock.UtcNow;
+            DateTimeOffset now = clock.StoredNow();
             List<ProfileShareRecord> shares = await db.ProfileShares.AsNoTracking()
                 .Where(s => s.OrgId == org.Value && s.RevokedAt == null && (s.ExpiresAt == null || s.ExpiresAt > now))
                 .OrderByDescending(s => s.GrantedAt).Take(200).ToListAsync(ct).ConfigureAwait(false);
@@ -234,7 +234,7 @@ public sealed class ProfileShares(
                 return Result<SharedFamilyView>.Failure(Error.NotFound("family.share_not_found", "This organisation holds no share with that id."));
             }
 
-            if (Status(share, clock.UtcNow) != Active)
+            if (Status(share, clock.StoredNow()) != Active)
             {
                 return Result<SharedFamilyView>.Failure(Error.Forbidden("family.share_ended", "The family has ended this share, or it has run out."));
             }
@@ -312,7 +312,7 @@ public sealed class ProfileShares(
 
     private ShareView View(ProfileShareRecord share, string organisationName) => new(
         share.Id, share.OrgId, organisationName, share.ListingId, share.MemberIds, share.SharedFields,
-        share.GrantedAt, share.ExpiresAt, share.RevokedAt, Status(share, clock.UtcNow));
+        share.GrantedAt, share.ExpiresAt, share.RevokedAt, Status(share, clock.StoredNow()));
 
     private Task AuditOwnerAsync(string action, Guid? profile, string change, CancellationToken ct, Guid? org = null)
     {

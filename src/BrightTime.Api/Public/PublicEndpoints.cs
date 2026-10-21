@@ -2,6 +2,7 @@ using System.Text.Json;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
+using BrightTime.Modules.Enrollment.Eligibility;
 using BrightTime.Modules.Enrollment.Forms;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Platform.Contracts;
@@ -50,6 +51,7 @@ public static class PublicEndpoints
         pub.MapGet("/listings", SearchAsync);
         pub.MapGet("/listings/{slug}", ListingAsync);
         pub.MapGet("/listings/{slug}/form", ListingFormAsync);
+        pub.MapGet("/listings/{slug}/eligibility", ListingEligibilityAsync);
         pub.MapGet("/collections", CollectionsAsync);
         pub.MapGet("/collections/{slug}", CollectionAsync);
         pub.MapGet("/neighbourhoods", NeighbourhoodsAsync);
@@ -89,6 +91,12 @@ public static class PublicEndpoints
         await forms.ForListingAsync(slug, tenant.Locale.Code, ct).ConfigureAwait(false) is { } form
             ? Results.Ok(form)
             : ApiProblems.NotFound("No published listing at that address asks for a form.");
+
+    /// <summary>Who a published listing is for (D46), so a family knows before applying.</summary>
+    private static async Task<IResult> ListingEligibilityAsync(string slug, EligibilityRules rules, CancellationToken ct) =>
+        await rules.ForPublishedListingAsync(slug, ct).ConfigureAwait(false) is { } found
+            ? Results.Ok(found)
+            : ApiProblems.NotFound("No published listing has that address.");
 
     private static async Task<IResult> ListingAsync(string slug, ITenantContext tenant, IListingDetails details, IOrganisationProfiles organisations, CancellationToken ct)
     {

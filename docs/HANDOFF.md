@@ -67,26 +67,26 @@ is merged (`cec1ed6`).
     `Security:Keys:data-protection`, which production must set in both hosts.
   - The worker recomputes capabilities left stale by a terms change.
   - `/auth/password/forgot` and `/auth/password/reset`, with the breached-password check.
-- **Push through FCM, terms on the web** (D40, proposed): `FcmPushSender` sends once
+- **Push through FCM, terms on the web** (D40): `FcmPushSender` sends once
   `Push:Fcm:*` is set, and revokes devices FCM has forgotten. The app's push registration waits
   for the Firebase project's config files. The web has `/terms`.
-- **External sign-in from the app** (D41, proposed): the provider's flow runs on the web in the
+- **External sign-in from the app** (D41): the provider's flow runs on the web in the
   system browser and hands the app a one-time code, bound to its PKCE challenge, which
   `POST /auth/external/token` redeems. Only accounts already connected to the provider get one.
 
-**M3 has started** (D42, proposed): M3a is registration (no money, no offline), M3b is
+**M3 has started** (D42): M3a is registration (no money, no offline), M3b is
 operations. The new `Enrollment` module holds:
-- **The family profile** (D43, proposed): a household, its members, their support needs and its
+- **The family profile** (D43): a household, its members, their support needs and its
   contacts, under `/api/v1/family-profile`. The owner alone reads or changes it, the youth fields
   are encrypted, and every read, change and refusal is audited.
-- **Profile shares** (D44, proposed): the family shares chosen members and fields with an
+- **Profile shares** (D44): the family shares chosen members and fields with an
   approved organisation, optionally for one listing and until a date. The organisation's
   staff read exactly that, while the share is live, under `/api/v1/org/{orgId}/family-shares`.
   `profile_share` gained `member_ids`.
-- **Registration forms** (D45, proposed): an organisation's admins draft typed questions, then
+- **Registration forms** (D45): an organisation's admins draft typed questions, then
   publish (fixed from then on), revise into new versions, and attach a published form to a
   listing. Families read it in their language at `/api/v1/public/listings/{slug}/form`.
-- **Applications and eligibility** (D46, proposed):
+- **Applications and eligibility** (D46):
   - Age, grade and neighbourhood rules, with a provider dry run and a public view.
   - Families draft against the listing's form, then submit once. Submitting checks
     completeness and the hard rules, and shares the applicant as the family chose.
@@ -98,8 +98,8 @@ operations. The new `Enrollment` module holds:
 
 ## Waiting on Sam
 
-Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
-**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split), D43 (the family profile), D44 (profile shares), D45 (registration forms) and D46 (applications and eligibility). D46 also reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
+Every decision through D46 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20).
+D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 

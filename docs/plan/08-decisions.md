@@ -1060,7 +1060,7 @@ Three loose ends from D37 and D38.
   - The API now checks new passwords, from a reset or a claim, against Have I Been Pwned by hash
     prefix when `Auth:CheckBreachedPasswords` is on, as the web does (D34 and D38 noted the gap).
 
-### D40 — Push through FCM, and the terms on the web (**proposed 2026-10-20; implemented, reversible**)
+### D40 — Push through FCM, and the terms on the web (**accepted 2026-10-20**)
 
 - **FCM, ready for the account:** `FcmPushSender` sends through Firebase Cloud Messaging's HTTP
   v1 API. It handles Android directly, and iOS through APNs once the app registers with Firebase
@@ -1082,7 +1082,7 @@ Three loose ends from D37 and D38.
   there as in the app, through the same `AccountTerms`, by the hash of the words shown. Every
   page's footer links to it, and the axe gate covers it.
 
-### D41 — External sign-in from the app, through the web, by one-time code (**proposed 2026-10-20; implemented, reversible**)
+### D41 — External sign-in from the app, through the web, by one-time code (**accepted 2026-10-20**)
 
 docs/plan/05's `/auth/external` for the app, done the way RFC 8252 has native apps do it: the
 provider's flow runs in the system browser, never in the app.
@@ -1118,7 +1118,7 @@ provider's flow runs in the system browser, never in the app.
 - **Not yet:** a run on a device against a real provider. That needs a configured provider and
   the region's real host.
 
-### D42 — M3 is split in two, and built in slices (**proposed 2026-10-20; reversible**)
+### D42 — M3 is split in two, and built in slices (**accepted 2026-10-20**)
 
 docs/plan/09's sequencing note, taken: M3 is the riskiest milestone, so it ships as two.
 - **M3a, registration:** the family profile, forms, eligibility, applications, waivers,
@@ -1138,7 +1138,7 @@ docs/plan/09's sequencing note, taken: M3 is the riskiest milestone, so it ships
   reference the Platform, Identity, Directory and Opportunities contracts, and the
   architecture tests hold it to that.
 
-### D43 — The family profile: owned, encrypted, audited (**proposed 2026-10-20; implemented, reversible**)
+### D43 — The family profile: owned, encrypted, audited (**accepted 2026-10-20**)
 
 M3a's first slice: a household entered once and reused for every application.
 - **Ownership:** one profile per account, made by its owner and read or changed by that owner
@@ -1179,7 +1179,7 @@ M3a's first slice: a household entered once and reused for every application.
   - the app's screens;
   - support needs being seen by an enrolling program.
 
-### D44 — Profile shares name their members, and organisations read them only while live (**proposed 2026-10-20; implemented, reversible**)
+### D44 — Profile shares name their members, and organisations read them only while live (**accepted 2026-10-20**)
 
 M3a's second slice: "one application serves many programs" without "every provider sees
 everything".
@@ -1227,7 +1227,7 @@ everything".
   - the provider console's screen;
   - the app's screens.
 
-### D45 — Registration forms: typed questions, fixed once published (**proposed 2026-10-20; implemented, reversible**)
+### D45 — Registration forms: typed questions, fixed once published (**accepted 2026-10-20**)
 
 M3a's third slice: an organisation writes the questions its registration asks, beyond what
 the family profile already holds.
@@ -1271,7 +1271,7 @@ the family profile already holds.
   - forms shared across organisations (`org_id` null, a tenant-wide intake form);
   - pre-filling answers from the family profile.
 
-### D46 — Applications, judged by declarative rules, submitted once (**proposed 2026-10-20; implemented, reversible**)
+### D46 — Applications, judged by declarative rules, submitted once (**accepted 2026-10-20**)
 
 M3a's fourth slice: a family applies for one young person to one listing.
 - **Eligibility rules** (`eligibility_rule`): a kind with a typed config, hard or advisory.

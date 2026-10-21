@@ -1424,7 +1424,7 @@ M3a's last slice: an organisation decides its applications, and seats are counte
   - notifications to the family on a decision;
   - the console's queue screens.
 
-### D49 — Attendance: rosters, records, offline sync and supersede (**proposed 2026-10-21; implemented, reversible**)
+### D49 — Attendance: rosters, records, offline sync and supersede (**accepted 2026-10-21**)
 
 M3b starts with attendance, the platform's highest-risk dataset (docs/plan/07, T4). It comes
 in slices:
@@ -1496,7 +1496,7 @@ in slices:
   - minutes derived from check-in and check-out;
   - the console's attendance screens.
 
-### D50 — Check-in by QR: badges and kiosks, codes that name nobody (**proposed 2026-10-21; implemented, reversible**)
+### D50 — Check-in by QR: badges and kiosks, codes that name nobody (**accepted 2026-10-21**)
 
 M3b's second attendance slice: checking in without anyone typing.
 - **A code is 256 random bits,** shown as a QR and stored only as its SHA-256
@@ -1529,7 +1529,7 @@ M3b's second attendance slice: checking in without anyone typing.
     slice;
   - check-out by code.
 
-### D51 — Devices: registered to sync, revoked to wipe (**proposed 2026-10-21; implemented, reversible**)
+### D51 — Devices: registered to sync, revoked to wipe (**accepted 2026-10-21**)
 
 M3b's third attendance slice: the server side of docs/plan/07's T12, for offline data on staff
 phones and kiosks.

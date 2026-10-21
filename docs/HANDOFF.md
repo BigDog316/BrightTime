@@ -111,14 +111,14 @@ operations. The new `Enrollment` module holds:
 waivers, decisions. M3b (attendance with offline sync, messaging, payments, reports) is next.
 Rebuild the compose volume first: the schema and the role permissions changed.
 
-**M3b has started** with attendance (D49, proposed):
+**M3b has started** with attendance (D49):
 - A new Attendance module: rosters per meeting, records, idempotent offline batch sync, and
   corrections that supersede.
 - A family's own view at `/me/attendance`.
 - Staff see display names only through the family's share. Every read and write is audited.
-- **Check-in by QR** (D50, proposed): families show a two-minute single-use badge that staff
+- **Check-in by QR** (D50): families show a two-minute single-use badge that staff
   scan, or scan a kiosk's one-minute code. Codes are random, hashed, and name nobody.
-- **Devices** (D51, proposed): phones and kiosks register to sync. Sync refuses unknown or
+- **Devices** (D51): phones and kiosks register to sync. Sync refuses unknown or
   revoked devices. Revoking asks for a wipe, which the device learns on contact without
   signing in.
 - Next: the app's offline roster (an encrypted store with a sync queue, purge on wipe, and the
@@ -128,7 +128,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D48 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 and D48 on 2026-10-21). **D49 (attendance), D50 (check-in by QR) and D51 (devices) are proposed.**
+Every decision through D51 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D51 on 2026-10-21).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

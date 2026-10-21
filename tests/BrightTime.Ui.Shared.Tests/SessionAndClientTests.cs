@@ -33,6 +33,7 @@ public sealed class SessionAndClientTests
         await using ServiceProvider youth = youthApi.Services();
         (await youth.GetRequiredService<AppSession>().SignInAsync("teen@example.net", "pw", Ct)).ShouldBeNull();
         (await youth.GetRequiredService<ISecretStore>().GetAsync(AppSession.RefreshTokenKey)).ShouldBeNull();
+        (await youth.GetRequiredService<ISecretStore>().GetAsync(AppSession.PersonKey)).ShouldBeNull();
     }
 
     [Fact]
@@ -51,6 +52,39 @@ public sealed class SessionAndClientTests
         await again.GetRequiredService<AppState>().StartAsync(Ct);
         again.GetRequiredService<AppSession>().IsSignedIn.ShouldBeFalse();
         (await again.GetRequiredService<ISecretStore>().GetAsync(AppSession.RefreshTokenKey)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Starting_offline_keeps_an_adult_signed_in_until_the_server_answers()
+    {
+        using FakeApi api = SignedInApi("adult");
+        await using ServiceProvider first = api.Services();
+        await first.GetRequiredService<AppState>().StartAsync(Ct);
+        (await first.GetRequiredService<AppSession>().SignInAsync("sam@example.net", "pw", Ct)).ShouldBeNull();
+        ISecretStore secrets = first.GetRequiredService<ISecretStore>();
+        IOfflineStore offline = first.GetRequiredService<IOfflineStore>();
+
+        // Opened again with no signal: the kept person stands in, and nothing kept is forgotten.
+        api.Offline = true;
+        await using ServiceProvider later = api.Services(s => s.AddSingleton(secrets).AddSingleton(offline));
+        await later.GetRequiredService<AppState>().StartAsync(Ct);
+        AppSession session = later.GetRequiredService<AppSession>();
+        session.IsSignedIn.ShouldBeTrue();
+        session.Me!.UserName.ShouldBe("sam@example.net");
+        (await secrets.GetAsync(AppSession.RefreshTokenKey)).ShouldBe("refresh-1");
+        (await later.GetRequiredService<BrightTimeApi>().SavedAsync(Ct)).Problem.ShouldBe(ApiProblem.Offline);
+
+        // The signal returns: the next request refreshes and reads the person afresh.
+        api.Offline = false;
+        api.Json(HttpMethod.Get, "me/saved-items", "[]");
+        int reads = api.Requests.Count(r => r.RequestUri!.AbsolutePath.EndsWith("/me", StringComparison.Ordinal));
+        (await later.GetRequiredService<BrightTimeApi>().SavedAsync(Ct)).IsSuccess.ShouldBeTrue();
+        api.Requests.Count(r => r.RequestUri!.AbsolutePath.EndsWith("/me", StringComparison.Ordinal)).ShouldBe(reads + 1);
+        (await secrets.GetAsync(AppSession.RefreshTokenKey)).ShouldBe("refresh-2");
+
+        // Signing out forgets the kept person too.
+        await session.SignOutAsync(Ct);
+        (await secrets.GetAsync(AppSession.PersonKey)).ShouldBeNull();
     }
 
     [Fact]

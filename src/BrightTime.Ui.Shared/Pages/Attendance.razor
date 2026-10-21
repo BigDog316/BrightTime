@@ -37,10 +37,10 @@ else if (_pack is { } pack)
             <li @key="line.EnrollmentId">
                 <span>@(line.DisplayName ?? T["app.attendance.unnamed"])</span>
                 <span class="choices">
-                    <button type="button" aria-pressed="@(mark == "present")" @onclick="() => MarkAsync(line, PresentState)">@T["app.attendance.present"]</button>
-                    <button type="button" aria-pressed="@(mark == "late")" @onclick="() => MarkAsync(line, LateState)">@T["app.attendance.late"]</button>
-                    <button type="button" aria-pressed="@(mark == "absent")" @onclick="() => MarkAsync(line, AbsentState)">@T["app.attendance.absent"]</button>
-                    <button type="button" aria-pressed="@(mark == "excused")" @onclick="() => MarkAsync(line, ExcusedState)">@T["app.attendance.excused"]</button>
+                    <button type="button" aria-pressed="@Pressed(mark, PresentState)" @onclick="() => MarkAsync(line, PresentState)">@T["app.attendance.present"]</button>
+                    <button type="button" aria-pressed="@Pressed(mark, LateState)" @onclick="() => MarkAsync(line, LateState)">@T["app.attendance.late"]</button>
+                    <button type="button" aria-pressed="@Pressed(mark, AbsentState)" @onclick="() => MarkAsync(line, AbsentState)">@T["app.attendance.absent"]</button>
+                    <button type="button" aria-pressed="@Pressed(mark, ExcusedState)" @onclick="() => MarkAsync(line, ExcusedState)">@T["app.attendance.excused"]</button>
                 </span>
             </li>
         }
@@ -92,6 +92,9 @@ else
     private const string LateState = "late";
     private const string AbsentState = "absent";
     private const string ExcusedState = "excused";
+
+    // Spelled out: Blazor writes a true bool as an empty attribute and drops a false one, and neither is a toggle state.
+    private static string Pressed(string? mark, string state) => mark == state ? "true" : "false";
 
     private RosterGate? _gate;
     private List<(Guid Org, AttendanceMeeting Meeting)>? _meetings;
@@ -210,7 +213,10 @@ else
         }
 
         _register = sent.NeedsRegistration.Count > 0 ? sent.NeedsRegistration[0] : null;
-        _message = sent.Offline ? T["app.attendance.offline"] : T.Format("app.attendance.synced", ("count", sent.Accepted));
+        // When nothing went because the phone isn't set up or every mark came back, the set-up prompt
+        // or the problem list says so; "Sent 0 marks" would only confuse.
+        _message = sent.Offline ? T["app.attendance.offline"]
+            : sent.Accepted > 0 || (_register is null && sent.Problems == 0) ? T.Format("app.attendance.synced", ("count", sent.Accepted)) : null;
         await RefreshAsync();
         if (_pack is { } open)
         {

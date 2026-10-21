@@ -186,6 +186,12 @@ button.primary, .button.primary {
     color: var(--bt-brand-ink);
 }
 
+/* A toggle that is on: filled, so the choice reads without colour. */
+button[aria-pressed="true"] {
+    background: var(--bt-brand);
+    color: var(--bt-brand-ink);
+}
+
 button.danger {
     border-color: var(--bt-error);
     color: var(--bt-error);
@@ -388,6 +394,24 @@ dl.facts dd {
     padding: var(--bt-space-3);
     border-inline-start: 4px solid var(--bt-line);
     background: var(--bt-paper);
+}
+
+/* The attendance roster: a name, then its four marks. */
+.roster {
+    padding: 0;
+    list-style: none;
+}
+
+.roster li {
+    padding-block: var(--bt-space-3);
+    border-block-end: 1px solid var(--bt-line);
+}
+
+.roster .choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bt-space-2);
+    margin-block-start: var(--bt-space-2);
 }
 
 /* Notices. */

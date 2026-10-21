@@ -20,6 +20,11 @@ namespace BrightTime.Ui.Shared.Api;
 /// after 30 minutes unused anyway.
 /// </para>
 /// <para>
+/// Offline is not signed out. An adult's last-read person is kept beside the refresh token, so an
+/// app opened without a signal still knows who is there (the offline roster, D52); the first
+/// request that reaches the server refreshes the tokens and reads the person afresh.
+/// </para>
+/// <para>
 /// Refreshing is serialised: two requests that find the access token stale refresh once, since
 /// a refresh token used twice ends the whole family (D28's theft detection).
 /// </para>
@@ -28,6 +33,7 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
 {
     public const string RefreshTokenKey = "brighttime.refresh_token";
     public const string DeviceIdKey = "brighttime.device_id";
+    public const string PersonKey = "brighttime.me";
 
     /// <summary>Refresh this long before the access token runs out, so a request never carries a dead one.</summary>
     public static readonly TimeSpan RefreshMargin = TimeSpan.FromSeconds(30);
@@ -38,6 +44,9 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
     private string? _accessToken;
     private string? _refreshToken;
     private DateTimeOffset _accessExpiresAt;
+
+    // Me is the kept copy from an offline start, to be read afresh once the server answers.
+    private bool _personStale;
 
     /// <summary>The signed-in person, or null.</summary>
     public Me? Me { get; private set; }
@@ -50,7 +59,10 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
     /// <summary>Raised when someone signs in or out, or their capabilities change.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>On start: an adult's kept refresh token signs them back in, if it still works.</summary>
+    /// <summary>
+    /// On start: an adult's kept refresh token signs them back in, if it still works. Offline, the
+    /// kept person stands in and the token waits for the network.
+    /// </summary>
     public async Task RestoreAsync(CancellationToken cancellationToken = default)
     {
         if (await secrets.GetAsync(RefreshTokenKey).ConfigureAwait(false) is not { Length: > 0 } kept)
@@ -59,13 +71,19 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         }
 
         _refreshToken = kept;
-        if (!await RefreshAsync(cancellationToken).ConfigureAwait(false))
+        if (await RefreshAsync(cancellationToken).ConfigureAwait(false))
         {
-            await ForgetAsync().ConfigureAwait(false);
+            await LoadPersonAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        await LoadPersonAsync(cancellationToken).ConfigureAwait(false);
+        // A refused token was forgotten by RefreshAsync; one still held means the server wasn't reached.
+        if (_refreshToken is not null && await KeptPersonAsync().ConfigureAwait(false) is { } person)
+        {
+            Me = person;
+            _personStale = true;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>Signs in with an email address and password. Null on success, else what went wrong.</summary>
@@ -199,7 +217,18 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
             return _accessToken;
         }
 
-        return _refreshToken is null || !await RefreshAsync(cancellationToken).ConfigureAwait(false) ? null : _accessToken;
+        if (_refreshToken is null || !await RefreshAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        if (_personStale)
+        {
+            _personStale = false;
+            await LoadPersonAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return _accessToken;
     }
 
     /// <summary>
@@ -309,16 +338,38 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         _accessExpiresAt = time.GetUtcNow().AddSeconds(pair.ExpiresIn);
     }
 
-    /// <summary>An adult's refresh token is kept; a young person's never is.</summary>
+    /// <summary>An adult's refresh token and person are kept; a young person's never are.</summary>
     private async Task KeepAsync()
     {
-        if (Me is { IsAdult: true } && _refreshToken is { } refresh)
+        if (Me is { IsAdult: true } me && _refreshToken is { } refresh)
         {
             await secrets.SetAsync(RefreshTokenKey, refresh).ConfigureAwait(false);
+            if (!_personStale)
+            {
+                await secrets.SetAsync(PersonKey, JsonSerializer.Serialize(me, Json)).ConfigureAwait(false);
+            }
         }
         else
         {
             await secrets.RemoveAsync(RefreshTokenKey).ConfigureAwait(false);
+            await secrets.RemoveAsync(PersonKey).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<Me?> KeptPersonAsync()
+    {
+        if (await secrets.GetAsync(PersonKey).ConfigureAwait(false) is not { Length: > 0 } kept)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<Me>(kept, Json) is { IsAdult: true } person ? person : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -329,7 +380,9 @@ public sealed class AppSession(HttpClient http, ISecretStore secrets, TimeProvid
         _refreshToken = null;
         Me = null;
         Capabilities = null;
+        _personStale = false;
         await secrets.RemoveAsync(RefreshTokenKey).ConfigureAwait(false);
+        await secrets.RemoveAsync(PersonKey).ConfigureAwait(false);
         if (was)
         {
             Changed?.Invoke(this, EventArgs.Empty);

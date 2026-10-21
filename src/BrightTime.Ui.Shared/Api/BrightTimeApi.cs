@@ -250,7 +250,8 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
         {
             if (await session.AccessTokenAsync(ct).ConfigureAwait(false) is not { } token)
             {
-                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                // Still signed in without a token: the refresh didn't reach the server (a refused one signs out).
+                return session.IsSignedIn ? throw new HttpRequestException("The token refresh did not reach the server.") : new HttpResponseMessage(HttpStatusCode.Unauthorized);
             }
 
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

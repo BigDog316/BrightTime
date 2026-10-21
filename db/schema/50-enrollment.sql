@@ -93,22 +93,35 @@ create table family_contact (
 );
 create index ix_family_contact_profile on family_contact (family_profile_id);
 
--- Explicit, revocable sharing of profile fields with one organisation.
+-- Explicit, revocable sharing of profile fields with one organisation (D44).
+-- member_ids names the members it covers: applying for one child shares
+-- that child, not their siblings. A member removed from the profile drops
+-- out of every share at read time; the array is not rewritten.
 create table profile_share (
   id               uuid primary key,
   tenant_id        uuid not null references platform.tenant(id) on delete cascade,
   family_profile_id uuid not null references family_profile(id) on delete cascade,
   org_id           uuid not null references directory.organisation(id) on delete cascade,
   listing_id       uuid references opportunity.listing(id) on delete set null,
+  member_ids       uuid[] not null,
   shared_fields    text[] not null,
   granted_by_user_id uuid not null references identity.app_user(id),
   granted_at       timestamptz not null default now(),
   expires_at       timestamptz,
   revoked_at       timestamptz,
-  constraint ck_profile_share_fields check (cardinality(shared_fields) > 0)
+  constraint ck_profile_share_fields check (cardinality(shared_fields) > 0),
+  constraint ck_profile_share_known_fields check (shared_fields <@ array[
+    'household','member_names','member_birth_dates','member_grade','member_pronouns',
+    'contacts','support_needs']::text[]),
+  constraint ck_profile_share_members check (cardinality(member_ids) > 0),
+  constraint ck_profile_share_expiry check (expires_at is null or expires_at > granted_at)
 );
 create unique index ux_profile_share_active
   on profile_share (family_profile_id, org_id, coalesce(listing_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  where revoked_at is null;
+-- An organisation's inbox of shares: the live ones, newest first.
+create index ix_profile_share_org_live
+  on profile_share (org_id, granted_at desc)
   where revoked_at is null;
 
 -- ---------------------------------------------------------------------

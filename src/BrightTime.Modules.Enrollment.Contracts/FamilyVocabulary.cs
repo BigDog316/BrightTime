@@ -21,3 +21,32 @@ public static class SupportNeedKinds
         ["allergy", "medication", "mobility", "sensory", "communication", "dietary", "medical_other", "iep_504", "none_disclosed"],
         StringComparer.Ordinal);
 }
+
+/// <summary>What a profile share can cover (<c>ck_profile_share_known_fields</c>, D44).</summary>
+public static class ProfileShareFields
+{
+    /// <summary>Household size, primary language and whether an interpreter is needed.</summary>
+    public const string Household = "household";
+
+    /// <summary>Each shared member's names and role.</summary>
+    public const string MemberNames = "member_names";
+
+    public const string MemberBirthDates = "member_birth_dates";
+
+    public const string MemberGrade = "member_grade";
+
+    public const string MemberPronouns = "member_pronouns";
+
+    /// <summary>The household's contacts: emergency and pick-up.</summary>
+    public const string Contacts = "contacts";
+
+    /// <summary>
+    /// The family's consent to show support needs marked for providers. Recorded now; read by an
+    /// organisation only once it has an active enrolment (the table's own rule), which comes later.
+    /// </summary>
+    public const string SupportNeeds = "support_needs";
+
+    public static IReadOnlySet<string> All { get; } = new HashSet<string>(
+        [Household, MemberNames, MemberBirthDates, MemberGrade, MemberPronouns, Contacts, SupportNeeds],
+        StringComparer.Ordinal);
+}

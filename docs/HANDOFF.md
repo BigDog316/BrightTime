@@ -78,14 +78,18 @@ is merged (`cec1ed6`).
 operations. The new `Enrollment` module holds:
 - **The family profile** (D43, proposed): a household, its members, their support needs and its
   contacts, under `/api/v1/family-profile`. The owner alone reads or changes it, the youth fields
-  are encrypted, and every read, change and refusal is audited. Next comes `profile_share`.
+  are encrypted, and every read, change and refusal is audited.
+- **Profile shares** (D44, proposed): the family shares chosen members and fields with an
+  approved organisation, optionally for one listing and until a date. The organisation's
+  staff read exactly that, while the share is live, under `/api/v1/org/{orgId}/family-shares`.
+  `profile_share` gained `member_ids`. Next come form definitions and the listing's form.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
 Every decision through D39 is accepted (D30 and D31 on 2026-10-19, D32 to D39 on 2026-10-20).
-**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split) and D43 (the family profile).
+**Proposed:** D40 (push through FCM, terms on the web), D41 (external sign-in from the app), D42 (the M3 split), D43 (the family profile) and D44 (profile shares).
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.
 

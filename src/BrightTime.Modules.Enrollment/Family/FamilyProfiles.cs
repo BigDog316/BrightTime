@@ -514,6 +514,7 @@ public static class EnrollmentModule
     public static IServiceCollection AddEnrollment(this IServiceCollection services)
     {
         services.AddScoped<FamilyProfiles>();
+        services.AddScoped<ProfileShares>();
         return services;
     }
 }

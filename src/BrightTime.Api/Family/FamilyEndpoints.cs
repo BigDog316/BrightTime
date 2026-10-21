@@ -5,6 +5,7 @@ using BrightTime.Modules.Identity.Authorization;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
+using Microsoft.AspNetCore.Authorization;
 
 namespace BrightTime.Api.Family;
 
@@ -26,13 +27,16 @@ public sealed record SupportNeedsRequest(IReadOnlyList<SupportNeedRequest>? Need
 
 public sealed record ContactRequest(string? Name, string? Relationship, string? Phone, string? Email, bool IsEmergency = true, bool CanPickUp = false);
 
+public sealed record ShareRequest(Guid OrganisationId, Guid? ListingId, IReadOnlyList<Guid>? MemberIds, IReadOnlyList<string>? Fields, DateTimeOffset? ExpiresAt);
+
 /// <summary>
 /// The signed-in account's family profile (M3a, D43): the household, its members with their
 /// support needs, and its contacts. Every request reads or changes a youth record, so every one
 /// is audited, refusals included (docs/plan/07).
 /// </summary>
 /// <remarks>
-/// A child account cannot hold a profile: its guardian's profile lists the child instead.
+/// A child account cannot hold a profile: its guardian's profile lists the child instead. An
+/// organisation reads a family only through a live share (D44), and only its staff do.
 /// </remarks>
 public static class FamilyEndpoints
 {
@@ -50,6 +54,14 @@ public static class FamilyEndpoints
         family.MapPost("/contacts", AddContactAsync).Changes().Produces<ContactView>(StatusCodes.Status201Created);
         family.MapPut("/contacts/{id:guid}", UpdateContactAsync).Changes().Produces<ContactView>();
         family.MapDelete("/contacts/{id:guid}", RemoveContactAsync).Changes();
+        family.MapGet("/shares", SharesAsync).Read().Produces<IReadOnlyList<ShareView>>();
+        family.MapPost("/shares", ShareAsync).Changes().Produces<ShareView>(StatusCodes.Status201Created);
+        family.MapDelete("/shares/{id:guid}", RevokeShareAsync).Changes();
+
+        // An organisation's side: what families have shared with it (D44).
+        RouteGroupBuilder org = api.MapGroup("/org/{orgId:guid}/family-shares").RequireAuthorization();
+        org.MapGet("/", OrganisationSharesAsync).WithMetadata(new YouthRecordAttribute(ProfileShares.OrganisationRead)).Produces<IReadOnlyList<SharedFamilyView>>();
+        org.MapGet("/{id:guid}", OrganisationShareAsync).WithMetadata(new YouthRecordAttribute(ProfileShares.OrganisationRead)).Produces<SharedFamilyView>();
         return api;
     }
 
@@ -164,6 +176,75 @@ public static class FamilyEndpoints
         return removed.IsSuccess ? Results.NoContent() : Refused(audit, FamilyProfiles.Changed, removed.Error);
     }
 
+    private static async Task<IResult> SharesAsync(ClaimsPrincipal user, ProfileShares shares, AuditTrail audit, CancellationToken ct)
+    {
+        if (ChildRefused(user, audit, FamilyProfiles.Read) is { } refused)
+        {
+            return refused;
+        }
+
+        return Results.Ok(await shares.ListAsync(Owner(user), ct));
+    }
+
+    private static async Task<IResult> ShareAsync(ShareRequest body, ClaimsPrincipal user, ProfileShares shares, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (ChildRefused(user, audit, FamilyProfiles.Changed) is { } refused)
+        {
+            return refused;
+        }
+
+        Result<ShareView> granted = await shares.GrantAsync(Owner(user),
+            new ShareInput(body.OrganisationId, body.ListingId, body.MemberIds ?? [], body.Fields ?? [], body.ExpiresAt), ct);
+        return granted.IsSuccess
+            ? Results.Created($"/api/v1/family-profile/shares/{granted.Value.Id}", granted.Value)
+            : Refused(audit, FamilyProfiles.Changed, granted.Error);
+    }
+
+    private static async Task<IResult> RevokeShareAsync(Guid id, ClaimsPrincipal user, ProfileShares shares, AuditTrail audit, CancellationToken ct)
+    {
+        if (ChildRefused(user, audit, FamilyProfiles.Changed) is { } refused)
+        {
+            return refused;
+        }
+
+        Result revoked = await shares.RevokeAsync(Owner(user), id, ct);
+        return revoked.IsSuccess ? Results.NoContent() : Refused(audit, FamilyProfiles.Changed, revoked.Error);
+    }
+
+    private static async Task<IResult> OrganisationSharesAsync(Guid orgId, ClaimsPrincipal user, IAuthorizationService authorization, ProfileShares shares, AuditTrail audit, CancellationToken ct)
+    {
+        OrganisationId org = new(orgId);
+        if (await OrganisationRefusedAsync(user, org, authorization, audit) is { } refused)
+        {
+            return refused;
+        }
+
+        return Results.Ok(await shares.ForOrganisationAsync(org, ct));
+    }
+
+    private static async Task<IResult> OrganisationShareAsync(Guid orgId, Guid id, ClaimsPrincipal user, IAuthorizationService authorization, ProfileShares shares, AuditTrail audit, CancellationToken ct)
+    {
+        OrganisationId org = new(orgId);
+        if (await OrganisationRefusedAsync(user, org, authorization, audit) is { } refused)
+        {
+            return refused;
+        }
+
+        Result<SharedFamilyView> read = await shares.ReadAsync(org, id, ct);
+        return read.IsSuccess ? Results.Ok(read.Value) : Refused(audit, ProfileShares.OrganisationRead, read.Error, org);
+    }
+
+    /// <summary>A member of the organisation, staff or above, holding the youth-record permission.</summary>
+    private static async Task<IResult?> OrganisationRefusedAsync(ClaimsPrincipal user, OrganisationId org, IAuthorizationService authorization, AuditTrail audit)
+    {
+        AuthorizationResult result = await authorization.AuthorizeAsync(
+            user, new AuthorizationTarget { OrganisationId = org }, new OrganisationScopeRequirement(Permissions.Youth.ReadRecord, OrganisationRoles.Staff));
+        return result.Succeeded
+            ? null
+            : Refused(audit, ProfileShares.OrganisationRead, Error.Forbidden("family.share_forbidden", "Only this organisation's staff may read what families share with it."), org);
+    }
+
     private static MemberInput Input(MemberRequest body)
     {
         ArgumentNullException.ThrowIfNull(body);
@@ -177,9 +258,9 @@ public static class FamilyEndpoints
     }
 
     /// <summary>A refusal is an access attempt too, so it leaves its own row, naming why.</summary>
-    private static IResult Refused(AuditTrail audit, string action, Error error)
+    private static IResult Refused(AuditTrail audit, string action, Error error, OrganisationId? org = null)
     {
-        audit.Record(new AuditAccess { Action = action, Outcome = AuditOutcome.Deny, SubjectKind = "family_profile", Reason = error.Code });
+        audit.Record(new AuditAccess { Action = action, Outcome = AuditOutcome.Deny, SubjectKind = "family_profile", ActorOrgId = org, Reason = error.Code });
         return ApiProblems.From(error);
     }
 

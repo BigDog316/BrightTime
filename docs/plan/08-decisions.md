@@ -1179,6 +1179,54 @@ M3a's first slice: a household entered once and reused for every application.
   - the app's screens;
   - support needs being seen by an enrolling program.
 
+### D44 — Profile shares name their members, and organisations read them only while live (**proposed 2026-10-20; implemented, reversible**)
+
+M3a's second slice: "one application serves many programs" without "every provider sees
+everything".
+- **A schema change:** `profile_share.member_ids uuid[] not null`.
+  - The table named the fields shared but not whose. So applying for one child would have
+    shared that child's siblings too.
+  - A member removed from the profile drops out of every share when it is read; the array
+    is not rewritten.
+  - Also new:
+    - checks on the field vocabulary, on a non-empty member list, and that the expiry is
+      after the grant;
+    - `ix_profile_share_org_live` for an organisation's inbox.
+- **Fields:**
+  - `household`;
+  - `member_names` (with the role);
+  - `member_birth_dates`;
+  - `member_grade`;
+  - `member_pronouns`;
+  - `contacts`;
+  - `support_needs`.
+- **The family's side** is `GET`, `POST /family-profile/shares` and
+  `DELETE /family-profile/shares/{id}`.
+  - A grant names an approved organisation, optionally one of its listings, one or more
+    members, the fields, and optionally an end date.
+  - A second grant to the same organisation and listing replaces the first. The old one is
+    revoked, and the history keeps both.
+  - At most 50 live shares.
+  - The list shows ended shares too, so a family sees who had what.
+- **The organisation's side** is `GET /org/{orgId}/family-shares` and
+  `GET /org/{orgId}/family-shares/{id}`.
+  - **Who may read:** a member of that organisation at staff or above, holding
+    `youth_record.read`. `OrganisationScopeHandler` now runs in the API too.
+  - **What they see:** only the shared members, and only the shared fields. Everything else
+    is null.
+  - **When:** a revoked or expired share is `family.share_ended` (403). Another
+    organisation's share is `family.share_not_found`.
+  - **Audit:** every read is one `enrollment.family_share.read` row, with the organisation as
+    `actor_org_id` and the share and fields in the detail. Every refusal is a `deny` row.
+- **Support needs are never shown through a share yet.** The table's rule is that only an
+  organisation with an active enrolment reads them, and enrolments come in slice 6 (D42).
+  - Until then, `support_needs` in a share only records the family's consent.
+  - The enrolment will show the needs that are both shared and marked `share_with_providers`.
+- **Not yet:**
+  - shares made from an application, which come with applications;
+  - the provider console's screen;
+  - the app's screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

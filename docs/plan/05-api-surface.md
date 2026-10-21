@@ -270,8 +270,12 @@ POST   /api/v1/org/{orgId}/listings/{lid}/waitlist/offer
 *Built (2026-10-20, D43):* `GET` and `PUT /family-profile`; `POST /family-profile/members`,
 `PUT` and `DELETE /family-profile/members/{id}`; `PUT /family-profile/members/{id}/support-needs`;
 `POST /family-profile/contacts`, `PUT` and `DELETE /family-profile/contacts/{id}`. A member is
-replaced with `PUT` rather than patched, and the members come back inside the profile. Shares
-come next (D42).
+replaced with `PUT` rather than patched, and the members come back inside the profile.
+
+*Built (2026-10-20, D44):* `GET` and `POST /family-profile/shares` and
+`DELETE /family-profile/shares/{id}`. A grant names the members and fields, optionally a listing
+and an end date. On the organisation's side, `GET /org/{orgId}/family-shares` and
+`GET /org/{orgId}/family-shares/{id}` return only what a live share covers.
 
 ```
 GET    /api/v1/enrollments

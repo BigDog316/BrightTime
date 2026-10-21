@@ -224,5 +224,6 @@ public static class ApiComposition
                 .AddRequirements(new RecentAuthenticationRequirement(PasskeyEndpoints.StepUpWindow)));
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RecentAuthenticationHandler>();
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PermissionHandler>();
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, OrganisationScopeHandler>();
     }
 }

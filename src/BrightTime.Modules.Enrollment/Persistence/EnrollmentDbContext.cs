@@ -106,7 +106,33 @@ public sealed class FamilyContactRecord
     public short SortOrder { get; set; }
 }
 
-/// <summary>The Enrollment module's context (M3a): the family profile so far.</summary>
+/// <summary>One organisation's view of a family profile: which members, which fields, until when (D44).</summary>
+public sealed class ProfileShareRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid FamilyProfileId { get; init; }
+
+    public Guid OrgId { get; init; }
+
+    public Guid? ListingId { get; init; }
+
+    public required Guid[] MemberIds { get; init; }
+
+    public required string[] SharedFields { get; init; }
+
+    public Guid GrantedByUserId { get; init; }
+
+    public DateTimeOffset GrantedAt { get; init; }
+
+    public DateTimeOffset? ExpiresAt { get; init; }
+
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+
+/// <summary>The Enrollment module's context (M3a): the family profile and its shares so far.</summary>
 public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -122,6 +148,8 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
     public DbSet<SupportNeedRecord> SupportNeeds => Set<SupportNeedRecord>();
 
     public DbSet<FamilyContactRecord> FamilyContacts => Set<FamilyContactRecord>();
+
+    public DbSet<ProfileShareRecord> ProfileShares => Set<ProfileShareRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -159,6 +187,14 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => x.FamilyProfileId);
+        });
+
+        modelBuilder.Entity<ProfileShareRecord>(b =>
+        {
+            b.ToTable("profile_share");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.OrgId, x.GrantedAt }).IsDescending(false, true).HasFilter("revoked_at is null");
         });
 
         modelBuilder.ApplySnakeCaseNames();

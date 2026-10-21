@@ -1666,6 +1666,35 @@ docs/plan/07's T1 enforced at every layer. Broadcasts come next (D54); SMS waits
   - the app's and the console's message screens;
   - SMS (Q9).
 
+### D54 — Broadcasts: one announcement, no replies, no family named to another (**proposed 2026-10-21; implemented, reversible**)
+
+M3b's messaging, second slice: telling every family on a listing at once.
+- **Sending:** `POST /org/{orgId}/broadcasts {listingId, subject, body}`, by holders of
+  `messages.send_to_family` at the listing's organisation.
+  - It reaches the owners of the family profiles of the listing's active, enrolled young
+    people (`IEnrolmentQueries.FamilyOwnersAsync`). Waitlisted families and applicants aren't
+    included.
+  - It is one `org_broadcast` conversation. Families read it and can't answer it
+    (`messaging.broadcast`).
+  - No family sees another: a participant sees the roles in it, never who.
+- **Young people are treated as in D53:**
+  - one whose consent doesn't allow organisation messages is left out;
+  - so is anyone a contact restriction keeps from the sender;
+  - with any young person among the recipients, an admin of the organisation observes it.
+    Without one, the young people are left out rather than sent to without a second adult of
+    the organisation's.
+
+  The answer says how many families it reached and how many young people it left out. With
+  nobody left to tell, it is `messaging.no_recipients` (409).
+- **It is screened and notified as any message.** With a young person in it, the text is
+  screened for contact exchange and held if flagged; then no one but the sender sees it. Each
+  recipient gets the same push as for a message, "{org} sent you a message".
+- **Not yet:**
+  - broadcasts to waitlisted families or applicants;
+  - scheduling a broadcast;
+  - email as well as push for announcements;
+  - SMS (Q9).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

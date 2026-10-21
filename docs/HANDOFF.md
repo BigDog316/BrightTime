@@ -129,14 +129,17 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   in one with a single adult: an admin observes, or it is refused, and the database decides who
   is a minor. Every route to a pair is tested at the database. Contact-exchange attempts to a
   minor are held. Pushes say only who wrote.
-- Next in M3b: broadcasts, then payments, then reports. Rebuild the compose volume: the schema
-  and the role permissions changed.
+- **Broadcasts** (D54, proposed): one announcement to every family with a child enrolled in a
+  listing. Families don't reply and never see each other. Young people are included only with
+  their consent and an admin observing.
+- Next in M3b: payments, then reports. Rebuild the compose volume: the schema and the role
+  permissions changed.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
-Every decision through D53 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D53 on 2026-10-21).
+Every decision through D53 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D53 on 2026-10-21). **D54 (broadcasts) is proposed.**
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

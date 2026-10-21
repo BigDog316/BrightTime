@@ -13,6 +13,8 @@ public sealed record StartConversationRequest(Guid? EnrollmentId, Guid? Applicat
 
 public sealed record MessageRequest(string? Body);
 
+public sealed record BroadcastRequest(Guid ListingId, string? Subject, string? Body);
+
 /// <summary>
 /// Messaging (M3b, D53): an organisation's staff open conversations with families; everyone in a
 /// conversation reads and writes it. There is no route to a one-to-one channel between an adult and
@@ -31,6 +33,8 @@ public static class MessagingEndpoints
 
         api.MapPost("/org/{orgId:guid}/conversations", StartAsync).RequireAuthorization()
             .WithMetadata(new YouthRecordAttribute(Conversations.Sent)).Produces<ConversationView>(StatusCodes.Status201Created);
+        api.MapPost("/org/{orgId:guid}/broadcasts", BroadcastAsync).RequireAuthorization()
+            .WithMetadata(new YouthRecordAttribute(Conversations.Sent)).Produces<BroadcastResult>(StatusCodes.Status201Created);
         return api;
     }
 
@@ -72,6 +76,24 @@ public static class MessagingEndpoints
         return started.IsSuccess
             ? Results.Created($"/api/v1/conversations/{started.Value.Id}", started.Value)
             : Refused(audit, Conversations.Sent, org, started.Error);
+    }
+
+    /// <summary>An announcement to every family with a young person enrolled in a listing (D54). Families read it; they don't reply.</summary>
+    private static async Task<IResult> BroadcastAsync(Guid orgId, BroadcastRequest body, ClaimsPrincipal user, IAuthorizationService authorization, Conversations conversations, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        OrganisationId org = new(orgId);
+        AuthorizationResult may = await authorization.AuthorizeAsync(user, new AuthorizationTarget { OrganisationId = org },
+            new OrganisationScopeRequirement(Permissions.Messages.SendToFamily, OrganisationRoles.Staff));
+        if (!may.Succeeded)
+        {
+            return Refused(audit, Conversations.Sent, org, Error.Forbidden("messaging.forbidden", "Only this organisation's staff message its families."));
+        }
+
+        Result<BroadcastResult> sent = await conversations.BroadcastAsync(org, Actor(user), body.ListingId, body.Subject, body.Body ?? string.Empty, ct);
+        return sent.IsSuccess
+            ? Results.Created($"/api/v1/conversations/{sent.Value.Conversation.Id}", sent.Value)
+            : Refused(audit, Conversations.Sent, org, sent.Error);
     }
 
     private static IResult Refused(AuditTrail audit, string action, OrganisationId? org, Error error)

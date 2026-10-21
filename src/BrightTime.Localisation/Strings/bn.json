@@ -682,6 +682,7 @@
   "error.messaging.closed": "এই কথোপকথনটি বন্ধ করা হয়েছে।",
   "error.messaging.family_not_found": "আপনার প্রতিষ্ঠানের এমন কোনো ভর্তি বা আবেদন নেই।",
   "error.messaging.forbidden": "শুধু এই প্রতিষ্ঠানের কর্মীরাই এর পরিবারগুলোকে বার্তা পাঠাতে পারেন।",
+  "error.messaging.no_recipients": "এই কার্যক্রমের কোনো পরিবার এই ঘোষণা পেতে পারবে না।",
   "error.messaging.not_found": "আপনি এমন কোনো কথোপকথনে নেই।",
   "error.messaging.not_messageable": "এই তরুণের সম্মতি এখনও প্রতিষ্ঠানের বার্তা পাওয়ার অনুমতি দেয় না।",
   "error.messaging.restricted": "আপনি এই পরিবারকে বার্তা পাঠাতে পারবেন না।",

@@ -682,6 +682,7 @@
   "error.messaging.closed": "تم إغلاق هذه المحادثة.",
   "error.messaging.family_not_found": "ليس لدى منظمتك هذا التسجيل أو الطلب.",
   "error.messaging.forbidden": "لا يراسل عائلات هذه المنظمة إلا موظفوها.",
+  "error.messaging.no_recipients": "لا توجد عائلة في هذا النشاط يمكنها تلقي هذا الإعلان.",
   "error.messaging.not_found": "لست في هذه المحادثة.",
   "error.messaging.not_messageable": "لا تسمح موافقة هذا الشاب بعد برسائل من المنظمات.",
   "error.messaging.restricted": "لا يمكنك مراسلة هذه العائلة.",

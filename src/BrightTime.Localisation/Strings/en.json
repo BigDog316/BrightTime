@@ -682,6 +682,7 @@
   "error.messaging.closed": "This conversation has been closed.",
   "error.messaging.family_not_found": "Your organisation has no enrolment or application like that.",
   "error.messaging.forbidden": "Only this organisation's staff can message its families.",
+  "error.messaging.no_recipients": "No family in this activity can get this announcement.",
   "error.messaging.not_found": "You aren't in a conversation like that.",
   "error.messaging.not_messageable": "This young person's consent doesn't allow messages from organisations yet.",
   "error.messaging.restricted": "You can't message this family.",

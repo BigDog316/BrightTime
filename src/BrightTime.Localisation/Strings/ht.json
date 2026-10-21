@@ -682,6 +682,7 @@
   "error.messaging.closed": "Yo fèmen konvèsasyon sa a.",
   "error.messaging.family_not_found": "Òganizasyon w lan pa gen enskripsyon oswa aplikasyon sa a.",
   "error.messaging.forbidden": "Se sèlman anplwaye òganizasyon sa a ki ka voye mesaj bay fanmi li yo.",
+  "error.messaging.no_recipients": "Pa gen okenn fanmi nan aktivite sa a ki ka resevwa anons sa a.",
   "error.messaging.not_found": "Ou pa nan konvèsasyon sa a.",
   "error.messaging.not_messageable": "Konsantman jèn moun sa a poko pèmèt li resevwa mesaj òganizasyon.",
   "error.messaging.restricted": "Ou pa ka voye mesaj bay fanmi sa a.",

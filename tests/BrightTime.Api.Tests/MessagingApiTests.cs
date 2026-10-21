@@ -193,4 +193,47 @@ public sealed class MessagingApiTests(ApiFixture api)
         await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{lonelyOrg}/conversations", new { applicationId = second, body = "Hello." }, Ct),
             HttpStatusCode.Conflict, "messaging.unsafe_shape");
     }
+
+    [Fact]
+    public async Task Enrolled_families_hear_an_announcement_and_cannot_answer_it()
+    {
+        RequireDatabase();
+        (Guid listing, Guid org, string staffEmail) = StaffedListing();
+        using HttpClient admin = await SignedInAsync(AdminOf(org));
+        using HttpClient staff = await SignedInAsync(staffEmail);
+        using HttpClient first = await SignedInAsync(await api.NewAdultAsync());
+        using HttpClient second = await SignedInAsync(await api.NewAdultAsync());
+        (string teenEmail, _) = await NewTeenAsync();
+        using HttpClient teen = await SignedInAsync(teenEmail);
+
+        // Two families and a teenager, enrolled. The teenager's consent doesn't allow messages yet.
+        await JsonAsync(await admin.PutAsJsonAsync($"api/v1/org/{org}/listings/{listing}/seats", new { capacity = 50 }, Ct));
+        foreach ((HttpClient family, string child, int age) in new[] { (first, "Ama", 9), (second, "Kwame", 11), (teen, "Yaw", 15) })
+        {
+            Guid application = await ApplyAsync(family, listing, child, age);
+            await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/applications/{application}/decide", new { decision = "accept" }, Ct));
+        }
+
+        JsonElement sent = await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/broadcasts",
+            new { listingId = listing, subject = "Rain plan", body = "We meet indoors tomorrow." }, Ct), HttpStatusCode.Created);
+        (sent.GetProperty("recipients").GetInt32(), sent.GetProperty("skipped").GetInt32()).ShouldBe((2, 1));
+        Guid conversation = sent.GetProperty("conversation").GetProperty("id").GetGuid();
+
+        // A family reads it, and can't answer it; the teenager never received it.
+        JsonElement mine = (await JsonAsync(await first.GetAsync(new Uri("api/v1/conversations", UriKind.Relative), Ct))).EnumerateArray()
+            .Single(c => c.GetProperty("id").GetGuid() == conversation);
+        mine.GetProperty("kind").GetString().ShouldBe("org_broadcast");
+        (await JsonAsync(await second.GetAsync(new Uri($"api/v1/conversations/{conversation}", UriKind.Relative), Ct))).GetProperty("messages")[0]
+            .GetProperty("body").GetString().ShouldBe("We meet indoors tomorrow.");
+        await ProblemAsync(await first.PostAsJsonAsync($"api/v1/conversations/{conversation}/messages", new { body = "Thanks!" }, Ct),
+            HttpStatusCode.Forbidden, "messaging.broadcast");
+        (await JsonAsync(await teen.GetAsync(new Uri("api/v1/conversations", UriKind.Relative), Ct))).EnumerateArray()
+            .Any(c => c.GetProperty("id").GetGuid() == conversation).ShouldBeFalse();
+
+        // A listing with nobody enrolled has nobody to tell.
+        (Guid lonely, Guid lonelyOrg) = UnstaffedListing();
+        using HttpClient lonelyAdmin = await SignedInAsync(AdminOf(lonelyOrg));
+        await ProblemAsync(await lonelyAdmin.PostAsJsonAsync($"api/v1/org/{lonelyOrg}/broadcasts", new { listingId = lonely, body = "Hello all." }, Ct),
+            HttpStatusCode.Conflict, "messaging.no_recipients");
+    }
 }

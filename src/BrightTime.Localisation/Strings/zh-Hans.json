@@ -682,6 +682,7 @@
   "error.messaging.closed": "此对话已关闭。",
   "error.messaging.family_not_found": "你的机构没有这项注册或申请。",
   "error.messaging.forbidden": "只有该机构的工作人员才能给其家庭发消息。",
+  "error.messaging.no_recipients": "这项活动中没有家庭可以收到此公告。",
   "error.messaging.not_found": "你不在这个对话中。",
   "error.messaging.not_messageable": "这位年轻人的同意尚未允许接收机构的消息。",
   "error.messaging.restricted": "你不能给这个家庭发消息。",

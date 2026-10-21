@@ -682,6 +682,7 @@
   "error.messaging.closed": "Esta conversación se cerró.",
   "error.messaging.family_not_found": "Tu organización no tiene esa inscripción o solicitud.",
   "error.messaging.forbidden": "Solo el personal de esta organización puede escribir a sus familias.",
+  "error.messaging.no_recipients": "Ninguna familia de esta actividad puede recibir este anuncio.",
   "error.messaging.not_found": "No participas en esa conversación.",
   "error.messaging.not_messageable": "El consentimiento de este joven todavía no permite mensajes de organizaciones.",
   "error.messaging.restricted": "No puedes escribir a esta familia.",

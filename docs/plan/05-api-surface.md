@@ -435,6 +435,10 @@ the remedy.
 applicationId, subject, body}` (staff open a conversation with a family). The unsafe shape is
 `409 urn:brighttime:problem:messaging.unsafe_shape`.
 
+*Built (2026-10-21, D54):* `POST /org/{orgId}/broadcasts {listingId, subject, body}`, to the
+families of a listing's enrolled young people. Families read it and don't reply; the answer says
+how many it reached and how many young people it left out.
+
 ---
 
 ## Workforce

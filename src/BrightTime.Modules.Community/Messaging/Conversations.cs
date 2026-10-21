@@ -7,6 +7,7 @@ using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Identity.Contracts;
+using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Platform.Contracts.Messages;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -30,6 +31,10 @@ public sealed record MessageView(Guid Id, bool FromMe, string SenderRole, string
 /// </summary>
 [YouthData]
 public sealed record ConversationView(Guid Id, Guid OrgId, string Kind, string? Subject, bool ReadByOrganisation, IReadOnlyList<string> Roles, IReadOnlyList<MessageView> Messages);
+
+/// <summary>An announcement as sent: the conversation, how many families it reached, and how many young people it had to leave out.</summary>
+[YouthData]
+public sealed record BroadcastResult(ConversationView Conversation, int Recipients, int Skipped);
 
 /// <summary>
 /// Conversations between an organisation and a family (M3b, D53), with the safety rules the schema
@@ -61,7 +66,8 @@ public sealed class Conversations(
     IClock clock,
     IIdentityQueries identity,
     IDirectoryQueries directory,
-    IEnrolmentQueries enrolments)
+    IEnrolmentQueries enrolments,
+    IListingDetails listings)
 {
     public const string Read = "messaging.read";
     public const string Sent = "messaging.sent";
@@ -122,7 +128,7 @@ public sealed class Conversations(
             Guid? observer = null;
             if (ownerIsMinor)
             {
-                observer = await ObserverAsync(org, [staff.Value, owner.Value], owner, ct).ConfigureAwait(false);
+                observer = await ObserverAsync(org, [staff.Value, owner.Value], [owner], ct).ConfigureAwait(false);
                 if (observer is null)
                 {
                     return Result<ConversationView>.Failure(Error.Conflict("messaging.unsafe_shape",
@@ -156,6 +162,102 @@ public sealed class Conversations(
             await WriteAsync(conversation, staff, text, ownerIsMinor, ct).ConfigureAwait(false);
             await AuditAsync(Sent, conversation, [conversation.Id], ct, org).ConfigureAwait(false);
             return Result<ConversationView>.Success(await ViewAsync(conversation, staff, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>
+    /// An announcement from staff to every family with a young person enrolled in a listing (D54):
+    /// one <c>org_broadcast</c> conversation that families read and don't answer, and that names no
+    /// family to another. With any young person among the recipients an admin of the organisation
+    /// observes it; without one, young people are left out (and counted) rather than sent to
+    /// without a second adult of the organisation's. So are young people whose consent doesn't
+    /// allow it, and anyone a contact restriction keeps from the sender.
+    /// </summary>
+    public Task<Result<BroadcastResult>> BroadcastAsync(OrganisationId org, UserId staff, Guid listingId, string? subject, string body, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (Body(body) is not { } text)
+            {
+                return Result<BroadcastResult>.Failure(BadBody());
+            }
+
+            string? topic = subject?.Trim() is { Length: > 0 } s ? s : null;
+            if (topic is { Length: > MaxSubject })
+            {
+                return Result<BroadcastResult>.Failure(Error.Validation("messaging.subject", $"A subject of at most {MaxSubject} characters."));
+            }
+
+            if ((await listings.GetForReviewAsync(tenant.TenantId, listingId, Locale.Default.Code, ct).ConfigureAwait(false))?.OrganisationId != org)
+            {
+                return Result<BroadcastResult>.Failure(Error.NotFound("form.listing_not_found", "Your organisation has no listing with that id."));
+            }
+
+            if (await identity.IsMinorAsync(staff, ct).ConfigureAwait(false))
+            {
+                return Result<BroadcastResult>.Failure(Error.Forbidden("messaging.forbidden", "Only an adult member of staff sends announcements."));
+            }
+
+            List<(Guid User, bool Minor)> recipients = [];
+            int skipped = 0;
+            foreach (Guid owner in (await enrolments.FamilyOwnersAsync(listingId, ct).ConfigureAwait(false)).Where(o => o != staff.Value).Distinct())
+            {
+                UserId who = new(owner);
+                bool minor = await identity.IsMinorAsync(who, ct).ConfigureAwait(false);
+                if (await identity.IsContactRestrictedAsync(staff, who, ct).ConfigureAwait(false)
+                    || (minor && !(await identity.GetCapabilitiesAsync(who, ct).ConfigureAwait(false)).CanBeMessagedByOrganisation))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                recipients.Add((owner, minor));
+            }
+
+            Guid? observer = null;
+            if (recipients.Any(r => r.Minor))
+            {
+                List<UserId> minors = [.. recipients.Where(r => r.Minor).Select(r => new UserId(r.User))];
+                observer = await ObserverAsync(org, [staff.Value, .. recipients.Select(r => r.User)], minors, ct).ConfigureAwait(false);
+                if (observer is null)
+                {
+                    skipped += minors.Count;
+                    recipients.RemoveAll(r => r.Minor);
+                }
+            }
+
+            if (recipients.Count == 0)
+            {
+                return Result<BroadcastResult>.Failure(Error.Conflict("messaging.no_recipients", "No family of this listing can be sent this announcement."));
+            }
+
+            DateTimeOffset now = clock.StoredNow();
+            ConversationRecord conversation = new()
+            {
+                Id = UuidV7.NewId(),
+                TenantId = tenant.TenantId.Value,
+                OrgId = org.Value,
+                ListingId = listingId,
+                ConversationKind = ConversationKinds.OrgBroadcast,
+                Subject = topic,
+                IsOrgVisible = true,
+                CreatedBy = staff.Value,
+                CreatedAt = now,
+            };
+            db.Conversations.Add(conversation);
+            db.Participants.Add(Participant(conversation.Id, staff.Value, ParticipantRoles.Staff, isMinor: false, now));
+            foreach ((Guid user, bool minor) in recipients)
+            {
+                db.Participants.Add(Participant(conversation.Id, user, minor ? ParticipantRoles.Youth : ParticipantRoles.Guardian, minor, now));
+            }
+
+            if (observer is { } reader)
+            {
+                db.Participants.Add(Participant(conversation.Id, reader, ParticipantRoles.OrgAdminObserver, isMinor: false, now, implicitReader: true));
+            }
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await WriteAsync(conversation, staff, text, recipients.Any(r => r.Minor), ct).ConfigureAwait(false);
+            await AuditAsync(Sent, conversation, [conversation.Id], ct, org).ConfigureAwait(false);
+            return Result<BroadcastResult>.Success(new BroadcastResult(await ViewAsync(conversation, staff, ct).ConfigureAwait(false), recipients.Count, skipped));
         }, cancellationToken);
 
     /// <summary>The person's conversations, newest activity first, with how many messages they haven't read.</summary>
@@ -274,20 +376,27 @@ public sealed class Conversations(
 
     /// <summary>
     /// An adult of the organisation to observe a conversation with a minor: an owner or admin first,
-    /// then staff; never one of <paramref name="already"/>, a minor, or someone kept away from the young person.
+    /// then staff; never one of <paramref name="already"/>, a minor, or someone kept away from any of the young people.
     /// </summary>
-    internal async Task<Guid?> ObserverAsync(OrganisationId org, IReadOnlyCollection<Guid> already, UserId youth, CancellationToken ct)
+    internal async Task<Guid?> ObserverAsync(OrganisationId org, IReadOnlyCollection<Guid> already, IReadOnlyCollection<UserId> youths, CancellationToken ct)
     {
         foreach (OrganisationMembership member in await directory.GetOrganisationMembersAsync(org, ct).ConfigureAwait(false))
         {
-            if (already.Contains(member.UserId.Value)
-                || await identity.IsMinorAsync(member.UserId, ct).ConfigureAwait(false)
-                || await identity.IsContactRestrictedAsync(member.UserId, youth, ct).ConfigureAwait(false))
+            if (already.Contains(member.UserId.Value) || await identity.IsMinorAsync(member.UserId, ct).ConfigureAwait(false))
             {
                 continue;
             }
 
-            return member.UserId.Value;
+            bool kept = false;
+            foreach (UserId youth in youths)
+            {
+                kept |= await identity.IsContactRestrictedAsync(member.UserId, youth, ct).ConfigureAwait(false);
+            }
+
+            if (!kept)
+            {
+                return member.UserId.Value;
+            }
         }
 
         return null;

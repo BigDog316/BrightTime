@@ -343,7 +343,13 @@ Duplicates are a success, not an error — that is the point of
 *Built (2026-10-21, D49):* the roster, `POST /attendance`, `POST /attendance/batch`
 (`{deviceId, appVersion, items}`, outcomes `applied|duplicate|conflict|rejected`),
 `GET /attendance` (`from`, `to`, `listingId`, `history`), `PATCH /attendance/{id}` (a correction
-with a reason, superseding) and `GET /me/attendance`. Check-in tokens and kiosk devices come next.
+with a reason, superseding) and `GET /me/attendance`.
+
+*Built (2026-10-21, D50):* `POST /org/{orgId}/checkin-tokens {listingId}` (a kiosk code),
+`POST /attendance/checkin {token, enrollmentId}` (a family at the kiosk), and two additions:
+`POST /me/attendance/badges {enrollmentId}` (a family's badge) and
+`POST /org/{orgId}/attendance/scan {token, occurrenceStartsAt}` (staff scanning it). Kiosk devices
+come next.
 
 ---
 

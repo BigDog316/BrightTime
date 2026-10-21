@@ -1496,6 +1496,39 @@ in slices:
   - minutes derived from check-in and check-out;
   - the console's attendance screens.
 
+### D50 — Check-in by QR: badges and kiosks, codes that name nobody (**proposed 2026-10-21; implemented, reversible**)
+
+M3b's second attendance slice: checking in without anyone typing.
+- **A code is 256 random bits,** shown as a QR and stored only as its SHA-256
+  (`checkin_token`). It carries no identifier (docs/plan/07): a photographed code names
+  nobody, and is spent or stale within minutes.
+- **A badge** goes from the family to staff.
+  - `POST /me/attendance/badges {enrollmentId}` gives the family's app a code for one of its
+    own current enrolments. It lasts two minutes and works once (`youth_badge`).
+  - Staff scan it with `POST /org/{orgId}/attendance/scan {token, occurrenceStartsAt}`, which
+    records the young person present (method `qr`, checked in now).
+  - The code is spent as it is scanned, even if the record is then refused, so a code is
+    never tried twice.
+- **A kiosk** goes from staff to the family.
+  - `POST /org/{orgId}/checkin-tokens {listingId}` gives a staff screen a code for the
+    listing. It lasts a minute and serves everyone who scans it in that time
+    (`session_kiosk`); the screen asks for a fresh one each minute.
+  - A family scans it with `POST /attendance/checkin {token, enrollmentId}`, which checks in
+    one of their own young people (method `kiosk`).
+  - The meeting is the one under way now, or starting within the hour (`checkin.no_meeting`
+    otherwise).
+- **Both paths write through D49's checks:** an active, seated enrolment at the organisation, a
+  real meeting inside the window, and one live record per meeting. They are audited the same
+  way, refusals included.
+- **Who:**
+  - issuing a kiosk code and scanning a badge need `attendance.record` at the organisation;
+  - a family asks for badges and checks in only for its own enrolments.
+- **Not yet:**
+  - sweeping expired codes (`ix_checkin_token_sweep` is ready for a job);
+  - binding kiosk codes to an enrolled kiosk device (`staff_scanner`), which is the next
+    slice;
+  - check-out by code.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

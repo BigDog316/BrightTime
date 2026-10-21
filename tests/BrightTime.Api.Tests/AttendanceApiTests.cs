@@ -223,4 +223,86 @@ public sealed class AttendanceApiTests(ApiFixture api)
         await ProblemAsync(await family.GetAsync(new Uri($"api/v1/org/{org}/listings/{listing}/roster?occurrence={Iso(meetings.Past)}", UriKind.Relative), Ct),
             HttpStatusCode.Forbidden, "attendance.forbidden");
     }
+
+    /// <summary>A meeting under way now: started ten minutes ago, ending in fifty.</summary>
+    private async Task<DateTimeOffset> MeetingNowAsync(Guid listing)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset at = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, TimeSpan.Zero).AddMinutes(-10);
+        Guid session = UuidV7.NewId();
+        await api.ExecuteAsync("""
+            insert into opportunity.listing_session (id, tenant_id, listing_id, timezone, starts_on, start_time, end_time)
+            values (@s, @t, @l, 'America/New_York', current_date - 1, '09:00', '10:00');
+            insert into opportunity.listing_occurrence (tenant_id, listing_id, session_id, starts_at, ends_at, day_of_week, is_cancelled)
+            values (@t, @l, @s, @at, @at + interval '1 hour', 1, false);
+            """, ("s", session), ("t", api.Data.TenantId), ("l", listing), ("at", at));
+        return at;
+    }
+
+    [Fact]
+    public async Task Staff_scan_a_familys_badge_once_and_the_badge_names_nobody()
+    {
+        RequireDatabase();
+        (int index, Guid org, Guid listing, int elsewhere) = Provider();
+        List<(string Email, Guid Org)> staffAccounts = AllStaff();
+        using HttpClient admin = await SignedInAsync(AdminOf(org));
+        using HttpClient staff = await SignedInAsync(staffAccounts[index].Email);
+        using HttpClient stranger = await SignedInAsync(staffAccounts[elsewhere].Email);
+        using HttpClient family = await SignedInAsync(await api.NewAdultAsync());
+        using HttpClient otherFamily = await SignedInAsync(await api.NewAdultAsync());
+        (Guid[] enrolled, Meetings meetings) = await EnrolAsync(admin, staff, family, org, listing, "Amani");
+        Guid amani = enrolled[0];
+
+        JsonElement badge = await JsonAsync(await family.PostAsJsonAsync("api/v1/me/attendance/badges", new { enrollmentId = amani }, Ct), HttpStatusCode.Created);
+        string token = badge.GetProperty("token").GetString()!;
+        token.Length.ShouldBe(43);
+        token.ShouldNotContain(amani.ToString("N")[..8], Case.Insensitive);
+        (badge.GetProperty("expiresAt").GetDateTimeOffset() - DateTimeOffset.UtcNow).ShouldBeLessThanOrEqualTo(TimeSpan.FromMinutes(2));
+        await ProblemAsync(await otherFamily.PostAsJsonAsync("api/v1/me/attendance/badges", new { enrollmentId = amani }, Ct), HttpStatusCode.NotFound, "checkin.enrolment");
+
+        // Another organisation's staff can't use it; this organisation's staff spend it once.
+        await ProblemAsync(await stranger.PostAsJsonAsync($"api/v1/org/{org}/attendance/scan", new { token, occurrenceStartsAt = meetings.Past }, Ct), HttpStatusCode.Forbidden, "attendance.forbidden");
+        JsonElement scanned = await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/scan", new { token, occurrenceStartsAt = meetings.Past }, Ct), HttpStatusCode.Created);
+        scanned.GetProperty("enrollmentId").GetGuid().ShouldBe(amani);
+        scanned.GetProperty("method").GetString().ShouldBe("qr");
+        scanned.GetProperty("state").GetString().ShouldBe("present");
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/scan", new { token, occurrenceStartsAt = meetings.Past }, Ct), HttpStatusCode.Conflict, "checkin.used");
+
+        // A stale badge, and something that isn't a badge at all.
+        string stale = (await JsonAsync(await family.PostAsJsonAsync("api/v1/me/attendance/badges", new { enrollmentId = amani }, Ct), HttpStatusCode.Created)).GetProperty("token").GetString()!;
+        await api.ExecuteAsync("update attendance.checkin_token set issued_at = now() - interval '1 hour', expires_at = now() - interval '58 minutes' where token_hash = sha256(convert_to(@t, 'UTF8'))", ("t", stale));
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/scan", new { token = stale, occurrenceStartsAt = meetings.Past }, Ct), HttpStatusCode.Conflict, "checkin.expired");
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/scan", new { token = new string('x', 43), occurrenceStartsAt = meetings.Past }, Ct), HttpStatusCode.NotFound, "checkin.invalid");
+        (await api.ScalarAsync<long>("select count(*) from attendance.checkin_token where length(token_hash) = 32 and enrollment_id = @e", ("e", amani))).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_family_checks_in_at_a_kiosk_for_the_meeting_on_now()
+    {
+        RequireDatabase();
+        (int index, Guid org, Guid listing, _) = Provider();
+        List<(string Email, Guid Org)> staffAccounts = AllStaff();
+        using HttpClient admin = await SignedInAsync(AdminOf(org));
+        using HttpClient staff = await SignedInAsync(staffAccounts[index].Email);
+        using HttpClient family = await SignedInAsync(await api.NewAdultAsync());
+        using HttpClient otherFamily = await SignedInAsync(await api.NewAdultAsync());
+        (Guid[] enrolled, _) = await EnrolAsync(admin, staff, family, org, listing, "Baraka", "Neema");
+        DateTimeOffset now = await MeetingNowAsync(listing);
+
+        string kiosk = (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/checkin-tokens", new { listingId = listing }, Ct), HttpStatusCode.Created)).GetProperty("token").GetString()!;
+
+        // One code on the screen serves every family that scans it while it lasts.
+        JsonElement baraka = await JsonAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.Created);
+        baraka.GetProperty("method").GetString().ShouldBe("kiosk");
+        baraka.GetProperty("occurrenceStartsAt").GetDateTimeOffset().ShouldBe(now);
+        await JsonAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[1] }, Ct), HttpStatusCode.Created);
+        await ProblemAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.Conflict, "attendance.exists");
+
+        // Only for one's own young people, and only with a kiosk's code while it lasts.
+        await ProblemAsync(await otherFamily.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.NotFound, "checkin.enrolment");
+        string badge = (await JsonAsync(await family.PostAsJsonAsync("api/v1/me/attendance/badges", new { enrollmentId = enrolled[0] }, Ct), HttpStatusCode.Created)).GetProperty("token").GetString()!;
+        await ProblemAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = badge, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.NotFound, "checkin.invalid");
+        await api.ExecuteAsync("update attendance.checkin_token set issued_at = now() - interval '5 minutes', expires_at = now() - interval '4 minutes' where token_hash = sha256(convert_to(@t, 'UTF8'))", ("t", kiosk));
+        await ProblemAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[1] }, Ct), HttpStatusCode.Conflict, "checkin.expired");
+    }
 }

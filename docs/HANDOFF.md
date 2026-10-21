@@ -116,14 +116,15 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   corrections that supersede.
 - A family's own view at `/me/attendance`.
 - Staff see display names only through the family's share. Every read and write is audited.
-- Next: rotating QR and kiosk check-in, then kiosk devices with remote wipe, then the app's
-  offline roster.
+- **Check-in by QR** (D50, proposed): families show a two-minute single-use badge that staff
+  scan, or scan a kiosk's one-minute code. Codes are random, hashed, and name nobody.
+- Next: kiosk devices with remote wipe, then the app's offline roster.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
-Every decision through D48 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 and D48 on 2026-10-21). **D49 (attendance) is proposed.**
+Every decision through D48 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 and D48 on 2026-10-21). **D49 (attendance) and D50 (check-in by QR) are proposed.**
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

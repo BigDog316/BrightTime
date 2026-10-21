@@ -152,6 +152,34 @@ public sealed class AttendanceRecords(
         }, cancellationToken);
 
     /// <summary>
+    /// A check-in by code (D50): present, checked in now, by the method given, under the same
+    /// checks as any record. The caller has proved the code; this writes the record.
+    /// </summary>
+    internal async Task<Result<AttendanceView>> CheckInAsync(OrganisationId org, UserId actor, Guid enrollmentId, DateTimeOffset occurrence, string method, CancellationToken ct)
+    {
+        await LockAsync(org, ct).ConfigureAwait(false);
+        DateTimeOffset now = clock.StoredNow();
+        AttendanceInput input = new(enrollmentId, occurrence, AttendanceStates.Present, CheckedInAt: now);
+        Checked check = await CheckAsync(org, input, [], ct).ConfigureAwait(false);
+        if (check.Error is { } invalid)
+        {
+            return Result<AttendanceView>.Failure(invalid);
+        }
+
+        if (await LiveAsync(enrollmentId, check.StartsAt, ct).ConfigureAwait(false) is { } live)
+        {
+            return Result<AttendanceView>.Failure(Error.Conflict("attendance.exists", "This young person already has a record for this meeting. Correct it instead.",
+                new Dictionary<string, object>(StringComparer.Ordinal) { ["recordId"] = live.Id }));
+        }
+
+        AttendanceRecordRecord record = await NewAsync(org, actor, input, check, method, now, null, null, ct).ConfigureAwait(false);
+        db.Records.Add(record);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await AuditAsync(Recorded, org, [enrollmentId], ct, new Dictionary<string, string>(StringComparer.Ordinal) { ["method"] = method }).ConfigureAwait(false);
+        return Result<AttendanceView>.Success(await ViewAsync(record, ct).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// A phone's offline queue, item by item: applied, a duplicate of an earlier replay (a success),
     /// a conflict with a record someone else made first (theirs stands), or rejected with a reason.
     /// </summary>
@@ -460,6 +488,7 @@ public static class AttendanceModule
     public static IServiceCollection AddAttendance(this IServiceCollection services)
     {
         services.AddScoped<AttendanceRecords>();
+        services.AddScoped<CheckIns>();
         return services;
     }
 }

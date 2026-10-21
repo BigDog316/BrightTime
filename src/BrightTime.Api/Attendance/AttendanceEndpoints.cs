@@ -31,6 +31,14 @@ public sealed record SyncItemRequest(
 
 public sealed record SyncRequest(string? DeviceId, string? AppVersion, IReadOnlyList<SyncItemRequest>? Items);
 
+public sealed record BadgeRequest(Guid EnrollmentId);
+
+public sealed record KioskCodeRequest(Guid ListingId);
+
+public sealed record ScanRequest(string? Token, DateTimeOffset OccurrenceStartsAt);
+
+public sealed record KioskCheckInRequest(string? Token, Guid EnrollmentId);
+
 public sealed record CorrectionRequest(string? State, short? MinutesAttended, DateTimeOffset? CheckedInAt, DateTimeOffset? CheckedOutAt, string? Note, string? Reason);
 
 /// <summary>
@@ -52,6 +60,12 @@ public static class AttendanceEndpoints
         org.MapPatch("/attendance/{id:guid}", CorrectAsync).Audits(AttendanceRecords.Corrected).Produces<AttendanceView>();
 
         api.MapGet("/me/attendance", FamilyAsync).RequireAuthorization().Audits(AttendanceRecords.FamilyRead).Produces<IReadOnlyList<FamilyAttendance>>();
+
+        // Check-in by QR (D50): codes carry no identifier, so issuing one reads no youth record.
+        org.MapPost("/checkin-tokens", KioskCodeAsync).Produces<CheckinCode>(StatusCodes.Status201Created);
+        org.MapPost("/attendance/scan", ScanAsync).Audits(AttendanceRecords.Recorded).Produces<AttendanceView>(StatusCodes.Status201Created);
+        api.MapPost("/me/attendance/badges", BadgeAsync).RequireAuthorization().Produces<CheckinCode>(StatusCodes.Status201Created);
+        api.MapPost("/attendance/checkin", KioskCheckInAsync).RequireAuthorization().Audits(AttendanceRecords.Recorded).Produces<AttendanceView>(StatusCodes.Status201Created);
         return api;
     }
 
@@ -129,6 +143,55 @@ public static class AttendanceEndpoints
 
     private static async Task<IResult> FamilyAsync(ClaimsPrincipal user, AttendanceRecords attendance, CancellationToken ct) =>
         Results.Ok(await attendance.ForFamilyAsync(Actor(user), ct));
+
+    /// <summary>A rotating code for a kiosk screen. Staff ask for a fresh one about every minute.</summary>
+    private static async Task<IResult> KioskCodeAsync(Guid orgId, KioskCodeRequest body, ClaimsPrincipal user, IAuthorizationService authorization, CheckIns checkIns, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (!await CanAsync(user, orgId, Permissions.Attendance.Record, authorization))
+        {
+            return ApiProblems.From(Forbidden());
+        }
+
+        Result<CheckinCode> code = await checkIns.KioskAsync(new OrganisationId(orgId), body.ListingId, ct);
+        return code.IsSuccess ? Results.Created((string?)null, code.Value) : ApiProblems.From(code.Error);
+    }
+
+    /// <summary>Staff scan a family's badge.</summary>
+    private static async Task<IResult> ScanAsync(Guid orgId, ScanRequest body, ClaimsPrincipal user, IAuthorizationService authorization, CheckIns checkIns, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        OrganisationId org = new(orgId);
+        if (!await CanAsync(user, orgId, Permissions.Attendance.Record, authorization))
+        {
+            return Refused(audit, AttendanceRecords.Recorded, org, Forbidden());
+        }
+
+        Result<AttendanceView> recorded = await checkIns.ScanBadgeAsync(org, Actor(user), body.Token ?? string.Empty, body.OccurrenceStartsAt, ct);
+        return recorded.IsSuccess ? Results.Created((string?)null, recorded.Value) : Refused(audit, AttendanceRecords.Recorded, org, recorded.Error);
+    }
+
+    /// <summary>A badge for the family's app to show, for one of their young people's enrolments.</summary>
+    private static async Task<IResult> BadgeAsync(BadgeRequest body, ClaimsPrincipal user, CheckIns checkIns, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        Result<CheckinCode> code = await checkIns.BadgeAsync(Actor(user), body.EnrollmentId, ct);
+        return code.IsSuccess ? Results.Created((string?)null, code.Value) : ApiProblems.From(code.Error);
+    }
+
+    /// <summary>A family scans a kiosk's code to check their young person in.</summary>
+    private static async Task<IResult> KioskCheckInAsync(KioskCheckInRequest body, ClaimsPrincipal user, CheckIns checkIns, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        Result<AttendanceView> recorded = await checkIns.KioskCheckInAsync(Actor(user), body.Token ?? string.Empty, body.EnrollmentId, ct);
+        if (recorded.IsSuccess)
+        {
+            return Results.Created((string?)null, recorded.Value);
+        }
+
+        audit.Record(new AuditAccess { Action = AttendanceRecords.Recorded, Outcome = AuditOutcome.Deny, SubjectKind = "enrollment", SubjectIds = [body.EnrollmentId], Reason = recorded.Error.Code });
+        return ApiProblems.From(recorded.Error);
+    }
 
     private static async Task<bool> CanAsync(ClaimsPrincipal user, Guid orgId, string permission, IAuthorizationService authorization) =>
         (await authorization.AuthorizeAsync(user, new AuthorizationTarget { OrganisationId = new OrganisationId(orgId) },

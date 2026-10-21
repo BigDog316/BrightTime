@@ -73,7 +73,34 @@ public sealed class AttendanceSyncBatchRecord
     public string? AppVersion { get; init; }
 }
 
-/// <summary>The Attendance module's context (M3b, D49): records and sync batches so far.</summary>
+/// <summary>
+/// A short-lived check-in code (D50). Only its SHA-256 is kept; the code itself is random and
+/// never contains a youth identifier.
+/// </summary>
+public sealed class CheckinTokenRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? EnrollmentId { get; init; }
+
+    public Guid? ListingId { get; init; }
+
+    public required byte[] TokenHash { get; init; }
+
+    public required string TokenKind { get; init; }
+
+    public DateTimeOffset IssuedAt { get; init; }
+
+    public DateTimeOffset ExpiresAt { get; init; }
+
+    public DateTimeOffset? ConsumedAt { get; set; }
+
+    public Guid? ConsumedBy { get; set; }
+}
+
+/// <summary>The Attendance module's context (M3b): records, sync batches and check-in codes so far.</summary>
 public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -85,6 +112,8 @@ public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> op
     public DbSet<AttendanceRecordRecord> Records => Set<AttendanceRecordRecord>();
 
     public DbSet<AttendanceSyncBatchRecord> SyncBatches => Set<AttendanceSyncBatchRecord>();
+
+    public DbSet<CheckinTokenRecord> CheckinTokens => Set<CheckinTokenRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -108,6 +137,15 @@ public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> op
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.DeviceId, x.ReceivedAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<CheckinTokenRecord>(b =>
+        {
+            b.ToTable("checkin_token");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.HasIndex(x => x.ExpiresAt).HasFilter("consumed_at is null");
         });
 
         modelBuilder.ApplySnakeCaseNames();

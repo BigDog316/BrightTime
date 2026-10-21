@@ -1335,7 +1335,7 @@ M3a's fourth slice: a family applies for one young person to one listing.
   - a guardian applying for a child who has their own account;
   - expiring stale drafts.
 
-### D47 — Waivers: signed for the exact text, by age (**proposed 2026-10-20; implemented, reversible**)
+### D47 — Waivers: signed for the exact text, by age (**accepted 2026-10-21**)
 
 M3a's fifth slice: e-signature for the releases a program needs before a young person joins.
 - **The organisation's side** works as forms do (D45). Owners and admins create, edit a
@@ -1375,7 +1375,7 @@ M3a's fifth slice: e-signature for the releases a program needs before a young p
   - the organisation's view of who signed (with decisions);
   - re-signing on enrolment.
 
-### D48 — Decisions, seats and waitlists, under a row lock (**proposed 2026-10-21; implemented, reversible**)
+### D48 — Decisions, seats and waitlists, under a row lock (**accepted 2026-10-21**)
 
 M3a's last slice: an organisation decides its applications, and seats are counted right.
 - **Seats:** one `seat_pool` per listing, `default`.

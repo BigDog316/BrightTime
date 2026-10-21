@@ -92,13 +92,13 @@ operations. The new `Enrollment` module holds:
     completeness and the hard rules, and shares the applicant as the family chose.
   - Sensitive answers are sealed.
   - `waiver_signature`'s references now restrict deletes.
-- **Waivers** (D47, proposed):
+- **Waivers** (D47):
   - Versioned like forms, and attached to listings as required or optional.
   - A parent signs a child's waiver for the exact text, by its hash. The signature is
     append-only evidence.
   - Submitting needs every required waiver signed.
   - Someone 18 or over signs for themselves, which waits on account linking.
-- **Decisions, seats and waitlists** (D48, proposed):
+- **Decisions, seats and waitlists** (D48):
   - Staff review, accept, waitlist and decline, singly or in bulk.
   - Seats are taken under a `FOR UPDATE` row lock, so the last seat goes to exactly one
     applicant.
@@ -115,7 +115,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D46 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20). **D47 (waivers) and D48 (decisions, seats and waitlists) are proposed.**
+Every decision through D48 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 and D48 on 2026-10-21).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

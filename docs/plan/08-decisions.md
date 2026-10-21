@@ -1335,6 +1335,46 @@ M3a's fourth slice: a family applies for one young person to one listing.
   - a guardian applying for a child who has their own account;
   - expiring stale drafts.
 
+### D47 — Waivers: signed for the exact text, by age (**proposed 2026-10-20; implemented, reversible**)
+
+M3a's fifth slice: e-signature for the releases a program needs before a young person joins.
+- **The organisation's side** works as forms do (D45). Owners and admins create, edit a
+  draft, publish (the text is then fixed), revise into a new version, and retire (refused
+  while a listing uses it).
+  - The text is Markdown, up to 20,000 characters, stored with `\n` line endings and no
+    surrounding space. Its SHA-256 is `body_hash`.
+  - A listing can ask for several waivers, each required or optional:
+    `PUT` and `DELETE /org/{orgId}/listings/{id}/waivers/{waiverId}`.
+- **The family's side:**
+  - `GET /applications/{id}/waivers` gives each waiver the listing asks for: its text, its
+    hash, and whether this young person has signed that text.
+  - `POST /applications/{id}/waivers/{waiverId}/sign {typedName, hash}` signs it.
+- **A signature is evidence.** It records:
+  - the signer, and their role;
+  - the young person;
+  - the typed name;
+  - the SHA-256 of the text, which the signer sends back so they can sign only the words that
+    were published (`waiver.changed` otherwise);
+  - when, and hashes of the address and browser it came from (the audit trail's keyed hashes).
+
+  The table is append-only for every role, superuser included. Signing the same text twice
+  returns the first signature, and a new version needs a new one.
+- **Who signs is decided by age.**
+  - For someone under 18, an adult account holding them on its family profile signs, as
+    guardian. A youth account can't sign (`waiver.guardian_signs`).
+  - Someone 18 or over signs for themselves (`youth_18_plus`). That waits on linking a member
+    to their own account, so for now it is refused (`waiver.adult_signs`).
+  - `requires_guardian` is kept and shown, and doesn't override age.
+  - The guardianship is the family's own statement, as the profile is. It isn't a verified
+    guardian link (D31); that comes if the county asks for it.
+- **Submitting needs every required waiver signed** in the text it has at that moment
+  (`application.waivers_unsigned`, naming them). Optional waivers never block.
+- **Not yet:**
+  - a drawn signature (`signature_media_id`; media storage is still open);
+  - waivers in more than one language: the family signs the text the provider wrote;
+  - the organisation's view of who signed (with decisions);
+  - re-signing on enrolment.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

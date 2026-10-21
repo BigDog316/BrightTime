@@ -62,6 +62,7 @@ v1.MapFamilyEndpoints();
 v1.MapFormEndpoints();
 v1.MapEligibilityEndpoints();
 v1.MapApplicationEndpoints();
+v1.MapWaiverEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

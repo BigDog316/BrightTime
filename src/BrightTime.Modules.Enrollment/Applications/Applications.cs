@@ -58,6 +58,9 @@ public sealed record ApplicationView(
 /// one that can't be decided yet (a grade not given) does not, and the provider decides.
 /// </para>
 /// <para>
+/// Every waiver the listing requires must be signed first (D47).
+/// </para>
+/// <para>
 /// Sensitive answers (D45) are sealed under the tenant's data key in the snapshot, and their
 /// reporting rows record only that they were answered.
 /// </para>
@@ -70,7 +73,8 @@ public sealed partial class Applications(
     IClock clock,
     IListingDetails listings,
     EligibilityRules eligibility,
-    ProfileShares shares)
+    ProfileShares shares,
+    Waivers.Waivers waivers)
 {
     public const string Read = "enrollment.application.read";
     public const string Changed = "enrollment.application.changed";
@@ -261,6 +265,13 @@ public sealed partial class Applications(
             if (form is not null && FormAnswers.CheckComplete(form, answers) is { } incomplete)
             {
                 return Fail<ApplicationView>(incomplete);
+            }
+
+            // Every waiver the listing requires, signed for this young person, in the text it has now (D47).
+            if (await waivers.UnsignedAsync(application.ListingId, application.FamilyMemberId, ct).ConfigureAwait(false) is { Count: > 0 } unsigned)
+            {
+                return Fail<ApplicationView>(Error.Validation("application.waivers_unsigned", "Sign every required waiver first.",
+                    arguments: new Dictionary<string, object>(StringComparer.Ordinal) { ["waivers"] = string.Join(',', unsigned) }));
             }
 
             FamilyMemberRecord member = await db.FamilyMembers.FirstAsync(m => m.Id == application.FamilyMemberId, ct).ConfigureAwait(false);

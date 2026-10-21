@@ -532,6 +532,7 @@ public static class EnrollmentModule
         services.AddScoped<Forms.FormDefinitions>();
         services.AddScoped<Eligibility.EligibilityRules>();
         services.AddScoped<Applications.Applications>();
+        services.AddScoped<Waivers.Waivers>();
         return services;
     }
 }

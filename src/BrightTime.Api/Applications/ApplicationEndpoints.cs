@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Modules.Enrollment.Applications;
+using BrightTime.Modules.Enrollment.Waivers;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -14,6 +15,8 @@ public sealed record NewApplicationRequest(Guid ListingId, Guid MemberId);
 public sealed record AnswersRequest(Dictionary<string, JsonElement>? Answers);
 
 public sealed record SubmitRequest(IReadOnlyList<string>? ShareFields, DateTimeOffset? ShareExpiresAt);
+
+public sealed record SignRequest(string? TypedName, string? Hash);
 
 /// <summary>
 /// A family's applications (M3a, D46). Every request reads or changes a young person's
@@ -34,6 +37,8 @@ public static class ApplicationEndpoints
         applications.MapPatch("/{id:guid}", SaveAnswersAsync).Changes().Produces<ApplicationView>();
         applications.MapPost("/{id:guid}/submit", SubmitAsync).Changes().Produces<ApplicationView>();
         applications.MapPost("/{id:guid}/withdraw", WithdrawAsync).Changes();
+        applications.MapGet("/{id:guid}/waivers", WaiversAsync).Reads().Produces<IReadOnlyList<ApplicationWaiver>>();
+        applications.MapPost("/{id:guid}/waivers/{waiverId:guid}/sign", SignAsync).Changes().Produces<SignatureView>();
         return api;
     }
 
@@ -92,6 +97,31 @@ public static class ApplicationEndpoints
 
         Result withdrawn = await applications.WithdrawAsync(Owner(user), id, ct);
         return withdrawn.IsSuccess ? Results.NoContent() : Refused(audit, Modules.Enrollment.Applications.Applications.Changed, withdrawn.Error);
+    }
+
+    private static async Task<IResult> WaiversAsync(Guid id, ClaimsPrincipal user, Waivers waivers, AuditTrail audit, CancellationToken ct)
+    {
+        if (ChildRefused(user, audit, Modules.Enrollment.Applications.Applications.Read) is { } refused)
+        {
+            return refused;
+        }
+
+        Result<IReadOnlyList<ApplicationWaiver>> found = await waivers.ForApplicationAsync(Owner(user), id, ct);
+        return found.IsSuccess ? Results.Ok(found.Value) : Refused(audit, Modules.Enrollment.Applications.Applications.Read, found.Error);
+    }
+
+    /// <summary>Signs a waiver (D47). Only an adult account signs, and only for someone under 18 for now.</summary>
+    private static async Task<IResult> SignAsync(Guid id, Guid waiverId, SignRequest body, ClaimsPrincipal user, Waivers waivers, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (ChildRefused(user, audit, Waivers.SignedAction) is { } refused)
+        {
+            return refused;
+        }
+
+        bool adult = (user.FindFirstValue(BrightTimeClaims.AccountKind) ?? "adult") == "adult";
+        Result<SignatureView> signed = await waivers.SignAsync(Owner(user), adult, id, waiverId, body.TypedName ?? string.Empty, body.Hash ?? string.Empty, ct);
+        return signed.IsSuccess ? Results.Ok(signed.Value) : Refused(audit, Waivers.SignedAction, signed.Error);
     }
 
     private static IResult Answer(AuditTrail audit, string action, Result<ApplicationView> result) =>

@@ -255,7 +255,73 @@ public sealed class ApplicationAnswerRecord
     public bool IsSensitive { get; init; }
 }
 
-/// <summary>The Enrollment module's context (M3a): the family profile, shares, forms, eligibility and applications so far.</summary>
+/// <summary>A provider's waiver, one version of it (D47). A published version's text never changes.</summary>
+public sealed class WaiverRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? OrgId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string BodyMd { get; set; }
+
+    public required byte[] BodyHash { get; set; }
+
+    public int Version { get; init; }
+
+    public bool RequiresGuardian { get; set; }
+
+    public required string Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>A waiver a listing asks families to sign, required or optional.</summary>
+public sealed class ListingWaiverRecord
+{
+    public Guid ListingId { get; init; }
+
+    public Guid WaiverId { get; init; }
+
+    public bool IsRequired { get; set; }
+}
+
+/// <summary>One signature: who signed which text, for whom, when. Append-only evidence.</summary>
+public sealed class WaiverSignatureRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid WaiverId { get; init; }
+
+    public Guid? EnrollmentId { get; init; }
+
+    public Guid? ApplicationId { get; init; }
+
+    public Guid FamilyMemberId { get; init; }
+
+    public Guid SignedByUserId { get; init; }
+
+    public required string SignerRole { get; init; }
+
+    public required string TypedName { get; init; }
+
+    public Guid? SignatureMediaId { get; init; }
+
+    public required byte[] BodyHashSigned { get; init; }
+
+    public DateTimeOffset SignedAt { get; init; }
+
+    public byte[]? IpHash { get; init; }
+
+    public byte[]? UserAgentHash { get; init; }
+}
+
+/// <summary>The Enrollment module's context (M3a): the family profile, shares, forms, eligibility, applications and waivers so far.</summary>
 public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -283,6 +349,12 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
     public DbSet<ApplicationRecord> Applications => Set<ApplicationRecord>();
 
     public DbSet<ApplicationAnswerRecord> ApplicationAnswers => Set<ApplicationAnswerRecord>();
+
+    public DbSet<WaiverRecord> Waivers => Set<WaiverRecord>();
+
+    public DbSet<ListingWaiverRecord> ListingWaivers => Set<ListingWaiverRecord>();
+
+    public DbSet<WaiverSignatureRecord> WaiverSignatures => Set<WaiverSignatureRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -375,6 +447,29 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
             b.ToTable("application_answer");
             b.HasKey(x => new { x.ApplicationId, x.QuestionKey });
             b.HasIndex(x => x.QuestionKey).HasFilter("not is_sensitive");
+        });
+
+        modelBuilder.Entity<WaiverRecord>(b =>
+        {
+            b.ToTable("waiver");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.TenantId, x.OrgId, x.Title, x.Version }).IsUnique();
+        });
+
+        modelBuilder.Entity<ListingWaiverRecord>(b =>
+        {
+            b.ToTable("listing_waiver");
+            b.HasKey(x => new { x.ListingId, x.WaiverId });
+        });
+
+        modelBuilder.Entity<WaiverSignatureRecord>(b =>
+        {
+            b.ToTable("waiver_signature");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.FamilyMemberId);
+            b.HasIndex(x => new { x.WaiverId, x.FamilyMemberId, x.BodyHashSigned }).IsUnique();
         });
 
         modelBuilder.ApplySnakeCaseNames();

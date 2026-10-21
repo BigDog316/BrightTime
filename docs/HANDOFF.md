@@ -92,13 +92,19 @@ operations. The new `Enrollment` module holds:
     completeness and the hard rules, and shares the applicant as the family chose.
   - Sensitive answers are sealed.
   - `waiver_signature`'s references now restrict deletes.
-  - Next come waivers, then decisions, seats and waitlists.
+- **Waivers** (D47, proposed):
+  - Versioned like forms, and attached to listings as required or optional.
+  - A parent signs a child's waiver for the exact text, by its hash. The signature is
+    append-only evidence.
+  - Submitting needs every required waiver signed.
+  - Someone 18 or over signs for themselves, which waits on account linking.
+  - Next come decisions, seats and waitlists, the last M3a slice.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
-Every decision through D46 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20).
+Every decision through D46 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20). **D47 (waivers) is proposed.**
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

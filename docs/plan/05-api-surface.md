@@ -288,6 +288,12 @@ and an end date. On the organisation's side, `GET /org/{orgId}/family-shares` an
 /org/{orgId}/listings/{id}/eligibility`, `POST …/eligibility/preview`, and
 `GET /public/listings/{slug}/eligibility`.
 
+*Built (2026-10-20, D47):* `GET` and `POST /org/{orgId}/waivers`; `GET` and `PUT
+/org/{orgId}/waivers/{id}` (drafts only); `POST /org/{orgId}/waivers/{id}/publish`, `/revise` and
+`/retire`; `PUT` and `DELETE /org/{orgId}/listings/{id}/waivers/{waiverId}`. Families sign per
+application: `GET /applications/{id}/waivers` and `POST
+/applications/{id}/waivers/{waiverId}/sign`, not `/waivers/{id}/sign`.
+
 ```
 GET    /api/v1/enrollments
 GET    /api/v1/enrollments/{id}

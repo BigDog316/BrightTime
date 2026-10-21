@@ -1608,7 +1608,7 @@ signal.
   - correcting a conflict from the phone (it's shown; staff correct it on the web or online);
   - the kiosk screens (badge and kiosk codes, D50), which come with the app's QR scanning.
 
-### D53 — Messaging: organisations and families, never a pair with a minor (**proposed 2026-10-21; implemented, reversible**)
+### D53 — Messaging: organisations and families, never a pair with a minor (**accepted 2026-10-21**)
 
 M3b's messaging, first slice: conversations between an organisation and a family, with
 docs/plan/07's T1 enforced at every layer. Broadcasts come next (D54); SMS waits on Q9.

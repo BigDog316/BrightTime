@@ -100,7 +100,40 @@ public sealed class CheckinTokenRecord
     public Guid? ConsumedBy { get; set; }
 }
 
-/// <summary>The Attendance module's context (M3b): records, sync batches and check-in codes so far.</summary>
+/// <summary>
+/// A phone or kiosk an organisation lets hold an offline roster and sync attendance (D51).
+/// Revoking it asks it to wipe itself on next contact.
+/// </summary>
+public sealed class KioskDeviceRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid OrgId { get; init; }
+
+    public Guid? SiteId { get; set; }
+
+    public required string DeviceId { get; init; }
+
+    public required string Label { get; set; }
+
+    public Guid? EnrolledBy { get; init; }
+
+    public DateTimeOffset EnrolledAt { get; init; }
+
+    public DateTimeOffset? LastSeenAt { get; set; }
+
+    public string? AppVersion { get; set; }
+
+    public DateTimeOffset? RevokedAt { get; set; }
+
+    public string? RevokedReason { get; set; }
+
+    public DateTimeOffset? WipeRequestedAt { get; set; }
+}
+
+/// <summary>The Attendance module's context (M3b): records, sync batches, check-in codes and devices.</summary>
 public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -114,6 +147,8 @@ public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> op
     public DbSet<AttendanceSyncBatchRecord> SyncBatches => Set<AttendanceSyncBatchRecord>();
 
     public DbSet<CheckinTokenRecord> CheckinTokens => Set<CheckinTokenRecord>();
+
+    public DbSet<KioskDeviceRecord> Devices => Set<KioskDeviceRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -146,6 +181,15 @@ public sealed class AttendanceDbContext(DbContextOptions<AttendanceDbContext> op
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => x.TokenHash).IsUnique();
             b.HasIndex(x => x.ExpiresAt).HasFilter("consumed_at is null");
+        });
+
+        modelBuilder.Entity<KioskDeviceRecord>(b =>
+        {
+            b.ToTable("kiosk_device");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.TenantId, x.DeviceId }).IsUnique();
+            b.HasIndex(x => x.OrgId).HasFilter("revoked_at is null");
         });
 
         modelBuilder.ApplySnakeCaseNames();

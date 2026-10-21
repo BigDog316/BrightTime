@@ -1529,6 +1529,40 @@ M3b's second attendance slice: checking in without anyone typing.
     slice;
   - check-out by code.
 
+### D51 — Devices: registered to sync, revoked to wipe (**proposed 2026-10-21; implemented, reversible**)
+
+M3b's third attendance slice: the server side of docs/plan/07's T12, for offline data on staff
+phones and kiosks.
+- **Registering:** `POST /org/{orgId}/kiosk-devices {deviceId, label, siteId, appVersion}`, by
+  anyone holding `attendance.offline_sync` at the organisation.
+  - The device id is the app's own random id. Registering again refreshes the label and
+    version.
+  - An id belongs to one organisation (`device.taken`). A revoked id is never registered
+    again (`device.revoked`): a wiped device makes a fresh one.
+- **Offline sync needs a registered, unrevoked device.** D49's batch now refuses others with
+  `device.unknown` or `device.revoked`, which refuses the whole batch. Each accepted batch
+  refreshes the device's `last_seen_at`.
+  - So a lost phone, once revoked, can't add records. Idempotent replay already meant it
+    couldn't change any.
+- **Revoking:** `POST /org/{orgId}/kiosk-devices/{id}/revoke {reason}` sets `revoked_at` and
+  `wipe_requested_at`.
+  - An admin revokes any of the organisation's devices. A staff member revokes those they
+    registered, since a lost phone is reported by whoever lost it.
+  - It is audited (`attendance.device_registered` and `attendance.device_revoked`).
+- **Contact:** `POST /attendance/devices/contact {deviceId}` says whether to wipe now, and the
+  most hours the app may stay offline before refusing to open (72).
+  - It needs no sign-in, because a phone whose user has left must still learn to purge. It
+    reveals only whether that id is registered and whether to wipe. It is rate-limited like
+    the public API.
+  - A signed-in member of the device's organisation also refreshes its last-seen time.
+- **Listing:** `GET /org/{orgId}/kiosk-devices` shows the organisation's devices to its owners
+  and admins.
+- **Not yet:**
+  - a device signing in as itself, without a staff account (kiosk mode unattended). It needs
+    an authentication scheme and a credential the table doesn't hold. Until then a kiosk
+    runs under a signed-in staff member;
+  - the app's purge and its 72-hour refusal, which come with the offline roster (slice 4).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

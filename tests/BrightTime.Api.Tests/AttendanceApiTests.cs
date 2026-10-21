@@ -115,6 +115,10 @@ public sealed class AttendanceApiTests(ApiFixture api)
         return await family.SendAsync(request, Ct);
     }
 
+    private static async Task<Guid> RegisterAsync(HttpClient staff, Guid org, string device, HttpStatusCode expected = HttpStatusCode.Created) =>
+        (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/kiosk-devices", new { deviceId = device, label = "Front desk tablet", appVersion = "1.0.0" }, Ct), expected))
+            .GetProperty("id").GetGuid();
+
     private static string Iso(DateTimeOffset at) => Uri.EscapeDataString(at.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
 
     [Fact]
@@ -192,6 +196,7 @@ public sealed class AttendanceApiTests(ApiFixture api)
         (Guid wanjiru, Guid otieno) = (enrolled[0], enrolled[1]);
 
         string device = "phone-" + Guid.NewGuid().ToString("N")[..8];
+        await RegisterAsync(staff, org, device);
         Guid c1 = Guid.NewGuid(), c2 = Guid.NewGuid(), c3 = Guid.NewGuid(), c4 = Guid.NewGuid();
         object Batch(string onDevice, params object[] items) => new { deviceId = onDevice, appVersion = "1.0.0", items };
         object Item(Guid client, Guid enrolment, string state) =>
@@ -212,8 +217,10 @@ public sealed class AttendanceApiTests(ApiFixture api)
         (await api.ScalarAsync<string>("select method from attendance.attendance_record where client_record_id = @c", ("c", c1))).ShouldBe("offline_sync");
 
         // Another phone that marked Otieno too finds the first record stands.
+        string otherPhone = "phone-other-" + Guid.NewGuid().ToString("N")[..6];
+        await RegisterAsync(staff, org, otherPhone);
         JsonElement[] other = [.. (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/batch",
-            Batch("phone-other-" + Guid.NewGuid().ToString("N")[..6], Item(Guid.NewGuid(), otieno, "present")), Ct))).EnumerateArray()];
+            Batch(otherPhone, Item(Guid.NewGuid(), otieno, "present")), Ct))).EnumerateArray()];
         other.Single().GetProperty("status").GetString().ShouldBe("conflict");
 
         // Nobody outside the organisation's staff takes or sees its attendance.
@@ -304,5 +311,58 @@ public sealed class AttendanceApiTests(ApiFixture api)
         await ProblemAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = badge, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.NotFound, "checkin.invalid");
         await api.ExecuteAsync("update attendance.checkin_token set issued_at = now() - interval '5 minutes', expires_at = now() - interval '4 minutes' where token_hash = sha256(convert_to(@t, 'UTF8'))", ("t", kiosk));
         await ProblemAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[1] }, Ct), HttpStatusCode.Conflict, "checkin.expired");
+    }
+
+    [Fact]
+    public async Task A_revoked_device_is_told_to_wipe_and_syncs_nothing()
+    {
+        RequireDatabase();
+        (int index, Guid org, Guid listing, int elsewhere) = Provider();
+        List<(string Email, Guid Org)> staffAccounts = AllStaff();
+        using HttpClient admin = await SignedInAsync(AdminOf(org));
+        using HttpClient staff = await SignedInAsync(staffAccounts[index].Email);
+        using HttpClient stranger = await SignedInAsync(staffAccounts[elsewhere].Email);
+        using HttpClient family = await SignedInAsync(await api.NewAdultAsync());
+        using HttpClient anyone = api.Client();
+        (Guid[] enrolled, Meetings meetings) = await EnrolAsync(admin, staff, family, org, listing, "Imani");
+        object Batch(string device) => new
+        {
+            deviceId = device,
+            items = new[] { new { clientRecordId = Guid.NewGuid(), enrollmentId = enrolled[0], occurrenceStartsAt = meetings.Past, state = "present" } },
+        };
+
+        // An unregistered phone can't sync; registered, it can, and registering again changes nothing.
+        string device = "tablet-" + Guid.NewGuid().ToString("N");
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/batch", Batch(device), Ct), HttpStatusCode.Forbidden, "device.unknown");
+        Guid id = await RegisterAsync(staff, org, device);
+        (await RegisterAsync(staff, org, device, HttpStatusCode.OK)).ShouldBe(id);
+        JsonElement contact = await JsonAsync(await anyone.PostAsJsonAsync("api/v1/attendance/devices/contact", new { deviceId = device }, Ct));
+        (contact.GetProperty("registered").GetBoolean(), contact.GetProperty("wipe").GetBoolean(), contact.GetProperty("maxOfflineHours").GetInt32()).ShouldBe((true, false, 72));
+        (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/batch", Batch(device), Ct))).EnumerateArray().Single().GetProperty("status").GetString().ShouldBe("applied");
+
+        // Admins see the organisation's devices; staff don't.
+        (await JsonAsync(await admin.GetAsync(new Uri($"api/v1/org/{org}/kiosk-devices", UriKind.Relative), Ct))).EnumerateArray()
+            .Any(d => d.GetProperty("id").GetGuid() == id).ShouldBeTrue();
+        await ProblemAsync(await staff.GetAsync(new Uri($"api/v1/org/{org}/kiosk-devices", UriKind.Relative), Ct), HttpStatusCode.Forbidden, "form.forbidden");
+
+        // Lost: revoked with a reason, it is told to wipe, even without a sign-in, and syncs nothing.
+        await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/kiosk-devices/{id}/revoke", new { reason = "" }, Ct), HttpStatusCode.BadRequest, "device.reason");
+        JsonElement revoked = await JsonAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/kiosk-devices/{id}/revoke", new { reason = "Left on the bus" }, Ct));
+        revoked.GetProperty("wipeRequested").GetBoolean().ShouldBeTrue();
+        (await JsonAsync(await anyone.PostAsJsonAsync("api/v1/attendance/devices/contact", new { deviceId = device }, Ct))).GetProperty("wipe").GetBoolean().ShouldBeTrue();
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance/batch", Batch(device), Ct), HttpStatusCode.Forbidden, "device.revoked");
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/kiosk-devices", new { deviceId = device, label = "Again" }, Ct), HttpStatusCode.Conflict, "device.revoked");
+
+        // A device belongs to one organisation; staff revoke only what they registered.
+        string second = "tablet-" + Guid.NewGuid().ToString("N");
+        Guid secondId = await RegisterAsync(staff, org, second);
+        await ProblemAsync(await stranger.PostAsJsonAsync($"api/v1/org/{staffAccounts[elsewhere].Org}/kiosk-devices", new { deviceId = second, label = "Mine now" }, Ct),
+            HttpStatusCode.Conflict, "device.taken");
+        await ProblemAsync(await stranger.PostAsJsonAsync($"api/v1/org/{staffAccounts[elsewhere].Org}/kiosk-devices/{secondId}/revoke", new { reason = "Not mine" }, Ct),
+            HttpStatusCode.NotFound, "device.not_found");
+        (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/kiosk-devices/{secondId}/revoke", new { reason = "Replaced" }, Ct)))
+            .GetProperty("revokedReason").GetString().ShouldBe("Replaced");
+        (await JsonAsync(await anyone.PostAsJsonAsync("api/v1/attendance/devices/contact", new { deviceId = "never-seen-" + Guid.NewGuid().ToString("N") }, Ct)))
+            .GetProperty("registered").GetBoolean().ShouldBeFalse();
     }
 }

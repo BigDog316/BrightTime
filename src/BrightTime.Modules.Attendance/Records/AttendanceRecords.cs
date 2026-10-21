@@ -2,6 +2,7 @@ using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Attendance.Contracts;
+using BrightTime.Modules.Attendance.Devices;
 using BrightTime.Modules.Attendance.Persistence;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Opportunities.Contracts;
@@ -80,7 +81,8 @@ public sealed class AttendanceRecords(
     IClock clock,
     IListingDetails listings,
     IListingOccurrences occurrences,
-    IEnrolmentQueries enrolments)
+    IEnrolmentQueries enrolments,
+    KioskDevices devices)
 {
     public const int MaxAgeDays = 30;
     public const int MaxBatch = 500;
@@ -196,6 +198,12 @@ public sealed class AttendanceRecords(
             if (items.Count is 0 or > MaxBatch)
             {
                 return Result<IReadOnlyList<SyncOutcome>>.Failure(Error.Validation("attendance.batch", $"1 to {MaxBatch} records."));
+            }
+
+            // Only a registered, unrevoked device syncs (D51): a lost phone, once revoked, changes nothing.
+            if (await devices.RequireActiveAsync(org, device, ct).ConfigureAwait(false) is { } refused)
+            {
+                return Result<IReadOnlyList<SyncOutcome>>.Failure(refused);
             }
 
             await LockAsync(org, ct).ConfigureAwait(false);
@@ -489,6 +497,7 @@ public static class AttendanceModule
     {
         services.AddScoped<AttendanceRecords>();
         services.AddScoped<CheckIns>();
+        services.AddScoped<KioskDevices>();
         return services;
     }
 }

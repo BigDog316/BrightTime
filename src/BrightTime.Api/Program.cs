@@ -67,6 +67,7 @@ v1.MapApplicationEndpoints();
 v1.MapWaiverEndpoints();
 v1.MapDecisionEndpoints();
 v1.MapAttendanceEndpoints();
+v1.MapDeviceEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

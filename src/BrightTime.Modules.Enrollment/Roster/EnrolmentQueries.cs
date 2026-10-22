@@ -53,6 +53,21 @@ public sealed class EnrolmentQueries(EnrollmentDbContext db, IFieldCipher cipher
                        where en.ListingId == listingId && en.Status == EnrollmentStatuses.Active && en.SeatKind == EnrollmentKinds.Enrolled
                        select p.OwnerUserId).Distinct().ToListAsync(ct).ConfigureAwait(false)], cancellationToken);
 
+    public Task<IReadOnlyList<EnrolmentFacts>> FactsAsync(IReadOnlyCollection<Guid> enrollmentIds, DateOnly asOf, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(enrollmentIds);
+        Guid[] ids = [.. enrollmentIds.Distinct()];
+        return db.InTransactionAsync<IReadOnlyList<EnrolmentFacts>>(async ct =>
+        {
+            var found = await (from e in db.Enrollments.AsNoTracking()
+                               join m in db.FamilyMembers on e.FamilyMemberId equals m.Id
+                               where ids.Contains(e.Id)
+                               select new { e.Id, e.FamilyMemberId, e.ListingId, e.OrgId, e.Status, e.EnrolledAt, e.EndedAt, m.BirthMonth }).ToListAsync(ct).ConfigureAwait(false);
+            return [.. found.Select(f => new EnrolmentFacts(f.Id, f.FamilyMemberId, f.ListingId, f.OrgId, f.Status, f.EnrolledAt, f.EndedAt,
+                f.BirthMonth is { } month ? Age.BandFromBirthMonth(month, asOf) : AgeBand.Unknown))];
+        }, cancellationToken);
+    }
+
     public Task<IReadOnlyList<EnrolmentSummary>> GetAsync(IReadOnlyCollection<Guid> enrollmentIds, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(enrollmentIds);

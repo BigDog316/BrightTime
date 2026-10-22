@@ -126,6 +126,8 @@ public static class ApiComposition
         // the staff note encrypted (D49).
         services.AddBrightTimeDbContext<AttendanceDbContext>(app, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
         services.AddAttendance();
+        // Reports are rendered in the request (D57); QuestPDF needs the deployment's licence first.
+        BrightTime.Reporting.ReportRenderer.Configure(configuration["Reports:QuestPdfLicence"]);
 
         // Messaging (M3b): conversations with families, never a pair with a minor (D53, T1).
         services.AddBrightTimeDbContext<CommunityDbContext>(app, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);

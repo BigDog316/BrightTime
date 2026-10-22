@@ -22,6 +22,7 @@
     <Project Path="src/BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
     <Project Path="src/BrightTime.Modules.Platform.Contracts/BrightTime.Modules.Platform.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
+    <Project Path="src/BrightTime.Reporting/BrightTime.Reporting.csproj" />
     <Project Path="src/BrightTime.Seed/BrightTime.Seed.csproj" />
     <Project Path="src/BrightTime.SharedKernel/BrightTime.SharedKernel.csproj" />
     <Project Path="src/BrightTime.Ui.Design/BrightTime.Ui.Design.csproj" />

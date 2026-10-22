@@ -11,6 +11,7 @@ using BrightTime.Api.Messaging;
 using BrightTime.Api.Notifications;
 using BrightTime.Api.Payments;
 using BrightTime.Api.Public;
+using BrightTime.Api.Reports;
 using BrightTime.Hosting.Auditing;
 using BrightTime.Hosting.Auth;
 using BrightTime.Hosting.Health;
@@ -72,6 +73,7 @@ v1.MapAttendanceEndpoints();
 v1.MapDeviceEndpoints();
 v1.MapMessagingEndpoints();
 v1.MapPaymentEndpoints();
+v1.MapReportEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

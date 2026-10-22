@@ -502,6 +502,7 @@ public static class AttendanceModule
     public static IServiceCollection AddAttendance(this IServiceCollection services)
     {
         services.AddScoped<AttendanceRecords>();
+        services.AddScoped<Reports.ProviderReports>();
         services.AddScoped<CheckIns>();
         services.AddScoped<KioskDevices>();
         return services;

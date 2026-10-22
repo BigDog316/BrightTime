@@ -1,3 +1,5 @@
+using BrightTime.SharedKernel.Primitives;
+
 namespace BrightTime.Modules.Enrollment.Contracts;
 
 /// <summary>An enrolment as other modules see it: whose, where, and whether it is live.</summary>
@@ -18,6 +20,13 @@ public sealed record FamilyEnrolment(Guid EnrollmentId, Guid MemberId, string Me
 /// </summary>
 public sealed record FamilyContact(Guid OwnerUserId, Guid OrgId, Guid ListingId);
 
+/// <summary>
+/// What a report counts about an enrolment (D57): when it began and ended, and the young person's
+/// age band on a day, from the month of birth. No name, no date of birth. Reports use the age band
+/// only inside suppressed aggregates.
+/// </summary>
+public sealed record EnrolmentFacts(Guid EnrollmentId, Guid FamilyMemberId, Guid ListingId, Guid OrgId, string Status, DateTimeOffset EnrolledAt, DateTimeOffset? EndedAt, AgeBand AgeBand);
+
 /// <summary>Enrolments, for the modules that hang records off them (attendance first).</summary>
 public interface IEnrolmentQueries
 {
@@ -34,4 +43,7 @@ public interface IEnrolmentQueries
 
     /// <summary>The accounts owning the family profiles of a listing's active, enrolled young people (D54).</summary>
     Task<IReadOnlyList<Guid>> FamilyOwnersAsync(Guid listingId, CancellationToken cancellationToken = default);
+
+    /// <summary>What reports count about these enrolments, with each young person's age band on <paramref name="asOf"/> (D57).</summary>
+    Task<IReadOnlyList<EnrolmentFacts>> FactsAsync(IReadOnlyCollection<Guid> enrollmentIds, DateOnly asOf, CancellationToken cancellationToken = default);
 }

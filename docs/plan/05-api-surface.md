@@ -524,6 +524,11 @@ POST   /api/v1/organiser/research-exports/{id}/approve
 GET    /api/v1/research-exports/{id}
 ```
 
+*Built (2026-10-21, D57):* `GET /org/{orgId}/reports/catalogue` and
+`POST /org/{orgId}/reports/runs`, which returns the file (PDF, Excel or CSV) in the response
+and stores nothing. The organisation is in the route. `GET /reports/runs/{id}` waits for object
+storage. A report's envelope is its note: what was hidden, how much, and why.
+
 Every aggregate response carries a suppression envelope:
 
 ```json

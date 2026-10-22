@@ -139,14 +139,17 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   Stripe, and the card is entered in Stripe's element. Its webhooks are believed only by signature
   and applied by the jobs host, which now runs the Enrollment context, so a status only moves
   forward. Without both secrets the gateway stays manual.
-- Next in M3b: reports (Q10). Rebuild the compose volume: the schema and the role permissions
+- **Reports** (D57): an organisation's roster, attendance and participation, as PDF, Excel or
+  CSV. They are made when asked for and never stored. Names appear only where the family shares
+  them, and participation hides small counts. Each run is recorded and audited.
+- Next in M3b: the funder packet (Q10). Rebuild the compose volume: the schema and the role permissions
   changed.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.
 
 ## Waiting on Sam
 
-Every decision through D56 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D56 on 2026-10-21).
+Every decision through D56 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D56 on 2026-10-21). D57 (provider reports) is proposed; it asks about QuestPDF's licence and fonts for non-Latin names.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).

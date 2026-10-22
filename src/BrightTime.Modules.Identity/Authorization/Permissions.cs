@@ -104,6 +104,12 @@ public static class Permissions
         public const string SendToFamily = "messages.send_to_family";
     }
 
+    public static class Reports
+    {
+        /// <summary>Running the organisation's own reports: roster, attendance and participation (D57).</summary>
+        public const string RunProvider = "reports.run_provider";
+    }
+
     public static class Payments
     {
         /// <summary>Waiving an organisation's fees, and recording money it received outside the platform (D55).</summary>
@@ -161,6 +167,7 @@ public static class Permissions
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Messages.SendToFamily,
         Payments.Waive,
+        Reports.RunProvider,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

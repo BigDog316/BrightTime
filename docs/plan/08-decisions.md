@@ -1799,6 +1799,63 @@ Q6 is answered: Stripe. This is the provider gateway D55 left out.
   - partial refunds;
   - the app's and the console's card screens (Stripe's element with the client secret).
 
+### D57 — Provider reports, made on request and never stored (**proposed 2026-10-21**)
+
+M3b's reports, first slice. docs/plan/09 names the provider reports (roster, attendance,
+participation), so they are built now. The funder packet waits on Q10.
+- **Three reports**, as PDF (QuestPDF), Excel (ClosedXML) or CSV:
+  - **Roster**, for one listing: each young person enrolled now, the date they enrolled, and how
+    many meetings they attended out of those recorded.
+  - **Attendance**, for one listing over up to 31 days: each young person against each meeting
+    (P, A, L, E, LE, ?), with a legend. It includes anyone whose enrolment ended within the
+    180-day grace period (D49).
+  - **Participation**, for the organisation over up to a year. It shows meetings, young people,
+    attendances, records and the attendance rate by activity, plus young people by age band.
+    It only counts.
+- **Names follow the share.** A name appears only where the family's live share gives it;
+  otherwise the row says "Name not shared". Staff notes are never included.
+- **Small counts are hidden in participation**, the report an organisation hands to a funder.
+  - `SmallCells` applies `analytics.suppress()`'s rule: zero is shown, and 1 to k−1 is hidden.
+  - k is the larger of the tenant's participation and attendance thresholds
+    (`analytics.min_cell`, at least 5, default 10).
+  - Complementary suppression is on: a line with a shown total and one hidden figure loses its
+    smallest other figure too.
+  - Hidden figures show as "<10", and a note says how many were hidden and why (docs/plan/05's
+    envelope).
+  - A young person in two activities counts once in the totals. Age bands come from the month of
+    birth, through a new `IEnrolmentQueries.FactsAsync` that carries no name or date of birth.
+- **Made on request, never stored.** There is no object storage yet, and a stored roster is one
+  more copy of children's names.
+  - `POST /api/v1/org/{orgId}/reports/runs {reportKey, listingId?, from?, to?, format}` renders
+    the report in the request and returns the file with `Cache-Control: no-store`.
+  - Every run is a row in `analytics.report_run` (state `available`, no `media_id`, its row count
+    and hidden-figure count).
+  - Every run is audited (`reports.provider.*`) with the enrolments a named report covered.
+    Refusals are audited too.
+  - `GET /org/{orgId}/reports/catalogue` lists what the caller may run.
+  - docs/plan/05's asynchronous `GET /reports/runs/{id}` waits for object storage and the funder
+    packet.
+- **Who:** a new `reports.run_provider` permission, which program staff and provider admins hold
+  at their own organisation (docs/plan/04). Roster and attendance also need
+  `attendance.view_roster`, so a role given only reports would see only counts.
+- **Rendering** lives in a new `BrightTime.Reporting` project. It works in memory and writes
+  nothing to disk.
+  - Wording comes from the catalogues in the reader's language, and Arabic reads right to left.
+  - CSV is UTF-8 with a byte-order mark, and a cell that would run as a formula is defused with
+    an apostrophe.
+  - An Excel cell is a number only in a numeric column; anything else is text.
+- **For you to look at:**
+  - QuestPDF's Community licence is free only under US$1M annual revenue. `Reports:QuestPdfLicence`
+    sets the deployment's licence (`Community` by default). A county deployment may need
+    Professional, or a different renderer.
+  - Fonts: names in Bengali, Chinese or Arabic need fonts in the container image. Until fonts
+    are bundled, a missing glyph falls back rather than failing the report.
+- **Not yet:**
+  - the funder packet (Q10);
+  - demographics beyond age band;
+  - the console's report screen;
+  - scheduled or emailed reports.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming
@@ -1880,6 +1937,9 @@ provider and for its funders" is the vaguest requirement in the prompt and
 reporting is where scope goes to die. Name three real reports — ideally actual
 funder templates — and I will build those and a generic builder, rather than
 guessing at a universal one.
+
+*Until then (2026-10-21):* D57 built the provider reports docs/plan/09 names (roster,
+attendance, participation) with small counts hidden. The funder packet waits on this answer.
 
 **Q11 — Docker.** Not installed on this machine, and neither is `psql`. That
 blocks Testcontainers, the local PostGIS stack, and the real `EXPLAIN` output

@@ -1,0 +1,38 @@
+@* A fee's fields: its name, amount, how often it's paid, and whether it's the default (D61). *@
+@using BrightTime.Modules.Enrollment.Payments
+<div class="field">
+    <label for="@($"fee-label-{Prefix}")">@T["provider.fees.label"]</label>
+    <input id="@($"fee-label-{Prefix}")" name="label" maxlength="80" required value="@Label" dir="auto" />
+</div>
+<div class="field">
+    <label for="@($"fee-amount-{Prefix}")">@T["provider.fees.amount"]</label>
+    <input id="@($"fee-amount-{Prefix}")" name="amount" inputmode="decimal" required value="@Amount" />
+</div>
+<div class="field">
+    <label for="@($"fee-cadence-{Prefix}")">@T["provider.fees.cadence"]</label>
+    <select id="@($"fee-cadence-{Prefix}")" name="cadence">
+        @foreach (string cadence in Cadences)
+        {
+            <option value="@cadence" selected="@(cadence == Cadence)">@T["provider.fees.cadence." + cadence]</option>
+        }
+    </select>
+</div>
+<div class="field checkbox">
+    <input id="@($"fee-default-{Prefix}")" name="isDefault" type="checkbox" value="true" checked="@IsDefault" />
+    <label for="@($"fee-default-{Prefix}")">@T["provider.fees.make_default"]</label>
+</div>
+
+@code {
+    private static readonly string[] Cadences = ["one_time", "weekly", "monthly", "per_session", "seasonal"];
+
+    /// <summary>Keeps each field's id unique when a page shows several fees.</summary>
+    [Parameter, EditorRequired] public string Prefix { get; set; } = "";
+
+    [Parameter] public string Label { get; set; } = "";
+
+    [Parameter] public string Amount { get; set; } = "";
+
+    [Parameter] public string Cadence { get; set; } = "seasonal";
+
+    [Parameter] public bool IsDefault { get; set; }
+}

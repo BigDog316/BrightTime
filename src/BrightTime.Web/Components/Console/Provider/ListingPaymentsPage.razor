@@ -1,0 +1,196 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/payments"
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Modules.Enrollment.Decisions
+@using BrightTime.Modules.Enrollment.Payments
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@using DecisionService = BrightTime.Modules.Enrollment.Decisions.Decisions
+@attribute [Authorize]
+@attribute [YouthRecord(DecisionService.OrgRead)]
+@inherits ConsoleComponent
+
+@* An activity's payments (D55, D61): who owes what, waived with a reason or marked received, never a card. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.payments.denied"]</h1>
+    <p>@T["error.payments.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is not null)
+{
+    <PageTitle>@T.Format("provider.payments.listing_title", ("listing", _listing)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/payments">@T["provider.nav.payments"]</a></p>
+    <h1 dir="auto">@_listing</h1>
+    <OrgNav OrgId="@OrgId" Current="payments" Role="@(RoleIn(Org) ?? "")" />
+    <p><a href="/provider/orgs/@OrgId/listings/@ListingId/fees">@T["provider.fees.link"]</a></p>
+
+    <h2>@T["provider.payments.link"]</h2>
+    @if (Done is "waived" or "received")
+    {
+        <p class="notice success" role="status">@T["provider.payments.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_payments.Count == 0)
+    {
+        <p>@T["provider.payments.none"]</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="payments">
+                <thead>
+                    <tr>
+                        <th scope="col">@T["provider.applications.col.applicant"]</th>
+                        <th scope="col">@T["provider.payments.col.amount"]</th>
+                        <th scope="col">@T["provider.applications.col.status"]</th>
+                        <th scope="col">@T["provider.payments.col.how"]</th>
+                        <th scope="col">@T["provider.payments.col.started"]</th>
+                        <th scope="col"><span class="visually-hidden">@T["provider.payments.col.actions"]</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (PaymentView p in _payments)
+                    {
+                        string id = p.Id.ToString("N");
+                        <tr>
+                            <td dir="auto">@Who(p)</td>
+                            <td>@T.Money(p.AmountCents)</td>
+                            <td>
+                                @T["provider.payments.status." + p.Status]
+                                @if (p.WaivedReason is { Length: > 0 } why)
+                                {
+                                    <br /><span class="note" dir="auto">@why</span>
+                                }
+                            </td>
+                            <td>@T["provider.payments.provider." + (p.Provider == ManualPaymentGateway.Name ? "manual" : "online")]</td>
+                            <td>@T.DateShort(p.CreatedAt)</td>
+                            <td>
+                                @if (Open.Contains(p.Status))
+                                {
+                                    @if (p.Provider == ManualPaymentGateway.Name)
+                                    {
+                                        <form method="post" @formname="@($"received-{id}")" @onsubmit="ReceivedAsync" class="inline-actions">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="payment" value="@p.Id" />
+                                            <label for="@($"note-{id}")" class="visually-hidden">@T["provider.payments.received_note"]</label>
+                                            <input id="@($"note-{id}")" name="note" maxlength="200" placeholder="@T["provider.payments.received_note"]" />
+                                            <button type="submit">@T["provider.payments.received"]</button>
+                                        </form>
+                                    }
+                                    <form method="post" @formname="@($"waive-{id}")" @onsubmit="WaiveAsync" class="inline-actions">
+                                        <AntiforgeryToken />
+                                        <input type="hidden" name="payment" value="@p.Id" />
+                                        <label for="@($"reason-{id}")" class="visually-hidden">@T["provider.payments.waive_reason"]</label>
+                                        <input id="@($"reason-{id}")" name="reason" maxlength="200" required placeholder="@T["provider.payments.waive_reason"]" />
+                                        <button type="submit" class="secondary">@T["provider.payments.waive"]</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="hint">@T["provider.payments.no_card"]</p>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private static readonly string[] Open = ["created", "requires_action", "processing"];
+
+    private string? _listing;
+    private IReadOnlyList<PaymentView> _payments = [];
+    private Dictionary<Guid, string> _names = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    private string Who(PaymentView p) =>
+        p.ApplicationId is { } a && _names.TryGetValue(a, out string? name) ? name : T["provider.applications.not_shared"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Payments.Waive, OrganisationRoles.Admin))
+        {
+            Get<AuditTrail>().Record(new AuditAccess { Action = DecisionService.OrgRead, Outcome = AuditOutcome.Deny, SubjectKind = "application", ActorOrgId = Org, Reason = "payments.forbidden" });
+            Forbid();
+            return;
+        }
+
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code) is not { } listing || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing.Title;
+        Result<IReadOnlyList<PaymentView>> payments = await Get<PaymentIntents>().ForListingAsync(Org, ListingId);
+        _payments = payments.IsSuccess ? payments.Value : [];
+
+        // Who each payment is for, as the family's share names them: the same reading as the applications queue, audited the same way.
+        if (_payments.Count > 0 && (await Get<DecisionService>().QueueAsync(Org, ListingId, null)) is { IsSuccess: true } queue)
+        {
+            _names = queue.Value.Where(a => a.FirstName is not null || a.LastName is not null)
+                .ToDictionary(a => a.Id, a => $"{a.FirstName} {a.LastName}".Trim());
+        }
+    }
+
+    private Guid? Payment() => Guid.TryParse(FormValue("payment"), out Guid id) && _payments.Any(p => p.Id == id) ? id : null;
+
+    private async Task WaiveAsync()
+    {
+        if (Payment() is not { } id)
+        {
+            return;
+        }
+
+        Result<PaymentView> waived = await Get<PaymentIntents>().WaiveAsync(Org, id, FormValue("reason"));
+        if (!waived.IsSuccess)
+        {
+            _problem = T.Error(waived.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/payments?done=waived");
+    }
+
+    private async Task ReceivedAsync()
+    {
+        if (Payment() is not { } id)
+        {
+            return;
+        }
+
+        string note = FormValue("note").Trim();
+        Result<PaymentView> received = await Get<PaymentIntents>().RecordReceivedAsync(Org, id, note.Length == 0 ? null : note);
+        if (!received.IsSuccess)
+        {
+            _problem = T.Error(received.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/payments?done=received");
+    }
+}

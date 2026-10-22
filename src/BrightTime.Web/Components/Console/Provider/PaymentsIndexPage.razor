@@ -1,0 +1,82 @@
+@page "/provider/orgs/{OrgId:guid}/payments"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@* The activities whose fees and payments an owner or admin manages (D61). Reads no payment. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.payments.denied"]</h1>
+    <p>@T["error.payments.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.payments.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="payments" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.nav.payments"]</h2>
+    @if (_rows.Count == 0)
+    {
+        <p>@T["provider.applications.no_activities"]</p>
+    }
+    else
+    {
+        <p class="hint">@T["provider.payments.intro"]</p>
+        <ul class="card-list">
+            @foreach (ListingRow row in _rows)
+            {
+                <li>
+                    <span dir="auto">@row.Title</span>
+                    <span class="note">
+                        <a href="/provider/orgs/@OrgId/listings/@row.Id/fees">@T["provider.fees.link"]</a> ·
+                        <a href="/provider/orgs/@OrgId/listings/@row.Id/payments">@T["provider.payments.link"]</a>
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<ListingRow> _rows = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Payments.Waive, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _rows = [.. (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+            .OrderBy(r => r.Status == ListingStatus.Published ? 0 : 1).ThenBy(r => r.Title, StringComparer.CurrentCulture)];
+    }
+}

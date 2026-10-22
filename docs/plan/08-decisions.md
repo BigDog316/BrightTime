@@ -1949,6 +1949,36 @@ The second screen on D58's list. It calls D49's `AttendanceRecords` service unch
   - minutes, check-out and notes in the form;
   - showing a correction's reason, which only the audit trail holds.
 
+### D61 — Fees and payments in the provider console (**proposed 2026-10-22**)
+
+The third screen on D58's list. It calls D55's `FeeSchedules` and `PaymentIntents`.
+- **Who:** a new Fees and payments tab for owners and admins, the same people the API lets manage
+  them.
+  - `/provider/orgs/{orgId}/payments` lists the activities, each with links to its fees and its
+    payments.
+  - The fees page needs `orgs.edit` as admin, as the API's fees route does. The payments page
+    needs `payments.waive` as admin.
+- **Fees:** `/provider/orgs/{orgId}/listings/{listingId}/fees`.
+  - Each change is its own small form: add a fee, edit one, remove one, add a price level, remove
+    one. The page sends the whole set to `FeeSchedules`, which checks it as before.
+  - Amounts are typed as dollars ("1,200", "$12.50"). Exactly one fee stays the default: the one
+    just made default, else the one already default, else the first.
+  - Price levels name a household size and an optional income band. The page says plainly that
+    families choose their own level and nobody is asked their income.
+  - A fee a payment uses can't be removed (`fees.in_use`); the page says so.
+- **Payments:** `/provider/orgs/{orgId}/listings/{listingId}/payments` shows who each payment is
+  for, the amount, the status, in person or online, and when it started.
+  - Names come from the applications queue, so only as the family shares them, and audited as
+    that read is.
+  - An open payment can be waived with a reason. One made in person can be marked received.
+  - The page reminds admins that card details never pass through the platform.
+- **A bug found here, fixed in the module:** changing a fee in place dropped its default flag.
+  - `SetAsync` cleared every kept fee's default flag in bulk, but the fees were loaded with change
+    tracking. EF then saw no change when the default was set back, and wrote nothing.
+  - They now load untracked. The API test checks the flag survives.
+- **Not yet:** refunds (D56), payments by date or status across activities, and editing a price
+  level in place (remove it and add it again).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

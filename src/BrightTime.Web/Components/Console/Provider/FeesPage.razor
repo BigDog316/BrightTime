@@ -1,0 +1,293 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/fees"
+@using System.Globalization
+@using BrightTime.Modules.Enrollment.Payments
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    An activity's fees and sliding-scale price levels (D55, D61). Each change is its own small form;
+    the page sends the whole set to FeeSchedules, which checks it. No family's income is asked for:
+    a price level names a band, and the family picks the one it fits.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.payments.denied"]</h1>
+    <p>@T["error.payments.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is not null)
+{
+    <PageTitle>@T.Format("provider.fees.title", ("listing", _listing)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/payments">@T["provider.nav.payments"]</a></p>
+    <h1 dir="auto">@_listing</h1>
+    <OrgNav OrgId="@OrgId" Current="payments" Role="@(RoleIn(Org) ?? "")" />
+    <p><a href="/provider/orgs/@OrgId/listings/@ListingId/payments">@T["provider.payments.link"]</a></p>
+
+    <h2>@T["provider.fees.link"]</h2>
+    @if (Done is "saved")
+    {
+        <p class="notice success" role="status">@T["provider.fees.saved"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+    <p class="hint">@T["provider.fees.intro"]</p>
+
+    @if (_fees.Count == 0)
+    {
+        <p>@T["provider.fees.none"]</p>
+    }
+
+    @foreach (FeeView fee in _fees)
+    {
+        string f = fee.Id.ToString("N");
+        <section class="fee" aria-labelledby="@($"fee-{f}")">
+            <h3 id="@($"fee-{f}")" dir="auto">
+                @fee.Label · @T.Money(fee.AmountCents) · @T["provider.fees.cadence." + fee.Cadence]
+                @if (fee.IsDefault)
+                {
+                    <span class="badge">@T["provider.fees.default"]</span>
+                }
+            </h3>
+
+            <form method="post" @formname="@($"edit-{f}")" @onsubmit="EditAsync" class="inline-actions">
+                <AntiforgeryToken />
+                <input type="hidden" name="fee" value="@fee.Id" />
+                <FeeFields Prefix="@f" Label="@fee.Label" Amount="@Dollars(fee.AmountCents)" Cadence="@fee.Cadence" IsDefault="@fee.IsDefault" />
+                <button type="submit">@T["provider.fees.save"]</button>
+            </form>
+            <form method="post" @formname="@($"remove-{f}")" @onsubmit="RemoveAsync" class="inline-actions">
+                <AntiforgeryToken />
+                <input type="hidden" name="fee" value="@fee.Id" />
+                <button type="submit" class="secondary">@T["provider.fees.remove"]</button>
+            </form>
+
+            <h4>@T["provider.fees.tiers"]</h4>
+            @if (fee.Tiers.Count == 0)
+            {
+                <p class="hint">@T["provider.fees.no_tiers"]</p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (TierView tier in fee.Tiers)
+                    {
+                        <li>
+                            <span dir="auto">@tier.Label</span> · @T.Money(tier.AmountCents)
+                            @if (tier.HouseholdSizeMin is not null || tier.HouseholdSizeMax is not null)
+                            {
+                                <span class="note">@T.Format("provider.fees.household", ("min", tier.HouseholdSizeMin ?? 1), ("max", tier.HouseholdSizeMax ?? 30))</span>
+                            }
+                            <form method="post" @formname="@($"untier-{tier.Id:N}")" @onsubmit="RemoveTierAsync" class="inline-actions">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="fee" value="@fee.Id" />
+                                <input type="hidden" name="tier" value="@tier.Id" />
+                                <button type="submit" class="secondary">@T["provider.fees.remove_tier"]</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <form method="post" @formname="@($"tier-{f}")" @onsubmit="AddTierAsync" class="tier-form">
+                <AntiforgeryToken />
+                <input type="hidden" name="fee" value="@fee.Id" />
+                <fieldset>
+                    <legend>@T["provider.fees.add_tier"]</legend>
+                    <div class="field">
+                        <label for="@($"tier-label-{f}")">@T["provider.fees.tier_label"]</label>
+                        <input id="@($"tier-label-{f}")" name="label" maxlength="80" required />
+                    </div>
+                    <div class="field">
+                        <label for="@($"tier-amount-{f}")">@T["provider.fees.amount"]</label>
+                        <input id="@($"tier-amount-{f}")" name="amount" inputmode="decimal" required />
+                    </div>
+                    <div class="field">
+                        <label for="@($"tier-min-{f}")">@T["provider.fees.household_min"]</label>
+                        <input id="@($"tier-min-{f}")" name="min" type="number" min="1" max="30" />
+                    </div>
+                    <div class="field">
+                        <label for="@($"tier-max-{f}")">@T["provider.fees.household_max"]</label>
+                        <input id="@($"tier-max-{f}")" name="max" type="number" min="1" max="30" />
+                    </div>
+                    <div class="field">
+                        <label for="@($"tier-band-{f}")">@T["provider.fees.income_band"]</label>
+                        <input id="@($"tier-band-{f}")" name="band" maxlength="40" aria-describedby="@($"tier-band-hint-{f}")" />
+                        <p class="hint" id="@($"tier-band-hint-{f}")">@T["provider.fees.income_band_hint"]</p>
+                    </div>
+                    <button type="submit">@T["provider.fees.add_tier"]</button>
+                </fieldset>
+            </form>
+        </section>
+    }
+
+    @if (_fees.Count < FeeSchedules.MaxFees)
+    {
+        <form method="post" @formname="add" @onsubmit="AddAsync" class="fee-form">
+            <AntiforgeryToken />
+            <fieldset>
+                <legend>@T["provider.fees.add"]</legend>
+                <FeeFields Prefix="new" Label="" Amount="" Cadence="seasonal" IsDefault="@(_fees.Count == 0)" />
+                <button type="submit">@T["provider.fees.add"]</button>
+            </fieldset>
+        </form>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private string? _listing;
+    private IReadOnlyList<FeeView> _fees = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    private static string Dollars(int cents) => (cents / 100m).ToString("0.00", CultureInfo.InvariantCulture);
+
+    /// <summary>"12", "12.5", "$1,200.00": cents, or null when it isn't an amount.</summary>
+    internal static int? Cents(string text)
+    {
+        string clean = text.Trim().TrimStart('$').Replace(",", "", StringComparison.Ordinal);
+        return decimal.TryParse(clean, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount) && amount >= 0 && amount <= FeeSchedules.MaxAmountCents / 100m
+            ? (int)Math.Round(amount * 100m, MidpointRounding.AwayFromZero)
+            : null;
+    }
+
+    private static short? Size(string text) => short.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out short n) ? n : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code) is not { } listing || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing.Title;
+        Result<IReadOnlyList<FeeView>> fees = await Get<FeeSchedules>().GetAsync(Org, ListingId);
+        _fees = fees.IsSuccess ? fees.Value : [];
+    }
+
+    private static FeeInput Input(FeeView f) =>
+        new(f.Id, f.Label, f.AmountCents, f.Cadence, f.IsDefault, [.. f.Tiers.Select(t => new TierInput(t.Label, t.AmountCents, t.HouseholdSizeMin, t.HouseholdSizeMax, t.IncomeBand))]);
+
+    /// <summary>The fee the form describes, or null (with the problem said) when its amount isn't one.</summary>
+    private FeeInput? Described(Guid? id, IReadOnlyList<TierInput> tiers)
+    {
+        if (Cents(FormValue("amount")) is not { } cents)
+        {
+            _problem = T["error.fees.fee"];
+            return null;
+        }
+
+        return new FeeInput(id, FormValue("label").Trim(), cents, FormValue("cadence"), FormValue("isDefault") == "true", tiers);
+    }
+
+    /// <summary>Exactly one default: the fee just made default, else the one already default, else the first.</summary>
+    private static List<FeeInput> OneDefault(List<FeeInput> fees, int? chosen)
+    {
+        int pick = chosen is { } c && fees[c].IsDefault ? c : Math.Max(fees.FindIndex(f => f.IsDefault), 0);
+        return [.. fees.Select((f, i) => f with { IsDefault = i == pick })];
+    }
+
+    private async Task SaveAsync(List<FeeInput> fees)
+    {
+        Result<IReadOnlyList<FeeView>> saved = await Get<FeeSchedules>().SetAsync(Org, ListingId, fees);
+        if (!saved.IsSuccess)
+        {
+            _problem = T.Error(saved.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/fees?done=saved");
+    }
+
+    private Guid? Fee() => Guid.TryParse(FormValue("fee"), out Guid id) && _fees.Any(f => f.Id == id) ? id : null;
+
+    private async Task AddAsync()
+    {
+        if (Described(null, []) is not { } added)
+        {
+            return;
+        }
+
+        List<FeeInput> fees = [.. _fees.Select(Input), added];
+        await SaveAsync(OneDefault(fees, fees.Count - 1));
+    }
+
+    private async Task EditAsync()
+    {
+        if (Fee() is not { } id || Described(id, Input(_fees.First(f => f.Id == id)).Tiers ?? []) is not { } edited)
+        {
+            return;
+        }
+
+        List<FeeInput> fees = [.. _fees.Select(f => f.Id == id ? edited : Input(f))];
+        await SaveAsync(OneDefault(fees, fees.FindIndex(f => f.Id == id)));
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (Fee() is not { } id)
+        {
+            return;
+        }
+
+        await SaveAsync(OneDefault([.. _fees.Where(f => f.Id != id).Select(Input)], null));
+    }
+
+    private async Task AddTierAsync()
+    {
+        if (Fee() is not { } id)
+        {
+            return;
+        }
+
+        if (Cents(FormValue("amount")) is not { } cents)
+        {
+            _problem = T["error.fees.tier"];
+            return;
+        }
+
+        string band = FormValue("band").Trim();
+        TierInput tier = new(FormValue("label").Trim(), cents, Size(FormValue("min")), Size(FormValue("max")), band.Length == 0 ? null : band);
+        await SaveAsync([.. _fees.Select(f => f.Id == id ? Input(f) with { Tiers = [.. Input(f).Tiers ?? [], tier] } : Input(f))]);
+    }
+
+    private async Task RemoveTierAsync()
+    {
+        if (Fee() is not { } id || !Guid.TryParse(FormValue("tier"), out Guid tierId))
+        {
+            return;
+        }
+
+        await SaveAsync([.. _fees.Select(f => f.Id == id
+            ? Input(f with { Tiers = [.. f.Tiers.Where(t => t.Id != tierId)] })
+            : Input(f))]);
+    }
+}

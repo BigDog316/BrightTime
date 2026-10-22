@@ -320,7 +320,10 @@ POST   /api/v1/webhooks/payments/{provider}       signature-verified, idempotent
 *Built (2026-10-21, D55):* `GET` and `PUT /org/{orgId}/listings/{id}/fees`;
 `GET /applications/{id}/fees` (the family's quote); `POST /payments/intents` (Idempotency-Key)
 and `GET /payments/intents/{id}`; `GET /org/{orgId}/listings/{id}/payments`;
-`POST /org/{orgId}/payments/{id}/waive` and `/received`. The webhook waits for the provider (D56).
+`POST /org/{orgId}/payments/{id}/waive` and `/received`.
+*Built (2026-10-21, D56):* `POST /webhooks/payments/{provider}` for Stripe: anonymous,
+believed only with a valid `Stripe-Signature` no more than 5 minutes old, and applied by the
+worker so the status only moves forward. Waiving stays under `/org/{orgId}` (D55).
 
 ---
 

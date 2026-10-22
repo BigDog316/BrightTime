@@ -15,6 +15,8 @@ public sealed class ManualPaymentGateway : IPaymentGateway
 
     public string ProviderName => Name;
 
+    public string WebhookSignatureHeader => string.Empty;
+
     public Task<PaymentIntentDescriptor> CreateIntentAsync(PaymentIntentRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -27,9 +29,10 @@ public sealed class ManualPaymentGateway : IPaymentGateway
     public Task<PaymentIntentDescriptor> RefundAsync(string providerReference, Money amount, string reason, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PaymentIntentDescriptor(providerReference, PaymentIntentState.Refunded, amount, null, null));
 
-    public bool TryVerifyWebhook(ReadOnlySpan<byte> payload, string signatureHeader, out string? eventType)
+    /// <summary>A manual payment has no provider to call back, so no webhook is ever genuine.</summary>
+    public bool TryReadWebhook(ReadOnlySpan<byte> payload, string signatureHeader, out PaymentWebhookEvent? webhookEvent)
     {
-        eventType = null;
+        webhookEvent = null;
         return false;
     }
 }

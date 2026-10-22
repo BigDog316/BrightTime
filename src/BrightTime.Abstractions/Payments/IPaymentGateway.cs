@@ -32,9 +32,36 @@ public sealed record PaymentIntentRequest(
     string IdempotencyKey,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
+/// <summary>
+/// What a provider's webhook says happened to a payment: its own event id (so a replay is
+/// recognised), the event's type, the payment's reference, and the state it is now in.
+/// </summary>
+public sealed record PaymentWebhookEvent(string EventId, string EventType, string ProviderReference, PaymentIntentState State);
+
+/// <summary>The provider refused or couldn't be reached. The message is for logs; a person is told the provider is unavailable.</summary>
+public sealed class PaymentProviderException : Exception
+{
+    public PaymentProviderException()
+    {
+    }
+
+    public PaymentProviderException(string message)
+        : base(message)
+    {
+    }
+
+    public PaymentProviderException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 public interface IPaymentGateway
 {
     string ProviderName { get; }
+
+    /// <summary>The request header the provider signs its webhooks in; empty when it sends none.</summary>
+    string WebhookSignatureHeader { get; }
 
     Task<PaymentIntentDescriptor> CreateIntentAsync(PaymentIntentRequest request, CancellationToken cancellationToken = default);
 
@@ -42,6 +69,10 @@ public interface IPaymentGateway
 
     Task<PaymentIntentDescriptor> RefundAsync(string providerReference, Money amount, string reason, CancellationToken cancellationToken = default);
 
-    /// <summary>Verifies a webhook signature. Returns false rather than throwing, so a forged callback is a 400 and not a 500.</summary>
-    bool TryVerifyWebhook(ReadOnlySpan<byte> payload, string signatureHeader, out string? eventType);
+    /// <summary>
+    /// Verifies a webhook's signature and reads what it says. False when the signature doesn't
+    /// verify, rather than throwing, so a forged callback is a 400 and not a 500. True with no
+    /// event when the callback is genuine but about something a payment doesn't change.
+    /// </summary>
+    bool TryReadWebhook(ReadOnlySpan<byte> payload, string signatureHeader, out PaymentWebhookEvent? webhookEvent);
 }

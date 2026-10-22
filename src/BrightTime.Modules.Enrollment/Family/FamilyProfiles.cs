@@ -540,6 +540,7 @@ public static class EnrollmentModule
         services.AddScoped<IEnrolmentQueries, Roster.EnrolmentQueries>();
         services.AddScoped<Payments.FeeSchedules>();
         services.AddScoped<Payments.PaymentIntents>();
+        services.AddScoped<Payments.PaymentWebhooks>();
         services.TryAddSingleton<Abstractions.Payments.IPaymentGateway, Payments.ManualPaymentGateway>();
         return services;
     }

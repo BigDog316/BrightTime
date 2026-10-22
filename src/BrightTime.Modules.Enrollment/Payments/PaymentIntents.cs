@@ -8,6 +8,7 @@ using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BrightTime.Modules.Enrollment.Payments;
 
@@ -52,7 +53,8 @@ public sealed class PaymentIntents(
     AuditTrail audit,
     IClock clock,
     IListingDetails listings,
-    IPaymentGateway gateway)
+    IPaymentGateway gateway,
+    ILogger<PaymentIntents> logger)
 {
     public const string Waived = "enrollment.payment.waived";
     public const string Received = "enrollment.payment.received";
@@ -99,7 +101,16 @@ public sealed class PaymentIntents(
             if (await db.PaymentIntents.FirstOrDefaultAsync(p => (p.ApplicationId == place.ApplicationId || (place.EnrollmentId != null && p.EnrollmentId == place.EnrollmentId))
                     && Open.Contains(p.Status), ct).ConfigureAwait(false) is { } open)
             {
-                return Result<PaymentView>.Success(View(open));
+                if (open.Provider == ManualPaymentGateway.Name || open.Provider != gateway.ProviderName)
+                {
+                    return Result<PaymentView>.Success(View(open));
+                }
+
+                // The client secret isn't kept (T20), so the provider is asked for it again.
+                PaymentIntentDescriptor? again = open.ProviderRef is null ? null : await ProviderAsync(() => gateway.GetIntentAsync(open.ProviderRef, ct)).ConfigureAwait(false);
+                return again is null
+                    ? Result<PaymentView>.Failure(Unavailable())
+                    : Result<PaymentView>.Success(View(open) with { ClientSecret = again.ClientSecret, HostedPaymentUrl = again.HostedPaymentUrl });
             }
 
             if (amount == 0)
@@ -107,9 +118,15 @@ public sealed class PaymentIntents(
                 return Result<PaymentView>.Failure(Error.Validation("payments.free", "There is nothing to pay."));
             }
 
-            PaymentIntentDescriptor made = await gateway.CreateIntentAsync(
-                new PaymentIntentRequest(Money.FromCents(amount, fee.Currency), fee.Label, idempotencyKey,
-                    new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = tenant.TenantId.Value.ToString("N") }), ct).ConfigureAwait(false);
+            // The provider's idempotency keys span its whole account, so the family's key is scoped to the tenant and the adult.
+            PaymentIntentDescriptor? made = await ProviderAsync(() => gateway.CreateIntentAsync(
+                new PaymentIntentRequest(Money.FromCents(amount, fee.Currency), fee.Label, $"{tenant.TenantId.Value:N}-{owner.Value:N}-{idempotencyKey}",
+                    new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = tenant.TenantId.Value.ToString("N") }), ct)).ConfigureAwait(false);
+            if (made is null)
+            {
+                return Result<PaymentView>.Failure(Unavailable());
+            }
+
             DateTimeOffset now = clock.StoredNow();
             PaymentIntentRecord intent = new()
             {
@@ -259,7 +276,23 @@ public sealed class PaymentIntents(
             : null;
     }
 
-    private static string Status(PaymentIntentState state) => state switch
+    /// <summary>A provider call, or null when the provider refused or couldn't be reached (logged; the family is told to try later).</summary>
+    private async Task<PaymentIntentDescriptor?> ProviderAsync(Func<Task<PaymentIntentDescriptor>> call)
+    {
+        try
+        {
+            return await call().ConfigureAwait(false);
+        }
+        catch (PaymentProviderException ex)
+        {
+            PaymentLog.ProviderFailed(logger, ex.Message, ex);
+            return null;
+        }
+    }
+
+    private static Error Unavailable() => new(ErrorKind.Unavailable, "payments.provider", "The payment provider can't be reached. Try again in a few minutes.");
+
+    internal static string Status(PaymentIntentState state) => state switch
     {
         PaymentIntentState.Created => "created",
         PaymentIntentState.RequiresAction => "requires_action",

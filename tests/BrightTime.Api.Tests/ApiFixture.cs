@@ -39,6 +39,9 @@ public sealed class ApiFixture : IAsyncLifetime
 
     internal SeedData Data { get; private set; } = default!;
 
+    /// <summary>The worker's login (a member of brighttime_jobs), for running a job as the jobs host would.</summary>
+    public string JobsConnection => new NpgsqlConnectionStringBuilder(Connection) { Username = "bt_api_jobs_login", Password = Password }.ConnectionString;
+
     public WebApplicationFactory<Program> Factory => _factory ?? throw new InvalidOperationException("No database.");
 
     public async ValueTask InitializeAsync()
@@ -183,12 +186,16 @@ public sealed class ApiFixture : IAsyncLifetime
               if not exists (select 1 from pg_roles where rolname = 'bt_auth_login') then
                 create role bt_auth_login login password '{{Password}}';
               end if;
+              if not exists (select 1 from pg_roles where rolname = 'bt_api_jobs_login') then
+                create role bt_api_jobs_login login password '{{Password}}';
+              end if;
               if not exists (select 1 from pg_roles where rolname = 'brighttime_app') then
                 raise exception 'Apply db/schema once on this server first: the brighttime roles are missing.';
               end if;
             end $$;
             grant brighttime_app, brighttime_finder to bt_web_login;
             grant brighttime_auth to bt_auth_login;
+            grant brighttime_jobs to bt_api_jobs_login;
             """, connection);
         await command.ExecuteNonQueryAsync(ct);
     }

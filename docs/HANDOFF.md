@@ -134,8 +134,11 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   their consent and an admin observing.
 - **Fees and payments** (D55): listings' fees with sliding-scale tiers. Families pay the
   tier their household fits, and no income is kept. Payments go behind `IPaymentGateway`, with a
-  manual gateway that admins mark received, or waive with a reason. The Stripe gateway and
-  webhooks (D56) wait on Q6.
+  manual gateway that admins mark received, or waive with a reason.
+- **Stripe** (D56): when `Payments:Stripe:SecretKey` and `:WebhookSecret` are set, payments go to
+  Stripe, and the card is entered in Stripe's element. Its webhooks are believed only by signature
+  and applied by the jobs host, which now runs the Enrollment context, so a status only moves
+  forward. Without both secrets the gateway stays manual.
 - Next in M3b: reports (Q10). Rebuild the compose volume: the schema and the role permissions
   changed.
 
@@ -143,7 +146,8 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D55 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D55 on 2026-10-21). D56 (the payment provider) waits on Q6.
+Every decision through D55 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D55 on 2026-10-21). D56 (Stripe, Q6 answered) is proposed.
+D56 asks two things: what to do when a waived fee is paid anyway (it's logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

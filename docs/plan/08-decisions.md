@@ -1736,6 +1736,69 @@ provider gateway and its webhooks come in D56.
   - fees by cadence over time (each payment is one charge);
   - the app's and the console's payment screens.
 
+### D56 — Stripe, believed only by signature and applied by the worker (**proposed 2026-10-21**)
+
+Q6 is answered: Stripe. This is the provider gateway D55 left out.
+- **The gateway** (`StripePaymentGateway`) calls Stripe's HTTP API directly, with no SDK.
+  - It makes a payment intent in cents with `automatic_payment_methods`, and pins the API
+    version (`2024-06-20`), so Stripe changing its default changes nothing here.
+  - The family's `Idempotency-Key` goes to Stripe, scoped to the tenant and the adult, because
+    Stripe's keys span the whole account. A retried request makes no second charge.
+  - The intent's client secret comes back for Stripe's own card element, so the card never
+    reaches us (T20, SAQ-A). It isn't kept. When the family asks again while the payment is
+    open, the secret is fetched from Stripe again.
+  - Stripe's statuses map to ours. `requires_payment_method`, `requires_confirmation` and
+    `requires_action` become `requires_action`; `processing` and `requires_capture` become
+    `processing`; `succeeded` and `canceled` map to themselves.
+- **Configuration:** `Payments:Stripe:SecretKey` and `Payments:Stripe:WebhookSecret`, both from
+  the secret store. Stripe is the gateway only with both; otherwise it stays manual, because
+  without the webhook secret nothing could confirm a payment.
+- **Failures:** a refusal, or no answer within 30 seconds, is `payments.provider` (503), and
+  no payment is kept.
+  - Logs carry only Stripe's error code (for example `card_declined`), never its message.
+  - Payments made earlier through another provider keep that provider. Only the manual gateway
+    can mark one received.
+- **Webhooks:** `POST /api/v1/webhooks/payments/stripe`, anonymous, on the tenant's own host.
+  - It is believed only with a valid `Stripe-Signature`: an HMAC-SHA256 of
+    `{timestamp}.{body}`, compared in fixed time, at most 5 minutes old so a captured callback
+    can't be replayed.
+  - A second `v1` signature is accepted while a secret is rolled.
+  - Another provider's path is a 404 (`payments.webhook_provider`). A bad, missing or stale
+    signature is a 400 (`payments.webhook_signature`). Bodies over 256 KB are refused.
+  - A genuine event about nothing a payment changes gets a 200 and is ignored.
+  - The route isn't rate-limited by address. Every callback comes from Stripe's few addresses,
+    and a forged one costs only an HMAC.
+- **Applied by the worker, not the request.** The actor guard on `payment_intent` refuses a
+  write with no one signed in, and a callback has no one. So the verified event is queued as an
+  `enrollment.payment_event` job carrying only the provider's reference and the status. The
+  jobs host applies it under the tenant policy.
+  - The job's key is the event id, so a redelivery that arrives while one is waiting
+    collapses into it.
+  - The status only moves forward, so redelivery and Stripe's arrival order don't matter:
+    - `succeeded` applies from any open status, and from `failed`;
+    - `processing` applies from `created` or `requires_action`;
+    - `requires_action` applies from `created` or `processing` (a debit that bounced asks
+      for another way to pay);
+    - `failed` and `cancelled` apply from any open status;
+    - `refunded` applies only from `succeeded`.
+  - A late event never undoes a payment. A waived or refunded payment is left as it is.
+  - A reference no payment in the tenant has is ignored.
+- **Events read:**
+  - `payment_intent.succeeded`, `.processing`, `.requires_action` and `.canceled`;
+  - `.payment_failed`, which stays `requires_action`, because Stripe keeps the intent for
+    another card;
+  - `charge.refunded` when the charge is fully refunded.
+- **For you to look at:**
+  - A payment that succeeds after an admin waived it is logged as a warning (event 5602), not
+    changed: money was taken, and someone has to refund it or correct the record.
+  - Stripe Connect is not used. One Stripe account takes every organisation's fees. If
+    organisations must be paid out directly, that is Connect, and a decision of its own.
+- **Not yet:**
+  - refunds started here (the gateway can, but no route asks it to; a refund made in Stripe's
+    dashboard is reported back);
+  - partial refunds;
+  - the app's and the console's card screens (Stripe's element with the client secret).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming
@@ -1785,6 +1848,8 @@ to matter in M3.
 *Until then (2026-10-21):* D55 built everything that doesn't depend on the
 provider. The manual gateway records payments an organisation takes itself.
 The provider gateway and webhooks (D56) wait on this answer.
+*Answered 2026-10-21: Stripe. D56 builds its gateway and webhooks; the manual gateway stays for
+deployments without Stripe's secrets.*
 
 **Q7 — Geocoding and map tiles.** Default is MapLibre + OpenStreetMap as the
 prompt specifies. For *geocoding* I need to pick: self-hosted Nominatim or

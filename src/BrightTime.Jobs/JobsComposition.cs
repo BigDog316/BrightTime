@@ -7,6 +7,8 @@ using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Enrollment.Payments;
+using BrightTime.Modules.Enrollment.Persistence;
 using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Persistence;
@@ -94,6 +96,11 @@ public static class JobsComposition
         services.AddFieldEncryption(configuration, environment.IsDevelopment());
         services.AddBrightTimeText(hasDatabase: true);
         services.AddNotificationDelivery(configuration);
+
+        // What the payment provider reports, applied to the payment (D56).
+        services.AddBrightTimeDbContext<EnrollmentDbContext>(
+            connection, EnrollmentDbContext.SchemaName, EnrollmentDbContext.MigrationsHistoryTable);
+        services.AddPaymentJobs();
 
         return services;
     }

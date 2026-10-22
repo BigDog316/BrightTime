@@ -19,6 +19,7 @@ using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Enrollment.Family;
+using BrightTime.Modules.Enrollment.Payments;
 using BrightTime.Modules.Enrollment.Persistence;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.Consent;
@@ -117,6 +118,8 @@ public static class ApiComposition
         // Enrollment (M3a): the family profile, owned by its account and encrypted under the
         // tenant's data key (D32, D43).
         services.AddBrightTimeDbContext<EnrollmentDbContext>(app, EnrollmentDbContext.SchemaName, EnrollmentDbContext.MigrationsHistoryTable);
+        // Stripe when it is configured (Q6, D56), else the manual gateway; AddEnrollment only fills the gap.
+        services.AddPaymentGateway(configuration);
         services.AddEnrollment();
 
         // Attendance (M3b): where a named child was at a given hour, so every read is audited and

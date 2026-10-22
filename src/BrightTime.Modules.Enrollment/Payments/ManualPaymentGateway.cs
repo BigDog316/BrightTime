@@ -1,0 +1,35 @@
+using BrightTime.Abstractions.Payments;
+using BrightTime.SharedKernel.Primitives;
+
+namespace BrightTime.Modules.Enrollment.Payments;
+
+/// <summary>
+/// Payment outside the platform (D55): cash, a cheque, a transfer the organisation receives
+/// itself. The intent waits, needing action, until an admin of the organisation records the money
+/// as received. No card, no provider, no webhook. It is also the gateway until a provider is
+/// configured (Q6).
+/// </summary>
+public sealed class ManualPaymentGateway : IPaymentGateway
+{
+    public const string Name = "manual";
+
+    public string ProviderName => Name;
+
+    public Task<PaymentIntentDescriptor> CreateIntentAsync(PaymentIntentRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Task.FromResult(new PaymentIntentDescriptor("manual_" + Guid.NewGuid().ToString("N"), PaymentIntentState.RequiresAction, request.Amount, null, null));
+    }
+
+    public Task<PaymentIntentDescriptor> GetIntentAsync(string providerReference, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new PaymentIntentDescriptor(providerReference, PaymentIntentState.RequiresAction, Money.Zero, null, null));
+
+    public Task<PaymentIntentDescriptor> RefundAsync(string providerReference, Money amount, string reason, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new PaymentIntentDescriptor(providerReference, PaymentIntentState.Refunded, amount, null, null));
+
+    public bool TryVerifyWebhook(ReadOnlySpan<byte> payload, string signatureHeader, out string? eventType)
+    {
+        eventType = null;
+        return false;
+    }
+}

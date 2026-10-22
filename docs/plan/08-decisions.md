@@ -1695,6 +1695,47 @@ M3b's messaging, second slice: telling every family on a listing at once.
   - email as well as push for announcements;
   - SMS (Q9).
 
+### D55 — Fees, sliding scales and payments, with no card and no income kept (**proposed 2026-10-21; implemented, reversible**)
+
+M3b's payments, first slice: everything that doesn't depend on which provider Q6 picks. The
+provider gateway and its webhooks come in D56.
+- **Fees** (`fee_schedule`): `GET` and `PUT /org/{orgId}/listings/{id}/fees`, by the
+  organisation's owners and admins.
+  - Up to 10 fees per listing, exactly one the default. Each has an amount up to $100,000 and a
+    cadence (`one_time`, `weekly`, `monthly`, `per_session`, `seasonal`).
+  - A fee has up to 10 sliding-scale tiers, none dearer than the fee, each by household size
+    (1 to 30) and an income band label.
+  - A fee that a payment refers to can be changed in place (by its id) but not dropped
+    (`fees.in_use`). The payment keeps its own amount.
+- **No income is kept.** A tier names a band; the family picks the tier it fits when it pays,
+  and only the amount is recorded. Household size, which the profile already holds, decides
+  which tiers are offered: `GET /applications/{id}/fees` gives the listing's fees with only the
+  tiers that household fits.
+- **Paying:** `POST /payments/intents {applicationId | enrollmentId, feeScheduleId, tierId}`,
+  with an `Idempotency-Key`.
+  - Only the adult who owns the family profile pays (docs/plan/04: `payments.initiate` is
+    18+), for an accepted or offered application or an active enrolment.
+  - The tier must fit the household. While a payment for the same place is open, asking again
+    returns it rather than a second one.
+  - It goes through `IPaymentGateway`. The provider's client secret or hosted page comes back
+    once, for the provider's own element, and isn't kept. No card data is ever held (T20).
+- **The manual gateway** is the default, and the only one until Q6: cash, a cheque, a transfer
+  the organisation takes itself. The intent waits as `requires_action` until an admin records
+  it received (`POST /org/{orgId}/payments/{id}/received`). That works only for manual
+  payments; a provider reports its own.
+- **Waiving:** `POST /org/{orgId}/payments/{id}/waive {reason}`, with the reason required (the
+  schema's own check). Recording and waiving are audited.
+  - Both need the new `payments.waive`, which provider admins hold at their own organisation.
+    The routes are under `/org/{orgId}`, not docs/plan/05's `/payments/intents/{id}/waive`, so
+    the organisation is in the route.
+- `GET /org/{orgId}/listings/{id}/payments` lists a listing's payments for its admins.
+- **Not yet:**
+  - the provider gateway (Stripe, if Q6 confirms) and signature-verified, idempotent webhooks
+    (D56);
+  - refunds;
+  - fees by cadence over time (each payment is one charge);
+  - the app's and the console's payment screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming
@@ -1740,6 +1781,10 @@ protects them. Your counsel's call, and it changes the deletion job.
 holds no card data either way. Stripe is the default assumption. Confirm, or
 name one, because sliding-scale behaviour and refund semantics differ enough
 to matter in M3.
+
+*Until then (2026-10-21):* D55 built everything that doesn't depend on the
+provider. The manual gateway records payments an organisation takes itself.
+The provider gateway and webhooks (D56) wait on this answer.
 
 **Q7 — Geocoding and map tiles.** Default is MapLibre + OpenStreetMap as the
 prompt specifies. For *geocoding* I need to pick: self-hosted Nominatim or

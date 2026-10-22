@@ -104,6 +104,12 @@ public static class Permissions
         public const string SendToFamily = "messages.send_to_family";
     }
 
+    public static class Payments
+    {
+        /// <summary>Waiving an organisation's fees, and recording money it received outside the platform (D55).</summary>
+        public const string Waive = "payments.waive";
+    }
+
     public static class Consent
     {
         /// <summary>
@@ -154,6 +160,7 @@ public static class Permissions
         Applications.View, Applications.Decide,
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Messages.SendToFamily,
+        Payments.Waive,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

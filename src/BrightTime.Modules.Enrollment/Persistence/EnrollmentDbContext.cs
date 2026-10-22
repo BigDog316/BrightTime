@@ -382,7 +382,77 @@ public sealed class EnrollmentRecord
     public string? EndReason { get; set; }
 }
 
-/// <summary>The Enrollment module's context (M3a): the family profile, shares, forms, eligibility, applications, waivers, seats and enrolments.</summary>
+/// <summary>What a listing charges (D55): an amount and how often, one of them the default.</summary>
+public sealed class FeeScheduleRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public required string Label { get; set; }
+
+    public int AmountCents { get; set; }
+
+    public required string Currency { get; init; }
+
+    public required string Cadence { get; set; }
+
+    public bool IsDefault { get; set; }
+}
+
+/// <summary>A reduced amount for households that fit it, by size and by the income band the family picks.</summary>
+public sealed class SlidingScaleTierRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid FeeScheduleId { get; init; }
+
+    public required string Label { get; init; }
+
+    public short? HouseholdSizeMin { get; init; }
+
+    public short? HouseholdSizeMax { get; init; }
+
+    public string? IncomeBand { get; init; }
+
+    public int AmountCents { get; init; }
+
+    public short SortOrder { get; init; }
+}
+
+/// <summary>A payment in flight with the provider: amount, status and the provider's reference. Never a card (T20).</summary>
+public sealed class PaymentIntentRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? EnrollmentId { get; init; }
+
+    public Guid? ApplicationId { get; init; }
+
+    public Guid? FeeScheduleId { get; init; }
+
+    public int AmountCents { get; init; }
+
+    public required string Currency { get; init; }
+
+    public required string Provider { get; init; }
+
+    public string? ProviderRef { get; init; }
+
+    public required string Status { get; set; }
+
+    public string? WaivedReason { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>The Enrollment module's context (M3a/M3b): the family profile, shares, forms, eligibility, applications, waivers, seats, enrolments and fees.</summary>
 public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -420,6 +490,12 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
     public DbSet<SeatPoolRecord> SeatPools => Set<SeatPoolRecord>();
 
     public DbSet<EnrollmentRecord> Enrollments => Set<EnrollmentRecord>();
+
+    public DbSet<FeeScheduleRecord> FeeSchedules => Set<FeeScheduleRecord>();
+
+    public DbSet<SlidingScaleTierRecord> SlidingScaleTiers => Set<SlidingScaleTierRecord>();
+
+    public DbSet<PaymentIntentRecord> PaymentIntents => Set<PaymentIntentRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -554,6 +630,32 @@ public sealed class EnrollmentDbContext(DbContextOptions<EnrollmentDbContext> op
             b.HasIndex(x => new { x.SeatPoolId, x.WaitlistPosition }).IsUnique().HasFilter("seat_kind = 'waitlist' and status = 'active'");
             b.HasIndex(x => new { x.OrgId, x.ListingId }).HasFilter("status = 'active'");
             b.HasIndex(x => x.YouthUserId).HasFilter("youth_user_id is not null");
+        });
+
+        modelBuilder.Entity<FeeScheduleRecord>(b =>
+        {
+            b.ToTable("fee_schedule");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Currency).HasColumnType("character(3)");
+            b.HasIndex(x => x.ListingId).IsUnique().HasFilter("is_default");
+        });
+
+        modelBuilder.Entity<SlidingScaleTierRecord>(b =>
+        {
+            b.ToTable("sliding_scale_tier");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<PaymentIntentRecord>(b =>
+        {
+            b.ToTable("payment_intent");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Currency).HasColumnType("character(3)");
+            b.HasIndex(x => new { x.Provider, x.ProviderRef }).IsUnique();
+            b.HasIndex(x => x.EnrollmentId);
         });
 
         modelBuilder.ApplySnakeCaseNames();

@@ -82,6 +82,7 @@ public static class BrightTimeRoles
                 Permissions.Clearances.ViewStatus,
                 Permissions.Youth.ReadRecord,
                 Permissions.Youth.ReadSupportNeeds,
+                Permissions.Payments.Waive,
                 Permissions.Applications.View,
                 Permissions.Applications.Decide,
                 Permissions.Attendance.Record,

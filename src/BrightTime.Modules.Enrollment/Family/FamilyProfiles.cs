@@ -11,6 +11,7 @@ using BrightTime.SharedKernel.Privacy;
 using BrightTime.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BrightTime.Modules.Enrollment.Family;
 
@@ -537,6 +538,9 @@ public static class EnrollmentModule
         services.AddScoped<Decisions.SeatLedger>();
         services.AddScoped<Decisions.Decisions>();
         services.AddScoped<IEnrolmentQueries, Roster.EnrolmentQueries>();
+        services.AddScoped<Payments.FeeSchedules>();
+        services.AddScoped<Payments.PaymentIntents>();
+        services.TryAddSingleton<Abstractions.Payments.IPaymentGateway, Payments.ManualPaymentGateway>();
         return services;
     }
 }

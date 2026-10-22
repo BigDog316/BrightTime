@@ -317,6 +317,11 @@ POST   /api/v1/payments/intents/{id}/waive
 POST   /api/v1/webhooks/payments/{provider}       signature-verified, idempotent
 ```
 
+*Built (2026-10-21, D55):* `GET` and `PUT /org/{orgId}/listings/{id}/fees`;
+`GET /applications/{id}/fees` (the family's quote); `POST /payments/intents` (Idempotency-Key)
+and `GET /payments/intents/{id}`; `GET /org/{orgId}/listings/{id}/payments`;
+`POST /org/{orgId}/payments/{id}/waive` and `/received`. The webhook waits for the provider (D56).
+
 ---
 
 ## Attendance

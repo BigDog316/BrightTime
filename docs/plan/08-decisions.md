@@ -1979,6 +1979,35 @@ The third screen on D58's list. It calls D55's `FeeSchedules` and `PaymentIntent
 - **Not yet:** refunds (D56), payments by date or status across activities, and editing a price
   level in place (remove it and add it again).
 
+### D62 — The form builder in the provider console (**proposed 2026-10-22**)
+
+The first part of D58's fourth item; eligibility rules and waivers follow. It calls D45's
+`FormDefinitions` unchanged.
+- **Who:** owners and admins (`orgs.edit` as admin, as the API's form routes), under a new Forms
+  tab.
+- **The forms page:** `/provider/orgs/{orgId}/forms` lists every version with its status and
+  question count. A new form starts with a name and its first question, since a form needs one.
+- **The editor:** `/provider/orgs/{orgId}/forms/{id}` shows one version.
+  - A draft's questions change one small form at a time: add, edit, move up, remove.
+  - A published version shows its questions read-only. It can be revised (the next version opens
+    as a draft holding the same questions) or retired, which is refused while a listing uses it.
+  - It can be attached to any of the organisation's listings, replacing whatever form that listing
+    asked for, and detached again.
+- **Providers write words, not keys.**
+  - A question's key comes from its English label: lower-case ASCII, accents dropped, at most 40,
+    numbered if taken. A label with no Latin letters, or one starting with a digit, gets `q`.
+  - Choices are one per line, and each gets a key the same way.
+  - Editing keeps the question's key, and the key of every choice whose English is unchanged, so
+    answers already given keep their meaning. FormSchema still checks everything.
+- **Other languages:** a question's label can be written in each of the other five languages,
+  under a collapsed section. Help and choices are English only here; the API takes them all.
+- **Sensitive questions** are marked in the builder. The page says what that means: never in
+  reports, exports or ranking (T16).
+- **Not yet:**
+  - translating help text and choices in the console;
+  - a preview of the form as a family sees it;
+  - eligibility rules and waivers (next).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -151,7 +151,11 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   the whole roster at once, corrections with a reason, and what was corrected.
 - **Fees and payments in the console** (D61): owners and admins set fees and price levels a form at
   a time, and waive a payment with a reason or mark one paid in person received. It also fixed a
-  D55 bug that dropped a fee's default flag when the fee was changed. Forms and messaging follow.
+  D55 bug that dropped a fee's default flag when the fee was changed.
+- **The form builder in the console** (D62): forms started with their first question, questions
+  added, edited, moved and translated (labels) a form at a time, and versions published, attached
+  to listings, revised and retired. Keys come from the English. Eligibility rules and waivers,
+  then messaging, follow.
 - Next in M3b: the funder packet (Q10). Rebuild the compose volume: the schema and the role permissions
   changed.
 
@@ -159,7 +163,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D61 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D61 on 2026-10-22).
+Every decision through D61 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D61 on 2026-10-22). D62 (the console's form builder) is proposed.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

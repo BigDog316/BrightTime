@@ -1,0 +1,114 @@
+@page "/provider/orgs/{OrgId:guid}/forms"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Enrollment.Forms
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@* An organisation's registration forms (D45, D62): every version, and a new form started with its first question. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.forms.denied"]</h1>
+    <p>@T["error.form.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.forms.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="forms" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.nav.forms"]</h2>
+    <p class="hint">@T["provider.forms.intro"]</p>
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_forms.Count == 0)
+    {
+        <p>@T["provider.forms.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list">
+            @foreach (FormSummary form in _forms)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/forms/@form.Id" dir="auto">@form.Name</a>
+                    <span class="note">
+                        @T.Format("provider.forms.version", ("version", form.Version)) · @T["provider.forms.status." + form.Status] ·
+                        @T.Format("provider.forms.question_count", ("count", form.QuestionCount))
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+
+    <form method="post" @formname="create" @onsubmit="CreateAsync" class="form-builder">
+        <AntiforgeryToken />
+        <fieldset>
+            <legend>@T["provider.forms.new"]</legend>
+            <div class="field">
+                <label for="form-name">@T["provider.forms.name"]</label>
+                <input id="form-name" name="name" maxlength="@FormDefinitions.MaxNameLength" required dir="auto" />
+            </div>
+            <h3>@T["provider.forms.first_question"]</h3>
+            <QuestionFields Prefix="first" />
+            <button type="submit">@T["provider.forms.create"]</button>
+        </fieldset>
+    </form>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<FormSummary> _forms = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _forms = await Get<FormDefinitions>().ListAsync(Org);
+    }
+
+    private async Task CreateAsync()
+    {
+        FormQuestion first = QuestionInput.Read(FormValue, null, []);
+        Result<FormView> created = await Get<FormDefinitions>().CreateAsync(Org, Actor, FormValue("name").Trim(), new FormSchema([first]));
+        if (!created.IsSuccess)
+        {
+            _problem = T.Error(created.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/forms/{created.Value.Id}?done=created");
+    }
+}

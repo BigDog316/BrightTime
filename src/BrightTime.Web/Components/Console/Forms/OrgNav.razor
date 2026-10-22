@@ -15,7 +15,7 @@
 @code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
 
-    /// <summary>listings, profile, sites, staff, import, applications, attendance, payments or reports.</summary>
+    /// <summary>listings, profile, sites, staff, import, forms, applications, attendance, payments or reports.</summary>
     [Parameter, EditorRequired] public string Current { get; set; } = "listings";
 
     /// <summary>The signed-in person's role in this organisation.</summary>
@@ -32,6 +32,7 @@
         ("sites", "/sites", true),
         ("staff", "/staff", true),
         ("import", "/import", IsAdmin && HttpContext.User.HasPermission(Permissions.Listings.BulkImport)),
+        ("forms", "/forms", IsAdmin && HttpContext.User.HasPermission(Permissions.Organisations.Edit)),
         ("applications", "/applications", HttpContext.User.HasPermission(Permissions.Applications.View)),
         ("attendance", "/attendance", HttpContext.User.HasPermission(Permissions.Attendance.ViewRoster)),
         ("payments", "/payments", IsAdmin && HttpContext.User.HasPermission(Permissions.Payments.Waive)),

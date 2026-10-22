@@ -1949,7 +1949,7 @@ The second screen on D58's list. It calls D49's `AttendanceRecords` service unch
   - minutes, check-out and notes in the form;
   - showing a correction's reason, which only the audit trail holds.
 
-### D61 — Fees and payments in the provider console (**proposed 2026-10-22**)
+### D61 — Fees and payments in the provider console (**accepted 2026-10-22**)
 
 The third screen on D58's list. It calls D55's `FeeSchedules` and `PaymentIntents`.
 - **Who:** a new Fees and payments tab for owners and admins, the same people the API lets manage

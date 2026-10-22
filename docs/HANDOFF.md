@@ -163,8 +163,8 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   application or a roster row, answered on the thread, and announcements to an activity's families.
   Every safety rule is the module's. This finishes D58's list: the provider console now covers
   M3's provider screens.
-- **The M3 report** ([m3-report.md](m3-report.md)) waits on Sam's sign-off: every acceptance criterion
-  is met, and the funder packet (Q10) and SMS (Q9) wait on answers. Rebuild the compose volume: the schema and the role permissions
+- **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
+  met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.
 
 - What waits on you: push accounts, the app identifiers, Q5 for export and delete, and Q13.

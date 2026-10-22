@@ -6,9 +6,10 @@ Written 2026-10-22 at `da81df0`, plus the acceptance test this report added. M3 
 payments and reports, D49 to D57). The provider console's screens for all of it followed (D58
 to D64).
 
-**Awaiting Sam's sign-off.** All three acceptance criteria are met and tested. Two of M3's scope
-items wait on answers: the funder packet (Q10) and SMS (Q9). Everything else in plan/09's list for
-M3 is built. Notes below say where a criterion was checked by hand rather than gated.
+**Signed off by Sam on 2026-10-22: M3 is closed.** All three acceptance criteria are met and
+tested. Two of M3's scope items wait on answers and carry forward: the funder packet (Q10) and SMS
+(Q9). Everything else in plan/09's list for M3 is built. Notes below say where a criterion was
+checked by hand rather than gated.
 
 ## Acceptance
 
@@ -176,7 +177,7 @@ Found or left during M3:
 
 ## Decisions needed
 
-None blocks signing off M3's acceptance. These shape what's left of it, and launch:
+None blocked closing M3. These shape what carries forward, and launch:
 
 | | Question | Needed by |
 |---|---|---|

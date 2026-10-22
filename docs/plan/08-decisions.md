@@ -2008,7 +2008,7 @@ The first part of D58's fourth item; eligibility rules and waivers follow. It ca
   - a preview of the form as a family sees it;
   - eligibility rules and waivers (next).
 
-### D63 — Eligibility rules and waivers in the provider console (**proposed 2026-10-22**)
+### D63 — Eligibility rules and waivers in the provider console (**accepted 2026-10-22**)
 
 The rest of D58's fourth item. It calls D46's `EligibilityRules` and D47's `Waivers` unchanged.
 Both are under the Forms tab, for owners and admins (`orgs.edit` as admin, as the API's routes).

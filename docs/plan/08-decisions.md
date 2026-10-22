@@ -1695,7 +1695,7 @@ M3b's messaging, second slice: telling every family on a listing at once.
   - email as well as push for announcements;
   - SMS (Q9).
 
-### D55 — Fees, sliding scales and payments, with no card and no income kept (**proposed 2026-10-21; implemented, reversible**)
+### D55 — Fees, sliding scales and payments, with no card and no income kept (**accepted 2026-10-21**)
 
 M3b's payments, first slice: everything that doesn't depend on which provider Q6 picks. The
 provider gateway and its webhooks come in D56.

@@ -132,7 +132,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 - **Broadcasts** (D54): one announcement to every family with a child enrolled in a
   listing. Families don't reply and never see each other. Young people are included only with
   their consent and an admin observing.
-- **Fees and payments** (D55, proposed): listings' fees with sliding-scale tiers. Families pay the
+- **Fees and payments** (D55): listings' fees with sliding-scale tiers. Families pay the
   tier their household fits, and no income is kept. Payments go behind `IPaymentGateway`, with a
   manual gateway that admins mark received, or waive with a reason. The Stripe gateway and
   webhooks (D56) wait on Q6.
@@ -143,7 +143,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D54 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D54 on 2026-10-21). **D55 (fees and payments) is proposed;** D56 waits on Q6.
+Every decision through D55 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D55 on 2026-10-21). D56 (the payment provider) waits on Q6.
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

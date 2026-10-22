@@ -1921,7 +1921,7 @@ The first screen on D58's list. It calls D48's `Decisions` service unchanged.
 - **Not yet:** paging past 500 applications, sorting, and the family's side in the console.
   Families use the app.
 
-### D60 — Rosters and attendance in the provider console (**proposed 2026-10-22**)
+### D60 — Rosters and attendance in the provider console (**accepted 2026-10-22**)
 
 The second screen on D58's list. It calls D49's `AttendanceRecords` service unchanged.
 - **The week:** `/provider/orgs/{orgId}/attendance` sits under a new Attendance tab for holders of

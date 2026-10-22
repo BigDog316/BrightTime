@@ -1888,7 +1888,7 @@ and reports. docs/plan/06 puts them in the provider console. This starts that wo
   4. registration forms, eligibility and waivers;
   5. messaging.
 
-### D59 — Applications in the provider console (**proposed 2026-10-22**)
+### D59 — Applications in the provider console (**accepted 2026-10-22**)
 
 The first screen on D58's list. It calls D48's `Decisions` service unchanged.
 - **Three pages** under a new Applications tab, shown to holders of `applications.view`:

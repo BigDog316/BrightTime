@@ -1,0 +1,141 @@
+@page "/provider/orgs/{OrgId:guid}/messages/{ConversationId:guid}"
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Messaging
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Conversations.Read)]
+@inherits ConsoleComponent
+
+@*
+    One conversation, for a member of the organisation's staff who is in it (D53, D64). It says who
+    else reads it, and a message held for a moderator shows only to its sender, marked so.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.messages.denied"]</h1>
+    <p>@T["error.messaging.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_conversation is { } c)
+{
+    <PageTitle>@(c.Subject ?? T["provider.messages.no_subject"]) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/messages">@T["provider.nav.messages"]</a></p>
+    <h1 dir="auto">@(c.Subject ?? T["provider.messages.no_subject"])</h1>
+    <OrgNav OrgId="@OrgId" Current="messages" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is "started")
+    {
+        <p class="notice success" role="status">@T["provider.messages.started"]</p>
+    }
+    else if (Done is "broadcast")
+    {
+        <p class="notice success" role="status">@T.Format("provider.messages.broadcast_done", ("count", Count ?? 0), ("skipped", Skipped ?? 0))</p>
+    }
+    else if (Done is "sent")
+    {
+        <p class="notice success" role="status">@T["provider.messages.sent"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p class="hint">
+        @T["provider.messages.kind." + c.Kind] ·
+        @T.Format("provider.messages.who", ("roles", string.Join(", ", c.Roles.Distinct().Select(r => T["provider.messages.role." + r]))))
+    </p>
+    @if (c.ReadByOrganisation)
+    {
+        <p class="notice">@T["provider.messages.read_by_org"]</p>
+    }
+
+    <ol class="messages">
+        @foreach (MessageView m in c.Messages)
+        {
+            <li class="@(m.FromMe ? "mine" : null)">
+                <p class="note">
+                    @(m.FromMe ? T["provider.messages.me"] : T["provider.messages.role." + m.SenderRole]) · @T.DateTime(m.SentAt)
+                    @if (m.State == MessageStates.Held)
+                    {
+                        <strong>@(" · " + T["provider.messages.held"])</strong>
+                    }
+                </p>
+                <p class="body" dir="auto">@m.Body</p>
+            </li>
+        }
+    </ol>
+
+    <form method="post" @formname="reply" @onsubmit="ReplyAsync" class="message-form">
+        <AntiforgeryToken />
+        <div class="field">
+            <label for="reply-body">@T["provider.messages.reply"]</label>
+            <textarea id="reply-body" name="body" rows="4" maxlength="@Conversations.MaxBody" required dir="auto"></textarea>
+        </div>
+        <button type="submit">@T["provider.messages.send"]</button>
+    </form>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ConversationId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    [SupplyParameterFromQuery(Name = "count")] public int? Count { get; set; }
+
+    [SupplyParameterFromQuery(Name = "skipped")] public int? Skipped { get; set; }
+
+    private ConversationView? _conversation;
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Messages.SendToFamily))
+        {
+            Forbid();
+            return;
+        }
+
+        // Only a conversation this person is in, and only this organisation's.
+        Result<ConversationView> found = await Get<Conversations>().GetAsync(Actor, ConversationId);
+        if (!found.IsSuccess || found.Value.OrgId != OrgId)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _conversation = found.Value;
+    }
+
+    private async Task ReplyAsync()
+    {
+        if (_conversation is null)
+        {
+            return;
+        }
+
+        Result<MessageView> sent = await Get<Conversations>().SendAsync(Actor, ConversationId, FormValue("body"));
+        if (!sent.IsSuccess)
+        {
+            _problem = T.Error(sent.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/messages/{ConversationId}?done=sent");
+    }
+}

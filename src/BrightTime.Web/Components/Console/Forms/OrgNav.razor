@@ -15,7 +15,7 @@
 @code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
 
-    /// <summary>listings, profile, sites, staff, import, forms, applications, attendance, payments or reports.</summary>
+    /// <summary>listings, profile, sites, staff, import, forms, applications, attendance, payments, messages or reports.</summary>
     [Parameter, EditorRequired] public string Current { get; set; } = "listings";
 
     /// <summary>The signed-in person's role in this organisation.</summary>
@@ -36,6 +36,7 @@
         ("applications", "/applications", HttpContext.User.HasPermission(Permissions.Applications.View)),
         ("attendance", "/attendance", HttpContext.User.HasPermission(Permissions.Attendance.ViewRoster)),
         ("payments", "/payments", IsAdmin && HttpContext.User.HasPermission(Permissions.Payments.Waive)),
+        ("messages", "/messages", HttpContext.User.HasPermission(Permissions.Messages.SendToFamily)),
         ("reports", "/reports", HttpContext.User.HasPermission(Permissions.Reports.RunProvider)),
     ];
 }

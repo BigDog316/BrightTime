@@ -74,7 +74,13 @@ else if (_roster is { } roster)
                             string who = line.DisplayName ?? T["provider.applications.not_shared"];
                             string id = $"mark-{line.EnrollmentId:N}";
                             <tr>
-                                <td><label for="@id" dir="auto">@who</label></td>
+                                <td>
+                                    <label for="@id" dir="auto">@who</label>
+                                    @if (_canMessage)
+                                    {
+                                        <br /><a class="note" href="/provider/orgs/@OrgId/messages?enrollment=@line.EnrollmentId">@T["provider.messages.message_family"]</a>
+                                    }
+                                </td>
                                 <td>
                                     @if (_canRecord)
                                     {
@@ -148,6 +154,7 @@ else if (_roster is { } roster)
     private DateTimeOffset? _at;
     private string? _listing;
     private bool _canRecord;
+    private bool _canMessage;
     private string? _problem;
     private Dictionary<Guid, string> _rowErrors = [];
     private Dictionary<Guid, AttendanceView> _current = [];
@@ -185,6 +192,7 @@ else if (_roster is { } roster)
 
         _listing = listing.Title;
         _canRecord = await CanActForAsync(Org, Permissions.Attendance.Record);
+        _canMessage = await CanActForAsync(Org, Permissions.Messages.SendToFamily);
 
         // No meeting named: the latest one that has started (or starts within the hour) this past week, else the next.
         _at = Occurrence;

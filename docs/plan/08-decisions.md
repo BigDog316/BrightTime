@@ -2034,6 +2034,38 @@ Both are under the Forms tab, for owners and admins (`orgs.edit` as admin, as th
 - **Not yet:** editing a rule in place (remove it and add it again), and who signed a waiver,
   which the organisation sees on each application.
 
+### D64 — Messaging in the provider console (**proposed 2026-10-22**)
+
+The last of D58's list. It calls D53 and D54's `Conversations` unchanged, so every safety rule is
+the module's:
+- no adult alone with a minor, so an admin observer is added or the conversation is refused;
+- consent and contact restrictions are respected;
+- an adult's message to a minor is screened, and held if it tries to move the conversation
+  elsewhere.
+
+The console host now registers the Community module and `IIdentityQueries`, which decides who may
+be messaged.
+- **Who:** holders of `messages.send_to_family` (program staff and provider admins), under a new
+  Messages tab.
+- **Messages:** `/provider/orgs/{orgId}/messages` lists the conversations this person is in for the
+  organisation, newest first.
+  - Each shows its subject, whether it is a conversation or an announcement, unread messages, and
+    whether a young person is in it.
+  - A conversation is opened from an application's page or a roster row ("Message the family"),
+    which bring the application or enrolment along.
+  - An announcement goes to every family with a child enrolled in a published activity. The page
+    then says how many families it reached and how many young people it left out, and why (no
+    consent, or no admin to read along).
+- **A conversation:** `/provider/orgs/{orgId}/messages/{id}`, only for someone in it and only the
+  organisation's own.
+  - It names who is in it. When a young person is, it says an admin of the organisation reads it
+    too, as everyone in it is told.
+  - A message held for a moderator shows only to its sender, marked so.
+  - Staff reply, announcements included.
+- **Audit:** the module audits every read and send; the pages declare `[YouthRecord]`.
+- **Not yet:** an organisation-wide inbox for admins of conversations they aren't in, closing a
+  conversation, and SMS (Q9).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

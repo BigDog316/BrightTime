@@ -2,9 +2,13 @@ using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Security;
 using BrightTime.Modules.Attendance.Persistence;
 using BrightTime.Modules.Attendance.Records;
+using BrightTime.Modules.Community.Messaging;
+using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Enrollment.Family;
 using BrightTime.Modules.Enrollment.Payments;
 using BrightTime.Modules.Enrollment.Persistence;
+using BrightTime.Modules.Identity.Contracts;
+using BrightTime.Modules.Identity.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Reporting;
@@ -12,7 +16,7 @@ using BrightTime.Reporting;
 namespace BrightTime.Web.Composition;
 
 /// <summary>
-/// The provider console's M3 work (D58): registration, attendance and reports, on the same modules
+/// The provider console's M3 work (D58): registration, attendance, reports and messaging, on the same modules
 /// and the same login as the API. Only with a database, as every console page is.
 /// </summary>
 /// <remarks>
@@ -44,6 +48,11 @@ public static class RegistrationServices
         services.AddBrightTimeDbContext<AttendanceDbContext>(connection, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
         services.AddAttendance();
         services.AddProviderReports(configuration);
+
+        // Messaging (D53, D64): who may be messaged is the identity module's to say (consent, restrictions).
+        services.AddScoped<IIdentityQueries, IdentityQueries>();
+        services.AddBrightTimeDbContext<CommunityDbContext>(connection, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);
+        services.AddCommunity();
         return services;
     }
 }

@@ -1,0 +1,199 @@
+@page "/provider/orgs/{OrgId:guid}/messages"
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Messaging
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Conversations.Read)]
+@inherits ConsoleComponent
+
+@*
+    The organisation's conversations with families, for a member of its staff (D53, D54, D64): the
+    ones they are in, a new one opened from an application or an enrolment, and announcements to
+    an activity's families. The safety rules are the module's: no adult alone with a minor, consent
+    and restrictions respected, an adult's message to a minor screened.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.messages.denied"]</h1>
+    <p>@T["error.messaging.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.messages.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="messages" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.nav.messages"]</h2>
+    <p class="hint">@T["provider.messages.intro"]</p>
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (Application is not null || Enrollment is not null)
+    {
+        <form method="post" @formname="start" @onsubmit="StartAsync" class="message-form">
+            <AntiforgeryToken />
+            <fieldset>
+                <legend>@T["provider.messages.compose"]</legend>
+                <p class="hint">@T["provider.messages.compose_hint"]</p>
+                <div class="field">
+                    <label for="start-subject">@T["provider.messages.subject"]</label>
+                    <input id="start-subject" name="subject" maxlength="@Conversations.MaxSubject" dir="auto" />
+                </div>
+                <div class="field">
+                    <label for="start-body">@T["provider.messages.body"]</label>
+                    <textarea id="start-body" name="body" rows="5" maxlength="@Conversations.MaxBody" required dir="auto"></textarea>
+                </div>
+                <button type="submit">@T["provider.messages.send"]</button>
+            </fieldset>
+        </form>
+    }
+
+    @if (_conversations.Count == 0)
+    {
+        <p>@T["provider.messages.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list conversations">
+            @foreach (ConversationSummary c in _conversations)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/messages/@c.Id" dir="auto">@(c.Subject ?? T["provider.messages.no_subject"])</a>
+                    <span class="note">
+                        @T["provider.messages.kind." + c.Kind]
+                        @if (c.LastMessageAt is { } last)
+                        {
+                            @(" · " + T.DateTime(last))
+                        }
+                        @if (c.Unread > 0)
+                        {
+                            <strong>@(" · " + T.Format("provider.messages.unread", ("count", c.Unread)))</strong>
+                        }
+                        @if (c.IncludesMinor)
+                        {
+                            @(" · " + T["provider.messages.includes_minor"])
+                        }
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_listings.Count > 0)
+    {
+        <form method="post" @formname="broadcast" @onsubmit="BroadcastAsync" class="message-form">
+            <AntiforgeryToken />
+            <fieldset>
+                <legend>@T["provider.messages.broadcast"]</legend>
+                <p class="hint">@T["provider.messages.broadcast_hint"]</p>
+                <div class="field">
+                    <label for="broadcast-listing">@T["provider.messages.broadcast_listing"]</label>
+                    <select id="broadcast-listing" name="listing">
+                        @foreach ((Guid id, string title) in _listings)
+                        {
+                            <option value="@id" dir="auto">@title</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="broadcast-subject">@T["provider.messages.subject"]</label>
+                    <input id="broadcast-subject" name="subject" maxlength="@Conversations.MaxSubject" dir="auto" />
+                </div>
+                <div class="field">
+                    <label for="broadcast-body">@T["provider.messages.body"]</label>
+                    <textarea id="broadcast-body" name="body" rows="5" maxlength="@Conversations.MaxBody" required dir="auto"></textarea>
+                </div>
+                <button type="submit">@T["provider.messages.broadcast_send"]</button>
+            </fieldset>
+        </form>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    /// <summary>Start a conversation with the family behind this application (from its page).</summary>
+    [SupplyParameterFromQuery(Name = "application")] public Guid? Application { get; set; }
+
+    /// <summary>Start a conversation with the family behind this enrolment (from a roster).</summary>
+    [SupplyParameterFromQuery(Name = "enrollment")] public Guid? Enrollment { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<ConversationSummary> _conversations = [];
+    private IReadOnlyList<(Guid Id, string Title)> _listings = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Messages.SendToFamily))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _conversations = [.. (await Get<Conversations>().ListAsync(Actor)).Where(c => c.OrgId == OrgId)];
+        _listings = [.. (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+            .Where(l => l.Status == ListingStatus.Published)
+            .OrderBy(l => l.Title, StringComparer.CurrentCulture).Select(l => (l.Id, l.Title))];
+    }
+
+    private static string? Optional(string text) => text.Trim() is { Length: > 0 } t ? t : null;
+
+    private async Task StartAsync()
+    {
+        Result<ConversationView> started = await Get<Conversations>().StartAsync(Org, Actor, Enrollment, Enrollment is null ? Application : null,
+            Optional(FormValue("subject")), FormValue("body"));
+        if (!started.IsSuccess)
+        {
+            _problem = T.Error(started.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/messages/{started.Value.Id}?done=started");
+    }
+
+    private async Task BroadcastAsync()
+    {
+        if (!Guid.TryParse(FormValue("listing"), out Guid listing) || _listings.All(l => l.Id != listing))
+        {
+            return;
+        }
+
+        Result<BroadcastResult> sent = await Get<Conversations>().BroadcastAsync(Org, Actor, listing, Optional(FormValue("subject")), FormValue("body"));
+        if (!sent.IsSuccess)
+        {
+            _problem = T.Error(sent.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/messages/{sent.Value.Conversation.Id}?done=broadcast&count={sent.Value.Recipients}&skipped={sent.Value.Skipped}");
+    }
+}

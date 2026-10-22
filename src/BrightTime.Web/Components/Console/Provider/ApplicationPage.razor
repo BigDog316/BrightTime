@@ -44,6 +44,11 @@ else if (_view is { } a)
         <p class="notice error" role="alert">@_problem</p>
     }
 
+    @if (_canMessage)
+    {
+        <p><a href="/provider/orgs/@OrgId/messages?application=@a.Id">@T["provider.messages.message_family"]</a></p>
+    }
+
     <dl class="facts">
         <dt>@T["provider.applications.col.status"]</dt>
         <dd>@T["provider.applications.status." + a.Status]@(a.WaitlistPosition is { } place ? " · " + T.Format("provider.applications.position", ("position", place)) : "")</dd>
@@ -144,6 +149,7 @@ else if (_view is { } a)
     private string? _listing;
     private Dictionary<string, PublicQuestion> _questions = new(StringComparer.Ordinal);
     private bool _canDecide;
+    private bool _canMessage;
     private string? _problem;
 
     private OrganisationId Org => new(OrgId);
@@ -164,6 +170,7 @@ else if (_view is { } a)
         }
 
         _canDecide = await CanActForAsync(Org, Permissions.Applications.Decide);
+        _canMessage = await CanActForAsync(Org, Permissions.Messages.SendToFamily);
         await LoadAsync();
     }
 

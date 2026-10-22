@@ -1856,7 +1856,7 @@ participation), so they are built now. The funder packet waits on Q10.
   - the console's report screen;
   - scheduled or emailed reports.
 
-### D58 — The provider console runs M3 on the same modules, starting with Reports (**proposed 2026-10-22**)
+### D58 — The provider console runs M3 on the same modules, starting with Reports (**accepted 2026-10-22**)
 
 Every M3 provider feature so far is API-only: applications, rosters, attendance, fees, payments
 and reports. docs/plan/06 puts them in the provider console. This starts that work.

@@ -1666,7 +1666,7 @@ docs/plan/07's T1 enforced at every layer. Broadcasts come next (D54); SMS waits
   - the app's and the console's message screens;
   - SMS (Q9).
 
-### D54 — Broadcasts: one announcement, no replies, no family named to another (**proposed 2026-10-21; implemented, reversible**)
+### D54 — Broadcasts: one announcement, no replies, no family named to another (**accepted 2026-10-21**)
 
 M3b's messaging, second slice: telling every family on a listing at once.
 - **Sending:** `POST /org/{orgId}/broadcasts {listingId, subject, body}`, by holders of

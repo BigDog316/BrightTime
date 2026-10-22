@@ -1,0 +1,104 @@
+@page "/provider/orgs/{OrgId:guid}/attendance"
+@using System.Globalization
+@using BrightTime.Modules.Attendance.Records
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@* A week of the organisation's meetings, each leading to its roster (D60). Names nobody, so audits nothing. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.attendance.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.attendance.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="attendance" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T.Format("provider.attendance.week", ("from", T.DateShort(_start)), ("to", T.DateShort(_start.AddDays(6))))</h2>
+    <nav class="pager" aria-label="@T["provider.attendance.weeks"]">
+        <a href="@Week(-7)">@T["provider.attendance.previous"]</a>
+        <a href="@Week(7)">@T["provider.attendance.next"]</a>
+    </nav>
+
+    @if (_meetings.Count == 0)
+    {
+        <p>@T["provider.attendance.none"]</p>
+    }
+
+    @foreach (var day in _meetings.GroupBy(m => Day(m.StartsAt)))
+    {
+        <section aria-labelledby="@($"day-{day.Key:yyyyMMdd}")">
+            <h3 id="@($"day-{day.Key:yyyyMMdd}")">@T.DayLong(day.First().StartsAt)</h3>
+            <ul class="card-list">
+                @foreach (OrganisationMeeting m in day)
+                {
+                    <li>
+                        <a href="@Roster(m)" dir="auto">@m.Title</a>
+                        <span class="note">@T.Range(T.Time(m.StartsAt), T.Time(m.EndsAt))</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+
+    private string? _name;
+    private DateOnly _start;
+    private IReadOnlyList<OrganisationMeeting> _meetings = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    private DateOnly Day(DateTimeOffset at) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).DateTime);
+
+    private string Week(int days) => $"/provider/orgs/{OrgId}/attendance?from={_start.AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
+
+    private string Roster(OrganisationMeeting m) =>
+        $"/provider/orgs/{OrgId}/listings/{m.ListingId}/roster?at={Uri.EscapeDataString(m.StartsAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Attendance.ViewRoster))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _start = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly chosen)
+            ? chosen
+            : Day(DateTimeOffset.UtcNow);
+        DateTime midnight = _start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        DateTimeOffset from = new DateTimeOffset(midnight, Tenant.TimeZone.GetUtcOffset(midnight)).ToUniversalTime();
+        Result<IReadOnlyList<OrganisationMeeting>> meetings = await Get<AttendanceRecords>().MeetingsAsync(Org, from, from.AddDays(7));
+        _meetings = meetings.IsSuccess ? meetings.Value : [];
+    }
+}

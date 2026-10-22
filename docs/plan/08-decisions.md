@@ -1921,6 +1921,34 @@ The first screen on D58's list. It calls D48's `Decisions` service unchanged.
 - **Not yet:** paging past 500 applications, sorting, and the family's side in the console.
   Families use the app.
 
+### D60 — Rosters and attendance in the provider console (**proposed 2026-10-22**)
+
+The second screen on D58's list. It calls D49's `AttendanceRecords` service unchanged.
+- **The week:** `/provider/orgs/{orgId}/attendance` sits under a new Attendance tab for holders of
+  `attendance.view_roster`.
+  - It shows a week of the organisation's meetings by day, in the tenant's zone, with previous and
+    next links. Each meeting links to its roster.
+  - It names nobody, so it audits nothing.
+- **The roster:** `/provider/orgs/{orgId}/listings/{listingId}/roster?at=…` shows each enrolled
+  young person: a name only where the family's share gives it, the current mark and the check-in
+  time.
+  - With no meeting named, it opens the latest one that has started (or starts within the hour)
+    this past week, else the next, else says there's none.
+- **Marking and correcting,** with `attendance.record`, in one form for the whole roster:
+  - an unmarked young person given a mark gets a new record;
+  - a changed mark becomes a correction, which supersedes the old record and keeps it (D49);
+  - a correction needs a reason, kept in the audit row, and carries over the old record's times,
+    minutes and note, so only the mark changes;
+  - rows stand on their own: a refused row (a meeting not started, more than 30 days old, an
+    enrolment ended) says why next to the name, and the rest are saved.
+- **Correction history:** the roster lists each corrected mark with what it was and when.
+- **Audit:** the service audits reads, marks and corrections; the roster page declares
+  `[YouthRecord]` and audits its own refusals.
+- **Not yet:**
+  - the QR scanner and kiosk mode in the console (D50's codes work from the app);
+  - minutes, check-out and notes in the form;
+  - showing a correction's reason, which only the audit trail holds.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -1,0 +1,289 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/roster"
+@using System.Globalization
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Modules.Attendance.Contracts
+@using BrightTime.Modules.Attendance.Records
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(AttendanceRecords.RosterRead)]
+@inherits ConsoleComponent
+
+@* A meeting's roster (D49, D60): mark each young person, correct a mark with a reason, and see what was corrected. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.attendance.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is not null && _roster is null)
+{
+    <PageTitle>@T.Format("provider.roster.title", ("listing", _listing)) · BrightTime</PageTitle>
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/attendance">@T["provider.roster.back"]</a></p>
+    <h1 dir="auto">@_listing</h1>
+    <OrgNav OrgId="@OrgId" Current="attendance" Role="@(RoleIn(Org) ?? "")" />
+    <p>@T["provider.roster.no_meeting"]</p>
+}
+else if (_roster is { } roster)
+{
+    <PageTitle>@T.Format("provider.roster.title", ("listing", _listing ?? "")) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="@($"/provider/orgs/{OrgId}/attendance?from={Day(roster.OccurrenceStartsAt)}")">@T["provider.roster.back"]</a></p>
+    <h1 dir="auto">@_listing</h1>
+    <p>@T.DayLong(roster.OccurrenceStartsAt) · @T.Range(T.Time(roster.OccurrenceStartsAt), T.Time(roster.OccurrenceEndsAt))</p>
+    <OrgNav OrgId="@OrgId" Current="attendance" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is "saved")
+    {
+        <p class="notice success" role="status">@T["provider.roster.saved"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+    @if (roster.OccurrenceStartsAt > DateTimeOffset.UtcNow.AddHours(1))
+    {
+        <p class="hint">@T["provider.roster.too_early"]</p>
+    }
+
+    @if (roster.Lines.Count == 0)
+    {
+        <p>@T["provider.roster.empty"]</p>
+    }
+    else
+    {
+        <form method="post" @formname="marks" @onsubmit="SaveAsync">
+            <AntiforgeryToken />
+            <div class="table-scroll">
+                <table class="roster">
+                    <thead>
+                        <tr>
+                            <th scope="col">@T["provider.roster.col.name"]</th>
+                            <th scope="col">@T["provider.roster.col.mark"]</th>
+                            <th scope="col">@T["provider.roster.col.checked_in"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (RosterLine line in roster.Lines)
+                        {
+                            string who = line.DisplayName ?? T["provider.applications.not_shared"];
+                            string id = $"mark-{line.EnrollmentId:N}";
+                            <tr>
+                                <td><label for="@id" dir="auto">@who</label></td>
+                                <td>
+                                    @if (_canRecord)
+                                    {
+                                        <select id="@id" name="@id" aria-describedby="@(_rowErrors.ContainsKey(line.EnrollmentId) ? id + "-error" : null)">
+                                            <option value="" selected="@(line.State is null)">@T["provider.roster.unmarked"]</option>
+                                            @foreach (string state in States)
+                                            {
+                                                <option value="@state" selected="@(line.State == state)">@T["provider.roster.state." + state]</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        @(line.State is { } s ? T["provider.roster.state." + s] : T["provider.roster.unmarked"])
+                                    }
+                                    @if (_rowErrors.TryGetValue(line.EnrollmentId, out string? error))
+                                    {
+                                        <p class="field-error" id="@(id + "-error")">@error</p>
+                                    }
+                                </td>
+                                <td>@(line.CheckedInAt is { } at ? T.Time(at) : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_canRecord)
+            {
+                <div class="field">
+                    <label for="reason">@T["provider.roster.reason"]</label>
+                    <input id="reason" name="reason" maxlength="500" aria-describedby="reason-hint" />
+                    <p class="hint" id="reason-hint">@T["provider.roster.reason_hint"]</p>
+                </div>
+                <button type="submit">@T["provider.roster.save"]</button>
+            }
+        </form>
+    }
+
+    @if (_history.Count > 0)
+    {
+        <section aria-labelledby="corrections">
+            <h2 id="corrections">@T["provider.roster.corrections"]</h2>
+            <ul>
+                @foreach (RosterLine line in roster.Lines.Where(l => _history.ContainsKey(l.EnrollmentId)))
+                {
+                    <li>
+                        <span dir="auto">@(line.DisplayName ?? T["provider.applications.not_shared"])</span>:
+                        @string.Join(" → ", _history[line.EnrollmentId].Select(h => T.Format("provider.roster.was",
+                            ("state", T["provider.roster.state." + h.State]), ("when", T.DateTime(h.RecordedAt)))))
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "at")] public string? At { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private static readonly string[] States =
+        [AttendanceStates.Present, AttendanceStates.Late, AttendanceStates.LeftEarly, AttendanceStates.Absent, AttendanceStates.Excused, AttendanceStates.Unknown];
+
+    private RosterView? _roster;
+    private DateTimeOffset? _at;
+    private string? _listing;
+    private bool _canRecord;
+    private string? _problem;
+    private Dictionary<Guid, string> _rowErrors = [];
+    private Dictionary<Guid, AttendanceView> _current = [];
+    private Dictionary<Guid, List<AttendanceView>> _history = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    private string Day(DateTimeOffset at) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, Tenant.TimeZone).DateTime).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private DateTimeOffset? Occurrence =>
+        DateTimeOffset.TryParse(At, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset at) ? at.ToUniversalTime() : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Attendance.ViewRoster))
+        {
+            Refuse(AttendanceRecords.RosterRead, "attendance.forbidden");
+            Forbid();
+            return;
+        }
+
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code) is not { } listing
+            || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing.Title;
+        _canRecord = await CanActForAsync(Org, Permissions.Attendance.Record);
+
+        // No meeting named: the latest one that has started (or starts within the hour) this past week, else the next.
+        _at = Occurrence;
+        if (_at is null)
+        {
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            IReadOnlyList<ListingTime> week = await Get<IListingOccurrences>().GetAsync(ListingId, now.AddDays(-7), now.AddDays(7));
+            _at = week.LastOrDefault(m => m.StartsAt <= now.AddHours(1))?.StartsAt ?? week.FirstOrDefault()?.StartsAt;
+            if (_at is null)
+            {
+                return;
+            }
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        AttendanceRecords attendance = Get<AttendanceRecords>();
+        Result<RosterView> roster = await attendance.RosterAsync(Org, ListingId, _at!.Value);
+        if (!roster.IsSuccess)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _roster = roster.Value;
+
+        // The meeting's records, corrected ones included, oldest first: the current one, and what it replaced.
+        Result<IReadOnlyList<AttendanceView>> records = await attendance.ListAsync(Org, _roster.OccurrenceStartsAt, _roster.OccurrenceStartsAt.AddSeconds(1), ListingId, history: true);
+        IReadOnlyList<AttendanceView> all = records.IsSuccess ? records.Value : [];
+        _current = all.Where(r => r.SupersededBy is null).ToDictionary(r => r.EnrollmentId);
+        _history = all.Where(r => r.SupersededBy is not null).GroupBy(r => r.EnrollmentId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.RecordedAt).ToList());
+    }
+
+    /// <summary>
+    /// Saves the marks: a new mark for anyone unmarked, a correction (with the reason) for anyone
+    /// whose mark changed, nothing for the rest. Each row stands on its own: one refused leaves the
+    /// others saved, and says why next to its name.
+    /// </summary>
+    private async Task SaveAsync()
+    {
+        if (!_canRecord || _roster is null)
+        {
+            return;
+        }
+
+        List<(RosterLine Line, string State)> changes = [.. _roster.Lines
+            .Select(l => (Line: l, State: FormValue($"mark-{l.EnrollmentId:N}")))
+            .Where(c => c.State.Length > 0 && c.State != c.Line.State)];
+        string reason = FormValue("reason").Trim();
+        if (changes.Any(c => c.Line.RecordId is not null) && reason.Length == 0)
+        {
+            _problem = T["provider.roster.reason_needed"];
+            return;
+        }
+
+        AttendanceRecords attendance = Get<AttendanceRecords>();
+        foreach ((RosterLine line, string state) in changes)
+        {
+            Result<AttendanceView> saved;
+            if (line.RecordId is { } record)
+            {
+                // A correction keeps the times, minutes and note the record had; only the mark changes.
+                AttendanceView? was = _current.GetValueOrDefault(line.EnrollmentId);
+                saved = await attendance.CorrectAsync(Org, Actor, record,
+                    new AttendanceInput(line.EnrollmentId, _roster.OccurrenceStartsAt, state, was?.MinutesAttended, was?.CheckedInAt, was?.CheckedOutAt, was?.Note), reason);
+                if (!saved.IsSuccess)
+                {
+                    Refuse(AttendanceRecords.Corrected, saved.Error.Code);
+                }
+            }
+            else
+            {
+                saved = await attendance.RecordAsync(Org, Actor, new AttendanceInput(line.EnrollmentId, _roster.OccurrenceStartsAt, state));
+                if (!saved.IsSuccess)
+                {
+                    Refuse(AttendanceRecords.Recorded, saved.Error.Code);
+                }
+            }
+
+            if (!saved.IsSuccess)
+            {
+                _rowErrors[line.EnrollmentId] = T.Error(saved.Error);
+            }
+        }
+
+        if (_rowErrors.Count == 0)
+        {
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/roster?at={Uri.EscapeDataString(_roster.OccurrenceStartsAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))}&done=saved");
+            return;
+        }
+
+        _problem = T["provider.roster.some_not_saved"];
+        await LoadAsync();
+    }
+
+    private void Refuse(string action, string reason) =>
+        Get<AuditTrail>().Record(new AuditAccess { Action = action, Outcome = AuditOutcome.Deny, SubjectKind = "enrollment", ActorOrgId = Org, Reason = reason });
+}

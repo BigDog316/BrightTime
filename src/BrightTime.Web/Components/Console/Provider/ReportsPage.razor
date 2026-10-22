@@ -1,0 +1,130 @@
+@page "/provider/orgs/{OrgId:guid}/reports"
+@using System.Globalization
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.Reporting
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.reports.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.reports.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="reports" Role="@_role" />
+
+    <h2>@T["provider.nav.reports"]</h2>
+    <p class="hint">@T["provider.reports.intro"]</p>
+
+    @if (Problem is { Length: > 0 } problem && T.Has("error." + problem))
+    {
+        <p class="notice error" role="alert">@T["error." + problem]</p>
+    }
+
+    @foreach (ReportCatalogueEntry report in _catalogue)
+    {
+        string id = report.Key.Replace('.', '-');
+        <section class="report" aria-labelledby="@($"{id}-title")">
+            <h3 id="@($"{id}-title")">@report.Title</h3>
+            <p class="hint">@T["provider.reports.about." + report.Key]</p>
+            <form method="post" action="@($"/provider/orgs/{OrgId}/reports/download")" class="report-form">
+                <AntiforgeryToken />
+                <input type="hidden" name="reportKey" value="@report.Key" />
+                @if (report.NeedsListing)
+                {
+                    <div class="field">
+                        <label for="@($"{id}-listing")">@T["provider.reports.listing"]</label>
+                        <select id="@($"{id}-listing")" name="listingId" required>
+                            @foreach (ListingRow listing in _listings)
+                            {
+                                <option value="@listing.Id" dir="auto">@listing.Title</option>
+                            }
+                        </select>
+                    </div>
+                }
+                @if (report.NeedsPeriod)
+                {
+                    <div class="field">
+                        <label for="@($"{id}-from")">@T["provider.reports.from"]</label>
+                        <input type="date" id="@($"{id}-from")" name="from" value="@Day(_today.AddDays(report.Key == "provider.attendance" ? -27 : -89))" required />
+                    </div>
+                    <div class="field">
+                        <label for="@($"{id}-to")">@T["provider.reports.to"]</label>
+                        <input type="date" id="@($"{id}-to")" name="to" value="@Day(_today)" required aria-describedby="@($"{id}-limit")" />
+                        <p class="hint" id="@($"{id}-limit")">@T.Format("provider.reports.limit", ("days", report.MaxDays ?? 0))</p>
+                    </div>
+                }
+                <div class="field">
+                    <label for="@($"{id}-format")">@T["provider.reports.format"]</label>
+                    <select id="@($"{id}-format")" name="format">
+                        @foreach (string format in report.Formats)
+                        {
+                            <option value="@format">@T["provider.reports.format." + format]</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit">@T["provider.reports.download"]</button>
+            </form>
+        </section>
+    }
+
+    @if (_catalogue.Any(r => r.NamesPeople))
+    {
+        <p class="hint">@T["provider.reports.names_note"]</p>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "problem")] public string? Problem { get; set; }
+
+    private string? _name;
+    private string _role = "";
+    private IReadOnlyList<ReportCatalogueEntry> _catalogue = [];
+    private IReadOnlyList<ListingRow> _listings = [];
+    private DateOnly _today;
+
+    private OrganisationId Org => new(OrgId);
+
+    private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Reports.RunProvider))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _role = RoleIn(Org) ?? "";
+        _today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, Tenant.TimeZone).DateTime);
+        _catalogue = await Get<ProviderReportRunner>().CatalogueAsync(await CanActForAsync(Org, Permissions.Attendance.ViewRoster));
+        _listings = [.. (await Get<ListingEditor>().ListForOrganisationAsync(Org)).OrderBy(l => l.Title, StringComparer.CurrentCulture)];
+    }
+}

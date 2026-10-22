@@ -20,6 +20,7 @@ builder.Services.AddClientNetwork(builder.Configuration);
 builder.Services.AddBrightTimeFinder(builder.Configuration);
 builder.Services.AddBrightTimeTenancy(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeConsoles(builder.Configuration, builder.Environment);
+builder.Services.AddBrightTimeRegistration(builder.Configuration, builder.Environment);
 builder.Services.AddBrightTimeAudit(builder.Configuration, builder.Environment,
     hasDatabase: builder.Configuration.GetSection(FinderOptions.SectionName).Get<FinderOptions>()?.Mode == FinderMode.Sql);
 builder.Services.AddBrightTimeLocalisation(builder.Configuration);
@@ -102,6 +103,7 @@ app.MapGet(BrightTime.Web.Components.Console.Provider.ImportPage.TemplatePath, (
     "text/csv; charset=utf-8",
     "brighttime-listings.csv"));
 app.MapBrightTimeSignIn();
+app.MapReportDownloads();
 if (app.Services.GetRequiredService<ConsoleAvailability>().CanSignIn)
 {
     app.MapBrightTimePasskeys();

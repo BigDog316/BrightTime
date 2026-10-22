@@ -99,6 +99,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
     private IEnumerable<string> Routes() =>
         db.Factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
+            .Where(e => e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.IHttpMethodMetadata>() is not { } methods || methods.HttpMethods.Contains("GET"))
             .Select(e => e.RoutePattern.RawText ?? "")
             .Where(r => r.StartsWith("/provider", StringComparison.Ordinal) || r.StartsWith("/organiser", StringComparison.Ordinal))
             .Where(r => !r.EndsWith(".csv", StringComparison.Ordinal))

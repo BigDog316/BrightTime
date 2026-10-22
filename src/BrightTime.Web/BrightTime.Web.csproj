@@ -21,6 +21,9 @@
     <ProjectReference Include="../BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Directory/BrightTime.Modules.Directory.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Opportunities/BrightTime.Modules.Opportunities.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Enrollment/BrightTime.Modules.Enrollment.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Attendance/BrightTime.Modules.Attendance.csproj" />
+    <ProjectReference Include="../BrightTime.Reporting/BrightTime.Reporting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

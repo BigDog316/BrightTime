@@ -124,6 +124,8 @@ public sealed class ProviderReports(
     public Task<Result<AttendanceReport>> AttendanceAsync(OrganisationId org, UserId actor, Guid listingId, DateTimeOffset from, DateTimeOffset to, string format, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
+            // A period may arrive in any offset; the database takes UTC.
+            (from, to) = (from.ToUniversalTime(), to.ToUniversalTime());
             if (to <= from || to - from > TimeSpan.FromDays(AttendanceRecords.MaxRangeDays))
             {
                 return Result<AttendanceReport>.Failure(Range(AttendanceRecords.MaxRangeDays));
@@ -166,6 +168,7 @@ public sealed class ProviderReports(
     public Task<Result<ParticipationReport>> ParticipationAsync(OrganisationId org, UserId actor, DateTimeOffset from, DateTimeOffset to, string format, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
+            (from, to) = (from.ToUniversalTime(), to.ToUniversalTime());
             if (to <= from || to - from > TimeSpan.FromDays(MaxParticipationDays))
             {
                 return Result<ParticipationReport>.Failure(Range(MaxParticipationDays));

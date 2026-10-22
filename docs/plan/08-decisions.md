@@ -1856,6 +1856,38 @@ participation), so they are built now. The funder packet waits on Q10.
   - the console's report screen;
   - scheduled or emailed reports.
 
+### D58 — The provider console runs M3 on the same modules, starting with Reports (**proposed 2026-10-22**)
+
+Every M3 provider feature so far is API-only: applications, rosters, attendance, fees, payments
+and reports. docs/plan/06 puts them in the provider console. This starts that work.
+- **The console runs the same modules the API does.** The web host now registers Enrollment and
+  Attendance (`AddBrightTimeRegistration`).
+  - It uses the same login (`brighttime_app`), the tenant's RLS, the actor guard, and family data
+    decrypted under the tenant's data key (D32).
+  - A console page is one more caller of the same services, not a second implementation. Only
+    with a database, as every console page is.
+- **One report runner for both hosts.** The checks, wording and rendering moved out of the API
+  into `ProviderReportRunner` (`BrightTime.Reporting`), which the API and the console both call.
+  - Each host still does its own authorisation and audits its own refusals.
+  - Periods are normalised to UTC in the module. A period sent with a local offset (the console's
+    days, or an API client's) used to fail in Npgsql.
+- **The Reports page:** `/provider/orgs/{orgId}/reports`, a new Reports tab for those holding
+  `reports.run_provider`.
+  - Each report the caller may run is a form: an activity where one is needed, a period as days
+    in the tenant's zone, and a file type.
+  - It posts to `POST /provider/orgs/{orgId}/reports/download`, an endpoint, because a page can't
+    answer with a file.
+  - The endpoint checks antiforgery and the same permissions as the API, then returns the file
+    with `Cache-Control: no-store`. A bad request goes back to the page with the reason.
+  - The page reminds staff that the file isn't kept here, and that some reports name young
+    people.
+- **Next, in this order:**
+  1. applications (queue, decide, bulk decide, waitlist offers);
+  2. rosters and attendance with correction history;
+  3. fees and payments (waive, mark received);
+  4. registration forms, eligibility and waivers;
+  5. messaging.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

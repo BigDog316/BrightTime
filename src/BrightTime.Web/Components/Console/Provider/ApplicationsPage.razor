@@ -1,0 +1,81 @@
+@page "/provider/orgs/{OrgId:guid}/applications"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@* The activities whose applications staff can open. Reads no application, so audits nothing. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.applications.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.applications.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="applications" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.nav.applications"]</h2>
+    @if (_rows.Count == 0)
+    {
+        <p>@T["provider.applications.no_activities"]</p>
+    }
+    else
+    {
+        <p class="hint">@T["provider.applications.intro"]</p>
+        <ul class="card-list">
+            @foreach (ListingRow row in _rows)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/listings/@row.Id/applications" dir="auto">@row.Title</a>
+                    <span class="note">@T["provider.listings.group." + row.Status.ToDbValue()]</span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<ListingRow> _rows = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Applications.View))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        // Drafts take no applications; the rest might hold some, even once ended.
+        _rows = [.. (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+            .Where(r => r.Status != ListingStatus.Draft)
+            .OrderBy(r => r.Status == ListingStatus.Published ? 0 : 1).ThenBy(r => r.Title, StringComparer.CurrentCulture)];
+    }
+}

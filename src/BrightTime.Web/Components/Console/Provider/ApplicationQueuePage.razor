@@ -1,0 +1,346 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/applications"
+@using System.Globalization
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Enrollment.Contracts
+@using BrightTime.Modules.Enrollment.Decisions
+@using DecisionService = BrightTime.Modules.Enrollment.Decisions.Decisions
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(DecisionService.OrgRead)]
+@inherits ConsoleComponent
+
+@* An activity's applications (D48, D59): the queue, deciding several at once, places and the waitlist. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.applications.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is not null)
+{
+    <PageTitle>@T.Format("provider.applications.queue_title", ("listing", _listing)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a> · <a href="/provider/orgs/@OrgId/applications">@_name</a></p>
+    <h1 dir="auto">@_listing</h1>
+    <OrgNav OrgId="@OrgId" Current="applications" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is "seats")
+    {
+        <p class="notice success" role="status">@T["provider.applications.seats.done"]</p>
+    }
+    else if (Done is "offered")
+    {
+        <p class="notice success" role="status">@T.Format("provider.applications.offer.done", ("count", Count ?? 0))</p>
+    }
+    else if (Done is "bulk")
+    {
+        <p class="notice success" role="status">@T.Format("provider.applications.bulk.done", ("count", Count ?? 0))</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+    @if (_left.Count > 0)
+    {
+        <div class="notice error" role="alert">
+            <p>@T["provider.applications.bulk.left"]</p>
+            <ul>
+                @foreach ((string who, string why) in _left)
+                {
+                    <li><span dir="auto">@who</span>: @why</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <section aria-labelledby="places">
+        <h2 id="places">@T["provider.applications.seats.title"]</h2>
+        @if (_seats is { } seats)
+        {
+            <p>
+                @T.Format("provider.applications.seats.taken", ("taken", seats.SeatsTaken), ("capacity", seats.Capacity))
+                @T.Format("provider.applications.seats.waitlist", ("count", seats.WaitlistTaken))
+            </p>
+        }
+        else
+        {
+            <p>@T["provider.applications.seats.none"]</p>
+        }
+
+        @if (_canSetSeats)
+        {
+            <form method="post" @formname="seats" @onsubmit="SetSeatsAsync" class="inline-actions">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="capacity">@T["provider.applications.seats.capacity"]</label>
+                    <input id="capacity" name="capacity" type="number" min="0" max="10000" required value="@(_seats?.Capacity.ToString(CultureInfo.InvariantCulture) ?? "")" />
+                </div>
+                <div class="field">
+                    <label for="waitlistCapacity">@T["provider.applications.seats.waitlist_capacity"]</label>
+                    <input id="waitlistCapacity" name="waitlistCapacity" type="number" min="0" max="10000" value="@(_seats?.WaitlistCapacity?.ToString(CultureInfo.InvariantCulture) ?? "")" />
+                </div>
+                <button type="submit">@T["provider.applications.seats.submit"]</button>
+            </form>
+        }
+
+        @if (_canDecide && _seats is { WaitlistTaken: > 0 })
+        {
+            <form method="post" @formname="offer" @onsubmit="OfferAsync" class="inline-actions">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="offerCount">@T["provider.applications.offer.count"]</label>
+                    <input id="offerCount" name="count" type="number" min="1" max="50" value="1" required />
+                </div>
+                <button type="submit">@T["provider.applications.offer.submit"]</button>
+            </form>
+        }
+    </section>
+
+    <section aria-labelledby="queue">
+        <h2 id="queue">@T["provider.nav.applications"]</h2>
+        <nav class="filters" aria-label="@T["provider.applications.filter"]">
+            <ul>
+                @foreach (string status in Filters)
+                {
+                    <li>
+                        <a href="@Link(status)" aria-current="@((Status ?? "") == status ? "page" : null)">
+                            @(status.Length == 0 ? T["provider.applications.filter.all"] : T["provider.applications.status." + status])
+                        </a>
+                    </li>
+                }
+            </ul>
+        </nav>
+
+        @if (_queue.Count == 0)
+        {
+            <p>@T["provider.applications.empty"]</p>
+        }
+        else
+        {
+            <form method="post" @formname="bulk" @onsubmit="BulkAsync">
+                <AntiforgeryToken />
+                <div class="table-scroll">
+                    <table class="applications">
+                        <thead>
+                            <tr>
+                                @if (_canDecide)
+                                {
+                                    <th scope="col"><span class="visually-hidden">@T["provider.applications.col.select"]</span></th>
+                                }
+                                <th scope="col">@T["provider.applications.col.applicant"]</th>
+                                <th scope="col">@T["provider.applications.col.status"]</th>
+                                <th scope="col">@T["provider.applications.col.submitted"]</th>
+                                <th scope="col">@T["provider.applications.col.eligible"]</th>
+                                <th scope="col">@T["provider.applications.col.position"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (OrgApplicationSummary a in _queue)
+                            {
+                                string who = Who(a.FirstName, a.LastName);
+                                <tr>
+                                    @if (_canDecide)
+                                    {
+                                        <td><input type="checkbox" name="ids" value="@a.Id" id="@($"pick-{a.Id:N}")" aria-label="@T.Format("provider.applications.select_one", ("name", who))" /></td>
+                                    }
+                                    <td><a href="/provider/orgs/@OrgId/applications/@a.Id" dir="auto">@who</a></td>
+                                    <td>@T["provider.applications.status." + a.Status]</td>
+                                    <td>@(a.SubmittedAt is { } at ? T.DateShort(at) : "")</td>
+                                    <td>@T["provider.applications.eligible." + (a.IsEligible switch { true => "yes", false => "no", null => "unknown" })]</td>
+                                    <td>@(a.WaitlistPosition?.ToString(CultureInfo.InvariantCulture) ?? "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (_canDecide)
+                {
+                    <fieldset class="bulk">
+                        <legend>@T["provider.applications.bulk.title"]</legend>
+                        <div class="field">
+                            <label for="bulkDecision">@T["provider.applications.decision"]</label>
+                            <select id="bulkDecision" name="decision">
+                                @foreach (string decision in DecisionChoices)
+                                {
+                                    <option value="@decision">@T["provider.applications.decision." + decision]</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="bulkNote">@T["provider.applications.note"]</label>
+                            <textarea id="bulkNote" name="note" maxlength="@DecisionService.MaxNoteLength" rows="2"></textarea>
+                        </div>
+                        <button type="submit">@T["provider.applications.bulk.submit"]</button>
+                    </fieldset>
+                }
+            </form>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    [SupplyParameterFromQuery(Name = "count")] public int? Count { get; set; }
+
+    private static readonly string[] Filters =
+        ["", ApplicationStatuses.Submitted, ApplicationStatuses.UnderReview, ApplicationStatuses.Waitlisted, ApplicationStatuses.Offered,
+         ApplicationStatuses.Accepted, ApplicationStatuses.Declined, ApplicationStatuses.Withdrawn];
+
+    private static readonly string[] DecisionChoices =
+        [DecisionService.Accept, DecisionService.Waitlist, DecisionService.Decline, DecisionService.Review];
+
+    private string? _name;
+    private string? _listing;
+    private SeatView? _seats;
+    private IReadOnlyList<OrgApplicationSummary> _queue = [];
+    private bool _canDecide;
+    private bool _canSetSeats;
+    private string? _problem;
+    private List<(string Who, string Why)> _left = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    private string Page => $"/provider/orgs/{OrgId}/listings/{ListingId}/applications";
+
+    private string Link(string status) => status.Length == 0 ? Page : $"{Page}?status={status}";
+
+    private string Who(string? first, string? last) =>
+        first is null && last is null ? T["provider.applications.not_shared"] : $"{first} {last}".Trim();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Applications.View))
+        {
+            Get<AuditTrail>().Record(new AuditAccess { Action = DecisionService.OrgRead, Outcome = AuditOutcome.Deny, SubjectKind = "application", ActorOrgId = Org, Reason = "decision.forbidden" });
+            Forbid();
+            return;
+        }
+
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code) is not { } listing || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing.Title;
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        _canDecide = await CanActForAsync(Org, Permissions.Applications.Decide);
+        _canSetSeats = await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        DecisionService decisions = Get<DecisionService>();
+        Result<SeatView?> seats = await decisions.SeatsAsync(Org, ListingId);
+        _seats = seats.IsSuccess ? seats.Value : null;
+        string? status = Filters.Contains(Status ?? "") && Status is { Length: > 0 } s ? s : null;
+        Result<IReadOnlyList<OrgApplicationSummary>> queue = await decisions.QueueAsync(Org, ListingId, status);
+        _queue = queue.IsSuccess ? queue.Value : [];
+    }
+
+    private async Task BulkAsync()
+    {
+        if (!_canDecide)
+        {
+            return;
+        }
+
+        Guid[] ids = [.. HttpContext.Request.Form["ids"].Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => g != Guid.Empty)];
+        if (ids.Length == 0)
+        {
+            _problem = T["provider.applications.bulk.none_selected"];
+            return;
+        }
+
+        string note = FormValue("note").Trim();
+        Result<IReadOnlyList<BulkOutcome>> outcomes = await Get<DecisionService>().BulkDecideAsync(Org, Actor, ids, FormValue("decision"), note.Length == 0 ? null : note);
+        if (!outcomes.IsSuccess)
+        {
+            _problem = T.Error(outcomes.Error);
+            return;
+        }
+
+        List<BulkOutcome> refused = [.. outcomes.Value.Where(o => o.Error is not null)];
+        foreach (BulkOutcome o in refused)
+        {
+            // A refused item leaves a row too, naming why, as the API's bulk decision does.
+            Get<AuditTrail>().Record(new AuditAccess { Action = DecisionService.Decided, Outcome = AuditOutcome.Deny, SubjectKind = "application", SubjectIds = [o.Id], ActorOrgId = Org, Reason = o.Error });
+        }
+
+        int decided = outcomes.Value.Count - refused.Count;
+        if (refused.Count == 0)
+        {
+            Navigation.NavigateTo($"{Page}?done=bulk&count={decided}");
+            return;
+        }
+
+        // Some were left alone: say which and why, on the page, with the queue as it now stands.
+        await LoadAsync();
+        Dictionary<Guid, OrgApplicationSummary> byId = _queue.ToDictionary(a => a.Id);
+        _left = [.. refused.Select(o => (byId.TryGetValue(o.Id, out OrgApplicationSummary? a) ? Who(a.FirstName, a.LastName) : T["provider.applications.not_shared"],
+            T.Has("error." + o.Error) ? T["error." + o.Error] : o.Error!))];
+        if (decided > 0)
+        {
+            _problem = T.Format("provider.applications.bulk.done", ("count", decided));
+        }
+    }
+
+    private async Task OfferAsync()
+    {
+        if (!_canDecide)
+        {
+            return;
+        }
+
+        int count = int.TryParse(FormValue("count"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : 0;
+        Result<IReadOnlyList<Guid>> offered = await Get<DecisionService>().OfferAsync(Org, Actor, ListingId, count);
+        if (!offered.IsSuccess)
+        {
+            _problem = T.Error(offered.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"{Page}?done=offered&count={offered.Value.Count}");
+    }
+
+    private async Task SetSeatsAsync()
+    {
+        if (!_canSetSeats)
+        {
+            return;
+        }
+
+        int capacity = int.TryParse(FormValue("capacity"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int c) ? c : -1;
+        int? waitlist = int.TryParse(FormValue("waitlistCapacity"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int w) ? w : null;
+        Result<SeatView> set = await Get<DecisionService>().SetSeatsAsync(Org, ListingId, capacity, waitlist);
+        if (!set.IsSuccess)
+        {
+            _problem = T.Error(set.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"{Page}?done=seats");
+    }
+}

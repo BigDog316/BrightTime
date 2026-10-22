@@ -1888,6 +1888,39 @@ and reports. docs/plan/06 puts them in the provider console. This starts that wo
   4. registration forms, eligibility and waivers;
   5. messaging.
 
+### D59 — Applications in the provider console (**proposed 2026-10-22**)
+
+The first screen on D58's list. It calls D48's `Decisions` service unchanged.
+- **Three pages** under a new Applications tab, shown to holders of `applications.view`:
+  - `/provider/orgs/{orgId}/applications` lists the organisation's activities, drafts left out.
+    It reads no application, so it audits nothing.
+  - `/provider/orgs/{orgId}/listings/{listingId}/applications` shows an activity's queue,
+    filterable by status.
+    - Each row shows the applicant's name only where the family's live share gives it (otherwise
+      "Name not shared"), the status, the date applied, the eligibility verdict and the waitlist
+      place.
+    - Places taken and the waitlist sit above the queue. Owners and admins set places there
+      (`orgs.edit`, as the API's seats route).
+    - With `applications.decide`, staff tick applications and decide them together, and offer
+      freed places to the waitlist.
+  - `/provider/orgs/{orgId}/applications/{id}` shows one application:
+    - what the share allows (name, and birth date only if shared);
+    - each eligibility rule (must be met or advice only) and whether it is met;
+    - the answers, worded with the form's own labels and choices, sensitive ones marked;
+    - the decision and its note.
+    - With `applications.decide`, the page has a form to accept, waitlist, decline or mark as being
+      reviewed, with a note.
+- **Bulk decisions say what they left.** Each application is decided on its own merits (D48). The
+  page reports how many were decided, and names each one left as it was with the reason (no
+  place left, already decided). Each refusal is audited, as the API's bulk route does.
+- **Audit:** the queue and application pages declare `[YouthRecord]`. The `Decisions` service
+  writes the reads and decisions; the pages audit their own refusals (another organisation's staff,
+  a decision refused).
+- **Found while building:** a waitlisting keeps its note but sets no decided date, so the note
+  has its own row rather than hanging off the date.
+- **Not yet:** paging past 500 applications, sorting, and the family's side in the console.
+  Families use the app.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

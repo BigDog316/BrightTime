@@ -1,0 +1,222 @@
+@page "/provider/orgs/{OrgId:guid}/applications/{ApplicationId:guid}"
+@using System.Globalization
+@using System.Text.Json
+@using BrightTime.Infrastructure.Auditing
+@using BrightTime.Modules.Enrollment.Decisions
+@using BrightTime.Modules.Enrollment.Eligibility
+@using BrightTime.Modules.Enrollment.Forms
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@using DecisionService = BrightTime.Modules.Enrollment.Decisions.Decisions
+@attribute [Authorize]
+@attribute [YouthRecord(DecisionService.OrgRead)]
+@inherits ConsoleComponent
+
+@* One application as the organisation sees it (D48, D59): what the family's share allows, the eligibility verdict, the answers, and the decision. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.applications.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_view is { } a)
+{
+    string who = a.FirstName is null && a.LastName is null ? T["provider.applications.not_shared"] : $"{a.FirstName} {a.LastName}".Trim();
+    <PageTitle>@T.Format("provider.applications.one_title", ("listing", _listing ?? "")) · BrightTime</PageTitle>
+
+    <p class="eyebrow">
+        <a href="/provider/orgs/@OrgId/listings/@a.ListingId/applications">@T.Format("provider.applications.back", ("listing", _listing ?? ""))</a>
+    </p>
+    <h1 dir="auto">@who</h1>
+    <OrgNav OrgId="@OrgId" Current="applications" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is "decided")
+    {
+        <p class="notice success" role="status">@T["provider.applications.decide.done"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <dl class="facts">
+        <dt>@T["provider.applications.col.status"]</dt>
+        <dd>@T["provider.applications.status." + a.Status]@(a.WaitlistPosition is { } place ? " · " + T.Format("provider.applications.position", ("position", place)) : "")</dd>
+        @if (a.SubmittedAt is { } submitted)
+        {
+            <dt>@T["provider.applications.col.submitted"]</dt>
+            <dd>@T.Date(submitted)</dd>
+        }
+        @if (a.DateOfBirth is { } dob)
+        {
+            <dt>@T["provider.applications.dob"]</dt>
+            <dd>@T.DateShort(dob)</dd>
+        }
+        @if (a.DecidedAt is { } decided)
+        {
+            <dt>@T["provider.applications.decided"]</dt>
+            <dd>@T.Date(decided)</dd>
+        }
+        @if (a.DecisionNote is { Length: > 0 } note)
+        {
+            <dt>@T["provider.applications.decision_note"]</dt>
+            <dd dir="auto">@note</dd>
+        }
+    </dl>
+
+    <section aria-labelledby="eligibility">
+        <h2 id="eligibility">@T["provider.applications.eligibility"]</h2>
+        <p>@T["provider.applications.eligible." + (a.Eligibility.IsEligible switch { true => "yes", false => "no", null => "unknown" })]</p>
+        @if (a.Eligibility.Rules.Count > 0)
+        {
+            <ul>
+                @foreach (RuleOutcome rule in a.Eligibility.Rules)
+                {
+                    <li>
+                        @T["provider.applications.rule." + rule.Kind] (@T[rule.IsHard ? "provider.applications.rule.hard" : "provider.applications.rule.advisory"]):
+                        @T["provider.applications.met." + (rule.Met switch { true => "yes", false => "no", null => "unknown" })]
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="answers">
+        <h2 id="answers">@T["provider.applications.answers"]</h2>
+        @if (a.Answers.Count == 0)
+        {
+            <p>@T["provider.applications.no_answers"]</p>
+        }
+        else
+        {
+            <dl class="answers">
+                @foreach ((string key, JsonElement value) in a.Answers)
+                {
+                    PublicQuestion? question = _questions.GetValueOrDefault(key);
+                    <dt dir="auto">@(question?.Label ?? key)@(question?.Sensitive == true ? " · " + T["provider.applications.sensitive"] : "")</dt>
+                    <dd dir="auto">@Answer(question, value)</dd>
+                }
+            </dl>
+        }
+    </section>
+
+    @if (_canDecide)
+    {
+        <section aria-labelledby="decide">
+            <h2 id="decide">@T["provider.applications.decide.title"]</h2>
+            <form method="post" @formname="decide" @onsubmit="DecideAsync">
+                <AntiforgeryToken />
+                <fieldset>
+                    <legend>@T["provider.applications.decision"]</legend>
+                    @foreach (string decision in DecisionChoices)
+                    {
+                        <label class="choice">
+                            <input type="radio" name="decision" value="@decision" required />
+                            @T["provider.applications.decision." + decision]
+                        </label>
+                    }
+                </fieldset>
+                <div class="field">
+                    <label for="note">@T["provider.applications.note"]</label>
+                    <textarea id="note" name="note" maxlength="@DecisionService.MaxNoteLength" rows="3"></textarea>
+                </div>
+                <button type="submit">@T["provider.applications.decide.submit"]</button>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ApplicationId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private static readonly string[] DecisionChoices = [DecisionService.Accept, DecisionService.Waitlist, DecisionService.Decline, DecisionService.Review];
+
+    private OrgApplicationView? _view;
+    private string? _listing;
+    private Dictionary<string, PublicQuestion> _questions = new(StringComparer.Ordinal);
+    private bool _canDecide;
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Applications.View))
+        {
+            Get<AuditTrail>().Record(new AuditAccess { Action = DecisionService.OrgRead, Outcome = AuditOutcome.Deny, SubjectKind = "application", ActorOrgId = Org, Reason = "decision.forbidden" });
+            Forbid();
+            return;
+        }
+
+        _canDecide = await CanActForAsync(Org, Permissions.Applications.Decide);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Result<OrgApplicationView> found = await Get<DecisionService>().GetAsync(Org, ApplicationId);
+        if (!found.IsSuccess)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _view = found.Value;
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, _view.ListingId, Tenant.Locale.Code) is { } listing)
+        {
+            _listing = listing.Title;
+            if (await Get<FormDefinitions>().ForListingAsync(listing.Slug, Tenant.Locale.Code) is { } form)
+            {
+                _questions = form.Questions.ToDictionary(q => q.Key, StringComparer.Ordinal);
+            }
+        }
+    }
+
+    /// <summary>An answer in words: a choice by its label, yes or no, a number or text as given.</summary>
+    private string Answer(PublicQuestion? question, JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.True => T["provider.applications.answer.yes"],
+        JsonValueKind.False => T["provider.applications.answer.no"],
+        JsonValueKind.String => Choice(question, value.GetString() ?? ""),
+        JsonValueKind.Array => string.Join(", ", value.EnumerateArray().Select(v => v.ValueKind == JsonValueKind.String ? Choice(question, v.GetString() ?? "") : v.ToString())),
+        JsonValueKind.Null or JsonValueKind.Undefined => "",
+        _ => value.ToString(),
+    };
+
+    private static string Choice(PublicQuestion? question, string key) =>
+        question?.Choices?.FirstOrDefault(c => c.Key == key)?.Label ?? key;
+
+    private async Task DecideAsync()
+    {
+        if (!_canDecide || _view is null)
+        {
+            return;
+        }
+
+        string note = FormValue("note").Trim();
+        Result<OrgApplicationView> decided = await Get<DecisionService>().DecideAsync(Org, Actor, ApplicationId, FormValue("decision"), note.Length == 0 ? null : note);
+        if (!decided.IsSuccess)
+        {
+            Get<AuditTrail>().Record(new AuditAccess { Action = DecisionService.Decided, Outcome = AuditOutcome.Deny, SubjectKind = "application", SubjectIds = [ApplicationId], ActorOrgId = Org, Reason = decided.Error.Code });
+            _problem = T.Error(decided.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/applications/{ApplicationId}?done=decided");
+    }
+}

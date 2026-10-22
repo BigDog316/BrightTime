@@ -143,8 +143,11 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   CSV. They are made when asked for and never stored. Names appear only where the family shares
   them, and participation hides small counts. Each run is recorded and audited.
 - **The provider console** (D58) now runs Enrollment and Attendance on the same modules as the
-  API. Its first M3 screen is Reports, which downloads a report straight away. Applications,
-  rosters and attendance, fees and payments, forms and messaging follow, in that order.
+  API. Its first M3 screen is Reports, which downloads a report straight away.
+- **Applications in the console** (D59): each activity's queue, with names only as families
+  share them. Staff set places, decide singly or in bulk (the page names any left as they were,
+  and why), and offer freed places to the waitlist. Rosters and attendance, fees and payments,
+  forms and messaging follow, in that order.
 - Next in M3b: the funder packet (Q10). Rebuild the compose volume: the schema and the role permissions
   changed.
 
@@ -152,7 +155,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D58 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 on 2026-10-22).
+Every decision through D58 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 on 2026-10-22). D59 (applications in the console) is proposed.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

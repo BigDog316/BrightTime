@@ -2034,7 +2034,7 @@ Both are under the Forms tab, for owners and admins (`orgs.edit` as admin, as th
 - **Not yet:** editing a rule in place (remove it and add it again), and who signed a waiver,
   which the organisation sees on each application.
 
-### D64 — Messaging in the provider console (**proposed 2026-10-22**)
+### D64 — Messaging in the provider console (**accepted 2026-10-22**)
 
 The last of D58's list. It calls D53 and D54's `Conversations` unchanged, so every safety rule is
 the module's:

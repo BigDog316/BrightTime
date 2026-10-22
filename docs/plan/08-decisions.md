@@ -1736,7 +1736,7 @@ provider gateway and its webhooks come in D56.
   - fees by cadence over time (each payment is one charge);
   - the app's and the console's payment screens.
 
-### D56 — Stripe, believed only by signature and applied by the worker (**proposed 2026-10-21**)
+### D56 — Stripe, believed only by signature and applied by the worker (**accepted 2026-10-21**)
 
 Q6 is answered: Stripe. This is the provider gateway D55 left out.
 - **The gateway** (`StripePaymentGateway`) calls Stripe's HTTP API directly, with no SDK.

@@ -146,8 +146,8 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D55 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D55 on 2026-10-21). D56 (Stripe, Q6 answered) is proposed.
-D56 asks two things: what to do when a waived fee is paid anyway (it's logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
+Every decision through D56 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D56 on 2026-10-21).
+D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.
 Counsel should also review the terms' draft text (`AccountTerms.Current`).
 Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minute refresh idle stays for now.

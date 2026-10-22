@@ -1799,7 +1799,7 @@ Q6 is answered: Stripe. This is the provider gateway D55 left out.
   - partial refunds;
   - the app's and the console's card screens (Stripe's element with the client secret).
 
-### D57 — Provider reports, made on request and never stored (**proposed 2026-10-21**)
+### D57 — Provider reports, made on request and never stored (**accepted 2026-10-21**)
 
 M3b's reports, first slice. docs/plan/09 names the provider reports (roster, attendance,
 participation), so they are built now. The funder packet waits on Q10.

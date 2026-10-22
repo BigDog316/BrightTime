@@ -1979,7 +1979,7 @@ The third screen on D58's list. It calls D55's `FeeSchedules` and `PaymentIntent
 - **Not yet:** refunds (D56), payments by date or status across activities, and editing a price
   level in place (remove it and add it again).
 
-### D62 — The form builder in the provider console (**proposed 2026-10-22**)
+### D62 — The form builder in the provider console (**accepted 2026-10-22**)
 
 The first part of D58's fourth item; eligibility rules and waivers follow. It calls D45's
 `FormDefinitions` unchanged.

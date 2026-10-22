@@ -169,7 +169,8 @@ public sealed class PaymentApiTests(ApiFixture api)
         await ProblemAsync(await admin.PutAsJsonAsync(fees, new { fees = new[] { new { label = "New season", amountCents = 45000, cadence = "seasonal", isDefault = true } } }, Ct),
             HttpStatusCode.Conflict, "fees.in_use");
         JsonElement changed = await JsonAsync(await admin.PutAsJsonAsync(fees, new { fees = new[] { new { id = season, label = "Summer session", amountCents = 42000, cadence = "seasonal", isDefault = true } } }, Ct));
-        (changed.GetArrayLength(), changed[0].GetProperty("amountCents").GetInt32()).ShouldBe((1, 42000));
+        (changed.GetArrayLength(), changed[0].GetProperty("amountCents").GetInt32(), changed[0].GetProperty("isDefault").GetBoolean()).ShouldBe((1, 42000, true));
+        (await api.ScalarAsync<bool>("select is_default from enrollment.fee_schedule where id = @f", ("f", season))).ShouldBeTrue("a fee changed in place stays the default");
         (await api.ScalarAsync<int>("select amount_cents from enrollment.payment_intent where id = @p", ("p", payment))).ShouldBe(10000, "a payment keeps its own amount");
     }
 

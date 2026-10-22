@@ -64,7 +64,8 @@ public sealed class FeeSchedules(EnrollmentDbContext db, ITenantContext tenant, 
                 return Result<IReadOnlyList<FeeView>>.Failure(invalid);
             }
 
-            List<FeeScheduleRecord> existing = await db.FeeSchedules.Where(f => f.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false);
+            // Untracked: the default is cleared below in bulk, and a tracked copy would hide that from the write that follows.
+            List<FeeScheduleRecord> existing = await db.FeeSchedules.AsNoTracking().Where(f => f.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false);
             if (fees.Any(f => f.Id is { } id && existing.All(e => e.Id != id)))
             {
                 return Result<IReadOnlyList<FeeView>>.Failure(Error.Validation("fees.unknown", "A fee id that isn't this listing's."));

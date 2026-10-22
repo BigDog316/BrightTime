@@ -54,13 +54,13 @@ public sealed partial class YouthAccountPagesTests(ConsoleFixture db)
             await other.SignInAsync(Admin(41));
             await other.GetAsync(page);
             other.Html.ShouldContain("isn&#x27;t for the account you&#x27;re signed in with");
-            other.Html.ShouldNotContain("Ada");
+            other.Html.ShouldNotContain("Philippa");
         }
 
         using Browser browser = db.NewBrowser();
         await browser.SignInAsync(guardian);
         await browser.GetAsync(page);
-        browser.Html.ShouldContain("Ada");
+        browser.Html.ShouldContain("Philippa");
         // The token field is there, and empty: the script fills it, never the server.
         string input = TokenInput().Match(browser.Html).Value;
         input.ShouldNotBeEmpty();
@@ -180,7 +180,7 @@ public sealed partial class YouthAccountPagesTests(ConsoleFixture db)
             insert into identity.app_user (id, tenant_id, user_name, normalized_user_name, security_stamp, concurrency_stamp, account_kind, status, birth_month, age_band)
             values (@c, @t, 'child-' || @c, upper('child-' || @c), 'stamp', 'concurrency', 'child', 'pending_consent',
                     date_trunc('month', now() - interval '7 years')::date, '6_8');
-            insert into identity.app_user_claim (user_id, claim_type, claim_value) values (@c, 'given_name', 'Ada');
+            insert into identity.app_user_claim (user_id, claim_type, claim_value) values (@c, 'given_name', 'Philippa');
             insert into identity.guardian_link (id, tenant_id, guardian_user_id, child_user_id, relationship, status, is_primary,
                                                 email_token_hash, email_token_issued_at, email_token_expires_at)
             values (@l, @t, @g, @c, 'parent', 'pending', true, sha256(@s), now(), now() + interval '3 days');

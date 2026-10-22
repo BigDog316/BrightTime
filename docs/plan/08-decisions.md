@@ -2008,6 +2008,32 @@ The first part of D58's fourth item; eligibility rules and waivers follow. It ca
   - a preview of the form as a family sees it;
   - eligibility rules and waivers (next).
 
+### D63 — Eligibility rules and waivers in the provider console (**proposed 2026-10-22**)
+
+The rest of D58's fourth item. It calls D46's `EligibilityRules` and D47's `Waivers` unchanged.
+Both are under the Forms tab, for owners and admins (`orgs.edit` as admin, as the API's routes).
+- **Eligibility:** `/provider/orgs/{orgId}/listings/{listingId}/eligibility`, linked for each
+  activity from the forms page.
+  - The rules are written out in words: "Age at the start: 9 to 12 (on 1 Jul 2027)", or a list of
+    neighbourhoods. Each is marked must be met or advice only, and can be removed.
+  - A rule is added by kind: an age or grade range (with the date an age is taken on), or
+    neighbourhoods chosen from the tenant's own. The service checks it; a backwards range comes
+    back as "Rule 3: …".
+  - **Try the rules:** a made-up date of birth, grade and neighbourhood run through the current
+    rules (`PreviewAsync`). It shows the verdict and each rule's outcome, saves nothing and reads
+    nobody real.
+- **Waivers:** `/provider/orgs/{orgId}/waivers` lists every version, and a new waiver is written
+  as a draft: a title, Markdown text, and whether a parent or guardian signs for anyone under 18.
+  - `/provider/orgs/{orgId}/waivers/{id}` edits a draft's text.
+  - A published version shows its text rendered and locked, because families sign that exact
+    text and its hash.
+  - A version can be published, revised into a new draft, or retired (refused while a listing asks
+    for it). It can be asked for on any of the organisation's listings, as required or optional,
+    and taken off again.
+  - The page counts signatures but shows nobody's.
+- **Not yet:** editing a rule in place (remove it and add it again), and who signed a waiver,
+  which the organisation sees on each application.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

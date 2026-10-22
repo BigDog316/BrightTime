@@ -1,0 +1,264 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/eligibility"
+@using System.Globalization
+@using BrightTime.Modules.Enrollment.Contracts
+@using BrightTime.Modules.Enrollment.Eligibility
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    An activity's eligibility rules (D46, D63): declarative, shown to a family before they apply,
+    and tried here against a made-up applicant before anyone real meets them.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.forms.denied"]</h1>
+    <p>@T["error.form.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is not null)
+{
+    <PageTitle>@T.Format("provider.eligibility.title", ("listing", _listing)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/forms">@T["provider.nav.forms"]</a></p>
+    <h1 dir="auto">@_listing</h1>
+    <OrgNav OrgId="@OrgId" Current="forms" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.eligibility.heading"]</h2>
+    <p class="hint">@T["provider.eligibility.intro"]</p>
+    @if (Done is "saved")
+    {
+        <p class="notice success" role="status">@T["provider.eligibility.saved"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_rules.Count == 0)
+    {
+        <p>@T["provider.eligibility.none"]</p>
+    }
+    else
+    {
+        <ul class="rules">
+            @foreach (RuleView rule in _rules)
+            {
+                <li>
+                    @Describe(rule.Kind, rule.Config) (@T[rule.IsHard ? "provider.applications.rule.hard" : "provider.applications.rule.advisory"])
+                    <form method="post" @formname="@($"remove-{rule.Id:N}")" @onsubmit="RemoveAsync" class="inline-actions">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="rule" value="@rule.Id" />
+                        <button type="submit" class="secondary">@T["provider.eligibility.remove"]</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_rules.Count < EligibilityRules.MaxRules)
+    {
+        <form method="post" @formname="add" @onsubmit="AddAsync" class="rule-form">
+            <AntiforgeryToken />
+            <fieldset>
+                <legend>@T["provider.eligibility.add"]</legend>
+                <div class="field">
+                    <label for="rule-kind">@T["provider.eligibility.kind"]</label>
+                    <select id="rule-kind" name="kind">
+                        @foreach (string kind in Kinds)
+                        {
+                            <option value="@kind">@T["provider.applications.rule." + kind]</option>
+                        }
+                    </select>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="rule-min">@T["provider.eligibility.min"]</label>
+                        <input id="rule-min" name="min" type="number" min="0" max="25" />
+                    </div>
+                    <div class="field">
+                        <label for="rule-max">@T["provider.eligibility.max"]</label>
+                        <input id="rule-max" name="max" type="number" min="0" max="25" />
+                    </div>
+                    <div class="field">
+                        <label for="rule-on">@T["provider.eligibility.on"]</label>
+                        <input id="rule-on" name="on" type="date" aria-describedby="rule-on-hint" />
+                        <p class="hint" id="rule-on-hint">@T["provider.eligibility.on_hint"]</p>
+                    </div>
+                </div>
+                <fieldset class="checkboxes">
+                    <legend>@T["provider.eligibility.neighbourhoods"]</legend>
+                    @foreach (NeighbourhoodShape n in _neighbourhoods)
+                    {
+                        <label class="choice"><input type="checkbox" name="neighbourhood" value="@n.Id" /> <span dir="auto">@n.Name</span></label>
+                    }
+                </fieldset>
+                <div class="field checkbox">
+                    <input id="rule-hard" name="hard" type="checkbox" value="true" checked />
+                    <label for="rule-hard">@T["provider.eligibility.hard"]</label>
+                </div>
+                <button type="submit">@T["provider.eligibility.add"]</button>
+            </fieldset>
+        </form>
+    }
+
+    <section aria-labelledby="try">
+        <h2 id="try">@T["provider.eligibility.try"]</h2>
+        <p class="hint">@T["provider.eligibility.try_hint"]</p>
+        <form method="post" @formname="try" @onsubmit="TryAsync" class="inline-actions">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="try-dob">@T["provider.applications.dob"]</label>
+                <input id="try-dob" name="dob" type="date" />
+            </div>
+            <div class="field">
+                <label for="try-grade">@T["provider.eligibility.grade"]</label>
+                <input id="try-grade" name="grade" type="number" min="-1" max="12" />
+            </div>
+            <div class="field">
+                <label for="try-neighbourhood">@T["provider.eligibility.lives_in"]</label>
+                <select id="try-neighbourhood" name="neighbourhood">
+                    <option value="">@T["provider.eligibility.not_said"]</option>
+                    @foreach (NeighbourhoodShape n in _neighbourhoods)
+                    {
+                        <option value="@n.Id" dir="auto">@n.Name</option>
+                    }
+                </select>
+            </div>
+            <button type="submit">@T["provider.eligibility.try_submit"]</button>
+        </form>
+        @if (_tried is { } result)
+        {
+            <div class="notice" role="status">
+                <p><strong>@T["provider.applications.col.eligible"]: @T["provider.applications.eligible." + (result.IsEligible switch { true => "yes", false => "no", null => "unknown" })]</strong></p>
+                <ul>
+                    @foreach (RuleOutcome o in result.Rules)
+                    {
+                        <li>@T["provider.applications.rule." + o.Kind]: @T["provider.applications.met." + (o.Met switch { true => "yes", false => "no", null => "unknown" })]</li>
+                    }
+                </ul>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private static readonly string[] Kinds = [EligibilityRuleKinds.AgeAtStart, EligibilityRuleKinds.GradeRange, EligibilityRuleKinds.NeighbourhoodIn];
+
+    private string? _listing;
+    private IReadOnlyList<RuleView> _rules = [];
+    private IReadOnlyList<NeighbourhoodShape> _neighbourhoods = [];
+    private EligibilityResult? _tried;
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    private static int? Int(string text) => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : null;
+
+    /// <summary>A rule in words: its kind and its range, or its neighbourhoods.</summary>
+    private string Describe(string kind, RuleConfig c)
+    {
+        string what = T["provider.applications.rule." + kind];
+        if (kind == EligibilityRuleKinds.NeighbourhoodIn)
+        {
+            HashSet<Guid> ids = [.. c.NeighbourhoodIds ?? []];
+            return $"{what}: {string.Join(", ", _neighbourhoods.Where(n => ids.Contains(n.Id)).Select(n => n.Name))}";
+        }
+
+        string range = (c.Min, c.Max) switch
+        {
+            ({ } min, { } max) => T.Format("provider.eligibility.between", ("min", min), ("max", max)),
+            ({ } min, null) => T.Format("provider.eligibility.at_least", ("min", min)),
+            (null, { } max) => T.Format("provider.eligibility.at_most", ("max", max)),
+            _ => "",
+        };
+        return c.On is { } on ? $"{what}: {range} ({T.Format("provider.eligibility.on_date", ("date", T.DateShort(on)))})" : $"{what}: {range}";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code) is not { } listing || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing.Title;
+        Result<IReadOnlyList<RuleView>> rules = await Get<EligibilityRules>().GetAsync(Org, ListingId);
+        _rules = rules.IsSuccess ? rules.Value : [];
+        _neighbourhoods = [.. (await Get<IGeographyQueries>().GetNeighbourhoodsAsync(Tenant.Locale.Code)).OrderBy(n => n.Name, StringComparer.CurrentCulture)];
+    }
+
+    private static RuleInput Input(RuleView r) => new(r.Kind, r.Config, r.IsHard);
+
+    private async Task SaveAsync(List<RuleInput> rules)
+    {
+        Result<IReadOnlyList<RuleView>> saved = await Get<EligibilityRules>().SetAsync(Org, ListingId, rules);
+        if (!saved.IsSuccess)
+        {
+            _problem = T.Error(saved.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/eligibility?done=saved");
+    }
+
+    private async Task AddAsync()
+    {
+        string kind = FormValue("kind");
+        RuleConfig config = kind == EligibilityRuleKinds.NeighbourhoodIn
+            ? new RuleConfig(NeighbourhoodIds: [.. HttpContext.Request.Form["neighbourhood"].Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => g != Guid.Empty)])
+            : new RuleConfig(Int(FormValue("min")), Int(FormValue("max")),
+                kind == EligibilityRuleKinds.AgeAtStart && DateOnly.TryParseExact(FormValue("on"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly on) ? on : null);
+        await SaveAsync([.. _rules.Select(Input), new RuleInput(kind, config, FormValue("hard") == "true")]);
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (Guid.TryParse(FormValue("rule"), out Guid id))
+        {
+            await SaveAsync([.. _rules.Where(r => r.Id != id).Select(Input)]);
+        }
+    }
+
+    /// <summary>The current rules against a made-up applicant. Nothing is saved, and nobody real is read.</summary>
+    private async Task TryAsync()
+    {
+        DateOnly? dob = DateOnly.TryParseExact(FormValue("dob"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly d) ? d : null;
+        short? grade = short.TryParse(FormValue("grade"), NumberStyles.Integer, CultureInfo.InvariantCulture, out short g) ? g : null;
+        Guid? lives = Guid.TryParse(FormValue("neighbourhood"), out Guid n) ? n : null;
+        Result<EligibilityResult> tried = await Get<EligibilityRules>().PreviewAsync(Org, ListingId, null, new Applicant(dob, grade, lives));
+        if (tried.IsSuccess)
+        {
+            _tried = tried.Value;
+        }
+        else
+        {
+            _problem = T.Error(tried.Error);
+        }
+    }
+}

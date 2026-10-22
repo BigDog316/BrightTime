@@ -1,0 +1,117 @@
+@page "/provider/orgs/{OrgId:guid}/waivers"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Enrollment.Waivers
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@* An organisation's waivers (D47, D63): every version, and a new one written as a draft. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.forms.denied"]</h1>
+    <p>@T["error.form.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.waivers.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/forms">@T["provider.nav.forms"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="forms" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.waivers.heading"]</h2>
+    <p class="hint">@T["provider.waivers.intro"]</p>
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_waivers.Count == 0)
+    {
+        <p>@T["provider.waivers.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list">
+            @foreach (WaiverSummary w in _waivers)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/waivers/@w.Id" dir="auto">@w.Title</a>
+                    <span class="note">@T.Format("provider.forms.version", ("version", w.Version)) · @T["provider.forms.status." + w.Status]</span>
+                </li>
+            }
+        </ul>
+    }
+
+    <form method="post" @formname="create" @onsubmit="CreateAsync" class="waiver-form">
+        <AntiforgeryToken />
+        <fieldset>
+            <legend>@T["provider.waivers.new"]</legend>
+            <div class="field">
+                <label for="waiver-title">@T["provider.waivers.title_label"]</label>
+                <input id="waiver-title" name="title" maxlength="@Waivers.MaxTitleLength" required dir="auto" />
+            </div>
+            <div class="field">
+                <label for="waiver-body">@T["provider.waivers.body"]</label>
+                <textarea id="waiver-body" name="body" rows="10" maxlength="@Waivers.MaxBodyLength" required dir="auto" aria-describedby="waiver-body-hint"></textarea>
+                <p class="hint" id="waiver-body-hint">@T["provider.waivers.body_hint"]</p>
+            </div>
+            <div class="field checkbox">
+                <input id="waiver-guardian" name="guardian" type="checkbox" value="true" checked />
+                <label for="waiver-guardian">@T["provider.waivers.guardian"]</label>
+            </div>
+            <button type="submit">@T["provider.waivers.create"]</button>
+        </fieldset>
+    </form>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<WaiverSummary> _waivers = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _waivers = await Get<Waivers>().ListAsync(Org);
+    }
+
+    private async Task CreateAsync()
+    {
+        Result<WaiverView> created = await Get<Waivers>().CreateAsync(Org, FormValue("title").Trim(), FormValue("body"), FormValue("guardian") == "true");
+        if (!created.IsSuccess)
+        {
+            _problem = T.Error(created.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/waivers/{created.Value.Id}?done=created");
+    }
+}

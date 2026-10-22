@@ -1,0 +1,228 @@
+@page "/provider/orgs/{OrgId:guid}/waivers/{WaiverId:guid}"
+@using BrightTime.Modules.Enrollment.Waivers
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using BrightTime.Web.Components.Shared
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    One version of a waiver (D47, D63). A draft's text can change; a published version never
+    does, because families sign that exact text. It is attached to listings as required or
+    optional, and the page counts the signatures without showing anyone's.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.forms.denied"]</h1>
+    <p>@T["error.form.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_waiver is { } w)
+{
+    bool draft = w.Status == Waivers.Draft;
+    <PageTitle>@w.Title · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/waivers">@T["provider.waivers.heading"]</a></p>
+    <h1 dir="auto">@w.Title</h1>
+    <p>
+        @T.Format("provider.forms.version", ("version", w.Version)) · @T["provider.forms.status." + w.Status] ·
+        @T.Format("provider.waivers.signatures", ("count", w.SignatureCount))
+    </p>
+    <OrgNav OrgId="@OrgId" Current="forms" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is { Length: > 0 } done && T.Has("provider.waivers.done." + done))
+    {
+        <p class="notice success" role="status">@T["provider.waivers.done." + done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p>@T[w.RequiresGuardian ? "provider.waivers.signed_by_guardian" : "provider.waivers.signed_by_anyone"]</p>
+
+    @if (draft)
+    {
+        <form method="post" @formname="text" @onsubmit="SaveAsync" class="waiver-form">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="waiver-body">@T["provider.waivers.body"]</label>
+                <textarea id="waiver-body" name="body" rows="14" maxlength="@Waivers.MaxBodyLength" required dir="auto">@w.BodyMarkdown</textarea>
+            </div>
+            <div class="field checkbox">
+                <input id="waiver-guardian" name="guardian" type="checkbox" value="true" checked="@w.RequiresGuardian" />
+                <label for="waiver-guardian">@T["provider.waivers.guardian"]</label>
+            </div>
+            <button type="submit">@T["provider.waivers.save"]</button>
+        </form>
+    }
+    else
+    {
+        <p class="hint">@T["provider.waivers.locked"]</p>
+        <div class="waiver-text" dir="auto"><MarkdownView Source="@w.BodyMarkdown" /></div>
+    }
+
+    <section aria-labelledby="version">
+        <h2 id="version">@T["provider.forms.this_version"]</h2>
+        <div class="inline-actions">
+            @if (draft)
+            {
+                <form method="post" @formname="publish" @onsubmit="PublishAsync">
+                    <AntiforgeryToken />
+                    <button type="submit">@T["provider.forms.publish"]</button>
+                </form>
+            }
+            else
+            {
+                <form method="post" @formname="revise" @onsubmit="ReviseAsync">
+                    <AntiforgeryToken />
+                    <button type="submit">@T["provider.forms.revise"]</button>
+                </form>
+                @if (w.Status == Waivers.Published)
+                {
+                    <form method="post" @formname="retire" @onsubmit="RetireAsync">
+                        <AntiforgeryToken />
+                        <button type="submit" class="secondary">@T["provider.forms.retire"]</button>
+                    </form>
+                }
+            }
+        </div>
+    </section>
+
+    <section aria-labelledby="listings">
+        <h2 id="listings">@T["provider.waivers.listings"]</h2>
+        @if (w.Listings.Count == 0)
+        {
+            <p>@T["provider.waivers.no_listings"]</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (WaiverListing l in w.Listings)
+                {
+                    <li>
+                        <span dir="auto">@(_titles.GetValueOrDefault(l.ListingId) ?? l.ListingId.ToString())</span>
+                        · @T[l.IsRequired ? "provider.waivers.required" : "provider.waivers.optional"]
+                        <form method="post" @formname="@($"detach-{l.ListingId:N}")" @onsubmit="DetachAsync" class="inline-actions">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="listing" value="@l.ListingId" />
+                            <button type="submit" class="secondary">@T["provider.forms.detach"]</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (w.Status == Waivers.Published && _titles.Keys.Except(w.Listings.Select(l => l.ListingId)).Any())
+        {
+            <form method="post" @formname="attach" @onsubmit="AttachAsync" class="inline-actions">
+                <AntiforgeryToken />
+                <label for="attach-listing">@T["provider.waivers.ask_on"]</label>
+                <select id="attach-listing" name="listing">
+                    @foreach ((Guid id, string title) in _titles.Where(t => w.Listings.All(l => l.ListingId != t.Key)).OrderBy(t => t.Value, StringComparer.CurrentCulture))
+                    {
+                        <option value="@id" dir="auto">@title</option>
+                    }
+                </select>
+                <label class="choice"><input type="checkbox" name="required" value="true" checked /> @T["provider.waivers.required"]</label>
+                <button type="submit">@T["provider.waivers.attach"]</button>
+            </form>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid WaiverId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private WaiverView? _waiver;
+    private Dictionary<Guid, string> _titles = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Organisations.Edit, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        Result<WaiverView> found = await Get<Waivers>().GetAsync(Org, WaiverId);
+        if (!found.IsSuccess)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _waiver = found.Value;
+        _titles = (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+            .Where(l => l.Status != ListingStatus.Archived)
+            .ToDictionary(l => l.Id, l => l.Title);
+    }
+
+    private string Here(string done) => $"/provider/orgs/{OrgId}/waivers/{WaiverId}?done={done}";
+
+    private void Answer(Result result, string done)
+    {
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo(Here(done));
+    }
+
+    private void Answer(Result<WaiverView> result, string done) => Answer(result.IsSuccess ? Result.Success() : Result.Failure(result.Error), done);
+
+    private async Task SaveAsync() => Answer(await Get<Waivers>().UpdateAsync(Org, WaiverId, FormValue("body"), FormValue("guardian") == "true"), "saved");
+
+    private async Task PublishAsync() => Answer(await Get<Waivers>().PublishAsync(Org, WaiverId), "published");
+
+    private async Task RetireAsync() => Answer(await Get<Waivers>().RetireAsync(Org, WaiverId), "retired");
+
+    /// <summary>The next version, as a draft: the page moves to it.</summary>
+    private async Task ReviseAsync()
+    {
+        Result<WaiverView> next = await Get<Waivers>().ReviseAsync(Org, WaiverId);
+        if (!next.IsSuccess)
+        {
+            _problem = T.Error(next.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/waivers/{next.Value.Id}?done=revised");
+    }
+
+    private async Task AttachAsync()
+    {
+        if (Guid.TryParse(FormValue("listing"), out Guid listing))
+        {
+            Answer(await Get<Waivers>().AttachAsync(Org, listing, WaiverId, FormValue("required") == "true"), "attached");
+        }
+    }
+
+    private async Task DetachAsync()
+    {
+        if (Guid.TryParse(FormValue("listing"), out Guid listing))
+        {
+            Answer(await Get<Waivers>().DetachAsync(Org, listing, WaiverId), "detached");
+        }
+    }
+}

@@ -64,7 +64,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
     }
 
     /// <summary>Route parameters for records the seed has none of: families make them.</summary>
-    private static readonly string[] Unseeded = ["ApplicationId", "FormId"];
+    private static readonly string[] Unseeded = ["ApplicationId", "FormId", "WaiverId"];
 
     [Fact]
     public async Task The_organisers_pages_refuse_providers_and_open_for_organisers()
@@ -121,7 +121,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
             "OrgId" => Victim.Id.ToString(),
             "ListingId" => listing.ToString(),
             "SiteId" => site.ToString(),
-            "ApplicationId" or "FormId" => Guid.Empty.ToString(),
+            "ApplicationId" or "FormId" or "WaiverId" => Guid.Empty.ToString(),
             "Vocabulary" => "category",
             "TermId" => KettleTaxonomy.TermId("category", "stem").ToString(),
             string other => throw new InvalidOperationException($"{route}: the matrix cannot fill {{{other}}}; add a value for it."),

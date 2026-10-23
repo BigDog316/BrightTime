@@ -2066,7 +2066,7 @@ be messaged.
 - **Not yet:** an organisation-wide inbox for admins of conversations they aren't in, closing a
   conversation, and SMS (Q9).
 
-### D65 — M4 begins: participation from attendance, and the young person's portfolio (**proposed 2026-10-22**)
+### D65 — M4 begins: participation from attendance, and the young person's portfolio (**accepted 2026-10-22**)
 
 M4's first slice, in a new Learning module. It may reference the contracts of Platform,
 Identity, Directory, Opportunities, Enrollment and Attendance (docs/plan/01's DAG), and the

@@ -1,6 +1,8 @@
 # Handoff
 
 Where the work stands, for picking it up on another machine or in a new session.
+User guides and technical documentation for the application as built are in
+[README.md](README.md).
 Written 2026-10-18 at commit c97444d. Updated on the Windows machine through 2026-10-20 (M2's
 server work: D30 to D41; M3 from D42).
 

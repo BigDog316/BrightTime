@@ -244,6 +244,7 @@ public static class LearningModule
     {
         services.AddScoped<ParticipationProjector>();
         services.AddScoped<Portfolios>();
+        services.AddScoped<Badges.Badges>();
         return services;
     }
 

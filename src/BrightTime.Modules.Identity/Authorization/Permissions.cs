@@ -104,6 +104,18 @@ public static class Permissions
         public const string SendToFamily = "messages.send_to_family";
     }
 
+    public static class Badges
+    {
+        /// <summary>Writing and publishing the organisation's badges (D66).</summary>
+        public const string Define = "badges.define";
+
+        /// <summary>Awarding the organisation's published badges to young people who took part.</summary>
+        public const string Issue = "badges.issue";
+
+        /// <summary>Revoking a badge the organisation awarded, with a reason.</summary>
+        public const string Revoke = "badges.revoke";
+    }
+
     public static class Reports
     {
         /// <summary>Running the organisation's own reports: roster, attendance and participation (D57).</summary>
@@ -168,6 +180,7 @@ public static class Permissions
         Messages.SendToFamily,
         Payments.Waive,
         Reports.RunProvider,
+        Badges.Define, Badges.Issue, Badges.Revoke,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

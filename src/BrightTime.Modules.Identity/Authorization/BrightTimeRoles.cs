@@ -67,6 +67,7 @@ public static class BrightTimeRoles
                 Permissions.Attendance.OfflineSync,
                 Permissions.Messages.SendToFamily,
                 Permissions.Reports.RunProvider,
+                Permissions.Badges.Issue,
             ],
 
             [ProviderAdmin] =
@@ -91,6 +92,9 @@ public static class BrightTimeRoles
                 Permissions.Attendance.OfflineSync,
                 Permissions.Messages.SendToFamily,
                 Permissions.Reports.RunProvider,
+                Permissions.Badges.Define,
+                Permissions.Badges.Issue,
+                Permissions.Badges.Revoke,
                 Permissions.Audit.Read,
             ],
 

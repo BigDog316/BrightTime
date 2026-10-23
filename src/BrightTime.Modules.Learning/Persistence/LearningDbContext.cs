@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Learning.Persistence;
 
-// The learning tables (db/schema/60-learning.sql) this module uses so far (D65). Mapped as the
+// The learning tables (db/schema/60-learning.sql) this module uses so far (D65, D66). Mapped as the
 // DDL has them; the schema drift test holds the two together.
 
 /// <summary>A young person's portfolio: how they appear, and who may see it.</summary>
@@ -74,6 +74,140 @@ public sealed class ParticipationRecordRecord
     public DateTimeOffset CreatedAt { get; init; }
 }
 
+/// <summary>
+/// Who issues badges (D66): an organisation, under its own <c>did:web</c> DID. The DID names the
+/// organisation by id, so it never changes when the organisation is renamed.
+/// </summary>
+public sealed class IssuerProfileRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? OrgId { get; init; }
+
+    public required string Did { get; init; }
+
+    public required string Name { get; set; }
+
+    public string? Url { get; set; }
+
+    public Guid? ImageMediaId { get; set; }
+
+    public string? Email { get; set; }
+
+    public required string Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>
+/// One of an issuer's signing keys: its public half, and a reference to the private half in the
+/// vault. The private key is never here.
+/// </summary>
+public sealed class IssuerKeyRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid IssuerId { get; init; }
+
+    public required string KeyId { get; init; }
+
+    public required string Algorithm { get; init; }
+
+    public required string PublicJwk { get; init; }
+
+    public required string PrivateKeyRef { get; init; }
+
+    public required string Status { get; set; }
+
+    public DateTimeOffset ActivatedAt { get; init; }
+
+    public DateTimeOffset? RetiredAt { get; set; }
+}
+
+/// <summary>An achievement an organisation awards (the OB 2.0 BadgeClass, the OB 3.0 Achievement).</summary>
+public sealed class BadgeClassRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid IssuerId { get; init; }
+
+    public required string Slug { get; init; }
+
+    public required string Name { get; set; }
+
+    public required string Description { get; set; }
+
+    public required string CriteriaMd { get; set; }
+
+    public string? CriteriaUrl { get; set; }
+
+    public Guid? ImageMediaId { get; set; }
+
+    public int Version { get; init; }
+
+    public string? Level { get; set; }
+
+    public string[] Tags { get; set; } = [];
+
+    public string Alignment { get; set; } = "[]";
+
+    public short? ExpiresAfterMonths { get; set; }
+
+    public required string Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>
+/// A badge awarded to one young person: the signed OB 3.0 credential, and what the OB 2.0 hosted
+/// assertion and the public verification page are built from. The recipient appears only as a
+/// salted hash.
+/// </summary>
+public sealed class BadgeAssertionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid BadgeClassId { get; init; }
+
+    public Guid RecipientUserId { get; init; }
+
+    public required byte[] RecipientIdentityHash { get; init; }
+
+    public required byte[] RecipientSalt { get; init; }
+
+    public DateTimeOffset IssuedOn { get; init; }
+
+    public DateTimeOffset? ExpiresOn { get; init; }
+
+    public string? Narrative { get; init; }
+
+    public string Evidence { get; init; } = "[]";
+
+    public Guid? IssuerKeyId { get; init; }
+
+    public string? CredentialJwt { get; init; }
+
+    public string? CredentialJson { get; init; }
+
+    public required string VerifySlug { get; init; }
+
+    public DateTimeOffset? RevokedAt { get; set; }
+
+    public string? RevocationReason { get; set; }
+
+    public Guid? AwardedBy { get; init; }
+
+    public Guid? EnrollmentId { get; init; }
+
+    public Guid? SourcePlaylistEnrollmentId { get; init; }
+}
+
 public sealed class LearningDbContext(DbContextOptions<LearningDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -85,6 +219,14 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
     public DbSet<LearnerProfileRecord> Profiles => Set<LearnerProfileRecord>();
 
     public DbSet<ParticipationRecordRecord> Participation => Set<ParticipationRecordRecord>();
+
+    public DbSet<IssuerProfileRecord> Issuers => Set<IssuerProfileRecord>();
+
+    public DbSet<IssuerKeyRecord> IssuerKeys => Set<IssuerKeyRecord>();
+
+    public DbSet<BadgeClassRecord> BadgeClasses => Set<BadgeClassRecord>();
+
+    public DbSet<BadgeAssertionRecord> BadgeAssertions => Set<BadgeAssertionRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -109,6 +251,49 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
             b.Property(x => x.Hours).HasColumnType("numeric(7,2)");
             b.HasIndex(x => new { x.UserId, x.StartedOn }).IsDescending(false, true).HasFilter("not is_hidden");
             b.HasIndex(x => x.EnrollmentId).IsUnique().HasFilter("enrollment_id is not null");
+        });
+
+        modelBuilder.Entity<IssuerProfileRecord>(b =>
+        {
+            b.ToTable("issuer_profile");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Email).HasColumnType("citext");
+            b.HasIndex(x => x.Did).IsUnique();
+        });
+
+        modelBuilder.Entity<IssuerKeyRecord>(b =>
+        {
+            b.ToTable("issuer_key");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.PublicJwk).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.IssuerId, x.KeyId }).IsUnique();
+            b.HasIndex(x => x.IssuerId).IsUnique().HasFilter("status = 'active'");
+        });
+
+        modelBuilder.Entity<BadgeClassRecord>(b =>
+        {
+            b.ToTable("badge_class");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Slug).HasColumnType("citext");
+            b.Property(x => x.Alignment).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.TenantId, x.Slug, x.Version }).IsUnique();
+        });
+
+        modelBuilder.Entity<BadgeAssertionRecord>(b =>
+        {
+            b.ToTable("badge_assertion");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Evidence).HasColumnType("jsonb");
+            b.Property(x => x.CredentialJson).HasColumnType("jsonb");
+            b.Property(x => x.VerifySlug).HasColumnType("citext");
+            b.HasIndex(x => x.VerifySlug).IsUnique();
+            b.HasIndex(x => new { x.BadgeClassId, x.RecipientUserId, x.IssuedOn }).IsUnique();
+            b.HasIndex(x => new { x.RecipientUserId, x.IssuedOn }).IsDescending(false, true).HasFilter("revoked_at is null");
+            b.HasIndex(x => x.BadgeClassId);
         });
 
         modelBuilder.ApplySnakeCaseNames();

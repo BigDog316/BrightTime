@@ -166,7 +166,13 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 - **M4 has started** (D65): a new Learning module. Families link a young member to their own
   account, attendance becomes that young person's participation on the worker, and the portfolio
   is theirs: private until they show it, records they can hide, and a page for anyone with the
-  link that never names them beyond the display name they chose. Badges and playlists follow.
+  link that never names them beyond the display name they chose.
+- **Open Badges** (D66): an organisation defines and publishes badges and awards them to young
+  people enrolled with it. Each is an OB 3.0 credential signed RS256 under the organisation's own
+  `did:web` DID, and an OB 2.0 hosted assertion; revoked with a reason that verifiers see at
+  once. Keys live in the vault: production must set `Security:SigningKeys:default` (an RSA PEM) or
+  one per organisation in the API host; Development makes one up. Playlists
+  follow. The console screens for badges, and a check with 1EdTech's validator, are still to do.
 - **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
   met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.
@@ -175,7 +181,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D65 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D65 on 2026-10-22).
+Every decision through D65 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D65 on 2026-10-22). D66 (Open Badges) is proposed.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

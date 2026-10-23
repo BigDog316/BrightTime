@@ -162,7 +162,8 @@ create table issuer_key (
   activated_at  timestamptz not null default now(),
   retired_at    timestamptz,
   constraint ux_issuer_key unique (issuer_id, key_id),
-  constraint ck_issuer_key_alg check (algorithm in ('Ed25519','ES256')),
+  -- RS256: what Open Badges 3.0's JWT proofs require issuers to support (D66).
+  constraint ck_issuer_key_alg check (algorithm in ('Ed25519','ES256','RS256')),
   constraint ck_issuer_key_status check (status in ('active','retired','compromised'))
 );
 create unique index ux_issuer_key_active on issuer_key (issuer_id) where status = 'active';
@@ -198,7 +199,7 @@ create table badge_assertion (
   tenant_id         uuid not null references platform.tenant(id) on delete restrict,
   badge_class_id    uuid not null references badge_class(id) on delete restrict,
   recipient_user_id uuid not null references identity.app_user(id) on delete cascade,
-  -- OB hashed recipient identity: sha256(salt + identifier)
+  -- OB hashed recipient identity: sha256(identifier || salt), as both OB versions specify
   recipient_identity_hash bytea not null,
   recipient_salt    bytea not null,
   issued_on         timestamptz not null default now(),
@@ -212,6 +213,9 @@ create table badge_assertion (
   revoked_at        timestamptz,
   revocation_reason text,
   awarded_by        uuid references identity.app_user(id),
+  -- The enrolment it was awarded for (D66): names the recipient to the organisation only as
+  -- the family's share does, and only while it does.
+  enrollment_id     uuid references enrollment.enrollment(id) on delete set null,
   source_playlist_enrollment_id uuid,
   constraint ux_badge_assertion_verify_slug unique (verify_slug),
   constraint ux_badge_assertion_once unique (badge_class_id, recipient_user_id, issued_on),

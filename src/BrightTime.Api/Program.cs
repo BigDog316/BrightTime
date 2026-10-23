@@ -76,6 +76,7 @@ v1.MapMessagingEndpoints();
 v1.MapPaymentEndpoints();
 v1.MapReportEndpoints();
 v1.MapPortfolioEndpoints();
+v1.MapBadgeEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

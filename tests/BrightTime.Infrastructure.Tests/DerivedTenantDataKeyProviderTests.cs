@@ -5,17 +5,28 @@ using Microsoft.Extensions.Configuration;
 
 namespace BrightTime.Infrastructure.Tests;
 
-public sealed class DerivedTenantDataKeyProviderTests
+public sealed class DerivedTenantDataKeyProviderTests : IDisposable
 {
     private static readonly TenantId First = new(Guid.Parse("0196c3e8-0000-7000-8000-000000000a01"));
     private static readonly TenantId Second = new(Guid.Parse("0196c3e8-0000-7000-8000-000000000a02"));
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static (DerivedTenantDataKeyProvider Keys, AesGcmFieldCipher Cipher) Build(Dictionary<string, string?> settings, bool development = false)
+    private readonly List<ConfiguredKeyVault> _vaults = [];
+
+    public void Dispose()
+    {
+        foreach (ConfiguredKeyVault vault in _vaults)
+        {
+            vault.Dispose();
+        }
+    }
+
+    private (DerivedTenantDataKeyProvider Keys, AesGcmFieldCipher Cipher) Build(Dictionary<string, string?> settings, bool development = false)
     {
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var vault = new ConfiguredKeyVault(configuration, development);
+        _vaults.Add(vault);
         List<DataKeyVersion> versions = configuration.GetSection(DerivedTenantDataKeyProvider.SectionName).Get<List<DataKeyVersion>>() ?? [];
         var keys = new DerivedTenantDataKeyProvider(vault, versions);
         return (keys, new AesGcmFieldCipher(keys));
@@ -82,8 +93,7 @@ public sealed class DerivedTenantDataKeyProviderTests
     [Fact]
     public void A_version_without_a_reference_is_refused_at_start()
     {
-        Should.Throw<InvalidOperationException>(() => new DerivedTenantDataKeyProvider(
-            new ConfiguredKeyVault(new ConfigurationBuilder().Build(), development: true),
-            [new DataKeyVersion { Version = 1, KeyRef = "" }]));
+        using ConfiguredKeyVault vault = new(new ConfigurationBuilder().Build(), development: true);
+        Should.Throw<InvalidOperationException>(() => new DerivedTenantDataKeyProvider(vault, [new DataKeyVersion { Version = 1, KeyRef = "" }]));
     }
 }

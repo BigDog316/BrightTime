@@ -57,6 +57,8 @@ recommendation:
 **Decision needed:** confirm dual 2.0/3.0 issuance. It is roughly a week of
 extra work in M4 and I think it is the difference between a badge and a
 picture.
+*Confirmed 2026-10-22: issue both. Every badge is an OB 3.0 credential and an OB 2.0 hosted
+assertion.*
 
 ### D4 — RLS for tenancy; application for everything else
 Confirming the prompt's intent and stating the boundary explicitly, because
@@ -2119,6 +2121,70 @@ architecture test now holds it to that.
   - a guardian's view of a child's portfolio;
   - the portfolio in the app;
   - exports, which come with badges.
+
+### D66 — Open Badges: OB 3.0 credentials and OB 2.0 hosted assertions (**proposed 2026-10-22**)
+
+M4's second slice, and D3 as confirmed: every badge is both an OB 3.0 credential and an OB 2.0
+hosted assertion. Two departures from D3's recommendation, both forced by the specification or
+the data:
+- **RS256, not Ed25519.** OB 3.0's VC-JWT proof requires RS256 as the algorithm every verifier
+  must accept; EdDSA is optional and several verifiers don't take it. Keys are RSA (2048 bits or
+  more) and the schema now allows `RS256` (`ck_issuer_key_alg`).
+- **One DID per organisation, not per tenant host.** The issuer is the organisation that ran the
+  programme, not the county's platform, so a badge says who vouched for it. The DID is
+  `did:web:{host}:api:v1:public:issuers:{org}`, which resolves to
+  `/api/v1/public/issuers/{org}/did.json` on the tenant's own host. No `/.well-known` rule in the
+  proxy, and an organisation's DID never changes when it is renamed.
+
+What is built:
+- **Keys in the vault.** `IKeyVault` gains `SignAsync` as RS256 and `GetPublicJwkAsync`.
+  `ConfiguredKeyVault` reads a PEM from `Security:SigningKeys:{ref}`, or
+  `Security:SigningKeys:default` for a small install that wants one key; in Development it makes
+  one up per process, and anywhere else a missing key is an error. Each organisation's reference
+  is `badge-issuer-{org}`. Only the public JWK and the reference are stored.
+- **Rotation is the vault's.** Each award checks the vault's key against the active
+  `issuer_key` by its RFC 7638 thumbprint (which is also its key id). A different key retires the
+  old one and becomes active; a key seen before is reactivated. Every key not marked compromised
+  stays in the DID document, so credentials signed before a rotation still verify.
+- **Badges an organisation defines.** `GET`, `POST /org/{org}/badge-classes`,
+  `PUT .../{id}` while a draft, `POST .../{id}/publish` and `/retire`. Criteria must say what
+  earns it (more than 20 characters). A published badge never changes: what was awarded is what
+  it says. The organisation becomes an issuer the first time it defines one.
+- **Awarding.** `POST /org/{org}/badge-classes/{id}/awards {enrollmentId, narrative}` to a young
+  person enrolled with the organisation whose family has linked them to their own account (D65).
+  - Once: a second award of the same badge waits until the first is revoked
+    (`badges.already_awarded`). That also makes a retried request safe, so there is no
+    Idempotency-Key, unlike the plan's route.
+  - The credential's recipient is a salted SHA-256 of `urn:uuid:{account}` (`identityType`
+    `identifier`), never a name or an address. The verification name is 128 random bits.
+  - The OB 3.0 `OpenBadgeCredential` (VC 2.0 contexts, `validFrom`, `validUntil` when the badge
+    expires, `1EdTechRevocationList` status, `1EdTechJsonSchemaValidator2019` schema) is signed
+    as a compact JWT, `kid` naming the DID's key; the JSON and the JWT are both stored.
+  - `badge_assertion.enrollment_id` (new) records the enrolment, so the organisation's list of
+    awards names a young person only as the family's share does.
+- **Revoking.** `POST /org/{org}/badge-assertions/{id}/revoke {reason}`, by an admin. Verifiers
+  see it at once (`no-store`). The young person keeps the record, marked revoked.
+- **Who may.** `badges.define` and `badges.revoke` need an organisation admin; `badges.issue`
+  (programme staff have it) needs staff. Reading a badge's awards is a youth-record read and
+  audited, as are every award, revocation and change.
+- **The young person's.** `GET /me/badges`: each badge with its JWT, to take anywhere.
+- **For anyone, anonymous and rate-limited.** None of it names the young person.
+  - `/public/issuers/{org}/did.json` (the DID document, `JsonWebKey2020`), `/ob2` (the OB 2.0
+    Issuer) and `/revocations`.
+  - `/public/badges/classes/{id}` (the Achievement), `/ob2` (the BadgeClass) and `/image.svg`
+    (a generated image: the badge's initials on a ring). Drafts aren't public.
+  - `/public/badges/{slug}`: valid, expired or revoked, with the credential and its JWT, sent with
+    `noindex`. `/public/badges/{slug}/ob2`: the hosted assertion, or `410 Gone` with
+    `revoked: true` and the reason, as OB 2.0 asks.
+  - `badge_assertion` is outside the actor guard, as its schema comment intends: the public
+    routes read it in the tenant without an actor, and return only what the credential carries.
+- **Not yet:**
+  - the console screens for badges, and badges in the app;
+  - images an organisation uploads (media storage is still open);
+  - the plan's `issuer-keys` routes: rotation happens in the vault, and marking a key
+    compromised is a database change for now;
+  - checking a credential with 1EdTech's validator by hand, which can't run in CI;
+  - badges from playlists, and portfolio exports (`json_ob3`, CLR 2.0).
 
 ## Open questions
 

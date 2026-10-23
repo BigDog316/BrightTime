@@ -401,6 +401,14 @@ name, headline, bio, visibility, link name), `POST /me/portfolio/participation/{
 comes from attendance on the worker. A household member is linked to their own account with
 `PUT /family-profile/members/{id}/account`.
 
+*Built (2026-10-22, D66):* `GET /me/badges`; `GET` and `POST /org/{orgId}/badge-classes`, `PUT`
+(a draft only, not `PATCH`), `/publish`, `/retire`, `GET` and `POST .../{id}/awards` (in place
+of `/issue`, with no Idempotency-Key: a badge is awarded once, so a retry is refused), and
+`POST /org/{orgId}/badge-assertions/{id}/revoke`. The public verification routes are
+`/public/badges/{slug}` and `/{slug}/ob2`, and each organisation's DID document is at
+`/public/issuers/{orgId}/did.json` rather than `/.well-known` (D66). No `issuer-keys` routes:
+keys rotate in the vault.
+
 ```
 
 GET    /api/v1/playlists

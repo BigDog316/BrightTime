@@ -120,6 +120,28 @@ grant select on platform.outbox_message, platform.job to brighttime_migrator;
 revoke all on function platform.queue_health() from public;
 grant execute on function platform.queue_health() to brighttime_app, brighttime_jobs;
 
+-- A portfolio its owner chose to show is read by people who aren't signed in, and participation
+-- sits behind the actor guard (D65). This returns only what a shown portfolio shows: the unhidden
+-- records of the portfolio with that link name, when its owner set it link_only or public. No
+-- account, no enrolment, nothing hidden. It runs as the migrator (BYPASSRLS), and checks the
+-- tenant and the visibility itself.
+create or replace function learning.public_participation(p_tenant uuid, p_slug text)
+returns table (title text, organisation text, started_on date, ended_on date, sessions_attended int, hours numeric)
+language sql stable security definer set search_path = pg_catalog, learning as $fn$
+  select pr.title_snapshot, pr.org_name_snapshot, pr.started_on, pr.ended_on, pr.sessions_attended, pr.hours
+    from learning.learner_profile lp
+    join learning.participation_record pr on pr.user_id = lp.user_id and pr.tenant_id = lp.tenant_id
+   where lp.tenant_id = p_tenant
+     and lp.public_slug::text = lower(p_slug)
+     and lp.visibility in ('link_only', 'public')
+     and not pr.is_hidden
+   order by pr.started_on desc;
+$fn$;
+alter function learning.public_participation(uuid, text) owner to brighttime_migrator;
+grant select on learning.learner_profile, learning.participation_record to brighttime_migrator;
+revoke all on function learning.public_participation(uuid, text) from public;
+grant execute on function learning.public_participation(uuid, text) to brighttime_app;
+
 -- platform.data_protection_key: the hosts' shared key ring, encrypted at rest,
 -- no tenant data. The hosts read and add keys; nothing updates or deletes one.
 alter table platform.data_protection_key enable row level security;

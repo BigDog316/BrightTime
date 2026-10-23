@@ -62,11 +62,27 @@ public sealed class EnrolmentQueries(EnrollmentDbContext db, IFieldCipher cipher
             var found = await (from e in db.Enrollments.AsNoTracking()
                                join m in db.FamilyMembers on e.FamilyMemberId equals m.Id
                                where ids.Contains(e.Id)
-                               select new { e.Id, e.FamilyMemberId, e.ListingId, e.OrgId, e.Status, e.EnrolledAt, e.EndedAt, m.BirthMonth }).ToListAsync(ct).ConfigureAwait(false);
+                               select new { e.Id, e.FamilyMemberId, e.ListingId, e.OrgId, e.Status, e.EnrolledAt, e.EndedAt, m.BirthMonth, e.YouthUserId }).ToListAsync(ct).ConfigureAwait(false);
             return [.. found.Select(f => new EnrolmentFacts(f.Id, f.FamilyMemberId, f.ListingId, f.OrgId, f.Status, f.EnrolledAt, f.EndedAt,
-                f.BirthMonth is { } month ? Age.BandFromBirthMonth(month, asOf) : AgeBand.Unknown))];
+                f.BirthMonth is { } month ? Age.BandFromBirthMonth(month, asOf) : AgeBand.Unknown, f.YouthUserId))];
         }, cancellationToken);
     }
+
+    public Task<IReadOnlyList<string>> SurnamesOfAsync(Guid youthUserId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<string>>(async ct =>
+        {
+            List<byte[]> sealedNames = await db.FamilyMembers.AsNoTracking().Where(m => m.UserId == youthUserId).Select(m => m.LastNameEnc).ToListAsync(ct).ConfigureAwait(false);
+            HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+            foreach (byte[] name in sealedNames)
+            {
+                if (await cipher.DecryptAsync(tenant.TenantId, name, ct).ConfigureAwait(false) is { Length: > 0 } plain)
+                {
+                    names.Add(plain.Trim());
+                }
+            }
+
+            return [.. names];
+        }, cancellationToken);
 
     public Task<IReadOnlyList<EnrolmentSummary>> GetAsync(IReadOnlyCollection<Guid> enrollmentIds, CancellationToken cancellationToken = default)
     {

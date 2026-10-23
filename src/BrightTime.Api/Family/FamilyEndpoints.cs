@@ -11,6 +11,8 @@ namespace BrightTime.Api.Family;
 
 public sealed record FamilyRequest(short? HouseholdSize, string? PrimaryLanguage, bool NeedsInterpreter);
 
+public sealed record AccountLinkRequest(Guid? UserId);
+
 public sealed record MemberRequest(
     string? Role,
     string? FirstName,
@@ -52,6 +54,7 @@ public static class FamilyEndpoints
         family.MapPut("/members/{id:guid}", UpdateMemberAsync).Changes().Produces<MemberView>();
         family.MapDelete("/members/{id:guid}", RemoveMemberAsync).Changes();
         family.MapPut("/members/{id:guid}/support-needs", SetSupportNeedsAsync).Changes().Produces<MemberView>();
+        family.MapPut("/members/{id:guid}/account", LinkAccountAsync).Changes().Produces<MemberView>();
         family.MapPost("/contacts", AddContactAsync).Changes().Produces<ContactView>(StatusCodes.Status201Created);
         family.MapPut("/contacts/{id:guid}", UpdateContactAsync).Changes().Produces<ContactView>();
         family.MapDelete("/contacts/{id:guid}", RemoveContactAsync).Changes();
@@ -116,6 +119,19 @@ public static class FamilyEndpoints
 
         Result<MemberView> changed = await profiles.UpdateMemberAsync(Owner(user), id, Input(body), ct);
         return changed.IsSuccess ? Results.Ok(changed.Value) : Refused(audit, FamilyProfiles.Changed, changed.Error);
+    }
+
+    /// <summary>Links a young member to their own account (D65), or unlinks them with a null id.</summary>
+    private static async Task<IResult> LinkAccountAsync(Guid id, AccountLinkRequest body, ClaimsPrincipal user, FamilyProfiles profiles, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (ChildRefused(user, audit, FamilyProfiles.Changed) is { } refused)
+        {
+            return refused;
+        }
+
+        Result<MemberView> linked = await profiles.LinkAccountAsync(Owner(user), id, body.UserId is { } account ? new UserId(account) : null, ct);
+        return linked.IsSuccess ? Results.Ok(linked.Value) : Refused(audit, FamilyProfiles.Changed, linked.Error);
     }
 
     private static async Task<IResult> RemoveMemberAsync(Guid id, ClaimsPrincipal user, FamilyProfiles profiles, AuditTrail audit, CancellationToken ct)

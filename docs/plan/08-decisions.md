@@ -2066,6 +2066,60 @@ be messaged.
 - **Not yet:** an organisation-wide inbox for admins of conversations they aren't in, closing a
   conversation, and SMS (Q9).
 
+### D65 — M4 begins: participation from attendance, and the young person's portfolio (**proposed 2026-10-22**)
+
+M4's first slice, in a new Learning module. It may reference the contracts of Platform,
+Identity, Directory, Opportunities, Enrollment and Attendance (docs/plan/01's DAG), and the
+architecture test now holds it to that.
+- **A family member linked to their own account.** Until now nothing set
+  `family_member.user_id`, so no enrolment ever belonged to a young person's account, and a
+  portfolio would have stayed empty.
+  - `PUT /family-profile/members/{id}/account {userId}` links a youth or child member to the
+    owner's own account or to one they are a verified guardian of. `null` unlinks.
+  - Nobody else's child can be claimed (`family.link_forbidden`), and an adult member can't be
+    linked (`family.link_role`).
+  - The member's enrolments follow (`enrollment.youth_user_id`), and each publishes
+    `EnrolmentAccountChanged`.
+- **Participation from attendance.**
+  - Attendance publishes `AttendanceChanged(enrollmentId)` on every write: a record, a check-in,
+    a sync and a correction.
+  - The worker's `ParticipationProjector` rebuilds that enrolment's `participation_record` whole
+    from its current records, so a correction, a replayed sync or a redelivered message leaves the
+    same row.
+  - Sessions are those marked present, late or left early. Hours are the minutes recorded where
+    staff recorded them, and the meeting's length otherwise.
+  - The title and organisation are copied, so the record outlives the listing.
+  - No linked account, or no session attended, means no record, and unlinking takes it away.
+  - New contracts: `IAttendanceQueries` (current records only: no notes, devices or recorders);
+    `EnrolmentFacts.YouthUserId`; `IEnrolmentQueries.SurnamesOfAsync`.
+- **The portfolio is the young person's.**
+  - `GET` and `PUT /me/portfolio`; `POST /me/portfolio/participation/{id}/hide` and `/show`.
+  - Private until they choose otherwise. They can hide any record, which leaves their total and
+    any shown page. Nothing is deleted.
+  - Only `private`, `link_only` and `public` are offered. The schema's `mentors` and `org` wait
+    for M5 and M6 to give them meaning.
+- **Showing it.** `link_only` or `public` needs:
+  - the showcase capability, so nobody under 13 (`portfolio.showcase`);
+  - a link name of 3 to 40 lower-case letters, digits and hyphens, unique in the tenant;
+  - a display name without the young person's family name, read from the household members
+    linked to the account. The schema leaves this rule to the application.
+- **The page anyone with the link sees.** `GET /public/portfolios/{slug}` is anonymous and
+  rate-limited, and returns the display name, headline, bio, hours and unhidden records. It never
+  returns an account, an enrolment or a legal name.
+  - A `link_only` page is sent with `X-Robots-Tag: noindex`.
+  - Participation sits behind the actor guard, so the page reads it through
+    `learning.public_participation(tenant, slug)`. That is a security-definer function owned by
+    the migrator, which itself checks the tenant, the link name and that the owner chose to show
+    the portfolio, and returns only unhidden records. The app role has execute on it and nothing
+    more.
+  - Every read and change is audited, public reads included.
+- **Not yet:**
+  - goals, skills and projects with staff approval;
+  - self-reported and provider-entered hours;
+  - a guardian's view of a child's portfolio;
+  - the portfolio in the app;
+  - exports, which come with badges.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -26,6 +26,8 @@
     <ProjectReference Include="../../src/BrightTime.Modules.Attendance.Contracts/BrightTime.Modules.Attendance.Contracts.csproj" />
     <ProjectReference Include="../../src/BrightTime.Modules.Community/BrightTime.Modules.Community.csproj" />
     <ProjectReference Include="../../src/BrightTime.Modules.Community.Contracts/BrightTime.Modules.Community.Contracts.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Learning/BrightTime.Modules.Learning.csproj" />
+    <ProjectReference Include="../../src/BrightTime.Modules.Learning.Contracts/BrightTime.Modules.Learning.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

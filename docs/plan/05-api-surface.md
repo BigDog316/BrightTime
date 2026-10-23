@@ -393,6 +393,15 @@ POST   /api/v1/org/{orgId}/badge-classes/{id}/issue     Idempotency-Key required
 POST   /api/v1/org/{orgId}/badge-assertions/{id}/revoke
 GET    /api/v1/org/{orgId}/issuer-keys
 POST   /api/v1/org/{orgId}/issuer-keys/rotate
+```
+
+*Built (2026-10-22, D65):* `GET` and `PUT /me/portfolio` (PUT for the whole settings: display
+name, headline, bio, visibility, link name), `POST /me/portfolio/participation/{id}/hide` and
+`/show`, and `GET /public/portfolios/{slug}` for `link_only` as well as `public`. Participation
+comes from attendance on the worker. A household member is linked to their own account with
+`PUT /family-profile/members/{id}/account`.
+
+```
 
 GET    /api/v1/playlists
 GET    /api/v1/playlists/{slug}

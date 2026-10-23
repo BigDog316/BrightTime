@@ -1,5 +1,6 @@
 using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Auditing;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Attendance.Contracts;
 using BrightTime.Modules.Attendance.Devices;
@@ -155,6 +156,7 @@ public sealed class AttendanceRecords(
             AttendanceRecordRecord record = await NewAsync(org, actor, input, check, AttendanceMethods.Manual, clock.StoredNow(), null, null, ct).ConfigureAwait(false);
             db.Records.Add(record);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await db.PublishAsync(tenant.TenantId, new AttendanceChanged(input.EnrollmentId), ct).ConfigureAwait(false);
             await AuditAsync(Recorded, org, [input.EnrollmentId], ct).ConfigureAwait(false);
             return Result<AttendanceView>.Success(await ViewAsync(record, ct).ConfigureAwait(false));
         }, cancellationToken);
@@ -183,6 +185,7 @@ public sealed class AttendanceRecords(
         AttendanceRecordRecord record = await NewAsync(org, actor, input, check, method, now, null, null, ct).ConfigureAwait(false);
         db.Records.Add(record);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await db.PublishAsync(tenant.TenantId, new AttendanceChanged(enrollmentId), ct).ConfigureAwait(false);
         await AuditAsync(Recorded, org, [enrollmentId], ct, new Dictionary<string, string>(StringComparer.Ordinal) { ["method"] = method }).ConfigureAwait(false);
         return Result<AttendanceView>.Success(await ViewAsync(record, ct).ConfigureAwait(false));
     }
@@ -267,6 +270,11 @@ public sealed class AttendanceRecords(
                 AppVersion = appVersion is { Length: <= 40 } ? appVersion : null,
             });
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            foreach (Guid enrolment in touched)
+            {
+                await db.PublishAsync(tenant.TenantId, new AttendanceChanged(enrolment), ct).ConfigureAwait(false);
+            }
+
             await AuditAsync(Synced, org, [.. touched], ct, new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["device"] = device,
@@ -330,6 +338,7 @@ public sealed class AttendanceRecords(
             db.Records.Add(record);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await db.Records.Where(r => r.Id == old.Id).ExecuteUpdateAsync(s => s.SetProperty(r => r.SupersededBy, record.Id), ct).ConfigureAwait(false);
+            await db.PublishAsync(tenant.TenantId, new AttendanceChanged(old.EnrollmentId), ct).ConfigureAwait(false);
             await AuditAsync(Corrected, org, [old.EnrollmentId], ct, new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["record"] = old.Id.ToString(),
@@ -502,6 +511,7 @@ public static class AttendanceModule
     public static IServiceCollection AddAttendance(this IServiceCollection services)
     {
         services.AddScoped<AttendanceRecords>();
+        services.AddScoped<IAttendanceQueries, AttendanceQueries>();
         services.AddScoped<Reports.ProviderReports>();
         services.AddScoped<CheckIns>();
         services.AddScoped<KioskDevices>();

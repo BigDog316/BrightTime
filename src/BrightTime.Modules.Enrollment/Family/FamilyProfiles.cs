@@ -1,9 +1,11 @@
 using System.Globalization;
 using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Auditing;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Enrollment.Persistence;
+using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -47,7 +49,8 @@ public sealed record MemberView(
     string? Pronouns,
     string? Relationship,
     Guid? NeighbourhoodId,
-    IReadOnlyList<SupportNeedView> SupportNeeds);
+    IReadOnlyList<SupportNeedView> SupportNeeds,
+    Guid? AccountUserId = null);
 
 [YouthData]
 public sealed record ContactView(Guid Id, string Name, string Relationship, string Phone, string? Email, bool IsEmergency, bool CanPickUp);
@@ -72,7 +75,7 @@ public sealed record FamilyView(Guid Id, short? HouseholdSize, string? PrimaryLa
 /// records").
 /// </para>
 /// </remarks>
-public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, IBlindIndexer blind, ITenantContext tenant, AuditTrail audit, IClock clock, IGeographyQueries geography)
+public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, IBlindIndexer blind, ITenantContext tenant, AuditTrail audit, IClock clock, IGeographyQueries geography, IIdentityQueries identity)
 {
     public const int MaxMembers = 15;
     public const int MaxContacts = 10;
@@ -185,6 +188,49 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             await ApplyAsync(member, input, clock.StoredNow(), ct).ConfigureAwait(false);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Changed, member.FamilyProfileId, ct, "member_changed").ConfigureAwait(false);
+            List<SupportNeedRecord> needs = await db.SupportNeeds.AsNoTracking().Where(n => n.FamilyMemberId == member.Id).ToListAsync(ct).ConfigureAwait(false);
+            return Result<MemberView>.Success(await MemberAsync(member, needs, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>
+    /// Links a young member of the household to their own account, or unlinks them with null (D65).
+    /// The account is the owner's own, or one they are a verified guardian of: nobody else's child
+    /// can be claimed. The member's enrolments follow, so what they took part in reaches the
+    /// young person's portfolio.
+    /// </summary>
+    public Task<Result<MemberView>> LinkAccountAsync(UserId owner, Guid memberId, UserId? account, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await OwnMemberAsync(owner, memberId, ct).ConfigureAwait(false) is not { } member)
+            {
+                return Result<MemberView>.Failure(NoMember());
+            }
+
+            if (!FamilyMemberRoles.IsYoungPerson(member.MemberRole))
+            {
+                return Result<MemberView>.Failure(Error.Validation("family.link_role", "Only a young person in the household is linked to their own account."));
+            }
+
+            if (account is { } linked && linked != owner && !await identity.IsVerifiedGuardianOfAsync(owner, linked, ct).ConfigureAwait(false))
+            {
+                return Result<MemberView>.Failure(Error.Forbidden("family.link_forbidden", "Link your own account, or one you are a verified guardian of."));
+            }
+
+            member.UserId = account?.Value;
+            member.UpdatedAt = clock.StoredNow();
+            List<EnrollmentRecord> enrolments = await db.Enrollments.Where(e => e.FamilyMemberId == member.Id).ToListAsync(ct).ConfigureAwait(false);
+            foreach (EnrollmentRecord enrolment in enrolments)
+            {
+                enrolment.YouthUserId = account?.Value;
+            }
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            foreach (EnrollmentRecord enrolment in enrolments)
+            {
+                await db.PublishAsync(tenant.TenantId, new EnrolmentAccountChanged(enrolment.Id, account?.Value), ct).ConfigureAwait(false);
+            }
+
+            await AuditAsync(Changed, member.FamilyProfileId, ct, account is null ? "member_unlinked" : "member_linked").ConfigureAwait(false);
             List<SupportNeedRecord> needs = await db.SupportNeeds.AsNoTracking().Where(n => n.FamilyMemberId == member.Id).ToListAsync(ct).ConfigureAwait(false);
             return Result<MemberView>.Success(await MemberAsync(member, needs, ct).ConfigureAwait(false));
         }, cancellationToken);
@@ -492,7 +538,8 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             member.Pronouns,
             member.RelationshipToOwner,
             member.NeighbourhoodId,
-            needViews);
+            needViews,
+            member.UserId);
     }
 
     private async Task<ContactView> ContactAsync(FamilyContactRecord contact, CancellationToken ct) => new(

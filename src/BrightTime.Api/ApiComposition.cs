@@ -26,6 +26,8 @@ using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Persistence;
 using BrightTime.Modules.Identity.SignIn;
+using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Learning.Portfolio;
 using BrightTime.Modules.Notifications;
 using BrightTime.Modules.Notifications.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
@@ -129,6 +131,10 @@ public static class ApiComposition
         services.AddAttendance();
         // Reports are rendered in the request (D57), under the deployment's QuestPDF licence.
         services.AddProviderReports(configuration);
+
+        // Learning (M4): the young person's portfolio, built from their attendance (D65).
+        services.AddBrightTimeDbContext<LearningDbContext>(app, LearningDbContext.SchemaName, LearningDbContext.MigrationsHistoryTable);
+        services.AddLearning();
 
         // Messaging (M3b): conversations with families, never a pair with a minor (D53, T1).
         services.AddBrightTimeDbContext<CommunityDbContext>(app, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);

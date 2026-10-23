@@ -361,7 +361,7 @@ public sealed class EnrollmentRecord
 
     public Guid FamilyMemberId { get; init; }
 
-    public Guid? YouthUserId { get; init; }
+    public Guid? YouthUserId { get; set; }
 
     public Guid OrgId { get; init; }
 

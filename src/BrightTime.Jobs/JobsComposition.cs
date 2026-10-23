@@ -5,15 +5,24 @@ using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Attendance.Contracts;
+using BrightTime.Modules.Attendance.Persistence;
+using BrightTime.Modules.Attendance.Records;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
+using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Enrollment.Payments;
 using BrightTime.Modules.Enrollment.Persistence;
+using BrightTime.Modules.Enrollment.Roster;
 using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Persistence;
+using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Learning.Portfolio;
 using BrightTime.Modules.Notifications;
 using BrightTime.Modules.Notifications.Persistence;
+using BrightTime.Modules.Opportunities.Contracts;
+using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Modules.Opportunities.Projection;
@@ -101,6 +110,18 @@ public static class JobsComposition
         services.AddBrightTimeDbContext<EnrollmentDbContext>(
             connection, EnrollmentDbContext.SchemaName, EnrollmentDbContext.MigrationsHistoryTable);
         services.AddPaymentJobs();
+
+        // A young person's participation, kept in step with their attendance (D65). The projector
+        // reads enrolments, attendance and listings through their contracts, on the jobs login.
+        services.AddBrightTimeDbContext<AttendanceDbContext>(
+            connection, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
+        services.AddBrightTimeDbContext<LearningDbContext>(
+            connection, LearningDbContext.SchemaName, LearningDbContext.MigrationsHistoryTable);
+        services.AddScoped<IAttendanceQueries, AttendanceQueries>();
+        services.AddScoped<IEnrolmentQueries, EnrolmentQueries>();
+        services.AddScoped<IListingOccurrences, ListingOccurrences>();
+        services.AddScoped<IListingDetails, SqlListingDetails>();
+        services.AddLearningJobs();
 
         return services;
     }

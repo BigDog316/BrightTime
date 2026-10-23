@@ -23,9 +23,10 @@ public sealed record FamilyContact(Guid OwnerUserId, Guid OrgId, Guid ListingId)
 /// <summary>
 /// What a report counts about an enrolment (D57): when it began and ended, and the young person's
 /// age band on a day, from the month of birth. No name, no date of birth. Reports use the age band
-/// only inside suppressed aggregates.
+/// only inside suppressed aggregates. <c>YouthUserId</c> is the young person's own account, once
+/// the family has linked it (D65), and null until then.
 /// </summary>
-public sealed record EnrolmentFacts(Guid EnrollmentId, Guid FamilyMemberId, Guid ListingId, Guid OrgId, string Status, DateTimeOffset EnrolledAt, DateTimeOffset? EndedAt, AgeBand AgeBand);
+public sealed record EnrolmentFacts(Guid EnrollmentId, Guid FamilyMemberId, Guid ListingId, Guid OrgId, string Status, DateTimeOffset EnrolledAt, DateTimeOffset? EndedAt, AgeBand AgeBand, Guid? YouthUserId = null);
 
 /// <summary>Enrolments, for the modules that hang records off them (attendance first).</summary>
 public interface IEnrolmentQueries
@@ -46,4 +47,10 @@ public interface IEnrolmentQueries
 
     /// <summary>What reports count about these enrolments, with each young person's age band on <paramref name="asOf"/> (D57).</summary>
     Task<IReadOnlyList<EnrolmentFacts>> FactsAsync(IReadOnlyCollection<Guid> enrollmentIds, DateOnly asOf, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The family names the young person with this account is known by, from the household members
+    /// linked to it (D65): what a portfolio shown to the public must not carry.
+    /// </summary>
+    Task<IReadOnlyList<string>> SurnamesOfAsync(Guid youthUserId, CancellationToken cancellationToken = default);
 }

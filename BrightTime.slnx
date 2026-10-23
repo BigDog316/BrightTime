@@ -16,6 +16,8 @@
     <Project Path="src/BrightTime.Modules.Enrollment/BrightTime.Modules.Enrollment.csproj" />
     <Project Path="src/BrightTime.Modules.Identity.Contracts/BrightTime.Modules.Identity.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Identity/BrightTime.Modules.Identity.csproj" />
+    <Project Path="src/BrightTime.Modules.Learning.Contracts/BrightTime.Modules.Learning.Contracts.csproj" />
+    <Project Path="src/BrightTime.Modules.Learning/BrightTime.Modules.Learning.csproj" />
     <Project Path="src/BrightTime.Modules.Notifications.Contracts/BrightTime.Modules.Notifications.Contracts.csproj" />
     <Project Path="src/BrightTime.Modules.Notifications/BrightTime.Modules.Notifications.csproj" />
     <Project Path="src/BrightTime.Modules.Opportunities.Contracts/BrightTime.Modules.Opportunities.Contracts.csproj" />

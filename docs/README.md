@@ -33,6 +33,16 @@ M1 to M3 are signed off and M4 is under way.
 | [Operations](technical/operations.md) | Running the stack, the schema, the worker, keys, payments, push, mail, health |
 | [Development](technical/development.md) | The solution, tests, CI and the conventions the tests enforce |
 
+## PDF editions
+
+The same guides and the technical reference are in [pdf/](pdf/) as PDFs, each with a cover, contents,
+bookmarks and page numbers. Rebuild them after changing the Markdown, with Python 3, Microsoft Edge
+and `pip install markdown pymupdf playwright`:
+
+```bash
+python tools/docs-pdf/build.py . docs/pdf
+```
+
 ## Records of decisions and progress
 
 - [plan/](plan/README.md): the plan as approved, and [plan/08-decisions.md](plan/08-decisions.md),

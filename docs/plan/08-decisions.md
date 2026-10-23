@@ -2122,7 +2122,7 @@ architecture test now holds it to that.
   - the portfolio in the app;
   - exports, which come with badges.
 
-### D66 — Open Badges: OB 3.0 credentials and OB 2.0 hosted assertions (**proposed 2026-10-22**)
+### D66 — Open Badges: OB 3.0 credentials and OB 2.0 hosted assertions (**accepted 2026-10-22**)
 
 M4's second slice, and D3 as confirmed: every badge is both an OB 3.0 credential and an OB 2.0
 hosted assertion. Two departures from D3's recommendation, both forced by the specification or

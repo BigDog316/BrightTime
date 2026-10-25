@@ -2186,7 +2186,7 @@ What is built:
   - checking a credential with 1EdTech's validator by hand, which can't run in CI;
   - badges from playlists, and portfolio exports (`json_ob3`, CLR 2.0).
 
-### D67 — Playlists: steps, progress, review, a completion badge, and listings it unlocks (**proposed 2026-10-25**)
+### D67 — Playlists: steps, progress, review, a completion badge, and listings it unlocks (**accepted 2026-10-25**)
 
 M4's third slice, and the rest of its acceptance criterion: *completing a playlist issues the
 badge and unlocks a gated listing*.

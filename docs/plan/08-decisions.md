@@ -2240,7 +2240,7 @@ badge and unlocks a gated listing*.
   - completing an *attend a listing* step automatically when attendance arrives;
   - mentors as reviewers (M6).
 
-### D68 — Portfolio exports: a printable PDF, the badges as OB 3.0, and a CLR 2.0 signed by the county (**proposed 2026-10-25**)
+### D68 — Portfolio exports: a printable PDF, the badges as OB 3.0, and a CLR 2.0 signed by the county (**accepted 2026-10-25**)
 
 M4's last item. `POST /me/portfolio/export {format}` gives the young person a file, made when
 asked and not kept, as reports are (D57). Media storage is still open, so nothing waits in a

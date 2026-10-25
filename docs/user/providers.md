@@ -307,6 +307,16 @@ When they arrive:
 - When someone finishes every required step, they're given the playlist's badge, signed by your
   organisation.
 
+**Projects and skills.** When the screens arrive:
+- **Projects.** Young people can send you projects they made about one of your activities. Staff
+  **approve** one, or **send it back** with a note saying what to change. Only approved work can
+  appear on a young person's portfolio, and if they change it, it needs approving again. You see the
+  project and the young person's portfolio display name, nothing more.
+- **Skills.** Staff can **endorse a skill** for a young person enrolled with you, such as
+  *Teamwork* or *Field research*, at a level from beginning to advanced. It appears on their
+  portfolio as endorsed. The skills come from the county's list, which network organisers keep in
+  Taxonomy.
+
 **Gating a program on a badge.** An activity's eligibility can now require a badge, or a
 completed playlist, as a rule that must be met. A young person who doesn't hold it can't submit an
 application. For now these two rules are set through the API; the console's eligibility page shows

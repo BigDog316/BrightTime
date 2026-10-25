@@ -107,6 +107,8 @@ create table project (
   status        text not null default 'draft',
   approved_by   uuid references identity.app_user(id),
   approved_at   timestamptz,
+  -- What staff asked to change when they sent it back (D69); cleared when it is approved.
+  review_note   text,
   guardian_consent_id uuid references identity.parental_consent(id),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),

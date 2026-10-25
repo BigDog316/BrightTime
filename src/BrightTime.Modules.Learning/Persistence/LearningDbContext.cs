@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Learning.Persistence;
 
-// The learning tables (db/schema/60-learning.sql) this module uses so far (D65 to D68). Mapped as the
+// The learning tables (db/schema/60-learning.sql) this module uses so far (D65 to D69). Mapped as the
 // DDL has them; the schema drift test holds the two together.
 
 /// <summary>A young person's portfolio: how they appear, and who may see it.</summary>
@@ -327,6 +327,84 @@ public sealed class UnlockRuleRecord
     public Guid? UnlocksPlaylistId { get; init; }
 }
 
+/// <summary>An aim of the young person's own (D69). Private: never shown, never exported.</summary>
+public sealed class LearnerGoalRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public required string Title { get; set; }
+
+    public string? Detail { get; set; }
+
+    public Guid? TargetTermId { get; set; }
+
+    public DateOnly? TargetDate { get; set; }
+
+    public required string Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset? AchievedAt { get; set; }
+}
+
+/// <summary>A skill on a young person's portfolio: their own assessment, or an organisation's endorsement (D69).</summary>
+public sealed class LearnerSkillRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public Guid TermId { get; init; }
+
+    public short? Level { get; set; }
+
+    public string? EvidenceKind { get; init; }
+
+    public Guid? EvidenceRefId { get; init; }
+
+    public Guid? AssertedBy { get; init; }
+
+    public DateTimeOffset AssertedAt { get; set; }
+}
+
+/// <summary>Something a young person made, approved by staff before anyone else sees it (D69).</summary>
+public sealed class ProjectRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public required string Title { get; set; }
+
+    public string? Description { get; set; }
+
+    public Guid? ListingId { get; set; }
+
+    public required string Visibility { get; set; }
+
+    public required string Status { get; set; }
+
+    public Guid? ApprovedBy { get; set; }
+
+    public DateTimeOffset? ApprovedAt { get; set; }
+
+    public string? ReviewNote { get; set; }
+
+    public Guid? GuardianConsentId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>A portfolio export a young person asked for (D68). The file itself is never kept.</summary>
 public sealed class PortfolioExportRecord
 {
@@ -378,6 +456,12 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
     public DbSet<UnlockRuleRecord> UnlockRules => Set<UnlockRuleRecord>();
 
     public DbSet<PortfolioExportRecord> Exports => Set<PortfolioExportRecord>();
+
+    public DbSet<LearnerGoalRecord> Goals => Set<LearnerGoalRecord>();
+
+    public DbSet<LearnerSkillRecord> Skills => Set<LearnerSkillRecord>();
+
+    public DbSet<ProjectRecord> Projects => Set<ProjectRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -478,6 +562,31 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
         {
             b.ToTable("playlist_step_progress");
             b.HasKey(x => new { x.PlaylistEnrollmentId, x.StepId });
+        });
+
+        modelBuilder.Entity<LearnerGoalRecord>(b =>
+        {
+            b.ToTable("learner_goal");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.UserId).HasFilter("status = 'active'");
+        });
+
+        modelBuilder.Entity<LearnerSkillRecord>(b =>
+        {
+            b.ToTable("learner_skill");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.UserId);
+        });
+
+        modelBuilder.Entity<ProjectRecord>(b =>
+        {
+            b.ToTable("project");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.UserId, x.CreatedAt }).IsDescending(false, true);
+            b.HasIndex(x => new { x.TenantId, x.Status }).HasFilter("status = 'submitted'");
         });
 
         modelBuilder.Entity<PortfolioExportRecord>(b =>

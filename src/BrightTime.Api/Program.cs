@@ -78,6 +78,7 @@ v1.MapReportEndpoints();
 v1.MapPortfolioEndpoints();
 v1.MapBadgeEndpoints();
 v1.MapPlaylistEndpoints();
+v1.MapLearnerRecordEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

@@ -2,14 +2,14 @@
 
 The end-of-milestone report that [plan/09](plan/09-milestones.md) promises.
 Written 2026-10-25 at `5f65730`. M4 ran from M3's sign-off on 2026-10-22 to 2026-10-25, as four
-slices: the portfolio (D65), Open Badges (D66), playlists (D67) and exports (D68). The user guides,
-technical documentation and their PDF editions were written alongside.
+slices: the portfolio (D65), Open Badges (D66), playlists (D67) and exports (D68), then goals,
+skills and projects (D69), added after the report was first written. The user guides, technical
+documentation and their PDF editions were written alongside.
 
 **Not yet signed off.** Two of the three acceptance criteria are met and tested. The third, a
 third-party validator verifying a credential, needs a check by hand on a host the internet can
-reach, and there is none yet. Three items of plan/09's M4 scope aren't built: skills, projects with
-staff approval, and evidence uploads on playlist steps. Media storage, still undecided, holds up the
-last two. The sections below give the detail.
+reach, and there is none yet. One item of plan/09's M4 scope isn't built: evidence uploads on
+playlist steps, which wait on media storage. The sections below give the detail.
 
 ## Acceptance
 
@@ -69,6 +69,16 @@ through its CLR 2.0 validator, and an OB 2.0 hosted assertion through an OB 2.0 
 - `clr2` is a CLR 2.0 `ClrCredential`. The county's site signs it under its own DID. It nests the
   badges' JWTs and records activities as co-curricular achievements.
 
+**Goals, skills and projects** (D69):
+- **Goals** are private: never shown, never exported.
+- **Skills** come from the county's skill vocabulary. Each is one the young person lists at a
+  level, or one an organisation endorses through their enrolment. They can remove either.
+- **Projects** concern an activity they took part in. That activity's organisation approves a
+  project, or sends it back with a note, before the young person can show it. Changing a shown
+  project takes it back to a private draft.
+- A shown portfolio carries published projects, and skills marked endorsed or not; the PDF export
+  carries both.
+
 **Documentation:**
 - User guides for families, young people, organisations and network organisers.
 - A technical reference: architecture, data and security, every API route, configuration,
@@ -90,14 +100,14 @@ the API; no console or app screens yet.
 - The API's routes are listed in [technical/api.md](technical/api.md), and in Development it serves
   its OpenAPI document at `http://kettle.localhost:8000/api/v1/openapi.json`.
 - The flows above are scripted end to end in `PortfolioApiTests`, `BadgeApiTests`,
-  `PlaylistApiTests` and `PortfolioExportApiTests`.
+  `PlaylistApiTests`, `PortfolioExportApiTests` and `LearnerRecordApiTests`.
 - Outside Development, set `Security:SigningKeys:default` (an RSA PEM) in the API before anyone
   awards a badge or exports a CLR.
 
 ## Test results
 
-1229 tests, all passing against PostgreSQL 18.6 + PostGIS 3.6.4, up from 1225 at M3's close
-(1224 in its report, plus the acceptance test it added). M4's four API test classes each run a
+1230 tests, all passing against PostgreSQL 18.6 + PostGIS 3.6.4, up from 1225 at M3's close
+(1224 in its report, plus the acceptance test it added). M4's five API test classes each run a
 whole flow end to end, as the real login, with row-level security and the actor guard in force.
 
 | Project | Methods | | Project | Methods |
@@ -105,7 +115,7 @@ whole flow end to end, as the real login, with row-level security and the actor 
 | Web | 193 | | Infrastructure | 39 |
 | Opportunities module | 182 | | SharedKernel | 35 |
 | Integration | 106 | | Ui.Shared | 23 |
-| API | 100 | | Localisation | 20 |
+| API | 101 | | Localisation | 20 |
 | Directory module | 40 | | Seed | 18 |
 | Identity module | 40 | | E2E (Playwright, axe) | 11 |
 | Architecture | 10 | | Platform module | 5 |
@@ -136,18 +146,21 @@ The DDL stayed the source of truth. M4 changed 28 lines in two files:
   the migrator and executable by the app role, returning only the unhidden records of a shown
   portfolio.
 
+- **`learning.project`** (D69): `review_note`, what staff asked to change when they sent a project
+  back.
+- **`learning.public_skills(tenant, slug)`** (D69): a second definer function, returning a shown
+  portfolio's skills (term, level, endorsed or not).
+
 Playlists, unlock rules and exports (D67, D68) used tables the approved schema already had.
 
 ## Known gaps
 
 M4 scope not built:
-- **Skills, and projects with staff approval** (plan/09's portfolio item). Goals too. Their tables
-  exist; nothing uses them yet.
-- **Evidence uploads on playlist steps**, which wait on media storage, and **quizzes**, which have no
-  design yet. Both step kinds are refused.
+- **Evidence uploads on playlist steps**, and **images on projects**, which wait on media storage;
+  and **quizzes**, which have no design yet. Those step kinds are refused.
 
 Left for later, by decision:
-- **Screens.** No console or app screens for portfolios, badges or playlists. The console's
+- **Screens.** No console or app screens for portfolios, badges, playlists, goals, skills or projects. The console's
   eligibility page shows badge and playlist rules but doesn't add them.
 - **A guardian's view** of a child's portfolio, and exports on a child's behalf.
 - **Completing an *attend a listing* step automatically** when attendance arrives; today the young
@@ -163,7 +176,6 @@ Left for later, by decision:
 |---|---|---|
 | — | A host the internet can reach (domain, HTTPS), for the validator check that closes M4's first criterion | Signing off M4 |
 | — | Where media and generated files are stored | Evidence uploads, projects, listing images |
-| — | Whether skills and projects ship before M5, or move to it | Planning M5 |
 | — | Whether CI should run the Web and Api suites against a service database | Before more slices land |
 | Q4, Q5 | Retention, including `portfolio_export` rows; deletion versus audit for portfolios and badges | Before production data |
 | Q13 | Who reviews the translations (M4's new strings are machine drafts in `@@drafts`) | Launch |

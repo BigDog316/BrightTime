@@ -184,9 +184,13 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 - **Portfolio exports** (D68): the young person's printable portfolio (PDF), their badges as OB
   3.0 credentials, and a CLR 2.0 that the county's site signs under its own `did:web` DID, nesting
   the badges' JWTs. Made when asked, never stored.
+- **Goals, skills and projects** (D69): private goals; skills the young person lists and skills an
+  organisation endorses through an enrolment; projects about an activity they took part in,
+  approved by that organisation's staff before they can be shown. The shown portfolio carries
+  published projects and skills (through `learning.public_skills`), and the PDF export carries both.
 - **The M4 report** ([m4-report.md](m4-report.md)), not yet signed off: two of three acceptance
-  criteria are met; the third needs a validator check on a public host. Skills, projects with staff
-  approval, and evidence uploads remain of M4's scope.
+  criteria are met; the third needs a validator check on a public host. Evidence uploads (media
+  storage) and quizzes remain of M4's scope.
 - **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
   met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.
@@ -195,7 +199,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D68 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 and D68 on 2026-10-25).
+Every decision through D68 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 and D68 on 2026-10-25). D69 (goals, skills, projects) is proposed.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

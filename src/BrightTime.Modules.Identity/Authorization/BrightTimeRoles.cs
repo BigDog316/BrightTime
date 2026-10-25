@@ -70,6 +70,8 @@ public static class BrightTimeRoles
                 Permissions.Badges.Issue,
                 Permissions.Playlists.Author,
                 Permissions.Playlists.ReviewSteps,
+                Permissions.Projects.Review,
+                Permissions.Skills.Endorse,
             ],
 
             [ProviderAdmin] =
@@ -99,6 +101,8 @@ public static class BrightTimeRoles
                 Permissions.Badges.Revoke,
                 Permissions.Playlists.Author,
                 Permissions.Playlists.ReviewSteps,
+                Permissions.Projects.Review,
+                Permissions.Skills.Endorse,
                 Permissions.Audit.Read,
             ],
 

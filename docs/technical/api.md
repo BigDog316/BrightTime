@@ -1,7 +1,7 @@
 # API reference
 
 The API host serves everything under `/api/v1` on each tenant's own host name, for example
-`https://kettle.example.org/api/v1/`. It is what the app uses. 181 routes are listed below, grouped
+`https://kettle.example.org/api/v1/`. It is what the app uses. 196 routes are listed below, grouped
 by area. In Development the host also serves the full OpenAPI document at `/api/v1/openapi.json`.
 
 - [Conventions](#conventions)
@@ -15,6 +15,7 @@ by area. In Development the host also serves the full OpenAPI document at `/api/
 - [Attendance](#attendance)
 - [Messages and devices](#messages-and-devices)
 - [Learning: portfolio, badges and playlists](#learning-portfolio-badges-and-playlists)
+- [Learning: goals, skills and projects](#learning-goals-skills-and-projects)
 - [Organisation routes](#organisation-routes)
 - [Organiser and webhook routes](#organiser-and-webhook-routes)
 
@@ -193,6 +194,18 @@ The owner alone reads or changes a family profile.
 | `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note |
 | `PUT /me/playlists/{id}/steps/{stepId}` | Mark a step done (`{ reflection }` for a reflection step): completed, or submitted when it needs review. Completing the last required step completes the playlist and awards its badge |
 
+## Learning: goals, skills and projects
+
+| Route | |
+|---|---|
+| `GET`, `POST /me/goals`; `PUT /me/goals/{id}` | Private goals: a title, detail, an optional interest or skill term, a target date, and `active`, `achieved`, `paused` or `abandoned` (D69) |
+| `GET /me/skills` | Skills, each with its level (1 to 4), and whether and by which organisation it was endorsed |
+| `POST /me/skills` | `{ termId, level }`: list a skill from the `skill` vocabulary as one's own, or change its level |
+| `DELETE /me/skills/{id}` | Remove a skill, endorsed or not |
+| `GET`, `POST /me/projects`; `PUT`, `DELETE /me/projects/{id}` | Projects: a title, a description, and the listing it came from (one the person took part in). Changing an approved or published project makes it a private draft again |
+| `POST /me/projects/{id}/submit` | Ask the listing's organisation to approve it |
+| `PUT /me/projects/{id}/visibility` | `{ visibility }`: `public` or `link_only` once approved (needs the showcase capability), or `private` |
+
 ## Organisation routes
 
 All under `/org/{orgId}`. Each needs a live membership in that organisation with the permission and
@@ -225,6 +238,8 @@ minimum role shown. *Admin* means owner or admin.
 | `GET`, `POST /badge-classes`; `PUT /badge-classes/{id}` (a draft only); `POST …/publish`, `/retire` | Admin to define; staff to list | Badges (D66) |
 | `GET`, `POST /badge-classes/{id}/awards` | Staff | Awards, named as the family's share allows; award one (`{ enrollmentId, narrative }`) |
 | `POST /badge-assertions/{id}/revoke` | Admin | Revoke with a reason |
+| `GET /projects`; `POST /projects/{id}/review` | Staff (`projects.review`) | Projects about the organisation's activities waiting for approval, named by portfolio display name only; approve, or send back (`{ approve, note }`) |
+| `POST /skills/endorse` | Staff (`skills.endorse`) | `{ enrollmentId, termId, level }`: endorse a skill for a young person enrolled with the organisation |
 | `GET`, `POST /playlists`; `GET`, `PUT /playlists/{id}` (a draft); `PUT /playlists/{id}/steps` (a draft); `POST …/publish`, `/archive` | Staff (`playlists.author`) | Playlists (D67) |
 | `GET /playlists/{id}/submissions`; `POST /playlists/{id}/steps/{stepId}/review` | Staff (`playlists.review_steps`) | Steps waiting for review, named by portfolio display name only; approve, or send back with a note (`{ enrollmentId, approve, note }`) |
 

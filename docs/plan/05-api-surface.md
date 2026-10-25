@@ -420,6 +420,13 @@ Listings are gated by the eligibility kinds `badge_required` and `playlist_compl
 `clr2`, returning the file at once; nothing is stored, so there is no export to fetch later. The
 CLR is signed by the county's site under `did:web:{host}:api:v1:public:issuers:{tenant}`.
 
+*Built (2026-10-25, D69):* `GET` and `POST /me/goals`, `PUT /me/goals/{id}`; `GET` and
+`POST /me/skills` (set one's own skill and level), `DELETE /me/skills/{id}`; `GET` and
+`POST /me/projects`, `PUT` and `DELETE /me/projects/{id}`, `POST .../{id}/submit` and
+`PUT .../{id}/visibility`. Organisations: `GET /org/{orgId}/projects` (waiting for approval),
+`POST /org/{orgId}/projects/{id}/review` (approve or send back), and
+`POST /org/{orgId}/skills/endorse`. Projects live under `/me`, not `/projects`.
+
 ```
 
 GET    /api/v1/playlists

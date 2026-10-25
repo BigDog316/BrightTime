@@ -30,11 +30,24 @@ public sealed record ExportedActivity(string Title, string? Organisation, DateOn
 [YouthData]
 public sealed record ExportedBadge(string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, Uri Verify);
 
-/// <summary>What a portfolio export says: the young person's own choices and unhidden records, and the badges they hold.</summary>
+/// <summary>A skill, and the organisation that endorsed it; null when it's the young person's own (D69).</summary>
+[YouthData]
+public sealed record ExportedSkill(string Name, short? Level, string? EndorsedBy);
+
+/// <summary>A project staff approved (D69).</summary>
+[YouthData]
+public sealed record ExportedProject(string Title, string? Activity, string? Organisation);
+
+/// <summary>What a portfolio export says: the young person's own choices and unhidden records, their skills and approved projects, and the badges they hold.</summary>
 [YouthData]
 public sealed record PortfolioFacts(
     string? DisplayName, string? Headline, string? Bio, decimal TotalHours, bool HasHidden,
-    IReadOnlyList<ExportedActivity> Activities, IReadOnlyList<ExportedBadge> Badges);
+    IReadOnlyList<ExportedActivity> Activities, IReadOnlyList<ExportedBadge> Badges)
+{
+    public IReadOnlyList<ExportedSkill> Skills { get; init; } = [];
+
+    public IReadOnlyList<ExportedProject> Projects { get; init; } = [];
+}
 
 public sealed record ExportFile(byte[] Bytes, string ContentType, string FileName);
 
@@ -48,7 +61,8 @@ public sealed record ExportFile(byte[] Bytes, string ContentType, string FileNam
 /// shown portfolio, and badges that were revoked are left out. Their legal name never appears; the
 /// CLR identifies them as their badges do, by a salted hash.
 /// </remarks>
-public sealed class PortfolioExports(LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, Badges.Badges badges)
+public sealed class PortfolioExports(
+    LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, Badges.Badges badges, Records.Skills skills, Records.Projects projects)
 {
     public const string Exported = "learning.portfolio.exported";
 
@@ -199,7 +213,11 @@ public sealed class PortfolioExports(LearningDbContext db, ITenantContext tenant
         return new PortfolioFacts(
             profile?.DisplayName, profile?.Headline, profile?.Bio, shown.Sum(r => r.Hours), records.Count != shown.Count,
             [.. shown.Select(r => new ExportedActivity(r.TitleSnapshot, r.OrgNameSnapshot, r.StartedOn, r.EndedOn, r.SessionsAttended, r.Hours))],
-            [.. held.Select(h => new ExportedBadge(h.Name, h.Issuer, h.IssuedOn, h.ExpiresOn, BadgeDocuments.Credential(site, h.VerifySlug)))]);
+            [.. held.Select(h => new ExportedBadge(h.Name, h.Issuer, h.IssuedOn, h.ExpiresOn, BadgeDocuments.Credential(site, h.VerifySlug)))])
+        {
+            Skills = [.. (await skills.OfAsync(user.Value, ct).ConfigureAwait(false)).Select(k => new ExportedSkill(k.Name, k.Level, k.EndorsedBy))],
+            Projects = [.. (await projects.ApprovedOfAsync(user.Value, ct).ConfigureAwait(false)).Select(p => new ExportedProject(p.Title, p.Activity, p.Organisation))],
+        };
     }
 
     private async Task<Guid> RecordAsync(UserId user, string format, CancellationToken ct)

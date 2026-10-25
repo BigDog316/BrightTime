@@ -75,6 +75,9 @@ For each term:
   has no name;
 - its **order** (lower numbers first), and for some vocabularies a parent **category**.
 
+The **skills** vocabulary is what young people choose from for their portfolios, and what
+organisations endorse. It starts empty: add the skills your county wants to recognise.
+
 Saving a term updates the listings tagged with it in search shortly afterwards. **Retire** stops
 editors and filters offering a term; listings already tagged keep it until they're re-tagged.
 **Restore** brings it back.

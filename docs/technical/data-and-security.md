@@ -87,6 +87,8 @@ and the conditions itself:
 - `platform.queue_health()`: counts and ages for the readiness probe, never a row.
 - `learning.public_participation(tenant, slug)`: the unhidden records of a portfolio its owner
   chose to show (D65).
+- `learning.public_skills(tenant, slug)`: that portfolio's skills: the term, the level, and
+  whether an organisation endorsed it, never which (D69).
 - The audit partition functions, executable by the jobs role only.
 
 `learning.badge_assertion` sits outside the actor guard on purpose, so public verification can
@@ -111,6 +113,8 @@ them:
 - **No youth home address or coordinates** anywhere in the schema.
 - **Clearances are status and expiry only**, never a background-check report.
 - **No cardholder data.** Payment rows hold the gateway's ids and statuses.
+- **Public work is approved work.** A project is `public` or `link_only` only when it's approved and
+  published (`ck_project_public_needs_approval`); changing it takes it back to a private draft (D69).
 - **Badges.** A badge is awarded once per recipient while unrevoked. A revocation always has a
   reason. A credential has a proof. Issuer keys are `Ed25519`, `ES256` or `RS256`, with at most
   one active key per issuer.

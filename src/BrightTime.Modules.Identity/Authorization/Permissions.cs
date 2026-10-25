@@ -125,6 +125,18 @@ public static class Permissions
         public const string ReviewSteps = "playlists.review_steps";
     }
 
+    public static class Projects
+    {
+        /// <summary>Approving, or sending back, projects young people submit about the organisation's activities (D69).</summary>
+        public const string Review = "projects.review";
+    }
+
+    public static class Skills
+    {
+        /// <summary>Endorsing a skill for a young person enrolled with the organisation (D69).</summary>
+        public const string Endorse = "skills.endorse";
+    }
+
     public static class Reports
     {
         /// <summary>Running the organisation's own reports: roster, attendance and participation (D57).</summary>
@@ -191,6 +203,7 @@ public static class Permissions
         Reports.RunProvider,
         Badges.Define, Badges.Issue, Badges.Revoke,
         Playlists.Author, Playlists.ReviewSteps,
+        Projects.Review, Skills.Endorse,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

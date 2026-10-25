@@ -99,6 +99,16 @@ badge at the end.
 - Some playlists, and some programs, are open only to people who hold a certain badge, or who have
   completed a certain playlist. The program's page says so before you apply.
 
+**Goals, skills and projects.**
+- **Goals** are your own aims, like *lead a river walk*. They're private: nobody else sees them.
+- **Skills** come from your county's list. Add the ones you have and say how far along you are,
+  from beginning to advanced. An organisation you're enrolled with can also **endorse** a skill,
+  vouching that you showed it. You can remove any skill, endorsed or not.
+- **Projects** are things you made, like a map or a write-up, about an activity you took part in.
+  You send a project to that organisation, and its staff approve it or ask you to change something.
+  Once it's approved you can show it on your portfolio. If you change it after that, it goes back
+  to private until it's approved again.
+
 **Taking it with you.** You'll be able to download your portfolio:
 - as a **PDF** to print or attach, with your activities and your badges, each with the link where
   anyone can check it;

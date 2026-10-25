@@ -2274,6 +2274,47 @@ audited.
 - **Not yet:** a guardian's export of a child's portfolio; the `zip` format; projects, skills and
   goals, which aren't built.
 
+### D69 — Goals, skills and projects with staff approval (**proposed 2026-10-25**)
+
+The rest of M4's portfolio item (plan/09): goals, skills, and projects with staff approval. It all
+belongs to the young person: they can see, change or remove anything of theirs.
+- **Goals** (`learner_goal`): their own aims, each with a title, detail, an optional target date
+  and an optional interest or skill it's about. Active, achieved, paused or abandoned. Goals are
+  private. They never appear on a shown portfolio or in an export.
+- **Skills** (`learner_skill`), from the tenant's `skill` vocabulary, which network organisers keep
+  in Taxonomy. A level from 1 to 4 (beginning, developing, proficient, advanced) is optional.
+  - **Self-assessed:** the young person adds a skill, one per term, and changes its level.
+  - **Endorsed:** staff of an organisation endorse a skill for a young person enrolled with it
+    (`skills.endorse`). The endorsement records the enrolment as its evidence, so it says which
+    organisation vouched. A family's share decides whether staff see the young person's name;
+    endorsing needs only the enrolment.
+  - The young person can remove any skill, endorsed ones included: the portfolio is theirs.
+- **Projects** (`project`): something the young person made, described in words. Images wait on
+  media storage, as playlist evidence does.
+  - **Drafted, then submitted** to the organisation of an activity they took part in (a
+    participation record for that listing). Staff with `projects.review` approve it, or send it
+    back with a note. The note is a new column, `project.review_note`.
+  - **Published** by the young person once approved, `public` or `link_only`. That needs the
+    showcase capability: nobody under 13, and a guardian's showcase consent where the account needs
+    one. The schema's own check holds that a public project is approved and published.
+  - **Changing an approved project** returns it to a draft, private and unapproved, so what is
+    public is always what staff approved. Unpublishing makes it private again. Removing marks it
+    removed.
+  - Staff reviewing see the title, the description and the young person's portfolio display name,
+    nothing more.
+- **On a shown portfolio** (D65): published projects, and the young person's skills, each marked
+  as endorsed or not. Skills sit behind the actor guard, so a second security-definer function,
+  `learning.public_skills(tenant, slug)`, returns exactly those of a shown portfolio: the term,
+  the level, and whether an organisation endorsed it.
+- **In the PDF export** (D68): skills, with who endorsed them, and projects that are approved or
+  published. The CLR and OB exports are unchanged.
+- **Not yet:**
+  - project images;
+  - visibility `mentors` and `org`, waiting for M5 and M6;
+  - skills a badge demonstrates;
+  - mentor endorsements (M6);
+  - screens in the app and the console.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

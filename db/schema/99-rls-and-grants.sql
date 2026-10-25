@@ -142,6 +142,25 @@ grant select on learning.learner_profile, learning.participation_record to brigh
 revoke all on function learning.public_participation(uuid, text) from public;
 grant execute on function learning.public_participation(uuid, text) to brighttime_app;
 
+-- The skills on a shown portfolio (D69), which sit behind the actor guard as participation does:
+-- the term, the level, and whether an organisation endorsed it. Nothing about who, or which
+-- enrolment. The same checks as learning.public_participation, as the migrator.
+create or replace function learning.public_skills(p_tenant uuid, p_slug text)
+returns table (term_id uuid, level smallint, endorsed boolean)
+language sql stable security definer set search_path = pg_catalog, learning as $fn$
+  select s.term_id, max(s.level), bool_or(s.evidence_kind = 'participation')
+    from learning.learner_profile lp
+    join learning.learner_skill s on s.user_id = lp.user_id and s.tenant_id = lp.tenant_id
+   where lp.tenant_id = p_tenant
+     and lp.public_slug::text = lower(p_slug)
+     and lp.visibility in ('link_only', 'public')
+   group by s.term_id;
+$fn$;
+alter function learning.public_skills(uuid, text) owner to brighttime_migrator;
+grant select on learning.learner_skill to brighttime_migrator;
+revoke all on function learning.public_skills(uuid, text) from public;
+grant execute on function learning.public_skills(uuid, text) to brighttime_app;
+
 -- platform.data_protection_key: the hosts' shared key ring, encrypted at rest,
 -- no tenant data. The hosts read and add keys; nothing updates or deletes one.
 alter table platform.data_protection_key enable row level security;

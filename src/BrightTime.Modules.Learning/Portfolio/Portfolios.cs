@@ -6,6 +6,7 @@ using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Learning.Contracts;
 using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -35,8 +36,18 @@ public sealed record PortfolioView(
 [YouthData]
 public sealed record PublicParticipation(string Title, string? Organisation, DateOnly StartedOn, DateOnly? EndedOn, int SessionsAttended, decimal Hours);
 
+/// <summary>A skill on a shown portfolio (D69): its name, the level, and whether an organisation endorsed it. Never which one.</summary>
 [YouthData]
-public sealed record PublicPortfolio(string DisplayName, string? Headline, string? Bio, bool Listed, decimal TotalHours, IReadOnlyList<PublicParticipation> Participation);
+public sealed record PublicSkill(string Name, short? Level, bool Endorsed);
+
+/// <summary>A project its maker published after staff approved it (D69).</summary>
+[YouthData]
+public sealed record PublicProject(string Title, string? Description);
+
+[YouthData]
+public sealed record PublicPortfolio(
+    string DisplayName, string? Headline, string? Bio, bool Listed, decimal TotalHours, IReadOnlyList<PublicParticipation> Participation,
+    IReadOnlyList<PublicSkill> Skills, IReadOnlyList<PublicProject> Projects);
 
 public sealed record PortfolioInput(string? DisplayName, string? Headline, string? Bio, string? Visibility, string? PublicSlug);
 
@@ -63,7 +74,8 @@ public sealed partial class Portfolios(
     IClock clock,
     IIdentityQueries identity,
     IEnrolmentQueries enrolments,
-    ParticipationProjector projector)
+    ParticipationProjector projector,
+    ITaxonomyQueries taxonomy)
 {
     public const int MaxDisplayName = 60;
     public const int MaxHeadline = 120;
@@ -209,9 +221,22 @@ public sealed partial class Portfolios(
             List<PublicParticipation> shown = await db.Database
                 .SqlQuery<PublicParticipation>($"select title as \"Title\", organisation as \"Organisation\", started_on as \"StartedOn\", ended_on as \"EndedOn\", sessions_attended as \"SessionsAttended\", hours as \"Hours\" from learning.public_participation({tenantId}, {name})")
                 .ToListAsync(ct).ConfigureAwait(false);
+            // Skills sit behind the actor guard too, so they come through their own definer function (D69).
+            List<ShownSkill> skills = await db.Database
+                .SqlQuery<ShownSkill>($"select term_id as \"TermId\", level as \"Level\", endorsed as \"Endorsed\" from learning.public_skills({tenantId}, {name})")
+                .ToListAsync(ct).ConfigureAwait(false);
+            Dictionary<Guid, string> names = skills.Count == 0 ? []
+                : (await taxonomy.GetTermsAsync([.. skills.Select(k => k.TermId)], tenant.Locale.Code, ct).ConfigureAwait(false)).ToDictionary(t => t.Id, t => t.Name ?? t.Code);
+            List<PublicProject> projects = await db.Projects.AsNoTracking()
+                .Where(p => p.UserId == profile.UserId && p.Status == "published" && (p.Visibility == "public" || p.Visibility == "link_only"))
+                .OrderByDescending(p => p.ApprovedAt).Select(p => new PublicProject(p.Title, p.Description)).ToListAsync(ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = PublicRead, SubjectKind = "learner_profile", SubjectIds = [profile.UserId] }, ct).ConfigureAwait(false);
-            return new PublicPortfolio(profile.DisplayName, profile.Headline, profile.Bio, profile.Visibility == PortfolioVisibility.Public, shown.Sum(p => p.Hours), shown);
+            return new PublicPortfolio(profile.DisplayName, profile.Headline, profile.Bio, profile.Visibility == PortfolioVisibility.Public, shown.Sum(p => p.Hours), shown,
+                [.. skills.Select(k => new PublicSkill(names.GetValueOrDefault(k.TermId) ?? string.Empty, k.Level, k.Endorsed)).OrderBy(k => k.Name, StringComparer.CurrentCulture)],
+                projects);
         }, cancellationToken);
+
+    private sealed record ShownSkill(Guid TermId, short? Level, bool Endorsed);
 
     private async Task<PortfolioView> MineCoreAsync(UserId user, CancellationToken ct)
     {
@@ -247,6 +272,9 @@ public static class LearningModule
         services.AddScoped<Badges.Badges>();
         services.AddScoped<Playlists.Playlists>();
         services.AddScoped<PortfolioExports>();
+        services.AddScoped<Records.Goals>();
+        services.AddScoped<Records.Skills>();
+        services.AddScoped<Records.Projects>();
         services.AddAchievementQueries();
         return services;
     }

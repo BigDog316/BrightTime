@@ -29,6 +29,27 @@ public sealed record FamilyContact(Guid OwnerUserId, Guid OrgId, Guid ListingId)
 public sealed record EnrolmentFacts(Guid EnrollmentId, Guid FamilyMemberId, Guid ListingId, Guid OrgId, string Status, DateTimeOffset EnrolledAt, DateTimeOffset? EndedAt, AgeBand AgeBand, Guid? YouthUserId = null);
 
 /// <summary>Enrolments, for the modules that hang records off them (attendance first).</summary>
+/// <summary>What a young person's account has achieved, as eligibility asks it (D67).</summary>
+/// <param name="BadgeClasses">The badge classes they hold an unrevoked badge of.</param>
+/// <param name="PlaylistsCompleted">The playlists they have completed.</param>
+public sealed record Achievements(IReadOnlySet<Guid> BadgeClasses, IReadOnlySet<Guid> PlaylistsCompleted)
+{
+    public static Achievements None { get; } = new(new HashSet<Guid>(), new HashSet<Guid>());
+}
+
+/// <summary>
+/// The achievements eligibility rules ask about (D67). Enrollment sits below Learning in the
+/// module order, so it states the question here and Learning answers it; a host without Learning
+/// answers that nobody has achieved anything, and that no badge or playlist exists.
+/// </summary>
+public interface IAchievementQueries
+{
+    Task<Achievements> OfAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>A published (or retired) badge class, or a published (or archived) playlist, of this tenant, by id: its name, or null.</summary>
+    Task<string?> NameAsync(string ruleKind, Guid id, CancellationToken cancellationToken = default);
+}
+
 public interface IEnrolmentQueries
 {
     Task<IReadOnlyList<EnrolmentSummary>> GetAsync(IReadOnlyCollection<Guid> enrollmentIds, CancellationToken cancellationToken = default);

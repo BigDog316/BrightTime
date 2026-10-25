@@ -77,7 +77,7 @@ migrations-history table name). Other modules see it only through its `.Contract
 | Attendance | `attendance` | Attendance records, sync batches, check-in tokens, devices | Built |
 | Notifications | `notify` | Push devices, preferences, the inbox, deliveries | Built |
 | Community | `community` | Conversations, messages, broadcasts, screening holds (M3). Spaces, posts and moderation are M5 | Messaging built |
-| Learning | `learning` | Learner profiles, participation, issuers and keys, badge classes and assertions (D65, D66). Playlists, goals, skills and projects to come | Partly built |
+| Learning | `learning` | Learner profiles, participation, issuers and keys, badge classes and assertions, playlists and progress, unlock rules (D65 to D67). Goals, skills, projects and exports to come | Partly built |
 | Workforce, Landscape, Analytics, Integrations | `workforce`, `landscape`, `analytics`, `integration` | Mentors and gigs; asset mapping and surveys; suppressed rollups; external systems | Schema only |
 
 **Dependencies.** A module may reference the contracts of the modules beneath it in this order,
@@ -124,6 +124,12 @@ Messages and their handlers today:
 | `NotificationRequested` | Any module | Notifications: the inbox and push, under the person's preferences and quiet hours. Email delivery of notifications isn't built yet |
 | `AttendanceChanged` | Attendance (every write path) | Learning: rebuilds that enrolment's participation record |
 | `EnrolmentAccountChanged` | Enrollment (linking a member to an account) | Learning: moves participation to or from the account |
+
+3. **Asking upwards.** Sometimes a lower module needs an answer only a higher one has. The lower
+   module states the question as an interface in its own contracts, and the higher module
+   implements it. Eligibility (Enrollment) asks what a young person has achieved through
+   `IAchievementQueries`; Learning answers it (D67). Enrollment registers a default that answers
+   "nothing", and a host that runs Learning replaces it.
 
 ## Tenancy
 

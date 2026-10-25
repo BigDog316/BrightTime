@@ -18,14 +18,20 @@ namespace BrightTime.Modules.Enrollment.Eligibility;
 /// <param name="Max">Age or grade, inclusive.</param>
 /// <param name="On">For an age rule, the date the age is taken on (a program's start); today when absent.</param>
 /// <param name="NeighbourhoodIds">For a neighbourhood rule, where the young person must live.</param>
-public sealed record RuleConfig(int? Min = null, int? Max = null, DateOnly? On = null, IReadOnlyList<Guid>? NeighbourhoodIds = null);
+/// <param name="BadgeClassId">For a badge rule, the badge they must hold (D67).</param>
+/// <param name="PlaylistId">For a playlist rule, the playlist they must have completed (D67).</param>
+public sealed record RuleConfig(
+    int? Min = null, int? Max = null, DateOnly? On = null, IReadOnlyList<Guid>? NeighbourhoodIds = null, Guid? BadgeClassId = null, Guid? PlaylistId = null);
 
 public sealed record RuleInput(string Kind, RuleConfig Config, bool IsHard = true);
 
 public sealed record RuleView(Guid Id, string Kind, RuleConfig Config, bool IsHard);
 
-/// <summary>What eligibility needs to know about a young person. Nothing else is read.</summary>
-public sealed record Applicant(DateOnly? DateOfBirth, short? Grade, Guid? NeighbourhoodId);
+/// <summary>
+/// What eligibility needs to know about a young person. Nothing else is read. What they have
+/// achieved is their own account's (D67); without one, nothing.
+/// </summary>
+public sealed record Applicant(DateOnly? DateOfBirth, short? Grade, Guid? NeighbourhoodId, Achievements? Achieved = null);
 
 /// <summary>One rule's outcome: met, not met, or not known (the family hasn't said).</summary>
 public sealed record RuleOutcome(Guid? RuleId, string Kind, bool IsHard, bool? Met);
@@ -40,7 +46,8 @@ public sealed record EligibilityResult(bool? IsEligible, IReadOnlyList<RuleOutco
 /// A listing's eligibility rules (M3a, D46): declarative, shown to a family before they apply,
 /// and evaluated here, never by code a provider writes.
 /// </summary>
-public sealed class EligibilityRules(EnrollmentDbContext db, ITenantContext tenant, IClock clock, IListingDetails listings, IGeographyQueries geography)
+public sealed class EligibilityRules(
+    EnrollmentDbContext db, ITenantContext tenant, IClock clock, IListingDetails listings, IGeographyQueries geography, IAchievementQueries achievements)
 {
     public const int MaxRules = 20;
 
@@ -143,8 +150,12 @@ public sealed class EligibilityRules(EnrollmentDbContext db, ITenantContext tena
         EligibilityRuleKinds.AgeAtStart => who.DateOfBirth is { } dob ? Within(Age.YearsOn(dob, rule.Config.On ?? today), rule.Config) : null,
         EligibilityRuleKinds.GradeRange => who.Grade is { } grade ? Within(grade, rule.Config) : null,
         EligibilityRuleKinds.NeighbourhoodIn => who.NeighbourhoodId is { } hood ? rule.Config.NeighbourhoodIds?.Contains(hood) == true : null,
+        EligibilityRuleKinds.BadgeRequired => (who.Achieved ?? Achievements.None).BadgeClasses.Contains(rule.Config.BadgeClassId ?? Guid.Empty),
+        EligibilityRuleKinds.PlaylistCompleted => (who.Achieved ?? Achievements.None).PlaylistsCompleted.Contains(rule.Config.PlaylistId ?? Guid.Empty),
         _ => null,
     };
+
+    private static bool Unranged(RuleConfig c) => c.Min is null && c.Max is null && c.On is null && c.NeighbourhoodIds is null;
 
     private static bool Within(int value, RuleConfig config) => (config.Min is null || value >= config.Min) && (config.Max is null || value <= config.Max);
 
@@ -165,18 +176,26 @@ public sealed class EligibilityRules(EnrollmentDbContext db, ITenantContext tena
             }
 
             RuleConfig c = rule.Config;
-            bool fits = rule.Kind switch
+            bool achievement = rule.Kind is EligibilityRuleKinds.BadgeRequired or EligibilityRuleKinds.PlaylistCompleted;
+            bool fits = (achievement || (c.BadgeClassId is null && c.PlaylistId is null)) && rule.Kind switch
             {
                 EligibilityRuleKinds.AgeAtStart => (c.Min is not null || c.Max is not null) && c.Min is null or (>= 0 and <= 25) && c.Max is null or (>= 0 and <= 25)
                     && (c.Min is null || c.Max is null || c.Min <= c.Max) && c.NeighbourhoodIds is null,
                 EligibilityRuleKinds.GradeRange => (c.Min is not null || c.Max is not null) && c.Min is null or (>= -1 and <= 12) && c.Max is null or (>= -1 and <= 12)
                     && (c.Min is null || c.Max is null || c.Min <= c.Max) && c.On is null && c.NeighbourhoodIds is null,
                 EligibilityRuleKinds.NeighbourhoodIn => c.NeighbourhoodIds is { Count: > 0 and <= 200 } && c.Min is null && c.Max is null && c.On is null,
+                EligibilityRuleKinds.BadgeRequired => c.BadgeClassId is not null && c.PlaylistId is null && Unranged(c),
+                EligibilityRuleKinds.PlaylistCompleted => c.PlaylistId is not null && c.BadgeClassId is null && Unranged(c),
                 _ => false,
             };
             if (!fits)
             {
-                return Error.Validation("eligibility.config", "Settings that suit the rule: an age or grade range, or one or more neighbourhoods.", arguments: at);
+                return Error.Validation("eligibility.config", "Settings that suit the rule: an age or grade range, neighbourhoods, a badge or a playlist.", arguments: at);
+            }
+
+            if (achievement && await achievements.NameAsync(rule.Kind, (c.BadgeClassId ?? c.PlaylistId)!.Value, ct).ConfigureAwait(false) is null)
+            {
+                return Error.Validation("eligibility.achievement", "A published badge or playlist of this county.", arguments: at);
             }
 
             if (c.NeighbourhoodIds is { } ids)

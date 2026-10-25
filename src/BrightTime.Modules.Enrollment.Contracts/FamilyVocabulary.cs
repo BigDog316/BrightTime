@@ -79,7 +79,14 @@ public static class EligibilityRuleKinds
     public const string GradeRange = "grade_range";
     public const string NeighbourhoodIn = "neighbourhood_in";
 
-    public static IReadOnlySet<string> Supported { get; } = new HashSet<string>([AgeAtStart, GradeRange, NeighbourhoodIn], StringComparer.Ordinal);
+    /// <summary>Holds an unrevoked badge of a class (D67).</summary>
+    public const string BadgeRequired = "badge_required";
+
+    /// <summary>Has completed a playlist (D67).</summary>
+    public const string PlaylistCompleted = "playlist_completed";
+
+    public static IReadOnlySet<string> Supported { get; } =
+        new HashSet<string>([AgeAtStart, GradeRange, NeighbourhoodIn, BadgeRequired, PlaylistCompleted], StringComparer.Ordinal);
 }
 
 /// <summary>An enrolment row's kind (<c>ck_enrollment_seat_kind</c>).</summary>

@@ -245,6 +245,18 @@ public static class LearningModule
         services.AddScoped<ParticipationProjector>();
         services.AddScoped<Portfolios>();
         services.AddScoped<Badges.Badges>();
+        services.AddScoped<Playlists.Playlists>();
+        services.AddAchievementQueries();
+        return services;
+    }
+
+    /// <summary>
+    /// Learning's answer to what eligibility asks about achievements (D67), for a host that runs
+    /// Enrollment's eligibility without the rest of Learning. It replaces Enrollment's default.
+    /// </summary>
+    public static IServiceCollection AddAchievementQueries(this IServiceCollection services)
+    {
+        services.AddScoped<IAchievementQueries, Playlists.AchievementQueries>();
         return services;
     }
 

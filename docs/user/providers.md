@@ -15,6 +15,7 @@ of it happens in the **console** on the website. Taking attendance on a phone ha
 - [Messages](#messages)
 - [Reports](#reports)
 - [Badges](#badges)
+- [Playlists](#playlists)
 - [What you can see about families, and why](#what-you-can-see-about-families-and-why)
 
 ## Joining BrightTime
@@ -286,6 +287,30 @@ their console screens are next. When they arrive:
   that it was revoked, and the reason.
 - Your organisation is the badge's issuer, under its own digital identity, so a badge says who
   vouched for it.
+
+## Playlists
+
+A **playlist** is a set of steps young people work through at their own pace, with one of your
+badges at the end. Playlists are built behind the scenes too, and their console screens are next.
+When they arrive:
+
+- Staff write a playlist as a draft: a title, a description, whether the steps go in order, an
+  age range and estimated hours, the badge it awards, and optionally a badge someone must already
+  hold to start it.
+- Each step is one of: **attend a listing** (done once their attendance is recorded), **an activity
+  elsewhere** (a link), **a reflection** they write, or **a check-in with staff**. Any step can be
+  marked for review, and a check-in always is. Steps are required unless you say otherwise.
+- **Publish** it, and from then on it never changes, because everyone's progress refers to its
+  steps. **Archive** stops anyone new starting; those already on it carry on.
+- Staff **review** submitted steps: approve one, or send it back with a note saying what to do
+  again. You see each young person only by the display name they chose for their portfolio.
+- When someone finishes every required step, they're given the playlist's badge, signed by your
+  organisation.
+
+**Gating a program on a badge.** An activity's eligibility can now require a badge, or a
+completed playlist, as a rule that must be met. A young person who doesn't hold it can't submit an
+application. For now these two rules are set through the API; the console's eligibility page shows
+them but doesn't add them yet.
 
 ## What you can see about families, and why
 

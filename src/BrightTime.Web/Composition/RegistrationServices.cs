@@ -9,6 +9,8 @@ using BrightTime.Modules.Enrollment.Payments;
 using BrightTime.Modules.Enrollment.Persistence;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Persistence;
+using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Learning.Portfolio;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Reporting;
@@ -44,6 +46,10 @@ public static class RegistrationServices
         services.AddBrightTimeDbContext<EnrollmentDbContext>(connection, EnrollmentDbContext.SchemaName, EnrollmentDbContext.MigrationsHistoryTable);
         services.AddPaymentGateway(configuration);
         services.AddEnrollment();
+
+        // Eligibility's badge and playlist rules are judged by Learning (D67).
+        services.AddBrightTimeDbContext<LearningDbContext>(connection, LearningDbContext.SchemaName, LearningDbContext.MigrationsHistoryTable);
+        services.AddAchievementQueries();
 
         services.AddBrightTimeDbContext<AttendanceDbContext>(connection, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
         services.AddAttendance();

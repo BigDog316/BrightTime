@@ -409,6 +409,13 @@ of `/issue`, with no Idempotency-Key: a badge is awarded once, so a retry is ref
 `/public/issuers/{orgId}/did.json` rather than `/.well-known` (D66). No `issuer-keys` routes:
 keys rotate in the vault.
 
+*Built (2026-10-25, D67):* `GET` and `POST /org/{orgId}/playlists`, `GET` and `PUT .../{id}`
+(a draft), `PUT .../{id}/steps` (a draft), `/publish`, `/archive`, `GET .../{id}/submissions` and
+`POST .../{id}/steps/{stepId}/review`; `POST /playlists/{id}/enroll`, `GET /me/playlists` and
+`PUT /me/playlists/{id}/steps/{stepId}`. The public reads are `/public/playlists` and
+`/public/playlists/{slug}`, alongside the other anonymous routes, rather than `/playlists`.
+Listings are gated by the eligibility kinds `badge_required` and `playlist_completed`.
+
 ```
 
 GET    /api/v1/playlists

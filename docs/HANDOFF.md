@@ -173,8 +173,14 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   people enrolled with it. Each is an OB 3.0 credential signed RS256 under the organisation's own
   `did:web` DID, and an OB 2.0 hosted assertion; revoked with a reason that verifiers see at
   once. Keys live in the vault: production must set `Security:SigningKeys:default` (an RSA PEM) or
-  one per organisation in the API host; Development makes one up. Playlists
-  follow. The console screens for badges, and a check with 1EdTech's validator, are still to do.
+  one per organisation in the API host; Development makes one up. The console screens for
+  badges, and a check with 1EdTech's validator, are still to do.
+- **Playlists** (D67): an organisation's ordered or unordered steps (attend a listing, an
+  activity elsewhere, a reflection, a check-in with staff), some reviewed by staff, with a badge
+  at the end. Completing one awards the badge, and a listing's eligibility can now ask for a badge
+  or a completed playlist, so M4's acceptance path runs end to end. Enrollment asks Learning
+  through `IAchievementQueries`, which the Web host now registers too. No console or app screens
+  for playlists yet.
 - **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
   met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.
@@ -183,7 +189,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D66 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22).
+Every decision through D66 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22). D67 (Playlists) is proposed.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

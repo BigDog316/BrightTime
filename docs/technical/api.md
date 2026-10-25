@@ -1,7 +1,7 @@
 # API reference
 
 The API host serves everything under `/api/v1` on each tenant's own host name, for example
-`https://kettle.example.org/api/v1/`. It is what the app uses. 166 routes are listed below, grouped
+`https://kettle.example.org/api/v1/`. It is what the app uses. 180 routes are listed below, grouped
 by area. In Development the host also serves the full OpenAPI document at `/api/v1/openapi.json`.
 
 - [Conventions](#conventions)
@@ -14,7 +14,7 @@ by area. In Development the host also serves the full OpenAPI document at `/api/
 - [Applications, waivers and payments](#applications-waivers-and-payments)
 - [Attendance](#attendance)
 - [Messages and devices](#messages-and-devices)
-- [Learning: portfolio and badges](#learning-portfolio-and-badges)
+- [Learning: portfolio, badges and playlists](#learning-portfolio-badges-and-playlists)
 - [Organisation routes](#organisation-routes)
 - [Organiser and webhook routes](#organiser-and-webhook-routes)
 
@@ -106,6 +106,7 @@ All anonymous and rate-limited.
 | `GET /public/badges/classes/{id}/image.svg` | Its generated image |
 | `GET /public/badges/{slug}` | A credential's standing (`valid`, `expired`, `revoked`), with the credential and its JWT. `no-store`, `noindex` |
 | `GET /public/badges/{slug}/ob2` | The OB 2.0 hosted assertion, or `410 Gone` with `revoked: true` and the reason |
+| `GET /public/playlists`, `GET /public/playlists/{slug}` | Published playlists: steps, estimated hours, the badge at the end, and any badge needed to start (D67) |
 | `GET /terms` | The current terms of use, with their hash |
 
 ## Your account
@@ -180,13 +181,16 @@ The owner alone reads or changes a family profile.
 | `POST /conversations/{id}/messages` | Reply. A message from an adult to a minor may be held for a moderator |
 | `POST /devices`, `DELETE /devices/{id}` | Register a phone for push, and forget it |
 
-## Learning: portfolio and badges
+## Learning: portfolio, badges and playlists
 
 | Route | |
 |---|---|
 | `GET`, `PUT /me/portfolio` | The young person's portfolio and its settings (display name, headline, bio, visibility, link name) |
 | `POST /me/portfolio/participation/{id}/hide`, `/show` | Hide a record from the total and any shown page, or show it again |
 | `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT |
+| `POST /playlists/{id}/enroll` | Start a published playlist: needs the account's sign-up capability and any badge the playlist asks for. Starting one already started returns it |
+| `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note |
+| `PUT /me/playlists/{id}/steps/{stepId}` | Mark a step done (`{ reflection }` for a reflection step): completed, or submitted when it needs review. Completing the last required step completes the playlist and awards its badge |
 
 ## Organisation routes
 
@@ -200,7 +204,7 @@ minimum role shown. *Admin* means owner or admin.
 | `PUT`, `DELETE /listings/{listingId}/form` | Admin | Attach or detach a published form |
 | `GET`, `POST /waivers`; `GET`, `PUT /waivers/{id}`; `POST /waivers/{id}/publish`, `/revise`, `/retire` | Admin | Waivers |
 | `PUT`, `DELETE /listings/{listingId}/waivers/{waiverId}` | Admin | Ask for a waiver on a listing, required or optional |
-| `GET`, `PUT /listings/{listingId}/eligibility`; `POST …/eligibility/preview` | Admin | Rules, and a dry run against a made-up applicant |
+| `GET`, `PUT /listings/{listingId}/eligibility`; `POST …/eligibility/preview` | Admin | Rules (`age_at_start`, `grade_range`, `neighbourhood_in`, `badge_required`, `playlist_completed`), and a dry run against a made-up applicant, who may hold `badgeClassIds` and `playlistIds` |
 | `GET /listings/{listingId}/applications`; `GET /applications/{id}` | Staff | The queue, and one application as the family's share allows |
 | `POST /applications/{id}/decide`, `POST /applications/bulk-decide` | Staff | Decide singly or in bulk; the bulk answer lists any left and why |
 | `GET /listings/{listingId}/seats`; `POST /listings/{listingId}/waitlist/offer` | Staff | Places taken and waiting; offer freed places to the front of the waitlist |
@@ -220,6 +224,8 @@ minimum role shown. *Admin* means owner or admin.
 | `GET`, `POST /badge-classes`; `PUT /badge-classes/{id}` (a draft only); `POST …/publish`, `/retire` | Admin to define; staff to list | Badges (D66) |
 | `GET`, `POST /badge-classes/{id}/awards` | Staff | Awards, named as the family's share allows; award one (`{ enrollmentId, narrative }`) |
 | `POST /badge-assertions/{id}/revoke` | Admin | Revoke with a reason |
+| `GET`, `POST /playlists`; `GET`, `PUT /playlists/{id}` (a draft); `PUT /playlists/{id}/steps` (a draft); `POST …/publish`, `/archive` | Staff (`playlists.author`) | Playlists (D67) |
+| `GET /playlists/{id}/submissions`; `POST /playlists/{id}/steps/{stepId}/review` | Staff (`playlists.review_steps`) | Steps waiting for review, named by portfolio display name only; approve, or send back with a note (`{ enrollmentId, approve, note }`) |
 
 Organisations' listings, sites, staff and profile are managed in the web console, not the API.
 

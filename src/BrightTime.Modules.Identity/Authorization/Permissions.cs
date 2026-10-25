@@ -116,6 +116,15 @@ public static class Permissions
         public const string Revoke = "badges.revoke";
     }
 
+    public static class Playlists
+    {
+        /// <summary>Writing, publishing and archiving the organisation's playlists (D67).</summary>
+        public const string Author = "playlists.author";
+
+        /// <summary>Approving or sending back the steps young people submit on the organisation's playlists.</summary>
+        public const string ReviewSteps = "playlists.review_steps";
+    }
+
     public static class Reports
     {
         /// <summary>Running the organisation's own reports: roster, attendance and participation (D57).</summary>
@@ -181,6 +190,7 @@ public static class Permissions
         Payments.Waive,
         Reports.RunProvider,
         Badges.Define, Badges.Issue, Badges.Revoke,
+        Playlists.Author, Playlists.ReviewSteps,
         Consent.AttestSignedForm,
         Taxonomy.Manage,
         Tenant.Settings, Tenant.FeatureFlags,

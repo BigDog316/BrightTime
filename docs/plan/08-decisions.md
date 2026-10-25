@@ -2186,6 +2186,60 @@ What is built:
   - checking a credential with 1EdTech's validator by hand, which can't run in CI;
   - badges from playlists, and portfolio exports (`json_ob3`, CLR 2.0).
 
+### D67 — Playlists: steps, progress, review, a completion badge, and listings it unlocks (**proposed 2026-10-25**)
+
+M4's third slice, and the rest of its acceptance criterion: *completing a playlist issues the
+badge and unlocks a gated listing*.
+- **An organisation writes a playlist** (`playlists.author`: programme staff and provider admins,
+  staff role or above).
+  - A draft has a title, a description, whether its steps go in order, an age range and estimated
+    hours (both shown, not enforced), an optional **completion badge** (one of the organisation's
+    own published badges), and an optional **badge needed to start it**.
+  - `PUT …/steps` replaces the whole ordered list while it's a draft.
+  - **Publishing** needs at least one required step. A published playlist never changes, because
+    the progress of everyone on it refers to its steps; **archiving** stops new starts, and anyone
+    already on it carries on.
+- **Steps, four kinds of the schema's six:**
+  - *attend a listing*: done once the young person has a participation record for that listing
+    (D65);
+  - *an activity elsewhere*: a link;
+  - *a reflection*: written in 20 to 2,000 characters;
+  - *a check-in with staff*: always reviewed.
+
+  Any step can be marked for review. `upload_artifact` waits on media storage, and `quiz` on a
+  design for quizzes; both are refused.
+- **The young person's playlist.**
+  - `POST /playlists/{id}/enroll` starts it. It needs the account's own sign-up capability, so
+    nobody under 13, and the badge the playlist asks for, if any (`learning.unlock_rule`, kind
+    `playlist`).
+  - `PUT /me/playlists/{id}/steps/{stepId}` marks a step done. A step needing review is
+    *submitted*; any other is *completed*.
+  - In an ordered playlist, a step waits until every required step before it is completed.
+  - Steps can't be undone; a reviewer's "needs rework" reopens one.
+- **Review.** Staff with `playlists.review_steps` see the steps waiting for review, named by the
+  young person's portfolio display name (D65) and nothing else. They approve a step, or send it
+  back with a note. Every read and decision is audited.
+- **Completion.** When every required step is completed (and at least `required_step_count`
+  steps, where set), the playlist is complete. The completion badge is then awarded, signed and
+  verifiable as any other (D66), with `source_playlist_enrollment_id` set and the organisation as
+  issuer. A young person who already holds that badge isn't given a second.
+- **Gating a listing.** Eligibility gains two of its reserved kinds: `badge_required` (holds an
+  unrevoked badge of a class) and `playlist_completed`. Enrollment sits below Learning in the module
+  order, so it can't ask Learning. Instead it defines the question as `IAchievementQueries` in its
+  contracts, and Learning answers it; the Web and Api hosts register Learning's answer.
+  - An applicant is judged by the account their household member is linked to (D65). A member with
+    no linked account holds nothing, so a hard badge rule isn't met.
+  - `learning.unlock_rule` is used only for playlists that need a badge. A listing is gated by its
+    eligibility rules, which families already see before applying, and which submission already
+    enforces.
+- **Not yet:**
+  - the console screens for playlists, and adding the new rule kinds from the console's
+    eligibility page (the API takes them; the console shows them);
+  - playlists in the app;
+  - evidence uploads and quizzes;
+  - completing an *attend a listing* step automatically when attendance arrives;
+  - mentors as reviewers (M6).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

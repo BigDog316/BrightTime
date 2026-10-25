@@ -68,6 +68,8 @@ public static class BrightTimeRoles
                 Permissions.Messages.SendToFamily,
                 Permissions.Reports.RunProvider,
                 Permissions.Badges.Issue,
+                Permissions.Playlists.Author,
+                Permissions.Playlists.ReviewSteps,
             ],
 
             [ProviderAdmin] =
@@ -95,6 +97,8 @@ public static class BrightTimeRoles
                 Permissions.Badges.Define,
                 Permissions.Badges.Issue,
                 Permissions.Badges.Revoke,
+                Permissions.Playlists.Author,
+                Permissions.Playlists.ReviewSteps,
                 Permissions.Audit.Read,
             ],
 

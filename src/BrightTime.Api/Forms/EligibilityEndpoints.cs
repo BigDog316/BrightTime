@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Enrollment.Eligibility;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -8,7 +9,10 @@ namespace BrightTime.Api.Forms;
 
 public sealed record EligibilityRulesRequest(IReadOnlyList<RuleInput>? Rules);
 
-public sealed record EligibilityPreviewRequest(IReadOnlyList<RuleInput>? Rules, DateOnly? DateOfBirth, short? Grade, Guid? NeighbourhoodId);
+/// <summary>A dry run's made-up applicant, including the badges and playlists they would hold (D67).</summary>
+public sealed record EligibilityPreviewRequest(
+    IReadOnlyList<RuleInput>? Rules, DateOnly? DateOfBirth, short? Grade, Guid? NeighbourhoodId,
+    IReadOnlyList<Guid>? BadgeClassIds = null, IReadOnlyList<Guid>? PlaylistIds = null);
 
 /// <summary>
 /// A listing's eligibility rules (M3a, D46), managed by the organisation's owners and admins as
@@ -46,7 +50,8 @@ public static class EligibilityEndpoints
         }
 
         Result<EligibilityResult> judged = await rules.PreviewAsync(new OrganisationId(orgId), listingId, body.Rules,
-            new Applicant(body.DateOfBirth, body.Grade, body.NeighbourhoodId), ct);
+            new Applicant(body.DateOfBirth, body.Grade, body.NeighbourhoodId,
+                new Achievements(new HashSet<Guid>(body.BadgeClassIds ?? []), new HashSet<Guid>(body.PlaylistIds ?? []))), ct);
         return judged.IsSuccess ? Results.Ok(judged.Value) : ApiProblems.From(judged.Error);
     }
 

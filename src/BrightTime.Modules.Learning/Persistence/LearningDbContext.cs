@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Learning.Persistence;
 
-// The learning tables (db/schema/60-learning.sql) this module uses so far (D65, D66). Mapped as the
+// The learning tables (db/schema/60-learning.sql) this module uses so far (D65 to D67). Mapped as the
 // DDL has them; the schema drift test holds the two together.
 
 /// <summary>A young person's portfolio: how they appear, and who may see it.</summary>
@@ -208,6 +208,125 @@ public sealed class BadgeAssertionRecord
     public Guid? SourcePlaylistEnrollmentId { get; init; }
 }
 
+/// <summary>A sequence of steps an organisation sets, with a badge at the end (D67).</summary>
+public sealed class PlaylistRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? OrgId { get; init; }
+
+    public required string Slug { get; init; }
+
+    public required string Title { get; set; }
+
+    public string? Description { get; set; }
+
+    public Guid? HeroMediaId { get; set; }
+
+    public bool IsOrdered { get; set; }
+
+    public short? AgeMin { get; set; }
+
+    public short? AgeMax { get; set; }
+
+    public decimal? EstimatedHours { get; set; }
+
+    public Guid? CompletionBadgeClassId { get; set; }
+
+    public short? RequiredStepCount { get; set; }
+
+    public required string Status { get; set; }
+
+    public Guid? CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public sealed class PlaylistStepRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid PlaylistId { get; init; }
+
+    public short SortOrder { get; init; }
+
+    public required string StepKind { get; init; }
+
+    public required string Title { get; init; }
+
+    public string? InstructionsMd { get; init; }
+
+    public Guid? ListingId { get; init; }
+
+    public string? ExternalUrl { get; init; }
+
+    public short? ExpectedMinutes { get; init; }
+
+    public bool IsRequired { get; init; }
+
+    public bool RequiresReview { get; init; }
+}
+
+/// <summary>One young person on one playlist.</summary>
+public sealed class PlaylistEnrollmentRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid PlaylistId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public DateTimeOffset StartedAt { get; init; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public Guid? AwardedAssertionId { get; set; }
+}
+
+/// <summary>Where one young person is on one step.</summary>
+public sealed class PlaylistStepProgressRecord
+{
+    public Guid PlaylistEnrollmentId { get; init; }
+
+    public Guid StepId { get; init; }
+
+    public required string State { get; set; }
+
+    public Guid? EvidenceProjectId { get; set; }
+
+    public string? Reflection { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public Guid? ReviewedBy { get; set; }
+
+    public DateTimeOffset? ReviewedAt { get; set; }
+
+    public string? ReviewNote { get; set; }
+}
+
+/// <summary>A badge that opens something to those who hold it; D67 uses it for playlists.</summary>
+public sealed class UnlockRuleRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid BadgeClassId { get; set; }
+
+    public required string UnlocksKind { get; init; }
+
+    public Guid? UnlocksListingId { get; init; }
+
+    public Guid? UnlocksPlaylistId { get; init; }
+}
+
 public sealed class LearningDbContext(DbContextOptions<LearningDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -227,6 +346,16 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
     public DbSet<BadgeClassRecord> BadgeClasses => Set<BadgeClassRecord>();
 
     public DbSet<BadgeAssertionRecord> BadgeAssertions => Set<BadgeAssertionRecord>();
+
+    public DbSet<PlaylistRecord> Playlists => Set<PlaylistRecord>();
+
+    public DbSet<PlaylistStepRecord> PlaylistSteps => Set<PlaylistStepRecord>();
+
+    public DbSet<PlaylistEnrollmentRecord> PlaylistEnrollments => Set<PlaylistEnrollmentRecord>();
+
+    public DbSet<PlaylistStepProgressRecord> PlaylistProgress => Set<PlaylistStepProgressRecord>();
+
+    public DbSet<UnlockRuleRecord> UnlockRules => Set<UnlockRuleRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -293,6 +422,47 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
             b.HasIndex(x => x.VerifySlug).IsUnique();
             b.HasIndex(x => new { x.BadgeClassId, x.RecipientUserId, x.IssuedOn }).IsUnique();
             b.HasIndex(x => new { x.RecipientUserId, x.IssuedOn }).IsDescending(false, true).HasFilter("revoked_at is null");
+            b.HasIndex(x => x.BadgeClassId);
+        });
+
+        modelBuilder.Entity<PlaylistRecord>(b =>
+        {
+            b.ToTable("playlist");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Slug).HasColumnType("citext");
+            b.Property(x => x.EstimatedHours).HasColumnType("numeric(6,2)");
+            b.HasIndex(x => new { x.TenantId, x.Slug }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlaylistStepRecord>(b =>
+        {
+            b.ToTable("playlist_step");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.PlaylistId, x.SortOrder }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlaylistEnrollmentRecord>(b =>
+        {
+            b.ToTable("playlist_enrollment");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.PlaylistId, x.UserId }).IsUnique();
+            b.HasIndex(x => x.UserId);
+        });
+
+        modelBuilder.Entity<PlaylistStepProgressRecord>(b =>
+        {
+            b.ToTable("playlist_step_progress");
+            b.HasKey(x => new { x.PlaylistEnrollmentId, x.StepId });
+        });
+
+        modelBuilder.Entity<UnlockRuleRecord>(b =>
+        {
+            b.ToTable("unlock_rule");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => x.BadgeClassId);
         });
 

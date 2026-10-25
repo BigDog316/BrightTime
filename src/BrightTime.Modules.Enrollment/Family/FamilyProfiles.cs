@@ -4,6 +4,7 @@ using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Enrollment.Contracts;
+using BrightTime.Modules.Enrollment.Eligibility;
 using BrightTime.Modules.Enrollment.Persistence;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Platform.Contracts;
@@ -575,6 +576,8 @@ public static class EnrollmentModule
     /// <summary>The request-side services. The host registers <see cref="EnrollmentDbContext"/> and field encryption.</summary>
     public static IServiceCollection AddEnrollment(this IServiceCollection services)
     {
+        // Learning answers what young people have achieved (D67); without it, nobody has.
+        services.TryAddScoped<IAchievementQueries, NoAchievements>();
         services.AddScoped<FamilyProfiles>();
         services.AddScoped<ProfileShares>();
         services.AddScoped<Forms.FormDefinitions>();

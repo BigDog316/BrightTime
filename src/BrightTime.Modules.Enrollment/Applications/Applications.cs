@@ -77,7 +77,8 @@ public sealed partial class Applications(
     ProfileShares shares,
     Waivers.Waivers waivers,
     SealedAnswers sealedAnswers,
-    SeatLedger seats)
+    SeatLedger seats,
+    IAchievementQueries achievements)
 {
     public const string Read = "enrollment.application.read";
     public const string Changed = "enrollment.application.changed";
@@ -448,7 +449,8 @@ public sealed partial class Applications(
     private async Task<Applicant> ApplicantAsync(FamilyMemberRecord member, CancellationToken ct)
     {
         string? dob = await cipher.DecryptAsync(tenant.TenantId, member.DateOfBirthEnc, ct).ConfigureAwait(false);
-        return new Applicant(dob is null ? null : DateOnly.ParseExact(dob, "yyyy-MM-dd", CultureInfo.InvariantCulture), member.Grade, member.NeighbourhoodId);
+        Achievements achieved = member.UserId is { } account ? await achievements.OfAsync(account, ct).ConfigureAwait(false) : Achievements.None;
+        return new Applicant(dob is null ? null : DateOnly.ParseExact(dob, "yyyy-MM-dd", CultureInfo.InvariantCulture), member.Grade, member.NeighbourhoodId, achieved);
     }
 
     private Task<Dictionary<string, JsonElement>> AnswersAsync(ApplicationRecord application, CancellationToken ct) =>

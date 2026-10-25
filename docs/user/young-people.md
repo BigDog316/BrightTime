@@ -7,7 +7,7 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [Finding things to do](#finding-things-to-do)
 - [What your account can do](#what-your-account-can-do)
 - [Staying safe](#staying-safe)
-- [Your portfolio and badges: coming soon](#your-portfolio-and-badges-coming-soon)
+- [Your portfolio, badges and playlists: coming soon](#your-portfolio-badges-and-playlists-coming-soon)
 
 ## Getting your own account
 
@@ -62,7 +62,7 @@ To sign up for programs yourself, you need to **agree to the terms of use**. Rea
 - **Sign out on all devices**, under **Account**, if you lose your phone or think someone else
   has used your account.
 
-## Your portfolio and badges: coming soon
+## Your portfolio, badges and playlists: coming soon
 
 These are built behind the scenes; their screens are next. When they arrive:
 
@@ -88,3 +88,13 @@ did, like *River Surveyor*.
 - Anyone can check a badge is real from its link. If an organisation takes a badge back (for
   example, it was given by mistake), the badge shows as **revoked**, with the reason. You still
   see it in your list, marked as revoked.
+
+**Playlists** are sets of steps an organisation puts together, like *Watershed Explorer*, with a
+badge at the end.
+- A step might be coming to one of the organisation's sessions, an activity somewhere else,
+  writing a short reflection, or a check-in with a member of staff.
+- Some playlists go in order, so a step opens once the ones before it are done. Some steps are
+  checked by staff, who may ask you to do one again and say why.
+- Finish every required step and the playlist is complete: you're given its badge.
+- Some playlists, and some programs, are open only to people who hold a certain badge, or who have
+  completed a certain playlist. The program's page says so before you apply.

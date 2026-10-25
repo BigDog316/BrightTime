@@ -160,6 +160,7 @@ else if (_listing is not null)
     private string? _listing;
     private IReadOnlyList<RuleView> _rules = [];
     private IReadOnlyList<NeighbourhoodShape> _neighbourhoods = [];
+    private readonly Dictionary<Guid, string> _achievements = [];
     private EligibilityResult? _tried;
     private string? _problem;
 
@@ -171,6 +172,11 @@ else if (_listing is not null)
     private string Describe(string kind, RuleConfig c)
     {
         string what = T["provider.applications.rule." + kind];
+        if ((c.BadgeClassId ?? c.PlaylistId) is { } achievement)
+        {
+            return $"{what}: {_achievements.GetValueOrDefault(achievement, "")}";
+        }
+
         if (kind == EligibilityRuleKinds.NeighbourhoodIn)
         {
             HashSet<Guid> ids = [.. c.NeighbourhoodIds ?? []];
@@ -211,6 +217,13 @@ else if (_listing is not null)
         Result<IReadOnlyList<RuleView>> rules = await Get<EligibilityRules>().GetAsync(Org, ListingId);
         _rules = rules.IsSuccess ? rules.Value : [];
         _neighbourhoods = [.. (await Get<IGeographyQueries>().GetNeighbourhoodsAsync(Tenant.Locale.Code)).OrderBy(n => n.Name, StringComparer.CurrentCulture)];
+        foreach (RuleView rule in _rules)
+        {
+            if ((rule.Config.BadgeClassId ?? rule.Config.PlaylistId) is { } id && await Get<IAchievementQueries>().NameAsync(rule.Kind, id) is { } name)
+            {
+                _achievements[id] = name;
+            }
+        }
     }
 
     private static RuleInput Input(RuleView r) => new(r.Kind, r.Config, r.IsHard);

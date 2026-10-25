@@ -200,40 +200,24 @@ public sealed partial class Badges(
                 return Result<AwardView>.Failure(Error.Conflict("badges.already_awarded", "This young person already holds this badge."));
             }
 
-            IssuerProfileRecord issuer = await db.Issuers.FirstAsync(i => i.Id == badge.IssuerId, ct).ConfigureAwait(false);
-            IssuerKeyRecord key = await ActiveKeyAsync(issuer, ct).ConfigureAwait(false);
-            DateTimeOffset now = clock.StoredNow();
-            string salt = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
-            string identity = BadgeDocuments.RecipientIdentity(recipient);
-            BadgeFacts facts = new(site, org.Value, issuer.Did, issuer.Name, badge.Id, badge.Name, badge.Description, badge.CriteriaMd,
-                VerifySlug(), now, badge.ExpiresAfterMonths is { } months ? now.AddMonths(months) : null, identity, salt, story);
-            JsonObject credential = BadgeDocuments.Credential(facts);
-            string signingInput = BadgeDocuments.SigningInput(credential, $"{issuer.Did}#{key.KeyId}", key.PublicJwk, facts.IssuedOn, facts.ExpiresOn);
-            byte[] signature = await vault.SignAsync(key.PrivateKeyRef, Encoding.UTF8.GetBytes(signingInput), ct).ConfigureAwait(false);
-
-            BadgeAssertionRecord award = new()
-            {
-                Id = UuidV7.NewId(),
-                TenantId = tenant.TenantId.Value,
-                BadgeClassId = badge.Id,
-                RecipientUserId = recipient,
-                RecipientIdentityHash = BadgeDocuments.IdentityHash(identity, salt),
-                RecipientSalt = Encoding.UTF8.GetBytes(salt),
-                IssuedOn = now,
-                ExpiresOn = facts.ExpiresOn,
-                Narrative = story,
-                IssuerKeyId = key.Id,
-                CredentialJwt = BadgeDocuments.Jwt(signingInput, signature),
-                CredentialJson = credential.ToJsonString(),
-                VerifySlug = facts.VerifySlug,
-                AwardedBy = staff.Value,
-                EnrollmentId = enrollmentId,
-            };
-            db.BadgeAssertions.Add(award);
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await AuditAsync(Issued, org, [award.Id], ct, null, recipient).ConfigureAwait(false);
+            BadgeAssertionRecord award = await SignAsync(org, site, badge, recipient, story, staff.Value, enrollmentId, null, ct).ConfigureAwait(false);
             return Result<AwardView>.Success(new AwardView(award.Id, null, award.VerifySlug, award.IssuedOn, award.ExpiresOn, null, null));
         }, cancellationToken);
+
+    /// <summary>
+    /// The completion badge of a playlist a young person has just completed (D67), awarded by the
+    /// playlist's organisation. Null when they already hold it, or the badge can't be awarded.
+    /// </summary>
+    internal async Task<BadgeAssertionRecord?> AwardForPlaylistAsync(OrganisationId org, Uri site, Guid badgeClassId, Guid recipient, Guid playlistEnrollmentId, string playlistTitle, CancellationToken ct)
+    {
+        if (await OwnAsync(org, badgeClassId, ct).ConfigureAwait(false) is not { Status: Published } badge
+            || await db.BadgeAssertions.AnyAsync(a => a.BadgeClassId == badge.Id && a.RecipientUserId == recipient && a.RevokedAt == null, ct).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return await SignAsync(org, site, badge, recipient, $"Completed the playlist “{playlistTitle}”.", null, null, playlistEnrollmentId, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Revokes an award, with the reason; verifiers are told at once, and the young person keeps the record.</summary>
     public Task<Result<AwardView>> RevokeAsync(OrganisationId org, Guid assertionId, string? reason, CancellationToken cancellationToken = default) =>
@@ -425,6 +409,46 @@ public sealed partial class Badges(
         }, cancellationToken);
 
     // ---- helpers ---------------------------------------------------------------------------------
+
+    /// <summary>Signs a badge for a recipient as the organisation, and stores the credential.</summary>
+    private async Task<BadgeAssertionRecord> SignAsync(
+        OrganisationId org, Uri site, BadgeClassRecord badge, Guid recipient, string? story, Guid? awardedBy, Guid? enrollmentId, Guid? playlistEnrollmentId, CancellationToken ct)
+    {
+        IssuerProfileRecord issuer = await db.Issuers.FirstAsync(i => i.Id == badge.IssuerId, ct).ConfigureAwait(false);
+        IssuerKeyRecord key = await ActiveKeyAsync(issuer, ct).ConfigureAwait(false);
+        DateTimeOffset now = clock.StoredNow();
+        string salt = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+        string identity = BadgeDocuments.RecipientIdentity(recipient);
+        BadgeFacts facts = new(site, org.Value, issuer.Did, issuer.Name, badge.Id, badge.Name, badge.Description, badge.CriteriaMd,
+            VerifySlug(), now, badge.ExpiresAfterMonths is { } months ? now.AddMonths(months) : null, identity, salt, story);
+        JsonObject credential = BadgeDocuments.Credential(facts);
+        string signingInput = BadgeDocuments.SigningInput(credential, $"{issuer.Did}#{key.KeyId}", key.PublicJwk, facts.IssuedOn, facts.ExpiresOn);
+        byte[] signature = await vault.SignAsync(key.PrivateKeyRef, Encoding.UTF8.GetBytes(signingInput), ct).ConfigureAwait(false);
+
+        BadgeAssertionRecord award = new()
+        {
+            Id = UuidV7.NewId(),
+            TenantId = tenant.TenantId.Value,
+            BadgeClassId = badge.Id,
+            RecipientUserId = recipient,
+            RecipientIdentityHash = BadgeDocuments.IdentityHash(identity, salt),
+            RecipientSalt = Encoding.UTF8.GetBytes(salt),
+            IssuedOn = now,
+            ExpiresOn = facts.ExpiresOn,
+            Narrative = story,
+            IssuerKeyId = key.Id,
+            CredentialJwt = BadgeDocuments.Jwt(signingInput, signature),
+            CredentialJson = credential.ToJsonString(),
+            VerifySlug = facts.VerifySlug,
+            AwardedBy = awardedBy,
+            EnrollmentId = enrollmentId,
+            SourcePlaylistEnrollmentId = playlistEnrollmentId,
+        };
+        db.BadgeAssertions.Add(award);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await AuditAsync(Issued, org, [award.Id], ct, playlistEnrollmentId is null ? null : "playlist", recipient).ConfigureAwait(false);
+        return award;
+    }
 
     /// <summary>The organisation's issuer profile, made the first time it defines a badge.</summary>
     private async Task<IssuerProfileRecord> IssuerAsync(OrganisationId org, Uri site, CancellationToken ct)

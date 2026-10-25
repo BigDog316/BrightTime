@@ -144,7 +144,8 @@ create table broadcast (
   id           uuid primary key,
   tenant_id    uuid not null references platform.tenant(id) on delete cascade,
   org_id       uuid not null references directory.organisation(id) on delete cascade,
-  listing_id   uuid references opportunity.listing(id) on delete set null,
+  -- By id, not a foreign key: Notifications sits below Opportunities in the module order (D70).
+  listing_id   uuid,
   sent_by      uuid not null references identity.app_user(id) on delete restrict,
   audience     text not null,
   subject      text,

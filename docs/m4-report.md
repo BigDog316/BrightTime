@@ -106,7 +106,7 @@ the API; no console or app screens yet.
 
 ## Test results
 
-1230 tests, all passing against PostgreSQL 18.6 + PostGIS 3.6.4, up from 1225 at M3's close
+1231 tests, all passing against PostgreSQL 18.6 + PostGIS 3.6.4, up from 1225 at M3's close
 (1224 in its report, plus the acceptance test it added). M4's five API test classes each run a
 whole flow end to end, as the real login, with row-level security and the actor guard in force.
 
@@ -114,7 +114,7 @@ whole flow end to end, as the real login, with row-level security and the actor 
 |---|---:|---|---|---:|
 | Web | 193 | | Infrastructure | 39 |
 | Opportunities module | 182 | | SharedKernel | 35 |
-| Integration | 106 | | Ui.Shared | 23 |
+| Integration | 107 | | Ui.Shared | 23 |
 | API | 101 | | Localisation | 20 |
 | Directory module | 40 | | Seed | 18 |
 | Identity module | 40 | | E2E (Playwright, axe) | 11 |
@@ -124,13 +124,13 @@ Found by tests and runs, not by reading:
 - **A shown portfolio was never found** (D65). The definer function's `search_path` doesn't include
   the schema that defines `citext`, so comparing the link name failed. It compares as text now.
 
-Found while writing the documentation, and recorded in it:
-- **CI skips the Web and Api suites.** The build job sets no `BRIGHTTIME_TEST_CONNECTION`, so those
-  suites skip in CI. They pass locally, as above.
-- **Nothing enforces the cross-schema foreign key allowlist.** plan/01 allows cross-schema foreign
-  keys to nine reference tables, and calls for a test to hold that. The test doesn't exist, and the
-  DDL has 34 other such keys, each pointing down the module order. M4 added one,
-  `badge_assertion.enrollment_id`.
+Found while writing the documentation, and since fixed (D70):
+- **CI skipped the Web and Api suites.** The build job sets no `BRIGHTTIME_TEST_CONNECTION`. A new
+  job runs both suites against a PostGIS service.
+- **Nothing enforced the cross-schema foreign key rule.** `CrossSchemaForeignKeyTests` now holds
+  every cross-schema key to a shared reference table or to a module the owner may reference. It
+  found one key pointing up the order, `notify.broadcast` → `opportunity.listing` on an unused
+  table, which was dropped.
 
 ## Schema changes during M4
 
@@ -176,7 +176,6 @@ Left for later, by decision:
 |---|---|---|
 | — | A host the internet can reach (domain, HTTPS), for the validator check that closes M4's first criterion | Signing off M4 |
 | — | Where media and generated files are stored | Evidence uploads, projects, listing images |
-| — | Whether CI should run the Web and Api suites against a service database | Before more slices land |
 | Q4, Q5 | Retention, including `portfolio_export` rows; deletion versus audit for portfolios and badges | Before production data |
 | Q13 | Who reviews the translations (M4's new strings are machine drafts in `@@drafts`) | Launch |
 | D56, D57 | Carried from M3: a waived fee paid anyway, Stripe Connect; QuestPDF's licence and fonts | Live payments; reports and PDF exports in production |

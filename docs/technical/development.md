@@ -77,10 +77,11 @@ The full suite is 1227 tests (at D66), all passing against PostgreSQL 18.6 and P
 | Android app builds | Installs the MAUI Android workload and builds the app, with its format check |
 | schema | Applies the DDL in order, checks every module table has row-level security, and checks the app role can't bypass it |
 | finder query plans | Runs the seven finder scenarios at 50,000 listings, fails on a sequential scan of `listing_search` or estimates off by more than 10×, and keeps the plans |
-| accessibility | The E2E gate, keeping traces of failures |
+| accessibility | The E2E gate against a PostGIS service, keeping traces of failures |
+| web and API suites | Both suites against a PostGIS 18-3.6 service, with the `C.UTF-8` collation and 300 connections (D70) |
 
-The build job sets no `BRIGHTTIME_TEST_CONNECTION`, so in CI the Web and Api suites skip and the
-integration suite runs on Testcontainers. Run the Web and Api suites locally before pushing.
+The build job sets no `BRIGHTTIME_TEST_CONNECTION`: there the integration suite runs on
+Testcontainers and the database suites skip, because their own jobs run them.
 
 **Line endings.** On Windows, a CRLF checkout fails `dotnet format --verify-no-changes` on every
 file. Check formatting as CI does, in a clone made with `core.autocrlf=false`.
@@ -118,6 +119,7 @@ The order that has worked through D66:
 | Modules reference only the contracts they're allowed | `ModuleBoundaryTests` |
 | Only clocks read the system time (`IClock`, `TimeProvider`) | An architecture test |
 | EF mapping equals the DDL, both ways | `SchemaDriftTests` |
+| A cross-schema foreign key goes to a shared reference table, or into a module the owner may reference | `CrossSchemaForeignKeyTests` (D70) |
 | Every module table has RLS; the app role can't bypass it | CI's schema job, `TenantIsolationMatrixTests` |
 | Every console route refuses other tenants and other organisations | `ConsoleRouteMatrixTests` |
 | An endpoint that can return youth data declares `[YouthRecord]` | The start-up guard, `YouthRecordGuardTests` |

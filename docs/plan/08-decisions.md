@@ -2315,6 +2315,32 @@ belongs to the young person: they can see, change or remove anything of theirs.
   - mentor endorsements (M6);
   - screens in the app and the console.
 
+### D70 — CI runs the Web and Api suites; cross-schema keys follow the module order (**proposed 2026-10-25**)
+
+Two gaps that writing the technical documentation found.
+- **CI skipped the Web and Api suites.** They need a PostgreSQL superuser connection
+  (`BRIGHTTIME_TEST_CONNECTION`) and skip without one, and the build job sets none. So about 300
+  test methods, including every end-to-end API flow, ran only on a developer's machine.
+  - A new CI job, `database-suites`, runs both suites against a PostGIS 18-3.6 service. It uses the
+    collation the DDL is written for (`C.UTF-8`) and 300 connections, the same as the scratch
+    cluster. A service container takes no server flags, so the job sets `max_connections` and
+    restarts the container.
+- **Nothing held plan/01's cross-schema foreign key rule.** plan/01 allows cross-schema keys only
+  to nine shared reference tables, and promises a test. There was no test, and the approved DDL
+  itself has 34 other cross-schema keys.
+  - 33 of them point down the module order: `enrollment.application` → `opportunity.listing`, for
+    example, where Enrollment may already depend on Opportunities. Removing them would trade real
+    integrity for a rule with no benefit, so they stay.
+  - The rule the code now holds: a cross-schema key goes to a shared reference table, or into a
+    module the owning module may reference. `CrossSchemaForeignKeyTests` reads the catalogue and
+    fails on any other.
+  - The one key that broke it, `notify.broadcast.listing_id` → `opportunity.listing`, pointed
+    up the order: Notifications may reference only Platform and Identity. Nothing uses that table
+    (D54's broadcasts are Community's), so the key is dropped and the column kept: Notifications
+    refers to a listing by id, as plan/01 says modules should.
+- **Not yet:** the CI job is written and its YAML parses, but it runs only once pushed; the first
+  run is its test.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

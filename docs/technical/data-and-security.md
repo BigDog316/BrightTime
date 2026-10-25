@@ -113,6 +113,10 @@ them:
 - **No youth home address or coordinates** anywhere in the schema.
 - **Clearances are status and expiry only**, never a background-check report.
 - **No cardholder data.** Payment rows hold the gateway's ids and statuses.
+- **Keys follow the module order.** A cross-schema foreign key goes to one of plan/01's nine shared
+  reference tables, or into a module the owning module may reference: `attendance.attendance_record`
+  → `enrollment.enrollment`, say, but never the other way. `CrossSchemaForeignKeyTests` reads the
+  catalogue and holds it (D70).
 - **Public work is approved work.** A project is `public` or `link_only` only when it's approved and
   published (`ck_project_public_needs_approval`); changing it takes it back to a private draft (D69).
 - **Badges.** A badge is awarded once per recipient while unrevoked. A revocation always has a
@@ -246,10 +250,6 @@ result: an honest caller should be told why.
 
 ## Known gaps
 
-- **Cross-schema foreign keys.** [plan/01](../plan/01-architecture.md#database-boundaries) allows
-  cross-schema foreign keys only to nine reference tables. The DDL also has 34 others, each
-  pointing down the module order (for example `attendance.attendance_record` →
-  `enrollment.enrollment`). The planned test that would hold the allowlist doesn't exist yet.
 - **Re-encryption on data key rotation** is described in the key provider's design but not built:
   adding a version keeps old data readable, and nothing rewrites it yet.
 - **Deletion versus audit** (Q5) and **retention periods** (Q4) are open. Nothing deletes subject

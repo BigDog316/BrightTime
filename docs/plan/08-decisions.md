@@ -2315,7 +2315,7 @@ belongs to the young person: they can see, change or remove anything of theirs.
   - mentor endorsements (M6);
   - screens in the app and the console.
 
-### D70 — CI runs the Web and Api suites; cross-schema keys follow the module order (**proposed 2026-10-25**)
+### D70 — CI runs the Web and Api suites; cross-schema keys follow the module order (**accepted 2026-10-25**)
 
 Two gaps that writing the technical documentation found.
 - **CI skipped the Web and Api suites.** They need a PostgreSQL superuser connection

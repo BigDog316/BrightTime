@@ -2274,7 +2274,7 @@ audited.
 - **Not yet:** a guardian's export of a child's portfolio; the `zip` format; projects, skills and
   goals, which aren't built.
 
-### D69 — Goals, skills and projects with staff approval (**proposed 2026-10-25**)
+### D69 — Goals, skills and projects with staff approval (**accepted 2026-10-25**)
 
 The rest of M4's portfolio item (plan/09): goals, skills, and projects with staff approval. It all
 belongs to the young person: they can see, change or remove anything of theirs.

@@ -183,8 +183,10 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   for playlists yet.
 - **Portfolio exports** (D68): the young person's printable portfolio (PDF), their badges as OB
   3.0 credentials, and a CLR 2.0 that the county's site signs under its own `did:web` DID, nesting
-  the badges' JWTs. Made when asked, never stored. This finishes M4's plan; a hand check with
-  1EdTech's validators is the one acceptance step left.
+  the badges' JWTs. Made when asked, never stored.
+- **The M4 report** ([m4-report.md](m4-report.md)), not yet signed off: two of three acceptance
+  criteria are met; the third needs a validator check on a public host. Skills, projects with staff
+  approval, and evidence uploads remain of M4's scope.
 - **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
   met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.

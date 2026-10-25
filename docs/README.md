@@ -47,7 +47,8 @@ python tools/docs-pdf/build.py . docs/pdf
 
 - [plan/](plan/README.md): the plan as approved, and [plan/08-decisions.md](plan/08-decisions.md),
   which records every decision (D1 to D66) and every open question.
-- [m1-report.md](m1-report.md) and [m3-report.md](m3-report.md): the milestone reports.
+- [m1-report.md](m1-report.md), [m3-report.md](m3-report.md) and [m4-report.md](m4-report.md): the
+  milestone reports.
 - [HANDOFF.md](HANDOFF.md): where the work stands, and setting up a development machine.
 - [seed.md](seed.md) and [import.md](import.md): the Kettle County seed, and importing listings.
 - [accessibility/](accessibility/): the keyboard-only pass.

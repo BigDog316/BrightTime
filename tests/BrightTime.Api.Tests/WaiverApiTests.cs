@@ -39,6 +39,22 @@ public sealed class WaiverApiTests(ApiFixture api)
         return (listing.Id, listing.OrgId);
     }
 
+    /// <summary>
+    /// A listing of an organisation of its own, for the test that attaches a required waiver: on the
+    /// shared listing it would block the other test's submission whenever it ran first. The
+    /// fourteenth organisation with no staff, past those the other classes take.
+    /// </summary>
+    private (Guid Id, Guid Org) OwnListing()
+    {
+        HashSet<Guid> staffed = [.. AllStaff().Select(s => s.Org)];
+        List<(Guid Id, Guid OrgId)> unstaffed = [.. api.Data.Listings
+            .Where(l => l.Status == "published" && l.RegistrationMode == "builtin" && !staffed.Contains(l.OrgId)
+                        && api.Data.Organisations.Single(o => o.Id == l.OrgId).Status == "approved")
+            .Select(l => (l.Id, l.OrgId))];
+        Guid org = unstaffed.Select(l => l.OrgId).Distinct().Skip(13).First();
+        return unstaffed.First(l => l.OrgId == org);
+    }
+
     private async Task<HttpClient> SignedInAsync(string email)
     {
         string password = await api.SetPasswordAsync(email);
@@ -142,7 +158,7 @@ public sealed class WaiverApiTests(ApiFixture api)
     public async Task Adults_sign_for_themselves_and_others_are_kept_out()
     {
         RequireDatabase();
-        (Guid listing, Guid org) = Listing();
+        (Guid listing, Guid org) = OwnListing();
         using HttpClient provider = await SignedInAsync(AdminOf(org));
         (string strangerEmail, Guid strangerOrg) = AllStaff().ElementAt(12);
         using HttpClient family = await SignedInAsync(AllStaff().ElementAt(11).Email);

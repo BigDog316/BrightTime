@@ -115,8 +115,11 @@ public sealed class DecisionApiTests(ApiFixture api)
         Guid cy = await ApplyAsync(familyA, listing, "Cy");
         Guid draft = await ApplyAsync(familyB, listing, "Dee", submit: false);
 
-        // The queue: submitted applications only, oldest first, named as the families shared.
-        JsonElement[] queue = [.. (await JsonAsync(await decider.GetAsync(new Uri($"api/v1/org/{org}/listings/{listing}/applications", UriKind.Relative), Ct))).EnumerateArray()];
+        // The queue: submitted applications only, oldest first, named as the families shared. The other
+        // test in this class applies to the same listing, and may run first, so only this test's count.
+        HashSet<Guid> mine = [ada, ben, cy, draft];
+        JsonElement[] queue = [.. (await JsonAsync(await decider.GetAsync(new Uri($"api/v1/org/{org}/listings/{listing}/applications", UriKind.Relative), Ct))).EnumerateArray()
+            .Where(a => mine.Contains(a.GetProperty("id").GetGuid()))];
         queue.Select(a => a.GetProperty("id").GetGuid()).ShouldBe([ada, ben, cy]);
         queue[0].GetProperty("firstName").GetString().ShouldBe("Ada");
         queue[2].GetProperty("firstName").GetString().ShouldBe("Cy", "a second child's submission joins the family's share instead of replacing it");

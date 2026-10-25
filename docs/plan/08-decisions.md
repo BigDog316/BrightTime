@@ -2338,8 +2338,15 @@ Two gaps that writing the technical documentation found.
     up the order: Notifications may reference only Platform and Identity. Nothing uses that table
     (D54's broadcasts are Community's), so the key is dropped and the column kept: Notifications
     refers to a listing by id, as plan/01 says modules should.
-- **Not yet:** the CI job is written and its YAML parses, but it runs only once pushed; the first
-  run is its test.
+- **What its first run found.** The Web suite passed in CI and the Api suite didn't: two tests failed
+  that had always passed locally.
+  - In both, two tests of one class shared a listing and wrote to it: an application in
+    `DecisionApiTests`, a required waiver in `WaiverApiTests`. xUnit v3 runs tests in a random
+    order, so whenever the second ran first, the first saw rows it hadn't made.
+  - The decision test now counts only its own applications. The waiver test that attaches a required
+    waiver uses an organisation of its own.
+  - Reproduced on a fresh `C.UTF-8` cluster in Release, as CI runs it, and then three clean runs of
+    the whole Api suite in different orders.
 
 ## Open questions
 

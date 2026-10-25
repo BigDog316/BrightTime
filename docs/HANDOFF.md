@@ -322,6 +322,9 @@ These have not been asked for yet:
   `TestHost.DrainAsync`, not `JobRunner.DrainAsync` alone.
 - **Shared test databases.** Web and API tests share one seeded database per project. A
   test that changes an account must use a seed account that no other test uses.
+- **Random order.** xUnit v3 shuffles tests, within a class too. Two tests that write to the same
+  listing or organisation must not count each other's rows: give each its own, or assert only on
+  what the test made (D70).
 - **A new public page** belongs in `PublicRoutes`, or neither the axe nor the keyboard gate sees it.
 - **Links to a spot on the same page** use `SamePageLink`, never a bare `href="#id"`, which
   `<base href="/">` sends to the home page.

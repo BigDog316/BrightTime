@@ -416,6 +416,10 @@ keys rotate in the vault.
 `/public/playlists/{slug}`, alongside the other anonymous routes, rather than `/playlists`.
 Listings are gated by the eligibility kinds `badge_required` and `playlist_completed`.
 
+*Built (2026-10-25, D68):* `POST /me/portfolio/export {format}` for `pdf`, `json_ob3` and
+`clr2`, returning the file at once; nothing is stored, so there is no export to fetch later. The
+CLR is signed by the county's site under `did:web:{host}:api:v1:public:issuers:{tenant}`.
+
 ```
 
 GET    /api/v1/playlists

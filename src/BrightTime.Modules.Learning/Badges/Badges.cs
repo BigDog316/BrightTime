@@ -369,7 +369,11 @@ public sealed partial class Badges(
     public Task<JsonObject?> DidDocumentAsync(Guid orgId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<JsonObject?>(async ct =>
         {
-            if (await db.Issuers.AsNoTracking().FirstOrDefaultAsync(i => i.OrgId == orgId, ct).ConfigureAwait(false) is not { } issuer)
+            // The county's own issuer (D68) sits under the tenant's id, where an organisation's sits under its own.
+            IssuerProfileRecord? issuer = orgId == tenant.TenantId.Value
+                ? await db.Issuers.AsNoTracking().FirstOrDefaultAsync(i => i.OrgId == null, ct).ConfigureAwait(false)
+                : await db.Issuers.AsNoTracking().FirstOrDefaultAsync(i => i.OrgId == orgId, ct).ConfigureAwait(false);
+            if (issuer is null)
             {
                 return null;
             }
@@ -475,12 +479,44 @@ public sealed partial class Badges(
     }
 
     /// <summary>
+    /// Signs a credential the county's site issues itself (D68): a CLR vouching for a young person's
+    /// record as a whole. The site's issuer has no organisation, sits under the tenant's id, and is
+    /// made the first time it signs.
+    /// </summary>
+    internal async Task<string> SignAsSiteAsync(Uri site, string siteName, DateTimeOffset issuedOn, Func<string, JsonObject> credentialFor, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(site);
+        ArgumentNullException.ThrowIfNull(credentialFor);
+        if (await db.Issuers.FirstOrDefaultAsync(i => i.OrgId == null, ct).ConfigureAwait(false) is not { } issuer)
+        {
+            issuer = new IssuerProfileRecord
+            {
+                Id = UuidV7.NewId(),
+                TenantId = tenant.TenantId.Value,
+                Did = BadgeDocuments.Did(site, tenant.TenantId.Value),
+                Name = siteName,
+                Url = site.ToString(),
+                Status = "active",
+                CreatedAt = clock.StoredNow(),
+            };
+            db.Issuers.Add(issuer);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        IssuerKeyRecord key = await ActiveKeyAsync(issuer, ct).ConfigureAwait(false);
+        JsonObject credential = credentialFor(issuer.Did);
+        string signingInput = BadgeDocuments.SigningInput(credential, $"{issuer.Did}#{key.KeyId}", key.PublicJwk, issuedOn, null);
+        byte[] signature = await vault.SignAsync(key.PrivateKeyRef, Encoding.UTF8.GetBytes(signingInput), ct).ConfigureAwait(false);
+        return BadgeDocuments.Jwt(signingInput, signature);
+    }
+
+    /// <summary>
     /// The issuer's signing key as the vault holds it now. A key the vault has replaced is retired,
     /// not removed, so credentials it signed still verify.
     /// </summary>
     private async Task<IssuerKeyRecord> ActiveKeyAsync(IssuerProfileRecord issuer, CancellationToken ct)
     {
-        string reference = $"badge-issuer-{issuer.OrgId ?? issuer.Id:N}";
+        string reference = issuer.OrgId is { } org ? $"badge-issuer-{org:N}" : $"clr-issuer-{issuer.TenantId:N}";
         string jwk = await vault.GetPublicJwkAsync(reference, ct).ConfigureAwait(false);
         string keyId = BadgeDocuments.Thumbprint(jwk);
         IssuerKeyRecord? active = await db.IssuerKeys.FirstOrDefaultAsync(k => k.IssuerId == issuer.Id && k.Status == "active", ct).ConfigureAwait(false);

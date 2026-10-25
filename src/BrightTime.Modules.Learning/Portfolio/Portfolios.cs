@@ -246,6 +246,7 @@ public static class LearningModule
         services.AddScoped<Portfolios>();
         services.AddScoped<Badges.Badges>();
         services.AddScoped<Playlists.Playlists>();
+        services.AddScoped<PortfolioExports>();
         services.AddAchievementQueries();
         return services;
     }

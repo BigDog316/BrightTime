@@ -2240,6 +2240,40 @@ badge and unlocks a gated listing*.
   - completing an *attend a listing* step automatically when attendance arrives;
   - mentors as reviewers (M6).
 
+### D68 — Portfolio exports: a printable PDF, the badges as OB 3.0, and a CLR 2.0 signed by the county (**proposed 2026-10-25**)
+
+M4's last item. `POST /me/portfolio/export {format}` gives the young person a file, made when
+asked and not kept, as reports are (D57). Media storage is still open, so nothing waits in a
+queue. Each export is recorded in `learning.portfolio_export` (format and time, no file) and
+audited.
+- **What goes in.** The young person's own records:
+  - participation they haven't hidden, with the display name, headline and bio they chose
+    (D65);
+  - every badge they hold that hasn't been revoked.
+  Hidden records stay out, as they do from a shown portfolio. Their legal name never appears.
+- **`pdf`**: a printable portfolio in their language, laid out by the report renderer (D57). It
+  lists the activities (organisation, dates, sessions, hours) and the badges (issuer, date, and
+  the link where anyone can check each one).
+- **`json_ob3`**: their badges as OB 3.0 credentials. For each: the name, issuer and verification
+  link, the credential, and its signed JWT, the form wallets and other platforms import.
+- **`clr2`**: a Comprehensive Learner Record 2.0, a `ClrCredential` signed RS256 as a VC-JWT.
+  - **Inside it:** the CLR, VC 2.0 and OB 3.0 contexts, and a `ClrSubject` identified only by
+    the salted hash its badges use. Its `verifiableCredential` list holds the badges' own JWTs,
+    which CLR 2.0 nests as compact JWS strings. Each activity becomes an `Achievement` of type
+    `CoCurricular`, carrying its sessions and hours.
+  - **Partial.** `partial` is true when they have hidden any record.
+  - **At least one badge.** CLR 2.0 requires one verifiable credential, so a young person with
+    none is told so (`portfolio.nothing_to_export`).
+- **The CLR's issuer is the county's site, not an organisation.** It vouches for the record as a
+  whole; each badge inside still carries its own organisation's signature.
+  - It is an issuer profile with no organisation, under
+    `did:web:{host}:api:v1:public:issuers:{tenant}`, so its DID document is served by the same
+    route as the organisations' (D66).
+  - Its key reference is `clr-issuer-{tenant}`, which `Security:SigningKeys:default` serves
+    unless a key of its own is set.
+- **Not yet:** a guardian's export of a child's portfolio; the `zip` format; projects, skills and
+  goals, which aren't built.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

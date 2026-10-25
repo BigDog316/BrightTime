@@ -181,6 +181,10 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   or a completed playlist, so M4's acceptance path runs end to end. Enrollment asks Learning
   through `IAchievementQueries`, which the Web host now registers too. No console or app screens
   for playlists yet.
+- **Portfolio exports** (D68): the young person's printable portfolio (PDF), their badges as OB
+  3.0 credentials, and a CLR 2.0 that the county's site signs under its own `did:web` DID, nesting
+  the badges' JWTs. Made when asked, never stored. This finishes M4's plan; a hand check with
+  1EdTech's validators is the one acceptance step left.
 - **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
   met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.
@@ -189,7 +193,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D67 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 on 2026-10-25).
+Every decision through D67 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 on 2026-10-25). D68 (portfolio exports) is proposed.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

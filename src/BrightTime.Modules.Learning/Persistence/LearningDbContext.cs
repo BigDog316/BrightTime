@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Learning.Persistence;
 
-// The learning tables (db/schema/60-learning.sql) this module uses so far (D65 to D67). Mapped as the
+// The learning tables (db/schema/60-learning.sql) this module uses so far (D65 to D68). Mapped as the
 // DDL has them; the schema drift test holds the two together.
 
 /// <summary>A young person's portfolio: how they appear, and who may see it.</summary>
@@ -327,6 +327,26 @@ public sealed class UnlockRuleRecord
     public Guid? UnlocksPlaylistId { get; init; }
 }
 
+/// <summary>A portfolio export a young person asked for (D68). The file itself is never kept.</summary>
+public sealed class PortfolioExportRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public required string Format { get; init; }
+
+    public Guid? MediaId { get; init; }
+
+    public DateTimeOffset RequestedAt { get; init; }
+
+    public DateTimeOffset? CompletedAt { get; init; }
+
+    public DateTimeOffset? ExpiresAt { get; init; }
+}
+
 public sealed class LearningDbContext(DbContextOptions<LearningDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -356,6 +376,8 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
     public DbSet<PlaylistStepProgressRecord> PlaylistProgress => Set<PlaylistStepProgressRecord>();
 
     public DbSet<UnlockRuleRecord> UnlockRules => Set<UnlockRuleRecord>();
+
+    public DbSet<PortfolioExportRecord> Exports => Set<PortfolioExportRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -456,6 +478,13 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
         {
             b.ToTable("playlist_step_progress");
             b.HasKey(x => new { x.PlaylistEnrollmentId, x.StepId });
+        });
+
+        modelBuilder.Entity<PortfolioExportRecord>(b =>
+        {
+            b.ToTable("portfolio_export");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<UnlockRuleRecord>(b =>

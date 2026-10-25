@@ -98,3 +98,13 @@ badge at the end.
 - Finish every required step and the playlist is complete: you're given its badge.
 - Some playlists, and some programs, are open only to people who hold a certain badge, or who have
   completed a certain playlist. The program's page says so before you apply.
+
+**Taking it with you.** You'll be able to download your portfolio:
+- as a **PDF** to print or attach, with your activities and your badges, each with the link where
+  anyone can check it;
+- your **badges** as Open Badges credentials, for a digital wallet or another platform;
+- a **Comprehensive Learner Record**, a single credential holding your activities and badges that
+  colleges and employers' systems can read. It's signed by your county's BrightTime, and each badge
+  inside keeps its own organisation's signature.
+
+Records you've hidden are left out, and your legal name never appears.

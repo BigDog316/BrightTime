@@ -8,6 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="../BrightTime.Localisation/BrightTime.Localisation.csproj" />
     <ProjectReference Include="../BrightTime.Modules.Attendance/BrightTime.Modules.Attendance.csproj" />
+    <ProjectReference Include="../BrightTime.Modules.Learning/BrightTime.Modules.Learning.csproj" />
   </ItemGroup>
 
 </Project>

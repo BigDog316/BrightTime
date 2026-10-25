@@ -293,7 +293,7 @@ public static class BadgeDocuments
 
     private static string Xml(string text) => System.Security.SecurityElement.Escape(text) ?? string.Empty;
 
-    private static string Instant(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+    internal static string Instant(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
     public static string WebSafeBase64(byte[] bytes)
     {

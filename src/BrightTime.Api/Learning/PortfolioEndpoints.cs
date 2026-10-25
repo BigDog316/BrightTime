@@ -1,11 +1,17 @@
 using System.Security.Claims;
+using BrightTime.Hosting.Tenancy;
+using BrightTime.Localisation;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Learning.Portfolio;
+using BrightTime.Reporting;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
+using BrightTime.SharedKernel.Time;
 
 namespace BrightTime.Api.Learning;
+
+public sealed record PortfolioExportRequest(string? Format);
 
 /// <summary>
 /// A young person's portfolio (M4, D65): their own view and settings, records hidden or shown
@@ -22,6 +28,9 @@ public static class PortfolioEndpoints
         mine.MapPut("/", SaveAsync).WithMetadata(new YouthRecordAttribute(Portfolios.Changed)).Produces<PortfolioView>();
         mine.MapPost("/participation/{id:guid}/hide", HideAsync).WithMetadata(new YouthRecordAttribute(Portfolios.Changed)).Produces<PortfolioView>();
         mine.MapPost("/participation/{id:guid}/show", ShowAsync).WithMetadata(new YouthRecordAttribute(Portfolios.Changed)).Produces<PortfolioView>();
+
+        // A file made now and not kept (D68): the printable portfolio, the badges as OB 3.0, or a CLR 2.0.
+        mine.MapPost("/export", ExportAsync).WithMetadata(new YouthRecordAttribute(PortfolioExports.Exported));
 
         // Shown by its owner's choice; never lists who they are beyond the display name they chose.
         api.MapGet("/public/portfolios/{slug}", PublicAsync).AllowAnonymous().RequireRateLimiting(Public.PublicEndpoints.RateLimit)
@@ -60,6 +69,31 @@ public static class PortfolioEndpoints
 
         response.Headers.CacheControl = "no-store";
         return Results.Ok(portfolio);
+    }
+
+    private static async Task<IResult> ExportAsync(
+        PortfolioExportRequest body, ClaimsPrincipal user, SiteContext site, PortfolioExports exports, Text text, IClock clock, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        ArgumentNullException.ThrowIfNull(site);
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(clock);
+        if (PortfolioExports.Check(body.Format) is { } invalid)
+        {
+            return ApiProblems.From(invalid);
+        }
+
+        Uri address = site.BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
+        if (body.Format == PortfolioExportFormats.Pdf)
+        {
+            PortfolioFacts facts = await exports.FactsAsync(Actor(user), address, ct);
+            await text.LoadAsync(ct);
+            ReportDocument document = PortfolioDocuments.Word(facts, text, clock.UtcNow);
+            return Results.File(ReportRenderer.Render(document, ReportFormats.Pdf), ReportFormats.ContentType(ReportFormats.Pdf), document.FileName + ".pdf");
+        }
+
+        Result<ExportFile> made = await exports.CredentialsAsync(Actor(user), address, site.Site?.DisplayName ?? address.Host, body.Format!, ct);
+        return made.IsSuccess ? Results.File(made.Value.Bytes, made.Value.ContentType, made.Value.FileName) : ApiProblems.From(made.Error);
     }
 
     private static IResult Answer(Result<PortfolioView> result) => result.IsSuccess ? Results.Ok(result.Value) : ApiProblems.From(result.Error);

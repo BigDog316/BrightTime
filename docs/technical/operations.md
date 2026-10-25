@@ -180,11 +180,14 @@ the inbox and push only.
 
 - Set `Security:SigningKeys:default` (or one key per organisation) in the Api before anyone awards
   a badge outside Development.
+- The CLRs young people export are signed by the site itself, under the tenant's id, with the
+  key reference `clr-issuer-<tenant>`; `Security:SigningKeys:default` serves it unless it has its own.
 - Each organisation's DID resolves to `https://<tenant host>/api/v1/public/issuers/<org>/did.json`.
   The tenant's host name must be stable: changing it changes every issuer's DID, and older
   credentials stop resolving.
-- **Check by hand before launch:** run a few credentials through 1EdTech's OB 3.0 validator, and
-  the OB 2.0 hosted assertions through an OB 2.0 validator. This can't run in CI.
+- **Check by hand before launch:** run a few credentials through 1EdTech's OB 3.0 validator, an
+  exported CLR through its CLR 2.0 validator, and the OB 2.0 hosted assertions through an OB 2.0
+  validator. This can't run in CI.
 
 ## Not yet in place
 

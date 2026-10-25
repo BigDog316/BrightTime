@@ -142,7 +142,7 @@ KMS) can replace it behind the same interface.
 | Kind | Configuration | Used for |
 |---|---|---|
 | Symmetric, base64, 32 bytes or more | `Security:Keys:<ref>` | Tenant data master keys, the data-protection key ring (`data-protection`), blind indexes |
-| RSA private key, PEM, 2048 bits or more | `Security:SigningKeys:<ref>` or `Security:SigningKeys:default` | Open Badges credentials, signed RS256 (D66); each organisation's reference is `badge-issuer-{orgId:N}` |
+| RSA private key, PEM, 2048 bits or more | `Security:SigningKeys:<ref>` or `Security:SigningKeys:default` | Open Badges credentials and CLRs, signed RS256 (D66, D68); each organisation's reference is `badge-issuer-{orgId:N}`, the site's `clr-issuer-{tenantId:N}` |
 
 In Development a missing key is made up for the life of the process. Anywhere else a missing key
 stops the operation. See [operations.md](operations.md#keys) for rotation.

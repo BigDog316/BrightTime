@@ -50,7 +50,7 @@ library to try it with.
 | `Security:Keys:<ref>` | ● | ● | ● | Base64 symmetric keys, 32 bytes or more, by vault reference |
 | `Security:Keys:data-protection` | ● | ● | | **Required.** Encrypts the shared data-protection key ring. Must be the same in both hosts. `DataProtection:KeyRef` names a different reference |
 | `Security:DataKeys:<n>:Version`, `:KeyRef` | ● | ● | ● | **Required.** The master key versions tenant data keys are derived from, each naming a `Security:Keys` reference. The highest version encrypts. Must match across all three hosts |
-| `Security:SigningKeys:<ref>`, `Security:SigningKeys:default` | | ● | | **Required to award badges.** RSA private keys as PEM, 2048 bits or more. `default` serves every reference without its own; per organisation, the reference is `badge-issuer-{orgId:N}` (D66) |
+| `Security:SigningKeys:<ref>`, `Security:SigningKeys:default` | | ● | | **Required to award badges.** RSA private keys as PEM, 2048 bits or more. `default` serves every reference without its own; per organisation, the reference is `badge-issuer-{orgId:N}` (D66); the site's, which signs CLRs, is `clr-issuer-{tenantId:N}` (D68) |
 | `Auth:Tokens:SigningKeys:<n>:Id`, `:Key` | | ● | | **Required.** Access-token keys: an id and a base64 key of 32 bytes or more. The first signs; all verify |
 | `Audit:ClientHashKey` | ● | ● | | **Required.** Base64, 32 bytes or more. Client addresses and user agents are kept only as hashes under it |
 

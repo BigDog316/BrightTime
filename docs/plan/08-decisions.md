@@ -2348,7 +2348,7 @@ Two gaps that writing the technical documentation found.
   - Reproduced on a fresh `C.UTF-8` cluster in Release, as CI runs it, and then three clean runs of
     the whole Api suite in different orders.
 
-### D71 — The family's screens begin: the household, in the app (**proposed 2026-10-29**)
+### D71 — The family's screens begin: the household, in the app (**accepted 2026-10-29**)
 
 Families can't yet apply, pay or read messages anywhere but the API. The server for all of it is
 built (M3), so the family screens are the largest gap in what people can use. They go into the

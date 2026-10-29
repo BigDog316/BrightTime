@@ -180,6 +180,41 @@ public sealed record Child(
     public bool IsClaimed => AccountKind == "youth";
 }
 
+/// <summary>A household's details, the people in it and its contacts (D43, D71).</summary>
+public sealed record Household(
+    Guid Id, short? HouseholdSize, string? PrimaryLanguage, bool NeedsInterpreter, IReadOnlyList<HouseholdMember> Members, IReadOnlyList<HouseholdContact> Contacts);
+
+/// <summary>One person in a household. <see cref="AccountUserId"/> is the account a young member is linked to (D65).</summary>
+public sealed record HouseholdMember(
+    Guid Id, string Role, string FirstName, string LastName, string? PreferredName, DateOnly? DateOfBirth, short? Grade,
+    string? Pronouns, string? Relationship, Guid? NeighbourhoodId, IReadOnlyList<SupportNeed> SupportNeeds, Guid? AccountUserId = null)
+{
+    public bool IsYoungPerson => Role is "youth" or "child";
+
+    public string ShownName => string.IsNullOrWhiteSpace(PreferredName) ? FirstName : PreferredName;
+}
+
+public sealed record SupportNeed(Guid Id, string Kind, string? Detail, bool ShareWithProviders);
+
+public sealed record HouseholdContact(Guid Id, string Name, string Relationship, string Phone, string? Email, bool IsEmergency, bool CanPickUp);
+
+/// <summary>What a household lets one organisation see, and until when (D44).</summary>
+public sealed record HouseholdShare(
+    Guid Id, Guid OrganisationId, string OrganisationName, Guid? ListingId, IReadOnlyList<Guid> MemberIds, IReadOnlyList<string> Fields,
+    DateTimeOffset GrantedAt, DateTimeOffset? ExpiresAt, DateTimeOffset? RevokedAt, string Status)
+{
+    public bool IsActive => Status == "active";
+}
+
+/// <summary>A member as the form sends it.</summary>
+public sealed record MemberDraft(
+    string Role, string FirstName, string LastName, string? PreferredName, DateOnly? DateOfBirth, short? Grade, string? Pronouns, string? Relationship,
+    Guid? NeighbourhoodId);
+
+public sealed record ContactDraft(string Name, string Relationship, string Phone, string? Email, bool IsEmergency, bool CanPickUp);
+
+public sealed record SupportNeedDraft(string Kind, string? Detail, bool ShareWithProviders);
+
 /// <summary>What a consent scope means, in the exact words a grant is recorded against (its <see cref="Hash"/>).</summary>
 public sealed record Disclosure(string Scope, string Version, string Text, string Hash, IReadOnlyList<string> Methods, bool AvailableUnder13);
 

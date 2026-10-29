@@ -160,16 +160,43 @@ When a child on your account turns 13, they can have their own sign-in. On their
 **Give them their own sign-in** and enter their email address. We email them a link to choose a
 password; then they sign in themselves. You can still manage their consents.
 
+## Your household (app)
+
+Under **Account**, choose **Your household**. You enter your household once, and every program you
+apply to uses it.
+
+- **About your household**: how many people live in your home, the language spoken there, and
+  whether you need an interpreter.
+- **People in your household**: choose **Add someone** for each person: who they are (a child, a
+  young person of 13 or over, a parent or guardian, or another adult), their names, the name they
+  go by, and their relationship to you. A young person's date of birth and school grade matter:
+  programs that check ages see the date of birth, and nobody else does.
+- **Support needs**, for a child or young person: an allergy, a medical need, a disability or
+  anything else that helps a program look after them, with a note on what helps. A need is shared
+  only if you tick **Programs may see this**.
+- **Their own account**: link a child or young person to the account they use (yours, if this is
+  you, or a child's profile on your account), so the programs they attend and the badges they earn
+  go on their portfolio.
+- **Contacts**: people a program can call in an emergency, or who may pick up a child.
+
+**Remove from household** takes a person off. Programs already sharing their details stop seeing
+them.
+
+### Who can see your household
+
+**See who can see it** lists every program you've shared your household with: the people, the
+details, since when, and until when. **Stop sharing** ends a share at once; the program stops
+seeing those details right away. Shares you stopped, or that ended, stay on the list so you can see
+what was shared.
+
 ## Applying, paying and messages: coming soon
 
 The parts of BrightTime that let you apply to programs through the site are built and being
 tested, and the screens for families come next. When they arrive you'll be able to:
 
-- **Keep one family profile**: your household, its members, emergency contacts and any support
-  needs, entered once and used for every application.
-- **Choose what each organisation sees.** You share chosen family members and chosen details with
-  one organisation at a time, for one program or all of them, and until a date you pick. You can
-  withdraw a share whenever you like, and the organisation stops seeing those details at once.
+- **Choose what each organisation sees** when you apply. You share chosen family members and
+  chosen details with one organisation at a time, for one program or all of them, and until a
+  date you pick. Stopping a share is already in the app (above).
 - **Apply** to a program by answering its form, after seeing who it's for. If your child doesn't
   meet a rule that must be met, you're told before you apply.
 - **Sign waivers**, such as a photo release. A parent or guardian signs for anyone under 18, and

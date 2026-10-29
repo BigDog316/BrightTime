@@ -2348,6 +2348,34 @@ Two gaps that writing the technical documentation found.
   - Reproduced on a fresh `C.UTF-8` cluster in Release, as CI runs it, and then three clean runs of
     the whole Api suite in different orders.
 
+### D71 — The family's screens begin: the household, in the app (**proposed 2026-10-29**)
+
+Families can't yet apply, pay or read messages anywhere but the API. The server for all of it is
+built (M3), so the family screens are the largest gap in what people can use. They go into the
+app first, as plan/06 lays out: the guardian's screens are interactive, and the app is where
+families already search, save and manage their children's consent. The web's family pages follow
+once the app's are settled.
+
+This first slice is the household, because applying needs it. In the app, under **Account**:
+- **Your household:** its size, the language it speaks at home, and whether it needs an
+  interpreter. A household not yet saved starts here.
+- **The people in it:** each member's role (young person, child, parent or guardian, emergency
+  contact), names, date of birth (needed for a young person), school grade, pronouns,
+  and relationship. A neighbourhood already recorded is kept; choosing one waits until the public
+  neighbourhood list carries the ids a member record stores.
+  - **Support needs** per young person, each marked for providers or not.
+  - **Their own account** (D65): link a young member to the signed-in person's own account, or to
+    a child's account they are guardian of, so attendance becomes that young person's portfolio.
+- **Contacts:** emergency and pick-up contacts.
+- **Who can see it:** every share the household has made, with the organisation, the people and
+  details it covers, and until when. **Stop sharing** ends one at once. Shares are made when the
+  family applies (next slice), not here.
+
+The screens add nothing on the server: they call the routes D43, D44 and D65 built, and show the
+errors those routes already word in all six languages.
+
+**Not yet:** applying, waivers and paying; messages; the child's activity; the web's family pages.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

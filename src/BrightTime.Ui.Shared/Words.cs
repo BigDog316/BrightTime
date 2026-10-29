@@ -88,6 +88,25 @@ public static class Words
     public static bool IsUnder13(int year, int month, DateOnly today) =>
         Age.BandFromBirthMonth(new DateOnly(year, month, 1), today).IsCoppaProtected();
 
+    /// <summary>How old someone is, in the app's language's digits.</summary>
+    public static string YearsOld(Text t, DateOnly dateOfBirth, DateOnly today)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        return Age.YearsOn(dateOfBirth, today).ToString(t.Culture);
+    }
+
+    /// <summary>A school grade in words: pre-K (-1), kindergarten (0), or a numbered grade.</summary>
+    public static string Grade(Text t, short grade)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        return grade switch
+        {
+            -1 => t["app.household.grade.prek"],
+            0 => t["app.household.grade.kindergarten"],
+            _ => t.Format("app.household.grade.numbered", ("grade", grade)),
+        };
+    }
+
     /// <summary>A month's name in the app's language, for the age question.</summary>
     public static string MonthName(Text t, int month)
     {

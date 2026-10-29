@@ -42,6 +42,10 @@ else
             {
                 <li><a href="attendance">@T["app.attendance.title"]</a></li>
             }
+            @if (me.AccountKind != "child")
+            {
+                <li><a href="household">@T["app.household.title"]</a></li>
+            }
             @if (me.IsAdult)
             {
                 <li><a href="family">@T["app.family.title"]</a></li>

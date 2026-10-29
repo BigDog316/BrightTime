@@ -1,0 +1,158 @@
+@page "/household"
+@* The household (D43, D71): its details, the people in it and its contacts, entered once and used
+   for every application. Only the family sees it; an organisation sees what a share gives it. *@
+@using BrightTime.SharedKernel.Primitives
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject TimeProvider Clock
+
+<h1>@T["app.household.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.household.sign_in"]</p>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_loading)
+    {
+        <Busy />
+    }
+    else if (_problem is null)
+    {
+        @if (_household is null)
+        {
+            <p class="lead">@T["app.household.start"]</p>
+        }
+
+        <form class="stack" @onsubmit="SaveAsync" aria-labelledby="details">
+            <h2 id="details">@T["app.household.details"]</h2>
+            <div class="field">
+                <label for="size">@T["app.household.size"]</label>
+                <input id="size" type="number" min="1" max="30" inputmode="numeric" @bind="_size" />
+            </div>
+            <div class="field">
+                <label for="language">@T["app.household.language"]</label>
+                <select id="language" @bind="_language">
+                    <option value="">@T["app.household.language_none"]</option>
+                    @foreach (Locale locale in Locale.Supported)
+                    {
+                        <option value="@locale.Code">@T["language." + locale.Code]</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label><input type="checkbox" @bind="_interpreter" /> @T["app.household.interpreter"]</label>
+            </div>
+            <ProblemNotice Problem="_saveProblem" />
+            @if (_saved)
+            {
+                <p class="notice success" role="status">@T["app.household.saved"]</p>
+            }
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@_busy">@T["app.household.save"]</button>
+            </div>
+        </form>
+
+        @if (_household is { } household)
+        {
+            <section aria-labelledby="people">
+                <h2 id="people">@T["app.household.people"]</h2>
+                @if (household.Members.Count == 0)
+                {
+                    <p>@T["app.household.no_people"]</p>
+                }
+                <ul class="cards">
+                    @foreach (HouseholdMember member in household.Members)
+                    {
+                        <li class="card" @key="member.Id">
+                            <h3><a href="household/members/@member.Id">@member.ShownName @member.LastName</a></h3>
+                            <p>@Describe(member)</p>
+                        </li>
+                    }
+                </ul>
+                <a class="button" href="household/members/add">@T["app.household.add_person"]</a>
+            </section>
+
+            <section aria-labelledby="contacts">
+                <h2 id="contacts">@T["app.household.contacts"]</h2>
+                <p class="hint">@T["app.household.contacts_hint"]</p>
+                <ul class="cards">
+                    @foreach (HouseholdContact contact in household.Contacts)
+                    {
+                        <li class="card" @key="contact.Id">
+                            <h3><a href="household/contacts/@contact.Id">@contact.Name</a></h3>
+                            <p>@contact.Relationship · @contact.Phone</p>
+                        </li>
+                    }
+                </ul>
+                <a class="button" href="household/contacts/add">@T["app.household.add_contact"]</a>
+            </section>
+
+            <section aria-labelledby="sharing">
+                <h2 id="sharing">@T["app.household.who_sees"]</h2>
+                <p class="hint">@T["app.household.who_sees_hint"]</p>
+                <a class="button" href="household/shares">@T["app.household.see_shares"]</a>
+            </section>
+        }
+    }
+}
+
+@code {
+    private Household? _household;
+    private bool _loading = true;
+    private ApiProblem? _problem;
+    private ApiProblem? _saveProblem;
+    private bool _busy;
+    private bool _saved;
+
+    private short? _size;
+    private string _language = "";
+    private bool _interpreter;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _problem = null;
+        ApiResult<Household> found = await Api.HouseholdAsync();
+        // A household not yet saved isn't a problem: this is where it starts.
+        _problem = found.Problem is { Code: "family.no_profile" } ? null : found.Problem;
+        Show(found.Value);
+        _loading = false;
+    }
+
+    private void Show(Household? household)
+    {
+        _household = household;
+        _size = household?.HouseholdSize;
+        _language = household?.PrimaryLanguage ?? "";
+        _interpreter = household?.NeedsInterpreter ?? false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _saved = false;
+        ApiResult<Household> saved = await Api.SaveHouseholdAsync(_size, _language.Length == 0 ? null : _language, _interpreter);
+        _saveProblem = saved.Problem;
+        if (saved.Value is { } household)
+        {
+            Show(household);
+            _saved = true;
+        }
+
+        _busy = false;
+    }
+
+    private string Describe(HouseholdMember member)
+    {
+        string role = T["app.household.role." + member.Role];
+        return member.DateOfBirth is { } born ? T.Format("app.household.role_age", ("role", role), ("age", Words.YearsOld(T, born, Today))) : role;
+    }
+
+    private DateOnly Today => DateOnly.FromDateTime(Clock.GetUtcNow().UtcDateTime);
+}

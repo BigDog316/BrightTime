@@ -1,0 +1,105 @@
+@page "/household/shares"
+@* Who can see the household (D44, D71): every share, what it covers, until when, and stopping it.
+   Stopping is immediate: the organisation's screens and reports lose those details at once. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.household.who_sees"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.household.sign_in"]</p>
+}
+else
+{
+    <p class="lead">@T["app.household.shares_intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_shares is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_shares is not null)
+    {
+        @if (_shares.Count == 0)
+        {
+            <p>@T["app.household.no_shares"]</p>
+        }
+
+        <ul class="cards">
+            @foreach (HouseholdShare share in _shares)
+            {
+                <li class="card" @key="share.Id">
+                    <h2>@share.OrganisationName</h2>
+                    <dl class="facts">
+                        <dt>@T["app.household.share_people"]</dt>
+                        <dd>@People(share)</dd>
+                        <dt>@T["app.household.share_details"]</dt>
+                        <dd>@string.Join(T["format.list_separator"], share.Fields.Select(f => T["app.household.field." + f]))</dd>
+                        <dt>@T["app.household.share_since"]</dt>
+                        <dd>@T.DateShort(share.GrantedAt)</dd>
+                        <dt>@T["app.household.share_until"]</dt>
+                        <dd>@Until(share)</dd>
+                    </dl>
+                    @if (share.IsActive)
+                    {
+                        @if (_confirm == share.Id)
+                        {
+                            <p class="hint">@T.Format("app.household.stop_explain", ("organisation", Text.Name(share.OrganisationName)))</p>
+                            <button type="button" class="danger" @onclick="() => StopAsync(share)" disabled="@_busy">@T["app.household.stop_confirm"]</button>
+                            <button type="button" @onclick="() => _confirm = null">@T["app.cancel"]</button>
+                        }
+                        else
+                        {
+                            <button type="button" @onclick="() => _confirm = share.Id">@T["app.household.stop"]</button>
+                        }
+                    }
+                </li>
+            }
+        </ul>
+        <ProblemNotice Problem="_stopProblem" />
+    }
+    <a class="button" href="household">@T["app.household.back"]</a>
+}
+
+@code {
+    private IReadOnlyList<HouseholdShare>? _shares;
+    private Dictionary<Guid, string> _names = [];
+    private ApiProblem? _problem;
+    private ApiProblem? _stopProblem;
+    private Guid? _confirm;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<HouseholdShare>> shares = await Api.SharesAsync();
+        _problem = shares.Problem is { Code: "family.no_profile" } ? null : shares.Problem;
+        _shares = shares.Value ?? (_problem is null ? [] : null);
+        _names = (await Api.HouseholdAsync()).Value?.Members.ToDictionary(m => m.Id, m => m.ShownName) ?? [];
+    }
+
+    private async Task StopAsync(HouseholdShare share)
+    {
+        _busy = true;
+        _stopProblem = (await Api.StopSharingAsync(share.Id)).Problem;
+        _confirm = null;
+        _busy = false;
+        if (_stopProblem is null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private string People(HouseholdShare share) =>
+        string.Join(T["format.list_separator"], share.MemberIds.Select(id => _names.GetValueOrDefault(id) ?? T["app.household.someone_removed"]));
+
+    private string Until(HouseholdShare share) => share switch
+    {
+        { RevokedAt: { } stopped } => T.Format("app.household.share_stopped", ("date", T.DateShort(stopped))),
+        { IsActive: false } => T["app.household.share_ended"],
+        { ExpiresAt: { } until } => T.DateShort(until),
+        _ => T["app.household.share_until_stopped"],
+    };
+}

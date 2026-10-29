@@ -31,7 +31,7 @@ keeps every youth-record table closed to a request with no signed-in actor. The 
 |---|---|---|
 | Tenancy, finder, consoles, sign-in, audit, localisation, import | Yes | M1 |
 | Public read API, consent, youth accounts, passkeys, notifications, the app | Yes (app: Android built and run on the emulator; iOS written, not compiled) | M2 |
-| Family profile, shares, forms, eligibility, applications, waivers, decisions | Server and provider console; family screens not yet | M3a |
+| Family profile, shares, forms, eligibility, applications, waivers, decisions | Server and provider console; the household and its shares in the app (D71); the other family screens not yet | M3a |
 | Attendance (with offline sync), messaging, fees and payments (manual and Stripe), reports | Server, provider console and the app's offline roster; family screens not yet | M3b |
 | Participation and portfolio (D65), Open Badges (D66), playlists and gated listings (D67), portfolio exports as PDF, OB 3.0 and CLR 2.0 (D68), goals, skills and projects with staff approval (D69) | Server only | M4 |
 | Community spaces, workforce, landscape, analytics, integrations | Schema only | M5 to M8 |

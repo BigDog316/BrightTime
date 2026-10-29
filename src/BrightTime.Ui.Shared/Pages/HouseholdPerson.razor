@@ -1,0 +1,363 @@
+@page "/household/members/add"
+@page "/household/members/{Id:guid}"
+@* One person in the household (D43, D71): who they are, and for a young person their support
+   needs and the account their attendance and badges belong to (D65). *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+<h1>@(Id is null ? T["app.household.add_person"] : _member?.ShownName ?? T["app.household.person"])</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.household.sign_in"]</p>
+}
+else if (_loading)
+{
+    <Busy />
+}
+else if (_missing)
+{
+    <p>@T["error.family.member_not_found"]</p>
+    <a class="button" href="household">@T["app.household.back"]</a>
+}
+else
+{
+    @if (Added)
+    {
+        <p class="notice success" role="status">@T["app.household.person_added"]</p>
+    }
+
+    <form class="stack" @onsubmit="SaveAsync">
+        <div class="field">
+            <label for="role">@T["app.household.role"]</label>
+            <select id="role" @bind="_role">
+                @foreach (string role in Roles)
+                {
+                    <option value="@role">@T["app.household.role." + role]</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="first">@T["app.household.first_name"]</label>
+            <input id="first" required maxlength="100" autocomplete="off" @bind="_first" />
+        </div>
+        <div class="field">
+            <label for="last">@T["app.household.last_name"]</label>
+            <input id="last" required maxlength="100" autocomplete="off" @bind="_last" />
+        </div>
+        <div class="field">
+            <label for="preferred">@T["app.household.preferred_name"]</label>
+            <p class="hint" id="preferred-hint">@T["app.household.preferred_name_hint"]</p>
+            <input id="preferred" maxlength="100" autocomplete="off" @bind="_preferred" aria-describedby="preferred-hint" />
+        </div>
+        <div class="field">
+            <label for="born">@T["app.household.date_of_birth"]</label>
+            <p class="hint" id="born-hint">@T["app.household.date_of_birth_hint"]</p>
+            <input id="born" type="date" @bind="_born" aria-describedby="born-hint" required="@YoungPerson" />
+        </div>
+        @if (YoungPerson)
+        {
+            <div class="field">
+                <label for="grade">@T["app.household.grade"]</label>
+                <select id="grade" @bind="_grade">
+                    <option value="">@T["app.household.grade.none"]</option>
+                    @for (short g = -1; g <= 12; g++)
+                    {
+                        <option value="@g">@Words.Grade(T, g)</option>
+                    }
+                </select>
+            </div>
+        }
+        <div class="field">
+            <label for="pronouns">@T["app.household.pronouns"]</label>
+            <input id="pronouns" maxlength="40" autocomplete="off" @bind="_pronouns" />
+        </div>
+        <div class="field">
+            <label for="relationship">@T["app.household.relationship"]</label>
+            <p class="hint" id="relationship-hint">@T["app.household.relationship_hint"]</p>
+            <input id="relationship" maxlength="40" autocomplete="off" @bind="_relationship" aria-describedby="relationship-hint" />
+        </div>
+        <ProblemNotice Problem="_problem" />
+        @if (_saved)
+        {
+            <p class="notice success" role="status">@T["app.household.saved"]</p>
+        }
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@_busy">@T[Id is null ? "app.household.add_person" : "app.household.save"]</button>
+            <a class="button" href="household">@T["app.household.back"]</a>
+        </div>
+    </form>
+
+    @if (_member is { IsYoungPerson: true } member)
+    {
+        <section aria-labelledby="needs">
+            <h2 id="needs">@T["app.household.support_needs"]</h2>
+            <p class="hint">@T["app.household.support_needs_hint"]</p>
+            @for (int i = 0; i < _needs.Count; i++)
+            {
+                int at = i;
+                <fieldset class="stack" @key="_needs[at]">
+                    <legend>@T.Format("app.household.need_number", ("number", at + 1))</legend>
+                    <div class="field">
+                        <label for="need-kind-@at">@T["app.household.need_kind"]</label>
+                        <select id="need-kind-@at" @bind="_needs[at].Kind">
+                            @foreach (string kind in NeedKinds)
+                            {
+                                <option value="@kind">@T["app.household.need." + kind]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="need-detail-@at">@T["app.household.need_detail"]</label>
+                        <textarea id="need-detail-@at" maxlength="500" rows="2" @bind="_needs[at].Detail"></textarea>
+                    </div>
+                    <div class="field">
+                        <label><input type="checkbox" @bind="_needs[at].Share" /> @T["app.household.need_share"]</label>
+                    </div>
+                    <button type="button" @onclick="() => _needs.RemoveAt(at)">@T["app.household.need_remove"]</button>
+                </fieldset>
+            }
+            <ProblemNotice Problem="_needsProblem" />
+            @if (_needsSaved)
+            {
+                <p class="notice success" role="status">@T["app.household.needs_saved"]</p>
+            }
+            <div class="actions">
+                <button type="button" @onclick="() => _needs.Add(new NeedRow())" disabled="@(_needs.Count >= 10)">@T["app.household.need_add"]</button>
+                <button type="button" class="primary" @onclick="SaveNeedsAsync" disabled="@_busy">@T["app.household.needs_save"]</button>
+            </div>
+        </section>
+
+        <section aria-labelledby="account">
+            <h2 id="account">@T["app.household.account"]</h2>
+            <p class="hint">@T["app.household.account_hint"]</p>
+            <p>@LinkedTo(member)</p>
+            <div class="field">
+                <label for="link">@T["app.household.account_choose"]</label>
+                <select id="link" @bind="_linkTo">
+                    <option value="">@T["app.household.account_none"]</option>
+                    @if (Session.Me is { } me)
+                    {
+                        <option value="@me.Id">@T["app.household.account_mine"]</option>
+                    }
+                    @foreach (Child child in _children.Where(c => c.Status == "active"))
+                    {
+                        <option value="@child.Id">@T.Format("app.household.account_child", ("name", Text.Name(child.GivenName)))</option>
+                    }
+                </select>
+            </div>
+            <ProblemNotice Problem="_linkProblem" />
+            <div class="actions">
+                <button type="button" @onclick="LinkAsync" disabled="@_busy">@T["app.household.account_save"]</button>
+            </div>
+        </section>
+    }
+
+    @if (_member is not null)
+    {
+        <section aria-labelledby="remove">
+            <h2 id="remove">@T["app.household.remove_person"]</h2>
+            <p class="hint">@T["app.household.remove_person_hint"]</p>
+            <ProblemNotice Problem="_removeProblem" />
+            @if (_confirmRemove)
+            {
+                <button type="button" class="danger" @onclick="RemoveAsync" disabled="@_busy">@T["app.household.remove_confirm"]</button>
+                <button type="button" @onclick="() => _confirmRemove = false">@T["app.cancel"]</button>
+            }
+            else
+            {
+                <button type="button" @onclick="() => _confirmRemove = true">@T["app.household.remove_person"]</button>
+            }
+        </section>
+    }
+}
+
+@code {
+    private static readonly string[] Roles = ["youth", "child", "guardian", "emergency_contact"];
+    private static readonly string[] NeedKinds = ["allergy", "medication", "mobility", "sensory", "communication", "dietary", "medical_other", "iep_504", "none_disclosed"];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "added")] public string? AddedFlag { get; set; }
+
+    private bool Added => AddedFlag == "1";
+
+    private HouseholdMember? _member;
+    private IReadOnlyList<Child> _children = [];
+    private bool _loading = true;
+    private bool _missing;
+    private bool _busy;
+    private bool _saved;
+    private bool _needsSaved;
+    private bool _confirmRemove;
+    private ApiProblem? _problem;
+    private ApiProblem? _needsProblem;
+    private ApiProblem? _linkProblem;
+    private ApiProblem? _removeProblem;
+
+    private string _role = "youth";
+    private string _first = "";
+    private string _last = "";
+    private string _preferred = "";
+    private DateOnly? _born;
+    private short? _grade;
+    private string _pronouns = "";
+    private string _relationship = "";
+    private string _linkTo = "";
+    private List<NeedRow> _needs = [];
+
+    private bool YoungPerson => _role is "youth" or "child";
+
+    private sealed class NeedRow
+    {
+        public string Kind { get; set; } = "allergy";
+
+        public string Detail { get; set; } = "";
+
+        public bool Share { get; set; }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _missing = false;
+        if (Session.IsSignedIn && Id is { } id)
+        {
+            ApiResult<Household> household = await Api.HouseholdAsync();
+            if (household.Value?.Members.FirstOrDefault(m => m.Id == id) is { } member)
+            {
+                Show(member);
+                if (Session.Me is { IsAdult: true })
+                {
+                    _children = (await Api.ChildrenAsync()).Value ?? [];
+                }
+            }
+            else
+            {
+                _missing = true;
+                _problem = household.Problem is { Code: not "family.no_profile" } ? household.Problem : null;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private void Show(HouseholdMember member)
+    {
+        _member = member;
+        _role = member.Role;
+        _first = member.FirstName;
+        _last = member.LastName;
+        _preferred = member.PreferredName ?? "";
+        _born = member.DateOfBirth;
+        _grade = member.Grade;
+        _pronouns = member.Pronouns ?? "";
+        _relationship = member.Relationship ?? "";
+        _linkTo = member.AccountUserId?.ToString() ?? "";
+        _needs = [.. member.SupportNeeds.Select(n => new NeedRow { Kind = n.Kind, Detail = n.Detail ?? "", Share = n.ShareWithProviders })];
+    }
+
+    private MemberDraft Draft() => new(
+        _role, _first.Trim(), _last.Trim(), Optional(_preferred), _born, YoungPerson ? _grade : null, Optional(_pronouns), Optional(_relationship),
+        _member?.NeighbourhoodId);
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _saved = false;
+        if (_member is null)
+        {
+            ApiResult<Household> household = await Api.HouseholdAsync();
+            if (household.Problem is { Code: "family.no_profile" })
+            {
+                // Adding the first person saves the household too: there's nothing to apply with otherwise.
+                await Api.SaveHouseholdAsync(null, null, false);
+            }
+
+            ApiResult<HouseholdMember> made = await Api.AddMemberAsync(Draft());
+            _problem = made.Problem;
+            if (made.Value is { } member)
+            {
+                Navigation.NavigateTo($"household/members/{member.Id}?added=1");
+            }
+        }
+        else
+        {
+            ApiResult<HouseholdMember> changed = await Api.UpdateMemberAsync(_member.Id, Draft());
+            _problem = changed.Problem;
+            if (changed.Value is { } member)
+            {
+                Show(member);
+                _saved = true;
+            }
+        }
+
+        _busy = false;
+    }
+
+    private async Task SaveNeedsAsync()
+    {
+        if (_member is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _needsSaved = false;
+        ApiResult<HouseholdMember> saved = await Api.SetSupportNeedsAsync(_member.Id, [.. _needs.Select(n => new SupportNeedDraft(n.Kind, Optional(n.Detail), n.Share))]);
+        _needsProblem = saved.Problem;
+        if (saved.Value is { } member)
+        {
+            Show(member);
+            _needsSaved = true;
+        }
+
+        _busy = false;
+    }
+
+    private async Task LinkAsync()
+    {
+        if (_member is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        ApiResult<HouseholdMember> linked = await Api.LinkMemberAccountAsync(_member.Id, Guid.TryParse(_linkTo, out Guid user) ? user : null);
+        _linkProblem = linked.Problem;
+        if (linked.Value is { } member)
+        {
+            Show(member);
+        }
+
+        _busy = false;
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_member is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        ApiResult removed = await Api.RemoveMemberAsync(_member.Id);
+        _removeProblem = removed.Problem;
+        _busy = false;
+        if (removed.IsSuccess)
+        {
+            Navigation.NavigateTo("household");
+        }
+    }
+
+    private string LinkedTo(HouseholdMember member) => member.AccountUserId switch
+    {
+        null => T["app.household.account_unlinked"],
+        { } user when user == Session.Me?.Id => T["app.household.account_is_mine"],
+        { } user when _children.FirstOrDefault(c => c.Id == user) is { } child => T.Format("app.household.account_is_child", ("name", Text.Name(child.GivenName))),
+        _ => T["app.household.account_linked"],
+    };
+
+    private static string? Optional(string text) => text.Trim() is { Length: > 0 } t ? t : null;
+}

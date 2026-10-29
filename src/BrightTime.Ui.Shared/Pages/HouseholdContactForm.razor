@@ -1,0 +1,148 @@
+@page "/household/contacts/add"
+@page "/household/contacts/{Id:guid}"
+@* A household contact (D43, D71): someone a program can call in an emergency, or who may pick a
+   child up. Programs see contacts only when a share includes them. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+<h1>@(Id is null ? T["app.household.add_contact"] : T["app.household.contact"])</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.household.sign_in"]</p>
+}
+else if (_loading)
+{
+    <Busy />
+}
+else if (_missing)
+{
+    <p>@T["error.family.contact_not_found"]</p>
+    <a class="button" href="household">@T["app.household.back"]</a>
+}
+else
+{
+    <form class="stack" @onsubmit="SaveAsync">
+        <div class="field">
+            <label for="name">@T["app.household.contact_name"]</label>
+            <input id="name" required maxlength="100" autocomplete="off" @bind="_name" />
+        </div>
+        <div class="field">
+            <label for="relationship">@T["app.household.relationship"]</label>
+            <p class="hint" id="relationship-hint">@T["app.household.contact_relationship_hint"]</p>
+            <input id="relationship" required maxlength="40" autocomplete="off" @bind="_relationship" aria-describedby="relationship-hint" />
+        </div>
+        <div class="field">
+            <label for="phone">@T["app.household.contact_phone"]</label>
+            <input id="phone" type="tel" required maxlength="25" autocomplete="off" @bind="_phone" />
+        </div>
+        <div class="field">
+            <label for="email">@T["app.household.contact_email"]</label>
+            <input id="email" type="email" maxlength="320" autocomplete="off" @bind="_email" />
+        </div>
+        <div class="field">
+            <label><input type="checkbox" @bind="_emergency" /> @T["app.household.contact_emergency"]</label>
+        </div>
+        <div class="field">
+            <label><input type="checkbox" @bind="_pickUp" /> @T["app.household.contact_pick_up"]</label>
+        </div>
+        <ProblemNotice Problem="_problem" />
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@_busy">@T[Id is null ? "app.household.add_contact" : "app.household.save"]</button>
+            <a class="button" href="household">@T["app.household.back"]</a>
+        </div>
+    </form>
+
+    @if (Id is { } id)
+    {
+        <section aria-labelledby="remove">
+            <h2 id="remove">@T["app.household.remove_contact"]</h2>
+            @if (_confirmRemove)
+            {
+                <button type="button" class="danger" @onclick="() => RemoveAsync(id)" disabled="@_busy">@T["app.household.remove_confirm"]</button>
+                <button type="button" @onclick="() => _confirmRemove = false">@T["app.cancel"]</button>
+            }
+            else
+            {
+                <button type="button" @onclick="() => _confirmRemove = true">@T["app.household.remove_contact"]</button>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool _loading = true;
+    private bool _missing;
+    private bool _busy;
+    private bool _confirmRemove;
+    private ApiProblem? _problem;
+
+    private string _name = "";
+    private string _relationship = "";
+    private string _phone = "";
+    private string _email = "";
+    private bool _emergency = true;
+    private bool _pickUp;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        if (Session.IsSignedIn && Id is { } id)
+        {
+            if ((await Api.HouseholdAsync()).Value?.Contacts.FirstOrDefault(c => c.Id == id) is { } contact)
+            {
+                _name = contact.Name;
+                _relationship = contact.Relationship;
+                _phone = contact.Phone;
+                _email = contact.Email ?? "";
+                _emergency = contact.IsEmergency;
+                _pickUp = contact.CanPickUp;
+            }
+            else
+            {
+                _missing = true;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        ContactDraft draft = new(_name.Trim(), _relationship.Trim(), _phone.Trim(), _email.Trim() is { Length: > 0 } e ? e : null, _emergency, _pickUp);
+        if (Id is { } id)
+        {
+            _problem = (await Api.UpdateContactAsync(id, draft)).Problem;
+        }
+        else
+        {
+            if ((await Api.HouseholdAsync()).Problem is { Code: "family.no_profile" })
+            {
+                await Api.SaveHouseholdAsync(null, null, false);
+            }
+
+            _problem = (await Api.AddContactAsync(draft)).Problem;
+        }
+
+        _busy = false;
+        if (_problem is null)
+        {
+            Navigation.NavigateTo("household");
+        }
+    }
+
+    private async Task RemoveAsync(Guid id)
+    {
+        _busy = true;
+        _problem = (await Api.RemoveContactAsync(id)).Problem;
+        _busy = false;
+        if (_problem is null)
+        {
+            Navigation.NavigateTo("household");
+        }
+    }
+}

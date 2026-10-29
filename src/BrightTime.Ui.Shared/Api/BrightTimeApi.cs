@@ -145,6 +145,48 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> UnregisterDeviceAsync(Guid id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"devices/{id:D}", null, signedIn: true, ct);
 
+    // ---- the household (D43, D44, D65, D71) ----------------------------------------------------
+
+    /// <summary>The household; a problem with code <c>family.no_profile</c> when it hasn't been saved yet.</summary>
+    public Task<ApiResult<Household>> HouseholdAsync(CancellationToken ct = default) =>
+        GetAsync<Household>("family-profile", signedIn: true, ct);
+
+    public Task<ApiResult<Household>> SaveHouseholdAsync(short? householdSize, string? primaryLanguage, bool needsInterpreter, CancellationToken ct = default) =>
+        SendAsync<Household>(HttpMethod.Put, "family-profile", new { householdSize, primaryLanguage, needsInterpreter }, signedIn: true, ct);
+
+    public Task<ApiResult<HouseholdMember>> AddMemberAsync(MemberDraft member, CancellationToken ct = default) =>
+        SendAsync<HouseholdMember>(HttpMethod.Post, "family-profile/members", member, signedIn: true, ct);
+
+    public Task<ApiResult<HouseholdMember>> UpdateMemberAsync(Guid id, MemberDraft member, CancellationToken ct = default) =>
+        SendAsync<HouseholdMember>(HttpMethod.Put, $"family-profile/members/{id:D}", member, signedIn: true, ct);
+
+    public Task<ApiResult> RemoveMemberAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"family-profile/members/{id:D}", null, signedIn: true, ct);
+
+    /// <summary>Replaces a member's support needs with these.</summary>
+    public Task<ApiResult<HouseholdMember>> SetSupportNeedsAsync(Guid id, IReadOnlyList<SupportNeedDraft> needs, CancellationToken ct = default) =>
+        SendAsync<HouseholdMember>(HttpMethod.Put, $"family-profile/members/{id:D}/support-needs", new { needs }, signedIn: true, ct);
+
+    /// <summary>Links a young member to an account (the person's own, or a child's they are guardian of); null unlinks.</summary>
+    public Task<ApiResult<HouseholdMember>> LinkMemberAccountAsync(Guid id, Guid? userId, CancellationToken ct = default) =>
+        SendAsync<HouseholdMember>(HttpMethod.Put, $"family-profile/members/{id:D}/account", new { userId }, signedIn: true, ct);
+
+    public Task<ApiResult<HouseholdContact>> AddContactAsync(ContactDraft contact, CancellationToken ct = default) =>
+        SendAsync<HouseholdContact>(HttpMethod.Post, "family-profile/contacts", contact, signedIn: true, ct);
+
+    public Task<ApiResult<HouseholdContact>> UpdateContactAsync(Guid id, ContactDraft contact, CancellationToken ct = default) =>
+        SendAsync<HouseholdContact>(HttpMethod.Put, $"family-profile/contacts/{id:D}", contact, signedIn: true, ct);
+
+    public Task<ApiResult> RemoveContactAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"family-profile/contacts/{id:D}", null, signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<HouseholdShare>>> SharesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<HouseholdShare>>("family-profile/shares", signedIn: true, ct);
+
+    /// <summary>Ends a share at once: the organisation stops seeing what it covered.</summary>
+    public Task<ApiResult> StopSharingAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"family-profile/shares/{id:D}", null, signedIn: true, ct);
+
     // ---- guardians, children and consent (D31, D34, D35) -------------------------------------
 
     public Task<ApiResult<IReadOnlyList<Child>>> ChildrenAsync(CancellationToken ct = default) =>

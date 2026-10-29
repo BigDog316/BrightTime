@@ -52,7 +52,7 @@ nothing in these guides promises a screen that doesn't exist yet.
 | **Organisations:** taking attendance on a phone, offline | | Yes | |
 | **Network organisers:** review, taxonomy, wording, audit | Yes | | |
 | Families applying to programs, signing waivers and paying | Coming | Coming | Built behind the scenes; the family screens are next |
-| A household's family profile and sharing it with an organisation | Coming | Coming | As above |
+| A household's family profile, and stopping a share | Coming | Yes | Sharing itself comes with applying |
 | Messages from organisations, and a family's own attendance | Coming | Coming | As above |
 | A young person's portfolio, badges and playlists | Coming | Coming | As above |
 | **Organisations:** playlists | Coming | | As above |

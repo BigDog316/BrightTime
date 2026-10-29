@@ -287,19 +287,25 @@ public sealed class FormDefinitions(EnrollmentDbContext db, ITenantContext tenan
                 return null;
             }
 
-            FormSchema schema = FormSchema.FromJson(form.SchemaJson);
-            return new PublicForm(form.Id, form.Version, Convert.ToHexStringLower(form.SchemaHash), [.. schema.Questions.Select(q => new PublicQuestion(
-                q.Key,
-                q.Kind,
-                FormSchema.In(q.Label, locale) ?? q.Key,
-                FormSchema.In(q.Help, locale),
-                q.Required,
-                q.Sensitive,
-                q.Choices?.Select(c => new PublicChoice(c.Key, FormSchema.In(c.Label, locale) ?? c.Key)).ToList(),
-                q.MaxLength,
-                q.Min,
-                q.Max))]);
+            return Public(form, locale);
         }, cancellationToken);
+
+    /// <summary>A form version as a family is shown it, in their language where the provider wrote one.</summary>
+    internal static PublicForm Public(FormDefinitionRecord form, string locale)
+    {
+        FormSchema schema = FormSchema.FromJson(form.SchemaJson);
+        return new PublicForm(form.Id, form.Version, Convert.ToHexStringLower(form.SchemaHash), [.. schema.Questions.Select(q => new PublicQuestion(
+            q.Key,
+            q.Kind,
+            FormSchema.In(q.Label, locale) ?? q.Key,
+            FormSchema.In(q.Help, locale),
+            q.Required,
+            q.Sensitive,
+            q.Choices?.Select(c => new PublicChoice(c.Key, FormSchema.In(c.Label, locale) ?? c.Key)).ToList(),
+            q.MaxLength,
+            q.Min,
+            q.Max))]);
+    }
 
     private Task<FormDefinitionRecord?> OwnAsync(OrganisationId org, Guid id, CancellationToken ct) =>
         db.FormDefinitions.FirstOrDefaultAsync(f => f.Id == id && f.OrgId == org.Value, ct);

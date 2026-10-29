@@ -145,8 +145,9 @@ listing. The column-by-column reference is in [docs/import.md](../import.md).
 
 ## Registration: forms, eligibility and waivers
 
-These apply to listings that register **through BrightTime**. Families can't apply through the
-website or the app yet; when they can, these are what they'll see. You can set them up now.
+These apply to listings that register **through BrightTime**. Families apply in the app: they
+see your rules first, answer your form, sign your waivers and choose what you may see of the young
+person. The website's family pages come later.
 
 **Forms** (owners and admins) are the questions families answer when they apply.
 1. **Start a new form** with a name and its first question.

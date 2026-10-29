@@ -51,8 +51,9 @@ nothing in these guides promises a screen that doesn't exist yet.
 | **Organisations:** forms, eligibility, waivers, applications, fees, attendance, messages, reports | Yes | | |
 | **Organisations:** taking attendance on a phone, offline | | Yes | |
 | **Network organisers:** review, taxonomy, wording, audit | Yes | | |
-| Families applying to programs, signing waivers and paying | Coming | Coming | Built behind the scenes; the family screens are next |
-| A household's family profile, and stopping a share | Coming | Yes | Sharing itself comes with applying |
+| Families applying to programs and signing waivers | Coming | Yes | |
+| Paying fees | Coming | Coming | Built behind the scenes; the family screens are next |
+| A household's family profile, and choosing and stopping what it shares | Coming | Yes | |
 | Messages from organisations, and a family's own attendance | Coming | Coming | As above |
 | A young person's portfolio, badges and playlists | Coming | Coming | As above |
 | **Organisations:** playlists | Coming | | As above |

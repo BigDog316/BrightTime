@@ -1,0 +1,547 @@
+@page "/applications/{Id:guid}"
+@* One application (D46, D47, D72). A draft: the activity's questions, its waivers, what the
+   organisation may see, and Send. After that: where it stands, an offered place to take or turn
+   down, and withdrawing. The rules are the server's to judge; the app only says what they found. *@
+@using System.Globalization
+@using System.Text.Json
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+@if (!Session.IsSignedIn)
+{
+    <h1>@T["app.applications.title"]</h1>
+    <p>@T["app.apply.sign_in"]</p>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (_application is null)
+{
+    <h1>@T["app.applications.title"]</h1>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_problem is null)
+    {
+        <Busy />
+    }
+}
+else
+{
+    FamilyApplication a = _application;
+    <h1>@a.ListingTitle</h1>
+    <dl class="facts">
+        <dt>@T["app.applications.for"]</dt>
+        <dd>@Text.Name(a.MemberFirstName)</dd>
+        <dt>@T["app.applications.status"]</dt>
+        <dd>@T["app.applications.status." + a.Status]</dd>
+        @if (a.SubmittedAt is { } sent)
+        {
+            <dt>@T["app.applications.sent"]</dt>
+            <dd>@T.DateShort(sent)</dd>
+        }
+    </dl>
+    @if (!a.IsDraft && T.Has("app.applications.explain." + a.Status))
+    {
+        <p>@T["app.applications.explain." + a.Status]</p>
+    }
+    @if (_status is not null)
+    {
+        <p class="notice" role="status">@_status</p>
+    }
+
+    @if (a.IsDraft)
+    {
+        @Verdict(a)
+
+        @if (_form is { } form)
+        {
+            <section aria-labelledby="questions">
+                <h2 id="questions">@T["app.apply.questions"]</h2>
+                <form class="stack" @onsubmit="SaveAnswersAsync">
+                    @foreach (FormQuestion q in form.Questions)
+                    {
+                        <div class="field" @key="q.Key">
+                            @Question(q)
+                            @if (_missing.Contains(q.Key))
+                            {
+                                <p class="error" id="@("q-" + q.Key + "-missing")">@T["app.apply.answer_this"]</p>
+                            }
+                        </div>
+                    }
+                    <ProblemNotice Problem="_answersProblem" />
+                    <div class="actions">
+                        <button type="submit" disabled="@_busy">@T["app.apply.save_answers"]</button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        @if (_waivers.Count > 0)
+        {
+            <section aria-labelledby="waivers">
+                <h2 id="waivers">@T["app.apply.waivers"]</h2>
+                <p class="hint">@T["app.apply.waivers_hint"]</p>
+                @foreach (ApplicationWaiver w in _waivers)
+                {
+                    <article class="card" @key="w.WaiverId">
+                        <h3>@w.Title</h3>
+                        <p class="hint">@(w.IsRequired ? T["app.apply.waiver_required"] : T["app.apply.waiver_optional"])</p>
+                        @* Plain text, a paragraph per blank line: the app renders no markup from the API. *@
+                        @foreach (string paragraph in w.BodyMarkdown.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            <p>@paragraph</p>
+                        }
+                        @if (w.SignedAt is { } signed)
+                        {
+                            <p><strong>@T.Format("app.apply.waiver_signed", ("date", T.DateShort(signed)))</strong></p>
+                        }
+                        else
+                        {
+                            <div class="field">
+                                <label for="@("sign-" + w.WaiverId.ToString("N"))">@T["app.apply.typed_name"]</label>
+                                <input id="@("sign-" + w.WaiverId.ToString("N"))" maxlength="200" autocomplete="name"
+                                       value="@_typed.GetValueOrDefault(w.WaiverId)" @onchange="e => _typed[w.WaiverId] = e.Value?.ToString() ?? string.Empty" />
+                            </div>
+                            <button type="button" @onclick="() => SignAsync(w)" disabled="@_busy">@T["app.apply.sign"]</button>
+                        }
+                    </article>
+                }
+                <ProblemNotice Problem="_waiverProblem" />
+            </section>
+        }
+
+        <section aria-labelledby="share">
+            <h2 id="share">@T["app.apply.share"]</h2>
+            <p class="hint">@T["app.apply.share_hint"]</p>
+            <fieldset>
+                <legend>@T["app.apply.share_fields"]</legend>
+                <label><input type="checkbox" checked disabled /> @T["app.apply.share_field.member_names"]</label>
+                @foreach (string field in ShareChoices)
+                {
+                    <label>
+                        <input type="checkbox" checked="@_share.Contains(field)" @onchange="e => Toggle(_share, field, e.Value is true)" />
+                        @T["app.apply.share_field." + field]
+                    </label>
+                }
+            </fieldset>
+            <div class="field">
+                <label for="until">@T["app.apply.share_until"]</label>
+                <p class="hint" id="until-hint">@T["app.apply.share_until_hint"]</p>
+                <input id="until" type="date" aria-describedby="until-hint" value="@_until?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
+                       @onchange="SetUntil" />
+            </div>
+        </section>
+
+        <ProblemNotice Problem="_sendProblem" />
+        <div class="actions">
+            <button type="button" class="primary" @onclick="SendAsync" disabled="@(_busy || a.Eligibility.IsEligible == false)">@T["app.apply.send"]</button>
+        </div>
+
+        <section aria-labelledby="discard">
+            <h2 id="discard">@T["app.apply.discard"]</h2>
+            @if (_confirm == Confirming.Discard)
+            {
+                <p class="hint">@T["app.apply.discard_explain"]</p>
+                <button type="button" class="danger" @onclick="WithdrawAsync" disabled="@_busy">@T["app.apply.discard_confirm"]</button>
+                <button type="button" @onclick="() => _confirm = null">@T["app.cancel"]</button>
+            }
+            else
+            {
+                <button type="button" @onclick="() => _confirm = Confirming.Discard">@T["app.apply.discard"]</button>
+            }
+        </section>
+    }
+    else
+    {
+        @if (a.IsOffered)
+        {
+            <section aria-labelledby="offer">
+                <h2 id="offer">@T["app.apply.offer"]</h2>
+                @if (_confirm == Confirming.Decline)
+                {
+                    <p class="hint">@T["app.apply.decline_explain"]</p>
+                    <button type="button" class="danger" @onclick="DeclineAsync" disabled="@_busy">@T["app.apply.decline_confirm"]</button>
+                    <button type="button" @onclick="() => _confirm = null">@T["app.cancel"]</button>
+                }
+                else
+                {
+                    <div class="actions">
+                        <button type="button" class="primary" @onclick="TakeAsync" disabled="@_busy">@T["app.apply.take"]</button>
+                        <button type="button" @onclick="() => _confirm = Confirming.Decline">@T["app.apply.decline"]</button>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (_form is { } form && a.Answers.Count > 0)
+        {
+            <section aria-labelledby="answers">
+                <h2 id="answers">@T["app.apply.your_answers"]</h2>
+                <dl class="facts">
+                    @foreach (FormQuestion q in form.Questions.Where(q => a.Answers.ContainsKey(q.Key)))
+                    {
+                        <dt>@q.Label</dt>
+                        <dd>@Shown(q, a.Answers[q.Key])</dd>
+                    }
+                </dl>
+            </section>
+        }
+
+        @if (a.CanWithdraw)
+        {
+            <section aria-labelledby="withdraw">
+                <h2 id="withdraw">@T["app.apply.withdraw"]</h2>
+                @if (_confirm == Confirming.Withdraw)
+                {
+                    <p class="hint">@T["app.apply.withdraw_explain"]</p>
+                    <button type="button" class="danger" @onclick="WithdrawAsync" disabled="@_busy">@T["app.apply.withdraw_confirm"]</button>
+                    <button type="button" @onclick="() => _confirm = null">@T["app.cancel"]</button>
+                }
+                else
+                {
+                    <button type="button" @onclick="() => _confirm = Confirming.Withdraw">@T["app.apply.withdraw"]</button>
+                }
+            </section>
+        }
+        <ProblemNotice Problem="_sendProblem" />
+    }
+
+    <a class="button" href="applications">@T["app.applications.back"]</a>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    /// <summary>What the family may share besides the young person's name, which is always shared.</summary>
+    private static readonly string[] ShareChoices = ["member_birth_dates", "member_grade", "member_pronouns", "household", "contacts", "support_needs"];
+
+    private enum Confirming { Discard, Withdraw, Decline }
+
+    private FamilyApplication? _application;
+    private ApplicationForm? _form;
+    private IReadOnlyList<ApplicationWaiver> _waivers = [];
+    private ApiProblem? _problem;
+    private ApiProblem? _answersProblem;
+    private ApiProblem? _waiverProblem;
+    private ApiProblem? _sendProblem;
+    private string? _status;
+    private bool _busy;
+    private Confirming? _confirm;
+
+    // Answers as the inputs hold them, by question key.
+    private readonly Dictionary<string, string> _text = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, bool?> _flags = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<string>> _picked = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _missing = new(StringComparer.Ordinal);
+
+    private readonly Dictionary<Guid, string> _typed = [];
+    private readonly HashSet<string> _share = new(StringComparer.Ordinal);
+    private DateOnly? _until;
+
+    protected override Task OnParametersSetAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<FamilyApplication> found = await Api.ApplicationAsync(Id);
+        if (!found.IsSuccess)
+        {
+            _problem = found.Problem;
+            return;
+        }
+
+        FamilyApplication application = found.Value!;
+        _form = application.FormId is null ? null : (await Api.ApplicationFormAsync(Id)).Value;
+        _waivers = application.IsDraft ? (await Api.ApplicationWaiversAsync(Id)).Value ?? [] : [];
+        Fill(application.Answers);
+        _application = application;
+    }
+
+    private void Fill(IReadOnlyDictionary<string, JsonElement> answers)
+    {
+        _text.Clear();
+        _flags.Clear();
+        _picked.Clear();
+        foreach ((string key, JsonElement value) in answers)
+        {
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.String:
+                    _text[key] = value.GetString()!;
+                    break;
+                case JsonValueKind.Number:
+                    _text[key] = value.GetRawText();
+                    break;
+                case JsonValueKind.True or JsonValueKind.False:
+                    _flags[key] = value.GetBoolean();
+                    break;
+                case JsonValueKind.Array:
+                    _picked[key] = new HashSet<string>(value.EnumerateArray().Select(v => v.GetString() ?? string.Empty), StringComparer.Ordinal);
+                    break;
+            }
+        }
+    }
+
+    private RenderFragment Verdict(FamilyApplication a)
+    {
+        string name = Text.Name(a.MemberFirstName);
+        List<string> failed = [.. a.Eligibility.Rules.Where(r => r.IsHard && r.Met == false).Select(r => Words.RuleKind(T, r.Kind)).Distinct()];
+        List<string> unknown = [.. a.Eligibility.Rules.Where(r => r.Met is null).Select(r => Words.RuleKind(T, r.Kind)).Distinct()];
+        return @<text>
+            @if (failed.Count > 0)
+            {
+                <p class="notice" role="alert">@T.Format("app.apply.ineligible", ("name", name), ("rules", string.Join(T["format.list_separator"], failed)))</p>
+            }
+            else if (unknown.Count > 0)
+            {
+                <p class="notice">
+                    @T.Format("app.apply.unknown", ("name", name), ("rules", string.Join(T["format.list_separator"], unknown)))
+                    <a href="household/members/@a.MemberId.ToString("D")">@T["app.apply.add_details"]</a>
+                </p>
+            }
+        </text>;
+    }
+
+    private RenderFragment Question(FormQuestion q)
+    {
+        string id = "q-" + q.Key;
+        string? described = string.Join(' ', new[] { q.Help is null ? null : id + "-help", q.Sensitive ? id + "-private" : null, _missing.Contains(q.Key) ? id + "-missing" : null }
+            .Where(x => x is not null));
+        described = described.Length == 0 ? null : described;
+        string label = q.Required && q.Kind != "consent" ? T.Format("app.apply.required", ("label", q.Label)) : q.Label;
+        return @<text>
+            @if (q.Kind == "consent")
+            {
+                <label>
+                    <input type="checkbox" checked="@(_flags.GetValueOrDefault(q.Key) == true)" aria-describedby="@described"
+                           @onchange="e => _flags[q.Key] = e.Value is true ? true : null" />
+                    @q.Label
+                </label>
+            }
+            else if (q.Kind is "yes_no" or "single_choice" or "multi_choice")
+            {
+                <fieldset aria-describedby="@described">
+                    <legend>@label</legend>
+                    @if (q.Kind == "yes_no")
+                    {
+                        <label><input type="radio" name="@id" checked="@(_flags.GetValueOrDefault(q.Key) == true)" @onchange="() => _flags[q.Key] = true" /> @T["app.apply.yes"]</label>
+                        <label><input type="radio" name="@id" checked="@(_flags.GetValueOrDefault(q.Key) == false)" @onchange="() => _flags[q.Key] = false" /> @T["app.apply.no"]</label>
+                    }
+                    else if (q.Kind == "single_choice")
+                    {
+                        @foreach (FormChoice c in q.Choices ?? [])
+                        {
+                            <label><input type="radio" name="@id" checked="@(_text.GetValueOrDefault(q.Key) == c.Key)" @onchange="() => _text[q.Key] = c.Key" /> @c.Label</label>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (FormChoice c in q.Choices ?? [])
+                        {
+                            <label>
+                                <input type="checkbox" checked="@(_picked.TryGetValue(q.Key, out HashSet<string>? on) && on.Contains(c.Key))"
+                                       @onchange="e => Toggle(Picked(q.Key), c.Key, e.Value is true)" />
+                                @c.Label
+                            </label>
+                        }
+                    }
+                </fieldset>
+            }
+            else
+            {
+                <label for="@id">@label</label>
+                @if (q.Kind == "long_text")
+                {
+                    <textarea id="@id" rows="4" maxlength="@(q.MaxLength ?? 5000)" aria-describedby="@described"
+                              @onchange="e => _text[q.Key] = e.Value?.ToString() ?? string.Empty">@_text.GetValueOrDefault(q.Key)</textarea>
+                }
+                else
+                {
+                    <input id="@id" type="@(q.Kind switch { "number" => "number", "date" => "date", _ => "text" })" aria-describedby="@described"
+                           maxlength="@(q.Kind == "short_text" ? q.MaxLength ?? 500 : null)" min="@Invariant(q.Min)" max="@Invariant(q.Max)" step="@(q.Kind == "number" ? "any" : null)"
+                           value="@_text.GetValueOrDefault(q.Key)" @onchange="e => _text[q.Key] = e.Value?.ToString() ?? string.Empty" />
+                }
+            }
+            @if (q.Help is { } help)
+            {
+                <p class="hint" id="@(id + "-help")">@help</p>
+            }
+            @if (q.Sensitive)
+            {
+                <p class="hint" id="@(id + "-private")">@T["app.apply.sensitive"]</p>
+            }
+        </text>;
+    }
+
+    private void SetUntil(ChangeEventArgs e) =>
+        _until = DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day) ? day : null;
+
+    private static string? Invariant(decimal? value) => value?.ToString(CultureInfo.InvariantCulture);
+
+    private HashSet<string> Picked(string key) =>
+        _picked.TryGetValue(key, out HashSet<string>? set) ? set : _picked[key] = new HashSet<string>(StringComparer.Ordinal);
+
+    private static void Toggle(HashSet<string> set, string value, bool on)
+    {
+        if (on)
+        {
+            set.Add(value);
+        }
+        else
+        {
+            set.Remove(value);
+        }
+    }
+
+    /// <summary>Every question's answer as the API takes it; null clears one not answered.</summary>
+    private Dictionary<string, object?> Answers()
+    {
+        Dictionary<string, object?> answers = new(StringComparer.Ordinal);
+        foreach (FormQuestion q in _form!.Questions)
+        {
+            string? text = _text.GetValueOrDefault(q.Key)?.Trim() is { Length: > 0 } t ? t : null;
+            answers[q.Key] = q.Kind switch
+            {
+                "yes_no" => _flags.GetValueOrDefault(q.Key),
+                "consent" => _flags.GetValueOrDefault(q.Key) == true ? true : null,
+                "multi_choice" => _picked.TryGetValue(q.Key, out HashSet<string>? on) && on.Count > 0 ? q.Choices!.Select(c => c.Key).Where(on.Contains).ToList() : null,
+                // A number the field couldn't read goes as text, and the server says it doesn't fit.
+                "number" when text is not null => decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal n) ? n : text,
+                _ => text,
+            };
+        }
+
+        return answers;
+    }
+
+    private async Task<bool> SaveAsync()
+    {
+        _answersProblem = null;
+        if (_form is null)
+        {
+            return true;
+        }
+
+        ApiResult<FamilyApplication> saved = await Api.SaveAnswersAsync(Id, Answers());
+        _answersProblem = saved.Problem;
+        if (saved.Value is { } application)
+        {
+            _application = application;
+        }
+
+        return saved.IsSuccess;
+    }
+
+    private async Task SaveAnswersAsync()
+    {
+        _busy = true;
+        _status = await SaveAsync() ? T["app.apply.answers_saved"] : null;
+        _busy = false;
+    }
+
+    private async Task SignAsync(ApplicationWaiver waiver)
+    {
+        _busy = true;
+        ApiResult signed = await Api.SignWaiverAsync(Id, waiver.WaiverId, _typed.GetValueOrDefault(waiver.WaiverId)?.Trim() ?? string.Empty, waiver.Hash);
+        _waiverProblem = signed.Problem;
+        if (signed.IsSuccess || signed.Problem is { Code: "waiver.changed" })
+        {
+            // Signed, or changed since it was read: either way, show the waiver as it is now.
+            _waivers = (await Api.ApplicationWaiversAsync(Id)).Value ?? _waivers;
+        }
+
+        _busy = false;
+    }
+
+    private async Task SendAsync()
+    {
+        _busy = true;
+        _sendProblem = null;
+        _status = null;
+        _missing.Clear();
+        if (_form is { } form)
+        {
+            Dictionary<string, object?> answers = Answers();
+            _missing.UnionWith(form.Questions.Where(q => q.Required && answers[q.Key] is null).Select(q => q.Key));
+        }
+
+        if (_missing.Count > 0)
+        {
+            _status = T["app.apply.answer_all"];
+        }
+        else if (_waivers.Any(w => w.IsRequired && w.SignedAt is null))
+        {
+            _status = T["app.apply.sign_first"];
+        }
+        else if (await SaveAsync())
+        {
+            DateTimeOffset? until = _until is { } day ? new DateTimeOffset(day.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null;
+            ApiResult<FamilyApplication> sent = await Api.SubmitApplicationAsync(Id, ["member_names", .. ShareChoices.Where(_share.Contains)], until);
+            _sendProblem = sent.Problem;
+            if (sent.Value is { } application)
+            {
+                _application = application;
+                _status = T["app.apply.sent"];
+            }
+        }
+
+        _busy = false;
+    }
+
+    private async Task TakeAsync()
+    {
+        _busy = true;
+        ApiResult<FamilyApplication> taken = await Api.TakeOfferAsync(Id);
+        _sendProblem = taken.Problem;
+        _application = taken.Value ?? _application;
+        _status = taken.IsSuccess ? T["app.apply.taken"] : null;
+        _busy = false;
+    }
+
+    private async Task DeclineAsync()
+    {
+        _busy = true;
+        ApiResult declined = await Api.DeclineOfferAsync(Id);
+        _sendProblem = declined.Problem;
+        _confirm = null;
+        if (declined.IsSuccess)
+        {
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    private async Task WithdrawAsync()
+    {
+        _busy = true;
+        bool draft = _application!.IsDraft;
+        ApiResult withdrawn = await Api.WithdrawApplicationAsync(Id);
+        _sendProblem = withdrawn.Problem;
+        _confirm = null;
+        if (withdrawn.IsSuccess && draft)
+        {
+            // A draft never sent is thrown away, not kept as withdrawn.
+            Navigation.NavigateTo("applications");
+            return;
+        }
+
+        if (withdrawn.IsSuccess)
+        {
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>A sent answer, worded: a choice's label rather than its key.</summary>
+    private string Shown(FormQuestion q, JsonElement value) => (q.Kind, value.ValueKind) switch
+    {
+        ("consent", JsonValueKind.True) => T["app.apply.agreed"],
+        (_, JsonValueKind.True) => T["app.apply.yes"],
+        (_, JsonValueKind.False) => T["app.apply.no"],
+        ("single_choice", JsonValueKind.String) => q.Choices?.FirstOrDefault(c => c.Key == value.GetString())?.Label ?? value.GetString()!,
+        (_, JsonValueKind.Array) => string.Join(T["format.list_separator"], value.EnumerateArray().Select(v => q.Choices?.FirstOrDefault(c => c.Key == v.GetString())?.Label ?? v.GetString())),
+        ("date", JsonValueKind.String) when DateOnly.TryParseExact(value.GetString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly d) => T.DateShort(d),
+        (_, JsonValueKind.String) => value.GetString()!,
+        _ => value.GetRawText(),
+    };
+}

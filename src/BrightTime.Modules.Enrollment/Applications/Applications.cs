@@ -192,6 +192,28 @@ public sealed partial class Applications(
             return Result<ApplicationView>.Success(view);
         }, cancellationToken);
 
+    /// <summary>
+    /// The form version an application answers (D45, D72), worded for the family. The listing's
+    /// own form may have moved on to a later version since the draft began; this one doesn't.
+    /// </summary>
+    public Task<Result<PublicForm>> QuestionsAsync(UserId owner, Guid id, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await OwnAsync(owner, id, ct).ConfigureAwait(false) is not { } application)
+            {
+                return Fail<PublicForm>(NotFound());
+            }
+
+            if (application.FormDefinitionId is not { } formId)
+            {
+                return Fail<PublicForm>(Error.NotFound("application.no_form", "This activity asks no questions."));
+            }
+
+            FormDefinitionRecord form = await db.FormDefinitions.AsNoTracking().FirstAsync(f => f.Id == formId, ct).ConfigureAwait(false);
+            await AuditAsync(Read, application.Id, null, ct).ConfigureAwait(false);
+            return Result<PublicForm>.Success(FormDefinitions.Public(form, tenant.Locale.Code));
+        }, cancellationToken);
+
     /// <summary>Saves some of a draft's answers; a null answer clears that question. Nothing is required until submitting.</summary>
     public Task<Result<ApplicationView>> SaveAnswersAsync(UserId owner, Guid id, IReadOnlyDictionary<string, JsonElement> answers, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>

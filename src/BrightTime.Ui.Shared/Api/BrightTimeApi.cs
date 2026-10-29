@@ -187,6 +187,54 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> StopSharingAsync(Guid id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"family-profile/shares/{id:D}", null, signedIn: true, ct);
 
+    // ---- applying (D46, D47, D72) -------------------------------------------------------------
+
+    /// <summary>Who an activity is for, before applying.</summary>
+    public Task<ApiResult<IReadOnlyList<EligibilityRule>>> EligibilityAsync(string slug, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<EligibilityRule>>("public/listings/" + Uri.EscapeDataString(slug) + "/eligibility", signedIn: false, ct);
+
+    public Task<ApiResult<IReadOnlyList<ApplicationSummary>>> ApplicationsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ApplicationSummary>>("applications", signedIn: true, ct);
+
+    /// <summary>
+    /// Starts a draft. The same <paramref name="key"/> sent again returns the same draft, so a
+    /// retry on a bad connection never makes a second one.
+    /// </summary>
+    public Task<ApiResult<FamilyApplication>> StartApplicationAsync(Guid listingId, Guid memberId, string key, CancellationToken ct = default) =>
+        SendAsync<FamilyApplication>(HttpMethod.Post, "applications", new { listingId, memberId }, signedIn: true, key, ct);
+
+    public Task<ApiResult<FamilyApplication>> ApplicationAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<FamilyApplication>($"applications/{id:D}", signedIn: true, ct);
+
+    /// <summary>The questions the draft answers: the form version it began on, not necessarily the listing's latest.</summary>
+    public Task<ApiResult<ApplicationForm>> ApplicationFormAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<ApplicationForm>($"applications/{id:D}/form", signedIn: true, ct);
+
+    /// <summary>Saves some answers; a null answer clears that question.</summary>
+    public Task<ApiResult<FamilyApplication>> SaveAnswersAsync(Guid id, IReadOnlyDictionary<string, object?> answers, CancellationToken ct = default) =>
+        SendAsync<FamilyApplication>(HttpMethod.Patch, $"applications/{id:D}", new { answers }, signedIn: true, ct);
+
+    /// <summary>Sends the application, sharing the young person's <paramref name="shareFields"/> with the organisation until <paramref name="shareUntil"/>.</summary>
+    public Task<ApiResult<FamilyApplication>> SubmitApplicationAsync(Guid id, IReadOnlyList<string> shareFields, DateTimeOffset? shareUntil, CancellationToken ct = default) =>
+        SendAsync<FamilyApplication>(HttpMethod.Post, $"applications/{id:D}/submit", new { shareFields, shareExpiresAt = shareUntil }, signedIn: true, ct);
+
+    /// <summary>Withdraws a sent application, or throws a draft away.</summary>
+    public Task<ApiResult> WithdrawApplicationAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"applications/{id:D}/withdraw", null, signedIn: true, ct);
+
+    public Task<ApiResult<FamilyApplication>> TakeOfferAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<FamilyApplication>(HttpMethod.Post, $"applications/{id:D}/offer/accept", null, signedIn: true, ct);
+
+    public Task<ApiResult> DeclineOfferAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"applications/{id:D}/offer/decline", null, signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<ApplicationWaiver>>> ApplicationWaiversAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ApplicationWaiver>>($"applications/{id:D}/waivers", signedIn: true, ct);
+
+    /// <summary>Signs a waiver by typing a full name, against the text's hash: a changed waiver is refused.</summary>
+    public Task<ApiResult> SignWaiverAsync(Guid id, Guid waiverId, string typedName, string hash, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"applications/{id:D}/waivers/{waiverId:D}/sign", new { typedName, hash }, signedIn: true, ct);
+
     // ---- guardians, children and consent (D31, D34, D35) -------------------------------------
 
     public Task<ApiResult<IReadOnlyList<Child>>> ChildrenAsync(CancellationToken ct = default) =>
@@ -254,11 +302,14 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
         return result.IsSuccess ? ApiResult.Success : ApiResult.Failure(result.Problem!);
     }
 
-    private async Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, object? body, bool signedIn, CancellationToken ct)
+    private Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, object? body, bool signedIn, CancellationToken ct) =>
+        SendAsync<T>(method, path, body, signedIn, idempotencyKey: null, ct);
+
+    private async Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, object? body, bool signedIn, string? idempotencyKey, CancellationToken ct)
     {
         try
         {
-            using HttpResponseMessage first = await SendOnceAsync(method, path, body, signedIn, ct).ConfigureAwait(false);
+            using HttpResponseMessage first = await SendOnceAsync(method, path, body, signedIn, idempotencyKey, ct).ConfigureAwait(false);
             if (first.StatusCode != HttpStatusCode.Unauthorized || !signedIn)
             {
                 return await ReadAsync<T>(first, ct).ConfigureAwait(false);
@@ -270,7 +321,7 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
                 return await ReadAsync<T>(first, ct).ConfigureAwait(false);
             }
 
-            using HttpResponseMessage second = await SendOnceAsync(method, path, body, signedIn, ct).ConfigureAwait(false);
+            using HttpResponseMessage second = await SendOnceAsync(method, path, body, signedIn, idempotencyKey, ct).ConfigureAwait(false);
             return await ReadAsync<T>(second, ct).ConfigureAwait(false);
         }
         catch (HttpRequestException)
@@ -284,10 +335,14 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
         }
     }
 
-    private async Task<HttpResponseMessage> SendOnceAsync(HttpMethod method, string path, object? body, bool signedIn, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendOnceAsync(HttpMethod method, string path, object? body, bool signedIn, string? idempotencyKey, CancellationToken ct)
     {
         using HttpRequestMessage request = new(method, path);
         request.Headers.AcceptLanguage.Add(new StringWithQualityHeaderValue(language.Locale.Code));
+        if (idempotencyKey is not null)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+        }
         if (signedIn)
         {
             if (await session.AccessTokenAsync(ct).ConfigureAwait(false) is not { } token)

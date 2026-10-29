@@ -1,0 +1,64 @@
+@page "/applications"
+@* The family's applications (D46, D72): each one, for whom, and where it stands. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.applications.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.apply.sign_in"]</p>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (Session.Me?.AccountKind == "child")
+{
+    <p>@T["app.apply.child_account"]</p>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_applications is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_applications is { Count: 0 })
+    {
+        <p>@T["app.applications.none"]</p>
+        <a class="button primary" href="search">@T["app.applications.find"]</a>
+    }
+    else if (_applications is not null)
+    {
+        <ul class="cards">
+            @foreach (ApplicationSummary a in _applications)
+            {
+                <li class="card" @key="a.Id">
+                    <h2><a href="applications/@a.Id.ToString("D")">@a.ListingTitle</a></h2>
+                    <dl class="facts">
+                        <dt>@T["app.applications.for"]</dt>
+                        <dd>@Text.Name(a.MemberFirstName)</dd>
+                        <dt>@T["app.applications.status"]</dt>
+                        <dd>@T["app.applications.status." + a.Status]</dd>
+                        <dt>@(a.SubmittedAt is null ? T["app.applications.started"] : T["app.applications.sent"])</dt>
+                        <dd>@T.DateShort(a.SubmittedAt ?? a.StartedAt)</dd>
+                    </dl>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<ApplicationSummary>? _applications;
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn && Session.Me?.AccountKind != "child" ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<ApplicationSummary>> found = await Api.ApplicationsAsync();
+        _problem = found.Problem;
+        // Most recent first: drafts and offers are what a family comes back for.
+        _applications = found.Value?.OrderByDescending(a => a.SubmittedAt ?? a.StartedAt).ToList();
+    }
+}

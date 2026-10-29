@@ -2376,6 +2376,30 @@ errors those routes already word in all six languages.
 
 **Not yet:** applying, waivers and paying; messages; the child's activity; the web's family pages.
 
+### D72 — Applying, in the app (**proposed 2026-10-29**)
+
+The second family slice, after the household (D71). A family applies to an activity from the app,
+as the server built it in M3a (D44 to D47):
+- **Apply** on an activity that takes registrations here (`builtin` or `waitlist_only`), for an
+  adult or young person signed in. The family first sees who the activity is for (its eligibility
+  rules, worded), then chooses a child or young person from the household. A household not yet
+  saved, or one with no young member, is sent to the household screens first. An application
+  already started for that person opens instead of a second one.
+- **The application:** the activity's questions in the family's language where the organisation
+  wrote one, saved as they go; the waivers it asks for, read and signed by typing a full name;
+  which details the organisation may see (names always, the rest chosen, nothing ticked by
+  default but names) and until when; then **Send**. Each rule the young person doesn't meet, or
+  can't be judged on yet, is said before sending.
+- **Your applications:** each one with its status. A sent one can be withdrawn; a place offered
+  from the waitlist can be taken or turned down.
+
+**One server addition:** `GET /applications/{id}/form` returns the form version the draft was
+started on, worded for the family. The public `/listings/{slug}/form` returns the listing's
+current version, and a draft is held to the version it began with (D45); the app needs that one.
+
+**Not yet:** fees and paying (next), messages, attendance and the check-in code, the young
+person's portfolio screens, and the web's family pages.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

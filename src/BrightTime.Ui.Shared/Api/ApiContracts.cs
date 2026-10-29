@@ -215,6 +215,51 @@ public sealed record ContactDraft(string Name, string Relationship, string Phone
 
 public sealed record SupportNeedDraft(string Kind, string? Detail, bool ShareWithProviders);
 
+/// <summary>One of the family's applications, as the list shows it (D46, D72).</summary>
+public sealed record ApplicationSummary(
+    Guid Id, Guid ListingId, string ListingTitle, Guid MemberId, string MemberFirstName, string Status, DateTimeOffset StartedAt, DateTimeOffset? SubmittedAt);
+
+/// <summary>
+/// One application (D46): its answers so far, and what the activity's rules say of the young
+/// person, judged afresh while it's a draft and as they stood when it was sent after that.
+/// </summary>
+public sealed record FamilyApplication(
+    Guid Id, Guid ListingId, string ListingTitle, Guid? OrganisationId, Guid MemberId, string MemberFirstName, string Status, Guid? FormId,
+    IReadOnlyDictionary<string, JsonElement> Answers, EligibilityVerdict Eligibility, DateTimeOffset StartedAt, DateTimeOffset? SubmittedAt, DateTimeOffset? WithdrawnAt)
+{
+    public bool IsDraft => Status == "draft";
+
+    public bool IsOffered => Status == "offered";
+
+    /// <summary>The states a family may still withdraw from (the server's <c>ApplicationStatuses.Withdrawable</c>).</summary>
+    public bool CanWithdraw => Status is "submitted" or "under_review" or "waitlisted" or "offered" or "accepted";
+}
+
+/// <summary>False when a rule that must be met isn't; null when one can't be judged yet; true otherwise.</summary>
+public sealed record EligibilityVerdict(bool? IsEligible, IReadOnlyList<RuleOutcome> Rules);
+
+public sealed record RuleOutcome(Guid? RuleId, string Kind, bool IsHard, bool? Met);
+
+/// <summary>One of an activity's rules, as a family is shown it before applying.</summary>
+public sealed record EligibilityRule(Guid Id, string Kind, RuleSettings Config, bool IsHard);
+
+public sealed record RuleSettings(int? Min, int? Max, DateOnly? On, IReadOnlyList<Guid>? NeighbourhoodIds, Guid? BadgeClassId, Guid? PlaylistId);
+
+/// <summary>The questions an application answers, in the family's language where the organisation wrote one.</summary>
+public sealed record ApplicationForm(Guid FormId, int Version, string Hash, IReadOnlyList<FormQuestion> Questions);
+
+/// <summary>
+/// A question: <see cref="Kind"/> is <c>short_text</c>, <c>long_text</c>, <c>number</c>,
+/// <c>date</c>, <c>yes_no</c>, <c>single_choice</c>, <c>multi_choice</c> or <c>consent</c>.
+/// </summary>
+public sealed record FormQuestion(
+    string Key, string Kind, string Label, string? Help, bool Required, bool Sensitive, IReadOnlyList<FormChoice>? Choices, int? MaxLength, decimal? Min, decimal? Max);
+
+public sealed record FormChoice(string Key, string Label);
+
+/// <summary>A waiver an application asks for (D47), signed against its exact text's <see cref="Hash"/>.</summary>
+public sealed record ApplicationWaiver(Guid WaiverId, string Title, int Version, string BodyMarkdown, string Hash, bool IsRequired, DateTimeOffset? SignedAt);
+
 /// <summary>What a consent scope means, in the exact words a grant is recorded against (its <see cref="Hash"/>).</summary>
 public sealed record Disclosure(string Scope, string Version, string Text, string Hash, IReadOnlyList<string> Methods, bool AvailableUnder13);
 

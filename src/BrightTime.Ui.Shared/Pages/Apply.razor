@@ -1,0 +1,143 @@
+@page "/listings/{Slug}/apply"
+@* Starting an application (D46, D72): who the activity is for, then which young person. An
+   application already started for them opens instead; the server refuses a second one. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+<h1>@T["app.apply.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <p>@T["app.apply.sign_in"]</p>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (Session.Me?.AccountKind == "child")
+{
+    <p>@T["app.apply.child_account"]</p>
+}
+else
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_listing is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_listing is { } l)
+    {
+        <p class="lead">@l.Title</p>
+
+        <section aria-labelledby="who-for">
+            <h2 id="who-for">@T["app.apply.who_for"]</h2>
+            @if (_rules.Count == 0)
+            {
+                <p>@T["app.apply.anyone"]</p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (EligibilityRule rule in _rules)
+                    {
+                        <li>@Words.Rule(T, rule)@(rule.IsHard ? "" : T["app.apply.advisory"])</li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section aria-labelledby="who-applies">
+            <h2 id="who-applies">@T["app.apply.who_applies"]</h2>
+            @if (_young.Count == 0)
+            {
+                <p>@T["app.apply.no_young"]</p>
+                <a class="button primary" href="household/members/add">@T["app.household.add_person"]</a>
+            }
+            else
+            {
+                <form class="stack" @onsubmit="StartAsync">
+                    <fieldset>
+                        <legend>@T["app.apply.choose"]</legend>
+                        @foreach (HouseholdMember m in _young)
+                        {
+                            <label>
+                                <input type="radio" name="member" value="@m.Id" checked="@(_member == m.Id)" @onchange="() => _member = m.Id" />
+                                @Text.Name(m.ShownName)
+                            </label>
+                        }
+                    </fieldset>
+                    <ProblemNotice Problem="_startProblem" />
+                    <div class="actions">
+                        <button type="submit" class="primary" disabled="@(_busy || _member is null)">@T["app.apply.start"]</button>
+                        <a class="button" href="listings/@Slug">@T["app.apply.back"]</a>
+                    </div>
+                </form>
+                <p class="hint">@T["app.apply.household_hint"] <a href="household">@T["app.household.title"]</a></p>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private ListingDetail? _listing;
+    private IReadOnlyList<EligibilityRule> _rules = [];
+    private List<HouseholdMember> _young = [];
+    private Guid? _member;
+    private ApiProblem? _problem;
+    private ApiProblem? _startProblem;
+    private bool _busy;
+
+    // One key per visit to this page: tapping Start twice, or a retry, returns the same draft.
+    private readonly string _key = "app-" + Guid.NewGuid().ToString("N");
+
+    protected override Task OnParametersSetAsync() => Session.IsSignedIn && Session.Me?.AccountKind != "child" ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<ListingDetail> listing = await Api.ListingAsync(Slug);
+        if (!listing.IsSuccess)
+        {
+            _problem = listing.Problem;
+            return;
+        }
+
+        _rules = (await Api.EligibilityAsync(Slug)).Value ?? [];
+        ApiResult<Household> household = await Api.HouseholdAsync();
+        if (household.Problem is { Code: not "family.no_profile" } problem)
+        {
+            _problem = problem;
+            return;
+        }
+
+        _young = [.. household.Value?.Members.Where(m => m.IsYoungPerson) ?? []];
+        _member = _young.Count == 1 ? _young[0].Id : _member;
+        _listing = listing.Value;
+    }
+
+    private async Task StartAsync()
+    {
+        if (_member is not { } member)
+        {
+            return;
+        }
+
+        _busy = true;
+        ApiResult<FamilyApplication> started = await Api.StartApplicationAsync(_listing!.Id, member, _key);
+        _startProblem = started.Problem;
+        if (started.Problem is { Code: "application.exists" }
+            && (await Api.ApplicationsAsync()).Value?.FirstOrDefault(a => a.ListingId == _listing.Id && a.MemberId == member && IsLive(a.Status)) is { } existing)
+        {
+            Navigation.NavigateTo($"applications/{existing.Id:D}");
+            return;
+        }
+
+        _busy = false;
+        if (started.Value is { } application)
+        {
+            Navigation.NavigateTo($"applications/{application.Id:D}");
+        }
+    }
+
+    private static bool IsLive(string status) => status is "draft" or "submitted" or "under_review" or "waitlisted" or "offered" or "accepted";
+}

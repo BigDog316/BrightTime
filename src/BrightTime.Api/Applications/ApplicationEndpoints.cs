@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Modules.Enrollment.Applications;
+using BrightTime.Modules.Enrollment.Forms;
 using BrightTime.Modules.Enrollment.Waivers;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.SharedKernel.Ids;
@@ -34,6 +35,7 @@ public static class ApplicationEndpoints
         applications.MapPost("/", CreateAsync).Changes().Produces<ApplicationView>(StatusCodes.Status201Created);
         applications.MapGet("/", ListAsync).Reads().Produces<IReadOnlyList<ApplicationSummary>>();
         applications.MapGet("/{id:guid}", GetAsync).Reads().Produces<ApplicationView>();
+        applications.MapGet("/{id:guid}/form", QuestionsAsync).Reads().Produces<PublicForm>();
         applications.MapPatch("/{id:guid}", SaveAnswersAsync).Changes().Produces<ApplicationView>();
         applications.MapPost("/{id:guid}/submit", SubmitAsync).Changes().Produces<ApplicationView>();
         applications.MapPost("/{id:guid}/withdraw", WithdrawAsync).Changes();
@@ -74,6 +76,18 @@ public static class ApplicationEndpoints
     private static async Task<IResult> GetAsync(Guid id, ClaimsPrincipal user, Modules.Enrollment.Applications.Applications applications, AuditTrail audit, CancellationToken ct) =>
         ChildRefused(user, audit, Modules.Enrollment.Applications.Applications.Read)
             ?? Answer(audit, Modules.Enrollment.Applications.Applications.Read, await applications.GetAsync(Owner(user), id, ct));
+
+    /// <summary>The form version the application answers (D72), which may be older than the listing's.</summary>
+    private static async Task<IResult> QuestionsAsync(Guid id, ClaimsPrincipal user, Modules.Enrollment.Applications.Applications applications, AuditTrail audit, CancellationToken ct)
+    {
+        if (ChildRefused(user, audit, Modules.Enrollment.Applications.Applications.Read) is { } refused)
+        {
+            return refused;
+        }
+
+        Result<PublicForm> form = await applications.QuestionsAsync(Owner(user), id, ct);
+        return form.IsSuccess ? Results.Ok(form.Value) : Refused(audit, Modules.Enrollment.Applications.Applications.Read, form.Error);
+    }
 
     private static async Task<IResult> SaveAnswersAsync(Guid id, AnswersRequest body, ClaimsPrincipal user, Modules.Enrollment.Applications.Applications applications, AuditTrail audit, CancellationToken ct)
     {

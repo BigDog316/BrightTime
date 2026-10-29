@@ -134,6 +134,13 @@ public sealed class ApplicationApiTests(ApiFixture api)
         (await JsonAsync(await CreateAsync(family, listing, kemi, key))).GetProperty("id").GetGuid().ShouldBe(application);
         await ProblemAsync(await CreateAsync(family, listing, kemi, "another-" + Guid.NewGuid().ToString("N")), HttpStatusCode.Conflict, "application.exists");
 
+        // The questions the draft answers, as the family is shown them (D72); nobody else's.
+        JsonElement questions = await JsonAsync(await family.GetAsync(new Uri($"api/v1/applications/{application}/form", UriKind.Relative), Ct));
+        questions.GetProperty("formId").GetGuid().ShouldBe(form);
+        questions.GetProperty("questions").EnumerateArray().Select(q => (q.GetProperty("key").GetString(), q.GetProperty("label").GetString()))
+            .ShouldBe([("school_name", "School"), ("household_income", "Household income"), ("photo_release", "Photos are fine.")]);
+        await ProblemAsync(await stranger.GetAsync(new Uri($"api/v1/applications/{application}/form", UriKind.Relative), Ct), HttpStatusCode.NotFound, "application.not_found");
+
         // Answers: checked against the form, saved a few at a time, the sensitive one sealed.
         JsonElement saved = await JsonAsync(await AnswerAsync(family, application, new Dictionary<string, object> { ["school_name"] = "PS 12", ["household_income"] = 42137 }));
         saved.GetProperty("answers").GetProperty("household_income").GetInt32().ShouldBe(42137);

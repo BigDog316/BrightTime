@@ -158,6 +158,7 @@ The owner alone reads or changes a family profile.
 |---|---|
 | `GET /applications`, `POST /applications` | The family's applications; start a draft (`Idempotency-Key` required) |
 | `GET`, `PATCH /applications/{id}` | One application; answer its form |
+| `GET /applications/{id}/form` | The questions it answers: the form version the draft began on, in the family's language (D72) |
 | `POST /applications/{id}/submit` | Submit once: checks completeness, hard eligibility rules and required waivers, and shares the applicant as chosen |
 | `POST /applications/{id}/withdraw` | Withdraw |
 | `POST /applications/{id}/offer/accept`, `/offer/decline` | Answer a place offered from the waitlist |

@@ -107,6 +107,40 @@ public static class Words
         };
     }
 
+    /// <summary>
+    /// One of an activity's rules as a family reads it before applying: "Aged 8 to 14 on 1
+    /// September", "In grade 3 to grade 8". Which neighbourhoods, badge or playlist isn't named:
+    /// the public rules carry only their ids.
+    /// </summary>
+    public static string Rule(Text t, EligibilityRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        ArgumentNullException.ThrowIfNull(rule);
+        RuleSettings c = rule.Config;
+        switch (rule.Kind)
+        {
+            case "age_at_start" when Ages(t, c.Min, c.Max) is { } ages:
+                return c.On is { } on
+                    ? t.Format("app.apply.rule.age_on", ("ages", ages), ("date", t.DateShort(on)))
+                    : t.Format("app.apply.rule.age", ("ages", ages));
+            case "grade_range" when (c.Min, c.Max) is ({ } a, { } b):
+                return t.Format("app.apply.rule.grades", ("min", Grade(t, (short)a)), ("max", Grade(t, (short)b)));
+            case "grade_range" when c.Min is { } a:
+                return t.Format("app.apply.rule.grade_from", ("min", Grade(t, (short)a)));
+            case "grade_range" when c.Max is { } b:
+                return t.Format("app.apply.rule.grade_up_to", ("max", Grade(t, (short)b)));
+            default:
+                return RuleKind(t, rule.Kind);
+        }
+    }
+
+    /// <summary>What a rule is about, for a verdict: "Age", "School grade", "Where they live".</summary>
+    public static string RuleKind(Text t, string kind)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        return t.Has("app.apply.rule.kind." + kind) ? t["app.apply.rule.kind." + kind] : t["app.apply.rule.kind.other"];
+    }
+
     /// <summary>A month's name in the app's language, for the age question.</summary>
     public static string MonthName(Text t, int month)
     {

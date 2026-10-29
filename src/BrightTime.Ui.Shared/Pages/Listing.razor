@@ -173,6 +173,23 @@ else if (_listing is { } l)
             {
                 <p>@T["listing.register.just_come"]</p>
             }
+            else if (l.RegistrationMode is "builtin" or "waitlist_only")
+            {
+                @* Applied for here (D72): a child's own account can't; their guardian applies. *@
+                <p>@(l.RegistrationMode == "waitlist_only" ? T["app.apply.here_waitlist"] : T["app.apply.here"])</p>
+                @if (!Session.IsSignedIn)
+                {
+                    <a class="button primary" href="sign-in">@T["app.apply.sign_in_to_apply"]</a>
+                }
+                else if (Session.Me?.AccountKind == "child")
+                {
+                    <p>@T["app.apply.child_account"]</p>
+                }
+                else
+                {
+                    <a class="button primary" href="listings/@l.Slug/apply">@(l.RegistrationMode == "waitlist_only" ? T["app.apply.join_waitlist"] : T["app.apply.apply"])</a>
+                }
+            }
             else if (l.ExternalUrl is { } external && Uri.TryCreate(external, UriKind.Absolute, out Uri? site) && site.Scheme == Uri.UriSchemeHttps)
             {
                 <p>@T.Format("listing.register.on_provider_site", ("organisation", Text.Name(l.Organisation.Name)))</p>

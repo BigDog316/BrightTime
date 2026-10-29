@@ -11,7 +11,9 @@ children's profiles and consent. Young people with their own account have
 - [Your account](#your-account)
 - [Children's profiles and consent (app)](#childrens-profiles-and-consent-app)
 - [Giving a child their own sign-in at 13](#giving-a-child-their-own-sign-in-at-13)
-- [Applying, paying and messages: coming soon](#applying-paying-and-messages-coming-soon)
+- [Your household (app)](#your-household-app)
+- [Applying (app)](#applying-app)
+- [Paying and messages: coming soon](#paying-and-messages-coming-soon)
 - [Your privacy](#your-privacy)
 
 ## Finding activities
@@ -189,20 +191,44 @@ details, since when, and until when. **Stop sharing** ends a share at once; the 
 seeing those details right away. Shares you stopped, or that ended, stay on the list so you can see
 what was shared.
 
-## Applying, paying and messages: coming soon
+## Applying (app)
 
-The parts of BrightTime that let you apply to programs through the site are built and being
-tested, and the screens for families come next. When they arrive you'll be able to:
+On an activity that takes applications in BrightTime, choose **Apply** (or **Join the waiting
+list** when it's full). If the activity takes registrations on its own website instead, the button
+takes you there.
 
-- **Choose what each organisation sees** when you apply. You share chosen family members and
-  chosen details with one organisation at a time, for one program or all of them, and until a
-  date you pick. Stopping a share is already in the app (above).
-- **Apply** to a program by answering its form, after seeing who it's for. If your child doesn't
-  meet a rule that must be met, you're told before you apply.
-- **Sign waivers**, such as a photo release. A parent or guardian signs for anyone under 18, and
-  you sign the exact text the organisation published.
-- **Hear back**: accepted, waitlisted or declined. If a place opens up, you're offered it and can
-  take it or say no.
+1. **Who it's for.** You see the activity's rules first: ages, school grades, where the young
+   person lives, or a badge they must hold. A rule marked *preferred, not required* never stops
+   anyone applying.
+2. **Who is applying.** Choose a child or young person from [your household](#your-household-app).
+   If you haven't added them yet, you're asked to first. If you've already started an application
+   for them, it opens instead of a second one.
+3. **The activity's questions**, in your language where the organisation wrote one. **Save
+   answers** keeps them, and you can come back later. An answer marked *Kept private* never appears
+   in any report.
+4. **Waivers**, such as a water-safety form. Read each one; a parent or guardian signs for anyone
+   under 18 by typing their full name. You sign the exact text the organisation published, and if
+   it changes before you sign, you're shown the new text.
+5. **What the organisation may see.** The young person's name is always shared. Tick anything
+   else they may see (date of birth, school grade, pronouns, your household's size and language,
+   your contacts, or support needs you marked for programs), and, if you like, a date the share
+   ends. You can stop sharing at any time under **Your household**.
+6. **Send the application.**
+
+If the young person doesn't meet a rule that must be met, you're told before you send, and it
+can't be sent. If a rule can't be checked yet (no school grade, say), you're told which, and can
+add the details to your household or let the organisation decide.
+
+**Your applications**, under **Account**, lists each one and where it stands: *Not sent yet*,
+*Sent*, *Being looked at*, *On the waiting list*, *A place is offered*, *Accepted*, *Not accepted*
+or *Withdrawn*. When a place is offered from the waiting list, open the application to **Take the
+place** or **Turn it down**. You can withdraw a sent application, or delete a draft you never sent.
+
+## Paying and messages: coming soon
+
+These are built and being tested, and the screens for families come next. When they arrive you'll
+be able to:
+
 - **Pay fees**, choosing the price level your household fits. Nobody asks your income. Card
   payments happen on the payment service's own page, never on BrightTime.
 - **Check in** with a code on your phone that staff scan, and see your child's attendance.

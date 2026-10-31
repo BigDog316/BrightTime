@@ -2376,7 +2376,7 @@ errors those routes already word in all six languages.
 
 **Not yet:** applying, waivers and paying; messages; the child's activity; the web's family pages.
 
-### D72 — Applying, in the app (**proposed 2026-10-29**)
+### D72 — Applying, in the app (**accepted 2026-10-31**)
 
 The second family slice, after the household (D71). A family applies to an activity from the app,
 as the server built it in M3a (D44 to D47):
@@ -2400,7 +2400,7 @@ current version, and a draft is held to the version it began with (D45); the app
 **Not yet:** fees and paying (next), messages, attendance and the check-in code, the young
 person's portfolio screens, and the web's family pages.
 
-### D73 — Fees and paying, in the app (**proposed 2026-10-31**)
+### D73 — Fees and paying, in the app (**accepted 2026-10-31**)
 
 The third family slice, after the household (D71) and applying (D72). On an accepted or offered
 application, the app shows what there is to pay:
@@ -2427,7 +2427,7 @@ application, the app shows what there is to pay:
 messages, attendance and the check-in code, the young person's portfolio screens, and the web's
 family pages.
 
-### D74 — Cards through Stripe Checkout's hosted page (**proposed 2026-10-31**)
+### D74 — Cards through Stripe Checkout's hosted page (**accepted 2026-10-31**)
 
 D73 asked how the app takes cards, and the answer is Stripe Checkout. This replaces D56's payment
 intents and client secret; D56's signature checks, worker and forward-only statuses stay.

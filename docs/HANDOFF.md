@@ -195,17 +195,17 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   details, its people (with a young member's support needs and the account they are linked to),
   its contacts, and who it is shared with, with Stop sharing. No server changes: the screens use
   the family-profile routes D43 and D44 built. Applying, waivers, paying and messages come next.
-- **Applying in the app** (D72, proposed): Apply on an activity that takes registrations here,
+- **Applying in the app** (D72): Apply on an activity that takes registrations here,
   after its rules are worded; the activity's questions (from the new `GET /applications/{id}/form`,
   the version the draft began on), its waivers signed by typed name, what the organisation may
   see and until when, then Send. **Your applications** lists each with its status; an offered
   place can be taken or turned down; a sent one withdrawn, a draft deleted. Fees and paying next.
-- **Fees and paying in the app** (D73, proposed): an accepted or offered application shows its fees
+- **Fees and paying in the app** (D73): an accepted or offered application shows its fees
   and the price levels that fit the household, what's been paid, and how to pay. The manual
   gateway works end to end. Two server changes: a one-time or
   seasonal fee already paid or waived now refuses a second charge (`payments.already_paid`), and
   `GET /applications/{id}/payments` lists an application's payments.
-- **Cards through Stripe Checkout** (D74, proposed): a payment is now a Checkout session, opened in
+- **Cards through Stripe Checkout** (D74): a payment is now a Checkout session, opened in
   the phone's browser; the client secret is gone. Stripe returns the family to `/payment/done`, and
   only signed callbacks settle a payment. Checked against Stripe's documentation and a stand-in
   only. Before going live, add the `checkout.session.*` events in Stripe and try it with test keys.
@@ -220,8 +220,8 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D71 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29).
-D72 (applying in the app), D73 (fees and paying in the app) and D74 (cards through Stripe Checkout) are proposed.
+Every decision through D74 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31).
+D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
 D46 reports that deleting an organisation, listing or community report would fail against append-only tables; that needs a decision before anything deletes them.

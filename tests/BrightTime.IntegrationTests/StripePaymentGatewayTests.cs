@@ -10,8 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BrightTime.IntegrationTests;
 
 /// <summary>
-/// The Stripe gateway (Q6, D56) against a stand-in for Stripe: what an intent is asked for with,
-/// what Stripe's statuses mean here, what a refusal becomes, and which webhooks are believed.
+/// The Stripe gateway (Q6, D56, D74) against a stand-in for Stripe: what a Checkout session is asked
+/// for with, what Stripe's statuses mean here, what a refusal becomes, and which webhooks are believed.
 /// </summary>
 public sealed class StripePaymentGatewayTests
 {
@@ -25,7 +25,10 @@ public sealed class StripePaymentGatewayTests
 
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
 
-        public string Answer { get; set; } = """{"id":"pi_1","status":"requires_payment_method","amount":10000,"currency":"usd","client_secret":"pi_1_secret_2"}""";
+        public string Answer { get; set; } = """
+            {"id":"cs_1","object":"checkout.session","status":"open","payment_status":"unpaid","payment_intent":null,"amount_total":10000,"currency":"usd",
+             "url":"https://checkout.stripe.test/c/pay/cs_1"}
+            """;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -57,21 +60,31 @@ public sealed class StripePaymentGatewayTests
     private static string Event(string type, string data) => $$"""{"id":"evt_9","object":"event","type":"{{type}}","data":{"object":""" + data + "}}";
 
     [Fact]
-    public async Task An_intent_is_asked_for_in_cents_with_the_key_the_version_and_the_callers_idempotency_key()
+    public async Task A_session_is_asked_for_in_cents_with_the_key_the_version_and_the_callers_idempotency_key()
     {
         (StripePaymentGateway gateway, FakeStripe stripe, HttpClient client) = Gateway();
         using (client)
         {
-            PaymentIntentDescriptor made = await gateway.CreateIntentAsync(new PaymentIntentRequest(Money.FromCents(10000, "USD"), "Summer session", "key-123",
+            PaymentIntentDescriptor made = await gateway.CreateIntentAsync(new PaymentIntentRequest(Money.FromCents(10000, "USD"), "Summer session", "key-123", new Uri("https://kettle.test/payment/done"),
                 new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "t1" }), Ct);
 
-            made.ShouldBe(new PaymentIntentDescriptor("pi_1", PaymentIntentState.RequiresAction, Money.FromCents(10000, "USD"), "pi_1_secret_2", null));
+            made.ShouldBe(new PaymentIntentDescriptor("cs_1", PaymentIntentState.RequiresAction, Money.FromCents(10000, "USD"), new Uri("https://checkout.stripe.test/c/pay/cs_1")));
             (HttpRequestMessage request, string body) = stripe.Seen.Single();
-            (request.Method, request.RequestUri!.ToString()).ShouldBe((HttpMethod.Post, "https://api.stripe.com/v1/payment_intents"));
+            (request.Method, request.RequestUri!.ToString()).ShouldBe((HttpMethod.Post, "https://api.stripe.com/v1/checkout/sessions"));
             request.Headers.Authorization!.ToString().ShouldBe("Bearer sk_test_key");
             request.Headers.GetValues("Stripe-Version").Single().ShouldBe("2024-06-20");
             request.Headers.GetValues("Idempotency-Key").Single().ShouldBe("key-123");
-            body.Split('&').ShouldBe(["amount=10000", "currency=usd", "description=Summer+session", "automatic_payment_methods%5Benabled%5D=true", "metadata%5Btenant%5D=t1"]);
+            Uri.UnescapeDataString(body.Replace('+', ' ')).Split('&').ShouldBe([
+                "mode=payment",
+                "success_url=https://kettle.test/payment/done",
+                "line_items[0][quantity]=1",
+                "line_items[0][price_data][currency]=usd",
+                "line_items[0][price_data][unit_amount]=10000",
+                "line_items[0][price_data][product_data][name]=Summer session",
+                "payment_intent_data[description]=Summer session",
+                "metadata[tenant]=t1",
+                "payment_intent_data[metadata][tenant]=t1",
+            ]);
         }
     }
 
@@ -91,6 +104,25 @@ public sealed class StripePaymentGatewayTests
             stripe.Answer = $$"""{"id":"pi_1","status":"{{stripeStatus}}","amount":500,"currency":"usd"}""";
             (await gateway.GetIntentAsync("pi_1", Ct)).State.ShouldBe(expected);
             stripe.Seen.Single().Request.RequestUri!.ToString().ShouldBe("https://api.stripe.com/v1/payment_intents/pi_1");
+        }
+    }
+
+    [Theory]
+    [InlineData("open", "unpaid", PaymentIntentState.RequiresAction)]
+    [InlineData("complete", "paid", PaymentIntentState.Succeeded)]
+    [InlineData("complete", "unpaid", PaymentIntentState.Processing)]
+    [InlineData("expired", "unpaid", PaymentIntentState.Cancelled)]
+    public async Task A_sessions_status_maps_to_ours_and_only_an_open_one_has_a_page(string status, string paid, PaymentIntentState expected)
+    {
+        (StripePaymentGateway gateway, FakeStripe stripe, HttpClient client) = Gateway();
+        using (client)
+        {
+            string url = status == "open" ? "\"https://checkout.stripe.test/c/pay/cs_1\"" : "null";
+            stripe.Answer = $$"""{"id":"cs_1","status":"{{status}}","payment_status":"{{paid}}","amount_total":500,"currency":"usd","url":{{url}}}""";
+            PaymentIntentDescriptor read = await gateway.GetIntentAsync("cs_1", Ct);
+            read.State.ShouldBe(expected);
+            (read.HostedPaymentUrl is not null).ShouldBe(status == "open");
+            stripe.Seen.Single().Request.RequestUri!.ToString().ShouldBe("https://api.stripe.com/v1/checkout/sessions/cs_1");
         }
     }
 
@@ -159,6 +191,23 @@ public sealed class StripePaymentGatewayTests
             string body = Event(type, data);
             gateway.TryReadWebhook(Encoding.UTF8.GetBytes(body), Sign(body, Now), out PaymentWebhookEvent? read).ShouldBeTrue();
             (read!.ProviderReference, read.State).ShouldBe((reference, state));
+        }
+    }
+
+    [Theory]
+    [InlineData("checkout.session.completed", """{"id":"cs_1","payment_status":"paid","payment_intent":"pi_1"}""", PaymentIntentState.Succeeded, "pi_1")]
+    [InlineData("checkout.session.completed", """{"id":"cs_1","payment_status":"unpaid","payment_intent":"pi_1"}""", PaymentIntentState.Processing, "pi_1")]
+    [InlineData("checkout.session.async_payment_succeeded", """{"id":"cs_1","payment_status":"paid","payment_intent":"pi_1"}""", PaymentIntentState.Succeeded, "pi_1")]
+    [InlineData("checkout.session.async_payment_failed", """{"id":"cs_1","payment_status":"unpaid","payment_intent":"pi_1"}""", PaymentIntentState.Failed, "pi_1")]
+    [InlineData("checkout.session.expired", """{"id":"cs_1","payment_status":"unpaid","payment_intent":null}""", PaymentIntentState.Cancelled, null)]
+    public void A_signed_session_event_names_the_session_and_any_intent_it_now_has(string type, string data, PaymentIntentState state, string? intent)
+    {
+        (StripePaymentGateway gateway, _, HttpClient client) = Gateway();
+        using (client)
+        {
+            string body = Event(type, data);
+            gateway.TryReadWebhook(Encoding.UTF8.GetBytes(body), Sign(body, Now), out PaymentWebhookEvent? read).ShouldBeTrue();
+            (read!.ProviderReference, read.State, read.PaymentReference).ShouldBe(("cs_1", state, intent));
         }
     }
 

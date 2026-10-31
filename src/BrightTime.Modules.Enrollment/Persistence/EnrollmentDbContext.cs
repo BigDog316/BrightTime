@@ -441,7 +441,7 @@ public sealed class PaymentIntentRecord
 
     public required string Provider { get; init; }
 
-    public string? ProviderRef { get; init; }
+    public string? ProviderRef { get; set; }
 
     public required string Status { get; set; }
 

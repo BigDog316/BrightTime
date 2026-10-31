@@ -1,0 +1,9 @@
+@page "/payment/done"
+@layout MainLayout
+@* Where Stripe's hosted page sends a family back to (D74). It settles nothing: only a signed
+   callback does (D56). A family pays from the app, so this sends them back there. *@
+
+<PageTitle>@T["site.payment_done.title"] · BrightTime</PageTitle>
+
+<h1>@T["site.payment_done.title"]</h1>
+<p>@T["site.payment_done.body"]</p>

@@ -151,10 +151,15 @@ What each key is for is in [data-and-security.md](data-and-security.md#encryptio
 Without Stripe, payments use the **manual gateway**: a family's payment waits until an admin marks
 it received or waives it.
 
-To take card payments through **Stripe** (D56):
+To take card payments through **Stripe** (D56, D74):
 1. Set `Payments:Stripe:SecretKey` and `Payments:Stripe:WebhookSecret` in the Api.
-2. In Stripe, send webhooks to `https://<tenant host>/api/v1/webhooks/payments/stripe`.
-3. Card details are entered in Stripe's own element. They never reach BrightTime.
+2. In Stripe, send webhooks to `https://<tenant host>/api/v1/webhooks/payments/stripe`, for
+   `checkout.session.completed`, `.async_payment_succeeded`, `.async_payment_failed` and `.expired`,
+   `payment_intent.succeeded`, `.processing`, `.requires_action`, `.payment_failed` and `.canceled`,
+   and `charge.refunded`.
+3. Card details are entered on Stripe Checkout's hosted page, in the phone's browser. They never
+   reach BrightTime. Stripe returns the family to the site's `/payment/done`.
+4. Try it with test keys before going live.
 
 Webhooks are believed only by their signature, within `Payments:Stripe:WebhookTolerance`. The worker
 applies them, so a payment's status only moves forward. A refund made in Stripe's dashboard is

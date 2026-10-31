@@ -15,28 +15,30 @@ public enum PaymentIntentState
 
 /// <summary>
 /// A payment in flight. Note what is absent: no card number, no expiry, no
-/// CVC, no cardholder name. The card is collected by the provider's hosted
-/// element and we hold a reference, which is what keeps this application out
-/// of PCI DSS scope beyond SAQ-A.
+/// CVC, no cardholder name, and no secret for a card form. The card is
+/// collected on the provider's own hosted page and we hold a reference, which
+/// is what keeps this application out of PCI DSS scope beyond SAQ-A.
 /// </summary>
 public sealed record PaymentIntentDescriptor(
     string ProviderReference,
     PaymentIntentState State,
     Money Amount,
-    string? ClientSecret,
     Uri? HostedPaymentUrl);
 
 public sealed record PaymentIntentRequest(
     Money Amount,
     string Description,
     string IdempotencyKey,
+    Uri ReturnUrl,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
 /// <summary>
 /// What a provider's webhook says happened to a payment: its own event id (so a replay is
 /// recognised), the event's type, the payment's reference, and the state it is now in.
+/// <paramref name="PaymentReference"/> is the reference the provider's later events will use, when
+/// that isn't the one the payment began with (D74).
 /// </summary>
-public sealed record PaymentWebhookEvent(string EventId, string EventType, string ProviderReference, PaymentIntentState State);
+public sealed record PaymentWebhookEvent(string EventId, string EventType, string ProviderReference, PaymentIntentState State, string? PaymentReference = null);
 
 /// <summary>The provider refused or couldn't be reached. The message is for logs; a person is told the provider is unavailable.</summary>
 public sealed class PaymentProviderException : Exception

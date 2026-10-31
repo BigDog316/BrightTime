@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BrightTime.Abstractions.Payments;
 using BrightTime.Api.Forms;
+using BrightTime.Hosting.Tenancy;
 using BrightTime.Modules.Enrollment.Payments;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.SharedKernel.Ids;
@@ -23,6 +24,9 @@ public sealed record ReasonRequest(string? Reason);
 public static class PaymentEndpoints
 {
     public const string IdempotencyHeader = "Idempotency-Key";
+
+    /// <summary>The site's page a provider's hosted payment page returns to (D74). It says go back to the app; it settles nothing.</summary>
+    public const string ReturnPath = "/payment/done";
 
     public static RouteGroupBuilder MapPaymentEndpoints(this RouteGroupBuilder api)
     {
@@ -91,13 +95,15 @@ public static class PaymentEndpoints
     }
 
     /// <summary>Pays a fee. Needs an Idempotency-Key; while a payment for the same place is open, that one comes back.</summary>
-    private static async Task<IResult> PayAsync(PaymentRequest body, HttpRequest request, ClaimsPrincipal user, PaymentIntents payments, CancellationToken ct)
+    private static async Task<IResult> PayAsync(PaymentRequest body, HttpRequest request, ClaimsPrincipal user, SiteContext site, PaymentIntents payments, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(site);
+        Uri address = site.BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
         bool adult = (user.FindFirstValue(BrightTimeClaims.AccountKind) ?? "adult") == "adult";
         Result<PaymentView> made = await payments.CreateAsync(Actor(user), adult, body.ApplicationId, body.EnrollmentId, body.FeeScheduleId, body.TierId,
-            request.Headers[IdempotencyHeader].ToString(), ct);
+            request.Headers[IdempotencyHeader].ToString(), new Uri(address, ReturnPath), ct);
         return made.IsSuccess ? Results.Created($"/api/v1/payments/intents/{made.Value.Id}", made.Value) : ApiProblems.From(made.Error);
     }
 

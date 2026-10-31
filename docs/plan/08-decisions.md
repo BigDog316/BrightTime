@@ -2421,17 +2421,46 @@ application, the app shows what there is to pay:
 - **`GET /applications/{id}/payments`:** the family's payments for one application, newest first.
   There was no way to list them; a family could only read a payment by an id it had kept.
 
-**For you to decide: taking cards in the app.** With Stripe configured, the app can't take a card
-yet. The gateway makes a payment intent and returns a client secret for Stripe's element (D56), but
-the app has no publishable key to run that element with, and it would have to run inside the
-app's WebView. Until this is settled, the app tells the family to contact the organisation, and the
-secret is ignored. I recommend Stripe Checkout: the gateway makes a session and the app opens its
-hosted page in the phone's browser, so the card stays on Stripe's page (T20) and no publishable key
-is needed. That changes D56's gateway and its webhook mapping, so it's a decision of its own.
+**Cards in the app** are D74.
 
-**Not yet:** cards in the app (above), changing a price level while a payment is open, refunds,
+**Not yet:** changing a price level while a payment is open, refunds,
 messages, attendance and the check-in code, the young person's portfolio screens, and the web's
 family pages.
+
+### D74 — Cards through Stripe Checkout's hosted page (**proposed 2026-10-31**)
+
+D73 asked how the app takes cards, and the answer is Stripe Checkout. This replaces D56's payment
+intents and client secret; D56's signature checks, worker and forward-only statuses stay.
+- **A payment is a Checkout session.** `POST /payments/intents` makes one and returns its
+  `hostedPaymentUrl`. The app opens that page in the phone's own browser, so the card is entered on
+  Stripe's page and never in the app or its WebView (T20, SAQ-A). No publishable key is needed.
+- **The client secret is gone** from the gateway and the API. There is nothing left to keep or leak.
+- **Returning:** Stripe sends the family to the site's `/payment/done`, which says to go back to the
+  app and settles nothing. Only a signed callback settles a payment (D56); the app's **Check again**
+  reloads the page.
+- **References:** Stripe makes the payment intent only when the family confirms, so `provider_ref`
+  starts as the session's id (`cs_…`). A session event that names the intent moves the payment to
+  the intent's id (`pi_…`), and the job matches either, so a later session event still finds it.
+  `charge.refunded` and `payment_intent.*` keep working from then on.
+- **Events read, added to D56's:**
+  - `checkout.session.completed`: `succeeded` when `payment_status` is `paid`, otherwise `processing`
+    (a delayed method such as a bank debit);
+  - `checkout.session.async_payment_succeeded` and `.async_payment_failed`;
+  - `checkout.session.expired`, which is `cancelled`, so the family can start again. A session lasts
+    Stripe's default of 24 hours.
+
+**For you to do before cards go live:**
+- Add the four `checkout.session.*` events to the webhook endpoint in Stripe.
+- Try it with test keys. This is checked against Stripe's documentation and a stand-in only; nothing
+  here has talked to Stripe itself. The API version stays pinned at `2024-06-20`.
+
+**Worth knowing:**
+- Stripe's page comes in Stripe's languages. Spanish and Chinese are among them; Bengali, Haitian
+  Creole and Arabic aren't, so those families see the browser's nearest language, usually English.
+- Stripe asks for the payer's email on its page. BrightTime sends Stripe no name or email.
+
+**Not yet:** refunds started here (the gateway needs a payment's `pi_…` reference, which only a
+payment confirmed has), and cards in the provider console, which has no reason to take one yet.
 
 ## Open questions
 

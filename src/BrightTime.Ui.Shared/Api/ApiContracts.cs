@@ -272,8 +272,8 @@ public sealed record Fee(Guid Id, string Label, int AmountCents, string Currency
 public sealed record FeeTier(Guid Id, string Label, int AmountCents);
 
 /// <summary>
-/// A payment as the family sees it. The provider's client secret isn't read (T20), nor the
-/// organisation's note on a waiver; <see cref="HostedPaymentUrl"/> is a page of the provider's own.
+/// A payment as the family sees it. The organisation's note on a waiver isn't read;
+/// <see cref="HostedPaymentUrl"/> is a page of the provider's own (T20).
 /// </summary>
 public sealed record Payment(Guid Id, Guid? FeeScheduleId, int AmountCents, string Provider, string Status, DateTimeOffset CreatedAt, Uri? HostedPaymentUrl = null)
 {

@@ -196,7 +196,7 @@ public sealed class PaymentApiTests(ApiFixture api)
 
     private const string WebhookSecret = "whsec_api_test";
 
-    /// <summary>Stripe, as far as this application can see it: intents made and read, or a refusal.</summary>
+    /// <summary>Stripe, as far as this application can see it: Checkout sessions made and read, or a refusal.</summary>
     private sealed class FakeStripe : HttpMessageHandler
     {
         private int _next;
@@ -214,11 +214,14 @@ public sealed class PaymentApiTests(ApiFixture api)
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("""{"error":{"type":"api_error"}}""", Encoding.UTF8, "application/json") };
             }
 
-            string id = request.Method == HttpMethod.Get ? request.RequestUri!.Segments[^1] : $"pi_test{Interlocked.Increment(ref _next)}";
-            string amount = body.Split('&').FirstOrDefault(p => p.StartsWith("amount=", StringComparison.Ordinal))?["amount=".Length..] ?? "10000";
+            string id = request.Method == HttpMethod.Get ? request.RequestUri!.Segments[^1] : $"cs_test{Interlocked.Increment(ref _next)}-{Guid.NewGuid():N}";
+            const string Amount = "line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=";
+            string amount = body.Split('&').FirstOrDefault(p => p.StartsWith(Amount, StringComparison.Ordinal))?[Amount.Length..] ?? "10000";
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent($$"""{"id":"{{id}}","status":"requires_payment_method","amount":{{amount}},"currency":"usd","client_secret":"{{id}}_secret_abc"}""", Encoding.UTF8, "application/json"),
+                Content = new StringContent(
+                    $$"""{"id":"{{id}}","object":"checkout.session","status":"open","payment_status":"unpaid","payment_intent":null,"amount_total":{{amount}},"currency":"usd","url":"https://checkout.stripe.test/c/pay/{{id}}"}""",
+                    Encoding.UTF8, "application/json"),
             };
         }
     }
@@ -285,7 +288,7 @@ public sealed class PaymentApiTests(ApiFixture api)
     }
 
     [Fact]
-    public async Task With_stripe_the_card_goes_to_stripe_and_only_a_signed_callback_settles_the_payment()
+    public async Task With_stripe_the_family_pays_on_stripes_page_and_only_a_signed_callback_settles_the_payment()
     {
         RequireDatabase();
         (Guid listing, Guid org) = Listing(next: 1);
@@ -314,33 +317,37 @@ public sealed class PaymentApiTests(ApiFixture api)
         await JsonAsync(await family.PutAsJsonAsync("api/v1/family-profile", new { householdSize = 2 }, Ct));
         Guid application = await AcceptedAsync(family, admin, org, listing, "Esi");
 
-        // Paying makes a Stripe intent: its client secret comes back for Stripe's own card form, and isn't kept.
+        // Paying makes a Checkout session: its page comes back for the phone's browser, and isn't kept.
         string key = Key();
         JsonElement paying = await JsonAsync(await PostWithKeyAsync(familyViaStripe, "api/v1/payments/intents", new { applicationId = application, feeScheduleId = fee }, key),
             HttpStatusCode.Created);
         Guid payment = paying.GetProperty("id").GetGuid();
         (paying.GetProperty("provider").GetString(), paying.GetProperty("status").GetString(), paying.GetProperty("amountCents").GetInt32()).ShouldBe(("stripe", "requires_action", 12500));
         string reference = await api.ScalarAsync<string>("select provider_ref from enrollment.payment_intent where id = @p", ("p", payment));
-        paying.GetProperty("clientSecret").GetString().ShouldBe(reference + "_secret_abc");
+        reference.ShouldStartWith("cs_test");
+        paying.GetProperty("hostedPaymentUrl").GetString().ShouldBe("https://checkout.stripe.test/c/pay/" + reference);
+        paying.TryGetProperty("clientSecret", out _).ShouldBeFalse("nothing for a card form leaves the server (D74)");
         (HttpRequestMessage made, string form) = fake.Seen.Single();
         made.Headers.GetValues("Idempotency-Key").Single().ShouldEndWith("-" + key, Case.Sensitive, "the family's key, scoped to the tenant and the adult");
-        form.ShouldContain("amount=12500");
-        form.ShouldContain("currency=usd");
+        form.ShouldContain("unit_amount%5D=12500");
+        form.ShouldContain("currency%5D=usd");
+        form.ShouldContain("success_url=https%3A%2F%2F" + ApiFixture.Host + "%2Fpayment%2Fdone", Case.Sensitive, "back to the tenant's own site");
 
-        // Asking again gives the same payment, with its client secret fetched again.
+        // Asking again gives the same payment, with its page fetched again.
         JsonElement again = await JsonAsync(await PostWithKeyAsync(familyViaStripe, "api/v1/payments/intents", new { applicationId = application, feeScheduleId = fee }, Key()),
             HttpStatusCode.Created);
-        (again.GetProperty("id").GetGuid(), again.GetProperty("clientSecret").GetString()).ShouldBe((payment, reference + "_secret_abc"));
+        (again.GetProperty("id").GetGuid(), again.GetProperty("hostedPaymentUrl").GetString()).ShouldBe((payment, "https://checkout.stripe.test/c/pay/" + reference));
         fake.Seen.Count(s => s.Request.Method == HttpMethod.Get).ShouldBe(1);
 
         // Only a payment provider recorded as Stripe's can be settled by Stripe; the admin can't mark it received.
         await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/payments/{payment}/received", new { reason = "Cash" }, Ct), HttpStatusCode.Conflict, "payments.not_manual");
 
         // Callbacks: unknown providers, missing, forged and stale signatures are refused and queue nothing.
-        string succeeded = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "payment_intent.succeeded", $$"""{"id":"{{reference}}","object":"payment_intent","status":"succeeded"}""");
+        string intent = "pi_" + Guid.NewGuid().ToString("N");
+        string succeeded = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "checkout.session.completed", $$"""{"id":"{{reference}}","object":"checkout.session","payment_status":"paid","payment_intent":"{{intent}}"}""");
         await ProblemAsync(await CallbackAsync(anonymous, "manual", succeeded, Signed(succeeded, DateTimeOffset.UtcNow)), HttpStatusCode.NotFound, "payments.webhook_provider");
         await ProblemAsync(await CallbackAsync(anonymous, "stripe", succeeded, null), HttpStatusCode.BadRequest, "payments.webhook_signature");
-        await ProblemAsync(await CallbackAsync(anonymous, "stripe", succeeded.Replace("succeeded", "canceled", StringComparison.Ordinal), Signed(succeeded, DateTimeOffset.UtcNow)),
+        await ProblemAsync(await CallbackAsync(anonymous, "stripe", succeeded.Replace("\"paid\"", "\"unpaid\"", StringComparison.Ordinal), Signed(succeeded, DateTimeOffset.UtcNow)),
             HttpStatusCode.BadRequest, "payments.webhook_signature");
         await ProblemAsync(await CallbackAsync(anonymous, "stripe", succeeded, Signed(succeeded, DateTimeOffset.UtcNow.AddMinutes(-10))), HttpStatusCode.BadRequest, "payments.webhook_signature");
         await ProblemAsync(await CallbackAsync(api.Client(), "stripe", succeeded, Signed(succeeded, DateTimeOffset.UtcNow)), HttpStatusCode.NotFound, "payments.webhook_provider");
@@ -356,15 +363,34 @@ public sealed class PaymentApiTests(ApiFixture api)
         (await RunPaymentEventsAsync(reference)).ShouldBe(1);
         (await JsonAsync(await family.GetAsync(new Uri($"api/v1/payments/intents/{payment}", UriKind.Relative), Ct))).GetProperty("status").GetString().ShouldBe("succeeded");
 
+        // From here the payment goes by the intent's reference, though a session event can still find it.
+        (await api.ScalarAsync<string>("select provider_ref from enrollment.payment_intent where id = @p", ("p", payment))).ShouldBe(intent);
+        string redelivered = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "checkout.session.async_payment_failed", $$"""{"id":"{{reference}}","payment_intent":"{{intent}}"}""");
+        (await CallbackAsync(anonymous, "stripe", redelivered, Signed(redelivered, DateTimeOffset.UtcNow))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RunPaymentEventsAsync(reference)).ShouldBe(1);
+        (await api.ScalarAsync<string>("select status from enrollment.payment_intent where id = @p", ("p", payment))).ShouldBe("succeeded", "a late failure never undoes a payment");
+
         // A late "processing" changes nothing; a full refund does.
-        string late = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "payment_intent.processing", $$"""{"id":"{{reference}}"}""");
+        string late = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "payment_intent.processing", $$"""{"id":"{{intent}}"}""");
         (await CallbackAsync(anonymous, "stripe", late, Signed(late, DateTimeOffset.UtcNow))).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await RunPaymentEventsAsync(reference)).ShouldBe(1);
+        (await RunPaymentEventsAsync(intent)).ShouldBe(1);
         (await api.ScalarAsync<string>("select status from enrollment.payment_intent where id = @p", ("p", payment))).ShouldBe("succeeded");
-        string refunded = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "charge.refunded", $$"""{"id":"ch_1","payment_intent":"{{reference}}","refunded":true}""");
+        string refunded = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "charge.refunded", $$"""{"id":"ch_1","payment_intent":"{{intent}}","refunded":true}""");
         (await CallbackAsync(anonymous, "stripe", refunded, Signed(refunded, DateTimeOffset.UtcNow))).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await RunPaymentEventsAsync(reference)).ShouldBe(1);
+        (await RunPaymentEventsAsync(intent)).ShouldBe(1);
         (await api.ScalarAsync<string>("select status from enrollment.payment_intent where id = @p", ("p", payment))).ShouldBe("refunded");
+
+        // A session left to expire lets the family start again.
+        Guid abandoned = await AcceptedAsync(family, admin, org, listing, "Ama");
+        Guid dropped = (await JsonAsync(await PostWithKeyAsync(familyViaStripe, "api/v1/payments/intents", new { applicationId = abandoned, feeScheduleId = fee }, Key()), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid();
+        string session = await api.ScalarAsync<string>("select provider_ref from enrollment.payment_intent where id = @p", ("p", dropped));
+        string expired = StripeEvent("evt_" + Guid.NewGuid().ToString("N"), "checkout.session.expired", $$"""{"id":"{{session}}","payment_intent":null}""");
+        (await CallbackAsync(anonymous, "stripe", expired, Signed(expired, DateTimeOffset.UtcNow))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RunPaymentEventsAsync(session)).ShouldBe(1);
+        (await api.ScalarAsync<string>("select status from enrollment.payment_intent where id = @p", ("p", dropped))).ShouldBe("cancelled");
+        (await JsonAsync(await PostWithKeyAsync(familyViaStripe, "api/v1/payments/intents", new { applicationId = abandoned, feeScheduleId = fee }, Key()), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid().ShouldNotBe(dropped);
 
         // When Stripe can't be reached the family is told to try later, and nothing is kept.
         Guid second = await AcceptedAsync(family, admin, org, listing, "Yaw");

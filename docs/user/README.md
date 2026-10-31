@@ -52,8 +52,7 @@ nothing in these guides promises a screen that doesn't exist yet.
 | **Organisations:** taking attendance on a phone, offline | | Yes | |
 | **Network organisers:** review, taxonomy, wording, audit | Yes | | |
 | Families applying to programs and signing waivers | Coming | Yes | |
-| Paying fees to the organisation directly | Coming | Yes | |
-| Paying fees by card | Coming | Coming | |
+| Paying fees, by card on Stripe's page or to the organisation directly | Coming | Yes | |
 | A household's family profile, and choosing and stopping what it shares | Coming | Yes | |
 | Messages from organisations, and a family's own attendance | Coming | Coming | As above |
 | A young person's portfolio, badges and playlists | Coming | Coming | As above |

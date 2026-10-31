@@ -90,7 +90,7 @@ Generate a symmetric key with `openssl rand -base64 32`, and an RSA key with
 | `Email:From` | ● | ● | ● | `BrightTime <no-reply@brighttime.invalid>` | The sender |
 | `Email:PickupDirectory` | ● | ● | ● | | Write messages to a folder instead of sending (tests and development) |
 | `Push:Fcm:ProjectId`, `:ServiceAccountJson` | | | ● | | Push through Firebase Cloud Messaging (D40). Without them, pushes are logged, not sent |
-| `Payments:Stripe:SecretKey`, `:WebhookSecret` | | ● | | | Both set: payments go to Stripe (D56). Either missing: the manual gateway |
+| `Payments:Stripe:SecretKey`, `:WebhookSecret` | | ● | | | Both set: payments go to Stripe Checkout (D56, D74). Either missing: the manual gateway |
 | `Payments:Stripe:ApiBase`, `:ApiVersion`, `:WebhookTolerance` | | ● | | `https://api.stripe.com/`, `2024-06-20`, `00:05:00` | |
 | `Reports:QuestPdfLicence` | ● | ● | | Community | QuestPDF's licence type. Community is free only under US$1M revenue (D57) |
 

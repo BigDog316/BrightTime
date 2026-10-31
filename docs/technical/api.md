@@ -165,7 +165,7 @@ The owner alone reads or changes a family profile.
 | `GET /applications/{id}/waivers`, `POST /applications/{id}/waivers/{waiverId}/sign` | The waivers it needs, and signing one (by the text's hash) |
 | `GET /applications/{id}/fees` | The fees and price levels that apply |
 | `GET /applications/{id}/payments` | Its payments, newest first (D73) |
-| `POST /payments/intents`, `GET /payments/intents/{id}` | Pay a fee at a price level (`Idempotency-Key` required). With Stripe, returns the client secret for Stripe's element; otherwise the payment waits to be marked received. A one-time or seasonal fee already paid or waived is `payments.already_paid` (D73) |
+| `POST /payments/intents`, `GET /payments/intents/{id}` | Pay a fee at a price level (`Idempotency-Key` required). With Stripe, returns `hostedPaymentUrl`, Stripe Checkout's page for the phone's browser (D74); otherwise the payment waits to be marked received. A one-time or seasonal fee already paid or waived is `payments.already_paid` (D73) |
 
 ## Attendance
 

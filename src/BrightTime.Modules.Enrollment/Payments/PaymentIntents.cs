@@ -13,9 +13,9 @@ using Microsoft.Extensions.Logging;
 namespace BrightTime.Modules.Enrollment.Payments;
 
 /// <summary>
-/// A payment as the family or the organisation sees it. <see cref="ClientSecret"/> and
-/// <see cref="HostedPaymentUrl"/> come from the provider when the payment is made, so the card is
-/// entered on the provider's page, never ours (T20); neither is kept.
+/// A payment as the family or the organisation sees it. <see cref="HostedPaymentUrl"/> comes from
+/// the provider when the payment is made, so the card is entered on the provider's page, never
+/// ours (T20). It isn't kept.
 /// </summary>
 public sealed record PaymentView(
     Guid Id,
@@ -28,7 +28,6 @@ public sealed record PaymentView(
     string Status,
     string? WaivedReason,
     DateTimeOffset CreatedAt,
-    string? ClientSecret = null,
     Uri? HostedPaymentUrl = null);
 
 /// <summary>
@@ -68,7 +67,7 @@ public sealed class PaymentIntents(
     private static readonly string[] OncePerPlace = ["one_time", "seasonal"];
 
     /// <summary>Starts paying a fee, at a tier if one is chosen; an open payment for the same place is returned instead.</summary>
-    public Task<Result<PaymentView>> CreateAsync(UserId owner, bool ownerIsAdult, Guid? applicationId, Guid? enrollmentId, Guid feeScheduleId, Guid? tierId, string idempotencyKey, CancellationToken cancellationToken = default) =>
+    public Task<Result<PaymentView>> CreateAsync(UserId owner, bool ownerIsAdult, Guid? applicationId, Guid? enrollmentId, Guid feeScheduleId, Guid? tierId, string idempotencyKey, Uri returnUrl, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             if (!ownerIsAdult)
@@ -119,11 +118,11 @@ public sealed class PaymentIntents(
                     return Result<PaymentView>.Success(View(open));
                 }
 
-                // The client secret isn't kept (T20), so the provider is asked for it again.
+                // The hosted page's address isn't kept, so the provider is asked for it again.
                 PaymentIntentDescriptor? again = open.ProviderRef is null ? null : await ProviderAsync(() => gateway.GetIntentAsync(open.ProviderRef, ct)).ConfigureAwait(false);
                 return again is null
                     ? Result<PaymentView>.Failure(Unavailable())
-                    : Result<PaymentView>.Success(View(open) with { ClientSecret = again.ClientSecret, HostedPaymentUrl = again.HostedPaymentUrl });
+                    : Result<PaymentView>.Success(View(open) with { HostedPaymentUrl = again.HostedPaymentUrl });
             }
 
             if (amount == 0)
@@ -133,7 +132,7 @@ public sealed class PaymentIntents(
 
             // The provider's idempotency keys span its whole account, so the family's key is scoped to the tenant and the adult.
             PaymentIntentDescriptor? made = await ProviderAsync(() => gateway.CreateIntentAsync(
-                new PaymentIntentRequest(Money.FromCents(amount, fee.Currency), fee.Label, $"{tenant.TenantId.Value:N}-{owner.Value:N}-{idempotencyKey}",
+                new PaymentIntentRequest(Money.FromCents(amount, fee.Currency), fee.Label, $"{tenant.TenantId.Value:N}-{owner.Value:N}-{idempotencyKey}", returnUrl,
                     new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = tenant.TenantId.Value.ToString("N") }), ct)).ConfigureAwait(false);
             if (made is null)
             {
@@ -158,7 +157,7 @@ public sealed class PaymentIntents(
             };
             db.PaymentIntents.Add(intent);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            return Result<PaymentView>.Success(View(intent) with { ClientSecret = made.ClientSecret, HostedPaymentUrl = made.HostedPaymentUrl });
+            return Result<PaymentView>.Success(View(intent) with { HostedPaymentUrl = made.HostedPaymentUrl });
         }, cancellationToken);
 
     /// <summary>The payments for one of the family's applications, newest first (D73).</summary>

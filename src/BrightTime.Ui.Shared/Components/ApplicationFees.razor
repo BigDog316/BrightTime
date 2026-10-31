@@ -1,6 +1,6 @@
-@* What there is to pay on an accepted or offered application (D55, D73): each fee, the price levels
-   that fit the household, and what's been paid. The card never comes here (T20): a provider's
-   hosted page opens in the phone's browser, and a client secret is never read. *@
+@* What there is to pay on an accepted or offered application (D55, D73, D74): each fee, the price
+   levels that fit the household, and what's been paid. The card never comes here (T20): the
+   provider's hosted page opens in the phone's browser, and only its signed callback settles a payment. *@
 @inject BrightTimeApi Api
 @inject IExternalLauncher Launcher
 
@@ -87,13 +87,14 @@
     private ApiProblem? _loadProblem;
     private ApiProblem? _problem;
     private bool _busy;
-    private bool _noCard;
+    private bool _confirming;
 
     // The price level chosen, by fee; Guid.Empty is the full price.
     private readonly Dictionary<Guid, Guid> _chosen = [];
 
     // Kept through a failed try, so a retry can't charge twice; a payment made ends it, since a weekly fee is paid again.
-    private readonly Dictionary<Guid, string> _keys = [];
+    // By price level too: Stripe refuses one key sent again with a different amount.
+    private readonly Dictionary<(Guid Fee, Guid? Tier), string> _keys = [];
 
     protected override Task OnParametersSetAsync() => _loaded == (Application.Id, Application.Status) ? Task.CompletedTask : LoadAsync();
 
@@ -110,35 +111,42 @@
     private bool IsChosen(Fee fee, Guid level) => _chosen.TryGetValue(fee.Id, out Guid chosen) && chosen == level;
 
     private RenderFragment Open(Payment payment) => @<text>
-        @if (payment.Status == "processing")
-        {
-            <p>@T["app.pay.processing"]</p>
-        }
-        else if (payment.Provider == "manual")
+        @if (payment.Provider == "manual")
         {
             <p>@T.Format("app.pay.manual", ("amount", T.Money(payment.AmountCents)))</p>
         }
-        else if (_noCard)
-        {
-            <p>@T.Format("app.pay.no_card", ("amount", T.Money(payment.AmountCents)))</p>
-        }
         else
         {
-            <button type="button" class="primary" @onclick="() => ContinueAsync(payment)" disabled="@_busy">@T["app.pay.continue"]</button>
+            @if (payment.Status == "processing")
+            {
+                <p>@T["app.pay.processing"]</p>
+            }
+            else if (_confirming)
+            {
+                <p>@T["app.pay.confirming"]</p>
+            }
+            else
+            {
+                <p>@T.Format("app.pay.on_stripe", ("amount", T.Money(payment.AmountCents)))</p>
+                <button type="button" class="primary" @onclick="() => ContinueAsync(payment)" disabled="@_busy">@T["app.pay.continue"]</button>
+            }
+
+            @* Paying happens in the browser, so nothing here changes until the family asks. *@
+            <button type="button" @onclick="LoadAsync" disabled="@_busy">@T["app.pay.check_again"]</button>
         }
     </text>;
 
     private async Task PayAsync(Fee fee)
     {
-        string key = _keys.TryGetValue(fee.Id, out string? kept) ? kept : _keys[fee.Id] = "pay-" + Guid.NewGuid().ToString("N");
         Guid? tier = _chosen.TryGetValue(fee.Id, out Guid chosen) && chosen != Guid.Empty ? chosen : null;
+        string key = _keys.TryGetValue((fee.Id, tier), out string? kept) ? kept : _keys[(fee.Id, tier)] = "pay-" + Guid.NewGuid().ToString("N");
         if (await RequestAsync(fee.Id, tier, key))
         {
-            _keys.Remove(fee.Id);
+            _keys.Remove((fee.Id, tier));
         }
     }
 
-    /// <summary>Asks again for a payment still open: the server gives it back with a fresh way to pay.</summary>
+    /// <summary>Asks again for a payment still open: the server gives it back with its hosted page, while there is one.</summary>
     private async Task ContinueAsync(Payment payment)
     {
         if (payment.FeeScheduleId is { } fee)
@@ -161,7 +169,8 @@
             }
             else
             {
-                _noCard = payment.Provider != "manual";
+                // Open here but with no page: Stripe has finished with it and its callback is on the way.
+                _confirming = payment.Provider != "manual";
             }
         }
 

@@ -34,13 +34,18 @@ public sealed class StripeOptions
 }
 
 /// <summary>
-/// Stripe (Q6, D56), over its HTTP API: payment intents, refunds, and signed webhooks.
+/// Stripe (Q6, D56, D74), over its HTTP API: Checkout sessions, refunds, and signed webhooks.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The card is entered in Stripe's own element with the intent's client secret, so nothing
-/// card-shaped reaches this application (T20, SAQ-A). Each create carries the caller's
-/// idempotency key, so a retried request makes no second charge.
+/// A payment is a Checkout session: the family pays on Stripe's hosted page, in the phone's own
+/// browser, so nothing card-shaped reaches this application (T20, SAQ-A). Each create carries the
+/// caller's idempotency key, so a retried request makes no second session.
+/// </para>
+/// <para>
+/// Stripe makes the session's payment intent only when the family confirms, so a payment's
+/// reference starts as the session's (<c>cs_…</c>). A session event that names the intent hands
+/// over its reference (<c>pi_…</c>), which refunds and the intent's own events use after that.
 /// </para>
 /// <para>
 /// A webhook is trusted only with a valid <c>Stripe-Signature</c>: an HMAC-SHA256 of
@@ -52,6 +57,8 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
 {
     public const string Name = "stripe";
 
+    private const string SessionPrefix = "cs_";
+
     public string ProviderName => Name;
 
     public string WebhookSignatureHeader => "Stripe-Signature";
@@ -61,18 +68,33 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
         ArgumentNullException.ThrowIfNull(request);
         List<KeyValuePair<string, string>> form =
         [
-            new("amount", request.Amount.Cents.ToString(CultureInfo.InvariantCulture)),
-            new("currency", request.Amount.Currency.ToLowerInvariant()),
-            new("description", request.Description),
-            new("automatic_payment_methods[enabled]", "true"),
+            new("mode", "payment"),
+            new("success_url", request.ReturnUrl.AbsoluteUri),
+            new("line_items[0][quantity]", "1"),
+            new("line_items[0][price_data][currency]", request.Amount.Currency.ToLowerInvariant()),
+            new("line_items[0][price_data][unit_amount]", request.Amount.Cents.ToString(CultureInfo.InvariantCulture)),
+            new("line_items[0][price_data][product_data][name]", request.Description),
+            new("payment_intent_data[description]", request.Description),
         ];
-        form.AddRange((request.Metadata ?? new Dictionary<string, string>()).Select(m => new KeyValuePair<string, string>($"metadata[{m.Key}]", m.Value)));
-        using JsonDocument intent = await SendAsync(HttpMethod.Post, "v1/payment_intents", form, request.IdempotencyKey, cancellationToken).ConfigureAwait(false);
-        return Descriptor(intent.RootElement);
+        foreach ((string key, string value) in request.Metadata ?? new Dictionary<string, string>())
+        {
+            form.Add(new($"metadata[{key}]", value));
+            form.Add(new($"payment_intent_data[metadata][{key}]", value));
+        }
+
+        using JsonDocument session = await SendAsync(HttpMethod.Post, "v1/checkout/sessions", form, request.IdempotencyKey, cancellationToken).ConfigureAwait(false);
+        return SessionDescriptor(session.RootElement);
     }
 
     public async Task<PaymentIntentDescriptor> GetIntentAsync(string providerReference, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(providerReference);
+        if (providerReference.StartsWith(SessionPrefix, StringComparison.Ordinal))
+        {
+            using JsonDocument session = await SendAsync(HttpMethod.Get, "v1/checkout/sessions/" + Uri.EscapeDataString(providerReference), null, null, cancellationToken).ConfigureAwait(false);
+            return SessionDescriptor(session.RootElement);
+        }
+
         using JsonDocument intent = await SendAsync(HttpMethod.Get, "v1/payment_intents/" + Uri.EscapeDataString(providerReference), null, null, cancellationToken).ConfigureAwait(false);
         return Descriptor(intent.RootElement);
     }
@@ -86,7 +108,7 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
             new("reason", "requested_by_customer"),
             new("metadata[reason]", reason),
         ], "refund-" + providerReference + "-" + amount.Cents.ToString(CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
-        return new PaymentIntentDescriptor(providerReference, PaymentIntentState.Refunded, amount, null, null);
+        return new PaymentIntentDescriptor(providerReference, PaymentIntentState.Refunded, amount, null);
     }
 
     public bool TryReadWebhook(ReadOnlySpan<byte> payload, string signatureHeader, out PaymentWebhookEvent? webhookEvent)
@@ -106,6 +128,11 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
             JsonElement data = root.GetProperty("data").GetProperty("object");
             (string? reference, PaymentIntentState? state) = type switch
             {
+                // Paid at once by card; a delayed method completes unpaid, and the async events settle it.
+                "checkout.session.completed" => (Text(data, "id"), Text(data, "payment_status") == "paid" ? PaymentIntentState.Succeeded : PaymentIntentState.Processing),
+                "checkout.session.async_payment_succeeded" => (Text(data, "id"), PaymentIntentState.Succeeded),
+                "checkout.session.async_payment_failed" => (Text(data, "id"), PaymentIntentState.Failed),
+                "checkout.session.expired" => (Text(data, "id"), PaymentIntentState.Cancelled),
                 "payment_intent.succeeded" => (Text(data, "id"), PaymentIntentState.Succeeded),
                 "payment_intent.processing" => (Text(data, "id"), PaymentIntentState.Processing),
                 "payment_intent.requires_action" => (Text(data, "id"), PaymentIntentState.RequiresAction),
@@ -118,7 +145,8 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
             };
             if (reference is { Length: > 0 } && state is { } now && eventId.Length > 0)
             {
-                webhookEvent = new PaymentWebhookEvent(eventId, type, reference, now);
+                string? intent = type.StartsWith("checkout.session.", StringComparison.Ordinal) ? Text(data, "payment_intent") : null;
+                webhookEvent = new PaymentWebhookEvent(eventId, type, reference, now, intent);
             }
 
             return true;
@@ -226,6 +254,20 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
         }
     }
 
+    private static PaymentIntentDescriptor SessionDescriptor(JsonElement session) => new(
+        session.GetProperty("id").GetString()!,
+        (Text(session, "status"), Text(session, "payment_status")) switch
+        {
+            ("complete", "paid") => PaymentIntentState.Succeeded,
+            ("complete", _) => PaymentIntentState.Processing,
+            ("expired", _) => PaymentIntentState.Cancelled,
+            _ => PaymentIntentState.RequiresAction,
+        },
+        Money.FromCents(session.TryGetProperty("amount_total", out JsonElement total) && total.ValueKind == JsonValueKind.Number ? total.GetInt32() : 0,
+            (Text(session, "currency") ?? "usd").ToUpperInvariant()),
+        // Present only while the session is open: once it's complete or expired there is no page to go to.
+        Text(session, "url") is { Length: > 0 } url ? new Uri(url) : null);
+
     private static PaymentIntentDescriptor Descriptor(JsonElement intent) => new(
         intent.GetProperty("id").GetString()!,
         intent.GetProperty("status").GetString() switch
@@ -236,7 +278,6 @@ public sealed class StripePaymentGateway(HttpClient http, StripeOptions options,
             _ => PaymentIntentState.RequiresAction,
         },
         Money.FromCents(intent.GetProperty("amount").GetInt32(), intent.GetProperty("currency").GetString()!.ToUpperInvariant()),
-        Text(intent, "client_secret"),
         null);
 
     private static string? Text(JsonElement element, string name) =>

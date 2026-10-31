@@ -74,13 +74,25 @@ public sealed class PaymentPagesTests(ConsoleFixture db)
             PaymentIntents intents = scope.ServiceProvider.GetRequiredService<PaymentIntents>();
             foreach (Guid application in applied)
             {
-                Result<PaymentView> paying = await intents.CreateAsync(new UserId(family), true, application, null, fee, null, "pay-" + Guid.NewGuid().ToString("N"), Ct);
+                Result<PaymentView> paying = await intents.CreateAsync(new UserId(family), true, application, null, fee, null, "pay-" + Guid.NewGuid().ToString("N"), new Uri("https://kettle.test/payment/done"), Ct);
                 paying.IsSuccess.ShouldBeTrue(paying.IsSuccess ? null : paying.Error.Code);
                 payments.Add(paying.Value.Id);
             }
         }
 
         return [.. payments];
+    }
+
+    [Fact]
+    public async Task The_page_stripe_returns_to_sends_the_family_back_to_the_app_and_settles_nothing()
+    {
+        RequireDatabase();
+        using Browser anyone = db.NewBrowser();
+        using HttpResponseMessage page = await anyone.GetAsync("/payment/done");
+        page.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string html = await page.Content.ReadAsStringAsync(Ct);
+        html.ShouldContain("Your payment is being confirmed.");
+        html.ShouldContain("Check again");
     }
 
     [Fact]

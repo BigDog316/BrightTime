@@ -244,7 +244,7 @@ result: an honest caller should be told why.
 | Offline devices (T12) | Sealed marks, a keychain key, a 72-hour lock, remote wipe | App, Attendance |
 | Shared devices (T14) | 30-minute youth sessions; refresh reuse revokes the family | Identity, Api |
 | Small-cell re-identification (T17) | Reports hide counts under the tenant's threshold, with complementary suppression, and say what they hid | Reporting |
-| Payment scope (T20) | Card entry on Stripe's element; webhooks believed only by signature | Enrollment |
+| Payment scope (T20) | Card entry on Stripe Checkout's hosted page; webhooks believed only by signature | Enrollment |
 | Account takeover (T21) | Passkeys first, Argon2id, breached-password check, step-up, rate limits | Identity, Web, Api |
 | Portfolio and badges (T5) | Private by default; display names without the family name; recipients only as salted hashes | Learning |
 

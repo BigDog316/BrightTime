@@ -234,12 +234,16 @@ Some fees have lower prices. You see the ones that fit your household's size, an
 the one that fits; nobody asks your income. If you haven't saved your household's size, saving it
 may show lower prices.
 
-Choose **Pay this fee**. For now, you pay the organisation directly, by cash, cheque or transfer as
-it tells you, and it marks the payment received. The application then shows it as *Paid*.
-If the organisation waives a fee, it shows *You don't need to pay this*.
+Choose **Pay this fee**. How you pay depends on your county:
 
-**Payments so far** lists each payment, its amount and where it stands. Paying by card in the app
-is coming; card details will never pass through BrightTime.
+- **By card:** Stripe's secure page opens in your phone's browser. Pay there, then come back to the
+  app and choose **Check again**. Card details never pass through BrightTime. Stripe's page comes in
+  the languages Stripe offers, which may not include yours.
+- **Directly to the organisation:** pay by cash, cheque or transfer as it tells you, and it marks
+  the payment received.
+
+The application then shows it as *Paid*. If the organisation waives a fee, it shows *You don't need
+to pay this*. **Payments so far** lists each payment, its amount and where it stands.
 
 ## Messages and check-in: coming soon
 

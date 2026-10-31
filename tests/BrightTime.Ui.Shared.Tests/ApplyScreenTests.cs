@@ -252,6 +252,18 @@ public sealed class ApplyScreenTests
     }
 
     [Fact]
+    public async Task A_card_payment_goes_on_at_stripe_and_can_be_checked_on_return()
+    {
+        using FakeApi api = Accepted($"[{Paid(Season, "requires_action", "stripe")}]");
+        string shown = Shown(await RenderAsync<ApplicationDetail>(api, new Dictionary<string, object?> { ["Id"] = Guid.Parse(ApplicationId) }));
+
+        shown.ShouldContain("Pay $100.00 by card on Stripe's secure page.");
+        shown.ShouldContain("Continue paying");
+        shown.ShouldContain("Check again", Case.Sensitive, "paying happens in the browser, so the family asks when it comes back");
+        shown.ShouldNotContain("to the organisation directly");
+    }
+
+    [Fact]
     public async Task A_draft_has_nothing_to_pay_yet()
     {
         using FakeApi api = Draft();
@@ -260,7 +272,7 @@ public sealed class ApplyScreenTests
     }
 
     [Fact]
-    public async Task Paying_sends_a_key_and_the_level_and_keeps_no_client_secret()
+    public async Task Paying_sends_a_key_and_the_level_and_brings_back_the_providers_page()
     {
         string? body = null;
         string? key = null;
@@ -268,7 +280,7 @@ public sealed class ApplyScreenTests
         {
             key = r.Headers.GetValues("Idempotency-Key").Single();
             body = r.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
-            return FakeApi.Respond(HttpStatusCode.Created, Paid(Season, "requires_action", "stripe").Replace("\"createdAt\"", "\"clientSecret\":\"pi_1_secret\",\"createdAt\"", StringComparison.Ordinal));
+            return FakeApi.Respond(HttpStatusCode.Created, Paid(Season, "requires_action", "stripe").Replace("\"createdAt\"", "\"hostedPaymentUrl\":\"https://checkout.stripe.test/c/pay/cs_1\",\"createdAt\"", StringComparison.Ordinal));
         });
         await using ServiceProvider app = api.Services();
         await app.GetRequiredService<AppState>().StartAsync(Ct);
@@ -281,7 +293,7 @@ public sealed class ApplyScreenTests
         (sent.RootElement.GetProperty("applicationId").GetGuid(), sent.RootElement.GetProperty("feeScheduleId").GetGuid(), sent.RootElement.GetProperty("tierId").GetGuid())
             .ShouldBe((Guid.Parse(ApplicationId), Guid.Parse(Season), Guid.Parse(Level)));
         payment.IsOpen.ShouldBeTrue();
-        payment.ToString().ShouldNotContain("secret", Case.Insensitive, "the provider's client secret is never read into the app (T20)");
+        payment.HostedPaymentUrl.ShouldBe(new Uri("https://checkout.stripe.test/c/pay/cs_1"));
     }
 
     [Fact]

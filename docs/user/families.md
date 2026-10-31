@@ -13,7 +13,8 @@ children's profiles and consent. Young people with their own account have
 - [Giving a child their own sign-in at 13](#giving-a-child-their-own-sign-in-at-13)
 - [Your household (app)](#your-household-app)
 - [Applying (app)](#applying-app)
-- [Paying and messages: coming soon](#paying-and-messages-coming-soon)
+- [Paying fees (app)](#paying-fees-app)
+- [Messages and check-in: coming soon](#messages-and-check-in-coming-soon)
 - [Your privacy](#your-privacy)
 
 ## Finding activities
@@ -224,13 +225,27 @@ add the details to your household or let the organisation decide.
 or *Withdrawn*. When a place is offered from the waiting list, open the application to **Take the
 place** or **Turn it down**. You can withdraw a sent application, or delete a draft you never sent.
 
-## Paying and messages: coming soon
+## Paying fees (app)
+
+Once a place is offered or accepted, the application shows its **Fees**: each fee, and how often
+it's charged.
+
+Some fees have lower prices. You see the ones that fit your household's size, and you choose
+the one that fits; nobody asks your income. If you haven't saved your household's size, saving it
+may show lower prices.
+
+Choose **Pay this fee**. For now, you pay the organisation directly, by cash, cheque or transfer as
+it tells you, and it marks the payment received. The application then shows it as *Paid*.
+If the organisation waives a fee, it shows *You don't need to pay this*.
+
+**Payments so far** lists each payment, its amount and where it stands. Paying by card in the app
+is coming; card details will never pass through BrightTime.
+
+## Messages and check-in: coming soon
 
 These are built and being tested, and the screens for families come next. When they arrive you'll
 be able to:
 
-- **Pay fees**, choosing the price level your household fits. Nobody asks your income. Card
-  payments happen on the payment service's own page, never on BrightTime.
 - **Check in** with a code on your phone that staff scan, and see your child's attendance.
 - **Read messages** from your child's programs and their announcements.
 

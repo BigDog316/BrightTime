@@ -61,6 +61,12 @@ public sealed class PaymentIntents(
 
     private static readonly string[] Open = ["created", "requires_action", "processing"];
 
+    /// <summary>A payment that covers its fee: money taken, or the organisation let it go.</summary>
+    private static readonly string[] Settled = ["succeeded", "waived"];
+
+    /// <summary>Charged once for the place. Weekly, monthly and per-session fees are paid again and again, one charge each.</summary>
+    private static readonly string[] OncePerPlace = ["one_time", "seasonal"];
+
     /// <summary>Starts paying a fee, at a tier if one is chosen; an open payment for the same place is returned instead.</summary>
     public Task<Result<PaymentView>> CreateAsync(UserId owner, bool ownerIsAdult, Guid? applicationId, Guid? enrollmentId, Guid feeScheduleId, Guid? tierId, string idempotencyKey, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
@@ -84,6 +90,13 @@ public sealed class PaymentIntents(
             if (fee is null)
             {
                 return Result<PaymentView>.Failure(Error.Validation("payments.fee", "One of this activity's fees."));
+            }
+
+            // A retry that arrives after the payment settled is not an open payment to give back: it would be a second charge.
+            if (OncePerPlace.Contains(fee.Cadence) && await db.PaymentIntents.AsNoTracking().AnyAsync(
+                    p => p.ApplicationId == place.ApplicationId && p.FeeScheduleId == fee.Id && Settled.Contains(p.Status), ct).ConfigureAwait(false))
+            {
+                return Result<PaymentView>.Failure(Error.Conflict("payments.already_paid", "This fee has been paid."));
             }
 
             int amount = fee.AmountCents;
@@ -146,6 +159,24 @@ public sealed class PaymentIntents(
             db.PaymentIntents.Add(intent);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             return Result<PaymentView>.Success(View(intent) with { ClientSecret = made.ClientSecret, HostedPaymentUrl = made.HostedPaymentUrl });
+        }, cancellationToken);
+
+    /// <summary>The payments for one of the family's applications, newest first (D73).</summary>
+    public Task<Result<IReadOnlyList<PaymentView>>> ForApplicationAsync(UserId owner, Guid applicationId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            bool mine = await (from a in db.Applications.AsNoTracking()
+                               join f in db.FamilyProfiles on a.FamilyProfileId equals f.Id
+                               where a.Id == applicationId && f.OwnerUserId == owner.Value
+                               select a.Id).AnyAsync(ct).ConfigureAwait(false);
+            if (!mine)
+            {
+                return Result<IReadOnlyList<PaymentView>>.Failure(Error.NotFound("application.not_found", "You have no application with that id."));
+            }
+
+            List<PaymentIntentRecord> found = await db.PaymentIntents.AsNoTracking().Where(p => p.ApplicationId == applicationId)
+                .OrderByDescending(p => p.CreatedAt).ToListAsync(ct).ConfigureAwait(false);
+            return Result<IReadOnlyList<PaymentView>>.Success([.. found.Select(View)]);
         }, cancellationToken);
 
     /// <summary>A payment, for the family that made it.</summary>

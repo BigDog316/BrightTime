@@ -154,6 +154,19 @@ public sealed class PaymentApiTests(ApiFixture api)
         (await JsonAsync(await family.GetAsync(new Uri($"api/v1/payments/intents/{payment}", UriKind.Relative), Ct))).GetProperty("status").GetString().ShouldBe("succeeded");
         await ProblemAsync(await stranger.GetAsync(new Uri($"api/v1/payments/intents/{payment}", UriKind.Relative), Ct), HttpStatusCode.NotFound, "payments.not_found");
 
+        // The family lists what it has paid (D73); a season paid isn't charged twice, a per-session fee may be.
+        (await JsonAsync(await family.GetAsync(new Uri($"api/v1/applications/{first}/payments", UriKind.Relative), Ct))).EnumerateArray()
+            .Select(p => (p.GetProperty("id").GetGuid(), p.GetProperty("status").GetString())).ShouldBe([(payment, "succeeded")]);
+        await ProblemAsync(await stranger.GetAsync(new Uri($"api/v1/applications/{first}/payments", UriKind.Relative), Ct), HttpStatusCode.NotFound, "application.not_found");
+        await ProblemAsync(await PostWithKeyAsync(family, "api/v1/payments/intents", new { applicationId = first, feeScheduleId = season, tierId = small }, Key()),
+            HttpStatusCode.Conflict, "payments.already_paid");
+        Guid late = set.EnumerateArray().Single(f => !f.GetProperty("isDefault").GetBoolean()).GetProperty("id").GetGuid();
+        Guid firstLate = (await JsonAsync(await PostWithKeyAsync(family, "api/v1/payments/intents", new { applicationId = first, feeScheduleId = late }, Key()), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid();
+        await JsonAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/payments/{firstLate}/received", new { reason = "Cash" }, Ct));
+        (await JsonAsync(await PostWithKeyAsync(family, "api/v1/payments/intents", new { applicationId = first, feeScheduleId = late }, Key()), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid().ShouldNotBe(firstLate);
+
         // A second child's full fee is waived, with a reason that is kept.
         Guid second = await AcceptedAsync(family, admin, org, listing, "Kojo");
         Guid waived = (await JsonAsync(await PostWithKeyAsync(family, "api/v1/payments/intents", new { applicationId = second, feeScheduleId = season }, Key()), HttpStatusCode.Created))
@@ -168,8 +181,15 @@ public sealed class PaymentApiTests(ApiFixture api)
         // A fee a payment refers to can't be dropped, but it can be changed.
         await ProblemAsync(await admin.PutAsJsonAsync(fees, new { fees = new[] { new { label = "New season", amountCents = 45000, cadence = "seasonal", isDefault = true } } }, Ct),
             HttpStatusCode.Conflict, "fees.in_use");
-        JsonElement changed = await JsonAsync(await admin.PutAsJsonAsync(fees, new { fees = new[] { new { id = season, label = "Summer session", amountCents = 42000, cadence = "seasonal", isDefault = true } } }, Ct));
-        (changed.GetArrayLength(), changed[0].GetProperty("amountCents").GetInt32(), changed[0].GetProperty("isDefault").GetBoolean()).ShouldBe((1, 42000, true));
+        JsonElement changed = await JsonAsync(await admin.PutAsJsonAsync(fees, new
+        {
+            fees = new[]
+            {
+                new { id = season, label = "Summer session", amountCents = 42000, cadence = "seasonal", isDefault = true },
+                new { id = late, label = "Late pick-up", amountCents = 500, cadence = "per_session", isDefault = false },
+            },
+        }, Ct));
+        (changed.GetArrayLength(), changed[0].GetProperty("amountCents").GetInt32(), changed[0].GetProperty("isDefault").GetBoolean()).ShouldBe((2, 42000, true));
         (await api.ScalarAsync<bool>("select is_default from enrollment.fee_schedule where id = @f", ("f", season))).ShouldBeTrue("a fee changed in place stays the default");
         (await api.ScalarAsync<int>("select amount_cents from enrollment.payment_intent where id = @p", ("p", payment))).ShouldBe(10000, "a payment keeps its own amount");
     }

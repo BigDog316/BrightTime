@@ -1,0 +1,171 @@
+@* What there is to pay on an accepted or offered application (D55, D73): each fee, the price levels
+   that fit the household, and what's been paid. The card never comes here (T20): a provider's
+   hosted page opens in the phone's browser, and a client secret is never read. *@
+@inject BrightTimeApi Api
+@inject IExternalLauncher Launcher
+
+<ProblemNotice Problem="_loadProblem" Retry="LoadAsync" />
+@if (_quote is { } quote && (quote.Fees.Count > 0 || _payments.Count > 0))
+{
+    <section aria-labelledby="fees">
+        <h2 id="fees">@T["app.pay.title"]</h2>
+        @if (quote.Fees.Any(f => f.Tiers.Count > 0))
+        {
+            <p class="hint">@T["app.pay.hint"]</p>
+        }
+        @if (quote.HouseholdSize is null && quote.Fees.Count > 0)
+        {
+            <p class="hint">@T["app.pay.no_size"] <a href="household">@T["app.household.title"]</a></p>
+        }
+
+        @foreach (Fee fee in quote.Fees)
+        {
+            <article class="card" @key="fee.Id">
+                <h3>@fee.Label</h3>
+                <p>@T.Format("app.pay.amount", ("amount", T.Money(fee.AmountCents)), ("cadence", T["app.pay.cadence." + fee.Cadence]))</p>
+                @if (_payments.FirstOrDefault(p => p.FeeScheduleId == fee.Id && p.IsOpen) is { } open)
+                {
+                    @Open(open)
+                }
+                else if (fee.IsOncePerPlace && _payments.FirstOrDefault(p => p.FeeScheduleId == fee.Id && p.IsSettled) is { } settled)
+                {
+                    <p><strong>@T["app.pay.status." + settled.Status]</strong></p>
+                }
+                else if (_payments.Any(p => p.IsOpen))
+                {
+                    @* The server gives back the open payment for this place, whichever fee is asked for. *@
+                    <p class="hint">@T["app.pay.finish_first"]</p>
+                }
+                else if (fee.AmountCents == 0 && fee.Tiers.Count == 0)
+                {
+                    <p>@T["app.pay.free"]</p>
+                }
+                else
+                {
+                    @if (fee.Tiers.Count > 0)
+                    {
+                        <fieldset>
+                            <legend>@T["app.pay.choose"]</legend>
+                            @foreach (FeeTier tier in fee.Tiers)
+                            {
+                                <label>
+                                    <input type="radio" name="@("fee-" + fee.Id.ToString("N"))" checked="@IsChosen(fee, tier.Id)" @onchange="() => _chosen[fee.Id] = tier.Id" />
+                                    @T.Format("app.pay.tier", ("label", Text.Name(tier.Label)), ("amount", T.Money(tier.AmountCents)))
+                                </label>
+                            }
+                            <label>
+                                <input type="radio" name="@("fee-" + fee.Id.ToString("N"))" checked="@IsChosen(fee, Guid.Empty)" @onchange="() => _chosen[fee.Id] = Guid.Empty" />
+                                @T.Format("app.pay.full_price", ("amount", T.Money(fee.AmountCents)))
+                            </label>
+                        </fieldset>
+                    }
+                    <button type="button" class="primary" @onclick="() => PayAsync(fee)" disabled="@(_busy || (fee.Tiers.Count > 0 && !_chosen.ContainsKey(fee.Id)))">@T["app.pay.pay"]</button>
+                }
+            </article>
+        }
+        <ProblemNotice Problem="_problem" />
+
+        @if (_payments.Count > 0)
+        {
+            <h3>@T["app.pay.history"]</h3>
+            <ul>
+                @foreach (Payment p in _payments)
+                {
+                    <li @key="p.Id">@T.Format("app.pay.line", ("date", T.DateShort(p.CreatedAt)), ("amount", T.Money(p.AmountCents)), ("status", T["app.pay.status." + p.Status]))</li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public FamilyApplication Application { get; set; } = default!;
+
+    private (Guid Id, string Status)? _loaded;
+    private FeeQuote? _quote;
+    private IReadOnlyList<Payment> _payments = [];
+    private ApiProblem? _loadProblem;
+    private ApiProblem? _problem;
+    private bool _busy;
+    private bool _noCard;
+
+    // The price level chosen, by fee; Guid.Empty is the full price.
+    private readonly Dictionary<Guid, Guid> _chosen = [];
+
+    // Kept through a failed try, so a retry can't charge twice; a payment made ends it, since a weekly fee is paid again.
+    private readonly Dictionary<Guid, string> _keys = [];
+
+    protected override Task OnParametersSetAsync() => _loaded == (Application.Id, Application.Status) ? Task.CompletedTask : LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loaded = (Application.Id, Application.Status);
+        ApiResult<FeeQuote> quote = await Api.FeesAsync(Application.Id);
+        ApiResult<IReadOnlyList<Payment>> payments = await Api.PaymentsAsync(Application.Id);
+        _loadProblem = quote.Problem ?? payments.Problem;
+        _quote = quote.Value;
+        _payments = payments.Value ?? [];
+    }
+
+    private bool IsChosen(Fee fee, Guid level) => _chosen.TryGetValue(fee.Id, out Guid chosen) && chosen == level;
+
+    private RenderFragment Open(Payment payment) => @<text>
+        @if (payment.Status == "processing")
+        {
+            <p>@T["app.pay.processing"]</p>
+        }
+        else if (payment.Provider == "manual")
+        {
+            <p>@T.Format("app.pay.manual", ("amount", T.Money(payment.AmountCents)))</p>
+        }
+        else if (_noCard)
+        {
+            <p>@T.Format("app.pay.no_card", ("amount", T.Money(payment.AmountCents)))</p>
+        }
+        else
+        {
+            <button type="button" class="primary" @onclick="() => ContinueAsync(payment)" disabled="@_busy">@T["app.pay.continue"]</button>
+        }
+    </text>;
+
+    private async Task PayAsync(Fee fee)
+    {
+        string key = _keys.TryGetValue(fee.Id, out string? kept) ? kept : _keys[fee.Id] = "pay-" + Guid.NewGuid().ToString("N");
+        Guid? tier = _chosen.TryGetValue(fee.Id, out Guid chosen) && chosen != Guid.Empty ? chosen : null;
+        if (await RequestAsync(fee.Id, tier, key))
+        {
+            _keys.Remove(fee.Id);
+        }
+    }
+
+    /// <summary>Asks again for a payment still open: the server gives it back with a fresh way to pay.</summary>
+    private async Task ContinueAsync(Payment payment)
+    {
+        if (payment.FeeScheduleId is { } fee)
+        {
+            await RequestAsync(fee, null, "pay-" + Guid.NewGuid().ToString("N"));
+        }
+    }
+
+    private async Task<bool> RequestAsync(Guid fee, Guid? tier, string key)
+    {
+        _busy = true;
+        ApiResult<Payment> made = await Api.PayAsync(Application.Id, fee, tier, key);
+        _problem = made.Problem;
+        if (made.Value is { } payment)
+        {
+            await LoadAsync();
+            if (payment.HostedPaymentUrl is { Scheme: "https" } page)
+            {
+                await Launcher.OpenAsync(page);
+            }
+            else
+            {
+                _noCard = payment.Provider != "manual";
+            }
+        }
+
+        _busy = false;
+        return made.IsSuccess;
+    }
+}

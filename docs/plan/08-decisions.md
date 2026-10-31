@@ -2400,6 +2400,39 @@ current version, and a draft is held to the version it began with (D45); the app
 **Not yet:** fees and paying (next), messages, attendance and the check-in code, the young
 person's portfolio screens, and the web's family pages.
 
+### D73 — Fees and paying, in the app (**proposed 2026-10-31**)
+
+The third family slice, after the household (D71) and applying (D72). On an accepted or offered
+application, the app shows what there is to pay:
+- **The fees:** each one with how often it's charged, and the price levels that fit the household
+  (D55). The family picks a level; nobody asks its income. A household with no size saved sees
+  only the levels with no size rule, and is told adding its size may show more.
+- **Paying:** the manual gateway says to pay the organisation directly, which records it received.
+  A provider's hosted page, when the gateway gives one, opens in the phone's own browser.
+- **What's been paid:** each payment for the application with its amount, date and status. The
+  reason for a waiver is the organisation's note and isn't shown.
+
+**Two server changes**, both found building this:
+- **A fee can't be charged twice by accident.** `POST /payments/intents` only returned *open*
+  payments, so asking again after a one-time or seasonal fee was paid started a second charge. Now
+  it's `payments.already_paid` (409) when that fee has a `succeeded` or `waived` payment for this
+  application. Weekly, monthly and per-session fees can still be paid again, since each payment is
+  one charge (D55). A refunded, failed or cancelled payment doesn't count.
+- **`GET /applications/{id}/payments`:** the family's payments for one application, newest first.
+  There was no way to list them; a family could only read a payment by an id it had kept.
+
+**For you to decide: taking cards in the app.** With Stripe configured, the app can't take a card
+yet. The gateway makes a payment intent and returns a client secret for Stripe's element (D56), but
+the app has no publishable key to run that element with, and it would have to run inside the
+app's WebView. Until this is settled, the app tells the family to contact the organisation, and the
+secret is ignored. I recommend Stripe Checkout: the gateway makes a session and the app opens its
+hosted page in the phone's browser, so the card stays on Stripe's page (T20) and no publishable key
+is needed. That changes D56's gateway and its webhook mapping, so it's a decision of its own.
+
+**Not yet:** cards in the app (above), changing a price level while a payment is open, refunds,
+messages, attendance and the check-in code, the young person's portfolio screens, and the web's
+family pages.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

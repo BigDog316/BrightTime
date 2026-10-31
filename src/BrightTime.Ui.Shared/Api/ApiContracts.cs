@@ -260,6 +260,28 @@ public sealed record FormChoice(string Key, string Label);
 /// <summary>A waiver an application asks for (D47), signed against its exact text's <see cref="Hash"/>.</summary>
 public sealed record ApplicationWaiver(Guid WaiverId, string Title, int Version, string BodyMarkdown, string Hash, bool IsRequired, DateTimeOffset? SignedAt);
 
+/// <summary>What an application's activity charges (D55), with only the price levels this household fits.</summary>
+public sealed record FeeQuote(Guid ApplicationId, short? HouseholdSize, IReadOnlyList<Fee> Fees);
+
+public sealed record Fee(Guid Id, string Label, int AmountCents, string Currency, string Cadence, bool IsDefault, IReadOnlyList<FeeTier> Tiers)
+{
+    /// <summary>Charged once for the place; weekly, monthly and per-session fees are paid again, one charge each (D73).</summary>
+    public bool IsOncePerPlace => Cadence is "one_time" or "seasonal";
+}
+
+public sealed record FeeTier(Guid Id, string Label, int AmountCents);
+
+/// <summary>
+/// A payment as the family sees it. The provider's client secret isn't read (T20), nor the
+/// organisation's note on a waiver; <see cref="HostedPaymentUrl"/> is a page of the provider's own.
+/// </summary>
+public sealed record Payment(Guid Id, Guid? FeeScheduleId, int AmountCents, string Provider, string Status, DateTimeOffset CreatedAt, Uri? HostedPaymentUrl = null)
+{
+    public bool IsOpen => Status is "created" or "requires_action" or "processing";
+
+    public bool IsSettled => Status is "succeeded" or "waived";
+}
+
 /// <summary>What a consent scope means, in the exact words a grant is recorded against (its <see cref="Hash"/>).</summary>
 public sealed record Disclosure(string Scope, string Version, string Text, string Hash, IReadOnlyList<string> Methods, bool AvailableUnder13);
 

@@ -171,6 +171,11 @@ else
             </section>
         }
 
+        @if (a.Status is "accepted" or "offered")
+        {
+            <ApplicationFees Application="a" />
+        }
+
         @if (_form is { } form && a.Answers.Count > 0)
         {
             <section aria-labelledby="answers">

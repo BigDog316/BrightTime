@@ -164,7 +164,8 @@ The owner alone reads or changes a family profile.
 | `POST /applications/{id}/offer/accept`, `/offer/decline` | Answer a place offered from the waitlist |
 | `GET /applications/{id}/waivers`, `POST /applications/{id}/waivers/{waiverId}/sign` | The waivers it needs, and signing one (by the text's hash) |
 | `GET /applications/{id}/fees` | The fees and price levels that apply |
-| `POST /payments/intents`, `GET /payments/intents/{id}` | Pay a fee at a price level (`Idempotency-Key` required). With Stripe, returns the client secret for Stripe's element; otherwise the payment waits to be marked received |
+| `GET /applications/{id}/payments` | Its payments, newest first (D73) |
+| `POST /payments/intents`, `GET /payments/intents/{id}` | Pay a fee at a price level (`Idempotency-Key` required). With Stripe, returns the client secret for Stripe's element; otherwise the payment waits to be marked received. A one-time or seasonal fee already paid or waived is `payments.already_paid` (D73) |
 
 ## Attendance
 

@@ -36,6 +36,7 @@ public static class PaymentEndpoints
         org.MapPost("/payments/{id:guid}/received", ReceivedAsync);
 
         api.MapGet("/applications/{id:guid}/fees", QuoteAsync).RequireAuthorization();
+        api.MapGet("/applications/{id:guid}/payments", ForApplicationAsync).RequireAuthorization();
         api.MapPost("/payments/intents", PayAsync).RequireAuthorization();
         api.MapGet("/payments/intents/{id:guid}", GetAsync).RequireAuthorization();
 
@@ -81,6 +82,12 @@ public static class PaymentEndpoints
     {
         Result<FeeQuote> quote = await fees.QuoteAsync(Actor(user), id, ct);
         return quote.IsSuccess ? Results.Ok(quote.Value) : ApiProblems.From(quote.Error);
+    }
+
+    private static async Task<IResult> ForApplicationAsync(Guid id, ClaimsPrincipal user, PaymentIntents payments, CancellationToken ct)
+    {
+        Result<IReadOnlyList<PaymentView>> found = await payments.ForApplicationAsync(Actor(user), id, ct);
+        return found.IsSuccess ? Results.Ok(found.Value) : ApiProblems.From(found.Error);
     }
 
     /// <summary>Pays a fee. Needs an Idempotency-Key; while a payment for the same place is open, that one comes back.</summary>

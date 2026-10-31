@@ -235,6 +235,18 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> SignWaiverAsync(Guid id, Guid waiverId, string typedName, string hash, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, $"applications/{id:D}/waivers/{waiverId:D}/sign", new { typedName, hash }, signedIn: true, ct);
 
+    // ---- fees and paying (D55, D73) -----------------------------------------------------------
+
+    public Task<ApiResult<FeeQuote>> FeesAsync(Guid applicationId, CancellationToken ct = default) =>
+        GetAsync<FeeQuote>($"applications/{applicationId:D}/fees", signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<Payment>>> PaymentsAsync(Guid applicationId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<Payment>>($"applications/{applicationId:D}/payments", signedIn: true, ct);
+
+    /// <summary>Starts paying a fee, at a price level if one is chosen. A payment already open for this place comes back instead.</summary>
+    public Task<ApiResult<Payment>> PayAsync(Guid applicationId, Guid feeScheduleId, Guid? tierId, string key, CancellationToken ct = default) =>
+        SendAsync<Payment>(HttpMethod.Post, "payments/intents", new { applicationId, feeScheduleId, tierId }, signedIn: true, key, ct);
+
     // ---- guardians, children and consent (D31, D34, D35) -------------------------------------
 
     public Task<ApiResult<IReadOnlyList<Child>>> ChildrenAsync(CancellationToken ct = default) =>

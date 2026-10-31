@@ -113,7 +113,7 @@ else
                         <textarea id="need-detail-@at" maxlength="500" rows="2" @bind="_needs[at].Detail"></textarea>
                     </div>
                     <div class="field">
-                        <label><input type="checkbox" @bind="_needs[at].Share" /> @T["app.household.need_share"]</label>
+                        <label class="check"><input type="checkbox" @bind="_needs[at].Share" /> @T["app.household.need_share"]</label>
                     </div>
                     <button type="button" @onclick="() => _needs.RemoveAt(at)">@T["app.household.need_remove"]</button>
                 </fieldset>

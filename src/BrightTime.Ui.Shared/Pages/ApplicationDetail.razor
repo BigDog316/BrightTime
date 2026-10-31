@@ -62,11 +62,15 @@ else
                             @Question(q)
                             @if (_missing.Contains(q.Key))
                             {
-                                <p class="error" id="@("q-" + q.Key + "-missing")">@T["app.apply.answer_this"]</p>
+                                <p class="notice error" id="@("q-" + q.Key + "-missing")">@T["app.apply.answer_this"]</p>
                             }
                         </div>
                     }
                     <ProblemNotice Problem="_answersProblem" />
+                    @if (_saveNote is not null)
+                    {
+                        <p class="notice" role="status">@_saveNote</p>
+                    }
                     <div class="actions">
                         <button type="submit" disabled="@_busy">@T["app.apply.save_answers"]</button>
                     </div>
@@ -113,10 +117,10 @@ else
             <p class="hint">@T["app.apply.share_hint"]</p>
             <fieldset>
                 <legend>@T["app.apply.share_fields"]</legend>
-                <label><input type="checkbox" checked disabled /> @T["app.apply.share_field.member_names"]</label>
+                <label class="check"><input type="checkbox" checked disabled /> @T["app.apply.share_field.member_names"]</label>
                 @foreach (string field in ShareChoices)
                 {
-                    <label>
+                    <label class="check">
                         <input type="checkbox" checked="@_share.Contains(field)" @onchange="e => Toggle(_share, field, e.Value is true)" />
                         @T["app.apply.share_field." + field]
                     </label>
@@ -131,6 +135,11 @@ else
         </section>
 
         <ProblemNotice Problem="_sendProblem" />
+        @* Beside the button: the top of the page is far off screen by now. *@
+        @if (_sendNote is not null)
+        {
+            <p class="notice" role="alert">@_sendNote</p>
+        }
         <div class="actions">
             <button type="button" class="primary" @onclick="SendAsync" disabled="@(_busy || a.Eligibility.IsEligible == false)">@T["app.apply.send"]</button>
         </div>
@@ -228,6 +237,8 @@ else
     private ApiProblem? _waiverProblem;
     private ApiProblem? _sendProblem;
     private string? _status;
+    private string? _saveNote;
+    private string? _sendNote;
     private bool _busy;
     private Confirming? _confirm;
 
@@ -315,7 +326,7 @@ else
         return @<text>
             @if (q.Kind == "consent")
             {
-                <label>
+                <label class="check">
                     <input type="checkbox" checked="@(_flags.GetValueOrDefault(q.Key) == true)" aria-describedby="@described"
                            @onchange="e => _flags[q.Key] = e.Value is true ? true : null" />
                     @q.Label
@@ -327,21 +338,21 @@ else
                     <legend>@label</legend>
                     @if (q.Kind == "yes_no")
                     {
-                        <label><input type="radio" name="@id" checked="@(_flags.GetValueOrDefault(q.Key) == true)" @onchange="() => _flags[q.Key] = true" /> @T["app.apply.yes"]</label>
-                        <label><input type="radio" name="@id" checked="@(_flags.GetValueOrDefault(q.Key) == false)" @onchange="() => _flags[q.Key] = false" /> @T["app.apply.no"]</label>
+                        <label class="check"><input type="radio" name="@id" checked="@(_flags.GetValueOrDefault(q.Key) == true)" @onchange="() => _flags[q.Key] = true" /> @T["app.apply.yes"]</label>
+                        <label class="check"><input type="radio" name="@id" checked="@(_flags.GetValueOrDefault(q.Key) == false)" @onchange="() => _flags[q.Key] = false" /> @T["app.apply.no"]</label>
                     }
                     else if (q.Kind == "single_choice")
                     {
                         @foreach (FormChoice c in q.Choices ?? [])
                         {
-                            <label><input type="radio" name="@id" checked="@(_text.GetValueOrDefault(q.Key) == c.Key)" @onchange="() => _text[q.Key] = c.Key" /> @c.Label</label>
+                            <label class="check"><input type="radio" name="@id" checked="@(_text.GetValueOrDefault(q.Key) == c.Key)" @onchange="() => _text[q.Key] = c.Key" /> @c.Label</label>
                         }
                     }
                     else
                     {
                         @foreach (FormChoice c in q.Choices ?? [])
                         {
-                            <label>
+                            <label class="check">
                                 <input type="checkbox" checked="@(_picked.TryGetValue(q.Key, out HashSet<string>? on) && on.Contains(c.Key))"
                                        @onchange="e => Toggle(Picked(q.Key), c.Key, e.Value is true)" />
                                 @c.Label
@@ -417,6 +428,17 @@ else
         return answers;
     }
 
+    private IEnumerable<string> Unanswered()
+    {
+        if (_form is null)
+        {
+            return [];
+        }
+
+        Dictionary<string, object?> answers = Answers();
+        return _form.Questions.Where(q => q.Required && answers[q.Key] is null).Select(q => q.Key);
+    }
+
     private async Task<bool> SaveAsync()
     {
         _answersProblem = null;
@@ -438,7 +460,8 @@ else
     private async Task SaveAnswersAsync()
     {
         _busy = true;
-        _status = await SaveAsync() ? T["app.apply.answers_saved"] : null;
+        _saveNote = await SaveAsync() ? T["app.apply.answers_saved"] : null;
+        _missing.IntersectWith(Unanswered());
         _busy = false;
     }
 
@@ -460,21 +483,18 @@ else
     {
         _busy = true;
         _sendProblem = null;
-        _status = null;
+        _sendNote = null;
+        _saveNote = null;
         _missing.Clear();
-        if (_form is { } form)
-        {
-            Dictionary<string, object?> answers = Answers();
-            _missing.UnionWith(form.Questions.Where(q => q.Required && answers[q.Key] is null).Select(q => q.Key));
-        }
+        _missing.UnionWith(Unanswered());
 
         if (_missing.Count > 0)
         {
-            _status = T["app.apply.answer_all"];
+            _sendNote = T["app.apply.answer_all"];
         }
         else if (_waivers.Any(w => w.IsRequired && w.SignedAt is null))
         {
-            _status = T["app.apply.sign_first"];
+            _sendNote = T["app.apply.sign_first"];
         }
         else if (await SaveAsync())
         {
@@ -483,8 +503,8 @@ else
             _sendProblem = sent.Problem;
             if (sent.Value is { } application)
             {
+                // The status line and its explanation say it's sent.
                 _application = application;
-                _status = T["app.apply.sent"];
             }
         }
 

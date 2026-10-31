@@ -44,7 +44,7 @@ else
                 </select>
             </div>
             <div class="field">
-                <label><input type="checkbox" @bind="_interpreter" /> @T["app.household.interpreter"]</label>
+                <label class="check"><input type="checkbox" @bind="_interpreter" /> @T["app.household.interpreter"]</label>
             </div>
             <ProblemNotice Problem="_saveProblem" />
             @if (_saved)

@@ -154,6 +154,30 @@ public sealed class ApplyScreenTests
     }
 
     [Fact]
+    public async Task Rules_that_fail_to_load_are_a_problem_not_anyone_can_apply()
+    {
+        using FakeApi api = SignedIn()
+            .Json(HttpMethod.Get, "public/listings/rowing-camp", ListingJson("builtin"))
+            .On(HttpMethod.Get, "public/listings/rowing-camp/eligibility", _ => FakeApi.Problem(HttpStatusCode.InternalServerError, "server"))
+            .Json(HttpMethod.Get, "family-profile", Household);
+        string html = await RenderAsync<Apply>(api, new Dictionary<string, object?> { ["Slug"] = "rowing-camp" });
+
+        html.ShouldContain("role=\"alert\"");
+        html.ShouldNotContain("Anyone can apply.");
+        html.ShouldNotContain("Start the application");
+    }
+
+    [Fact]
+    public async Task Every_choice_sits_on_a_check_row_beside_its_label()
+    {
+        using FakeApi api = Draft();
+        string html = await RenderAsync<ApplicationDetail>(api, new Dictionary<string, object?> { ["Id"] = Guid.Parse(ApplicationId) });
+
+        html.ShouldContain("<label class=\"check\"><input type=\"radio\" name=\"q-tshirt\"");
+        html.ShouldNotMatch(@"<label>\s*<input", "a bare label stacks its input above its text");
+    }
+
+    [Fact]
     public async Task A_draft_shows_its_questions_waivers_and_what_will_be_shared()
     {
         using FakeApi api = Draft();

@@ -48,12 +48,12 @@
                             <legend>@T["app.pay.choose"]</legend>
                             @foreach (FeeTier tier in fee.Tiers)
                             {
-                                <label>
+                                <label class="check">
                                     <input type="radio" name="@("fee-" + fee.Id.ToString("N"))" checked="@IsChosen(fee, tier.Id)" @onchange="() => _chosen[fee.Id] = tier.Id" />
                                     @T.Format("app.pay.tier", ("label", Text.Name(tier.Label)), ("amount", T.Money(tier.AmountCents)))
                                 </label>
                             }
-                            <label>
+                            <label class="check">
                                 <input type="radio" name="@("fee-" + fee.Id.ToString("N"))" checked="@IsChosen(fee, Guid.Empty)" @onchange="() => _chosen[fee.Id] = Guid.Empty" />
                                 @T.Format("app.pay.full_price", ("amount", T.Money(fee.AmountCents)))
                             </label>

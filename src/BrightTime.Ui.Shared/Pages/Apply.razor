@@ -58,7 +58,7 @@ else
                         <legend>@T["app.apply.choose"]</legend>
                         @foreach (HouseholdMember m in _young)
                         {
-                            <label>
+                            <label class="check">
                                 <input type="radio" name="member" value="@m.Id" checked="@(_member == m.Id)" @onchange="() => _member = m.Id" />
                                 @Text.Name(m.ShownName)
                             </label>
@@ -102,7 +102,15 @@ else
             return;
         }
 
-        _rules = (await Api.EligibilityAsync(Slug)).Value ?? [];
+        // An empty list means anyone can apply, so rules that didn't load mustn't read as none.
+        ApiResult<IReadOnlyList<EligibilityRule>> rules = await Api.EligibilityAsync(Slug);
+        if (!rules.IsSuccess)
+        {
+            _problem = rules.Problem;
+            return;
+        }
+
+        _rules = rules.Value!;
         ApiResult<Household> household = await Api.HouseholdAsync();
         if (household.Problem is { Code: not "family.no_profile" } problem)
         {

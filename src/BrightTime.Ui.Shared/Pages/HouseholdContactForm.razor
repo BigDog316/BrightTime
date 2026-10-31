@@ -42,10 +42,10 @@ else
             <input id="email" type="email" maxlength="320" autocomplete="off" @bind="_email" />
         </div>
         <div class="field">
-            <label><input type="checkbox" @bind="_emergency" /> @T["app.household.contact_emergency"]</label>
+            <label class="check"><input type="checkbox" @bind="_emergency" /> @T["app.household.contact_emergency"]</label>
         </div>
         <div class="field">
-            <label><input type="checkbox" @bind="_pickUp" /> @T["app.household.contact_pick_up"]</label>
+            <label class="check"><input type="checkbox" @bind="_pickUp" /> @T["app.household.contact_pick_up"]</label>
         </div>
         <ProblemNotice Problem="_problem" />
         <div class="actions">

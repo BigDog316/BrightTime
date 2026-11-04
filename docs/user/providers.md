@@ -241,7 +241,8 @@ If a phone is lost and its access withdrawn, it deletes everything it held the n
 connects.
 
 Families can also **check in** with a code on their phone that staff scan, or by scanning a code a
-kiosk shows. The codes are built; the scanning and kiosk screens are still to come.
+kiosk shows. Families can now show their code in the app (under **Account**, **Check-in**). Scanning it,
+and the kiosk screen, are still to come: until then, mark the young person on your roster.
 
 ## Messages
 

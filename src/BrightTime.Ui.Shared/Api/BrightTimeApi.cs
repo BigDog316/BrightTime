@@ -318,6 +318,20 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<AttendanceDeviceContact>> DeviceContactAsync(string deviceId, string? appVersion, CancellationToken ct = default) =>
         SendAsync<AttendanceDeviceContact>(HttpMethod.Post, "attendance/devices/contact", new { deviceId, appVersion }, signedIn: session.IsSignedIn, ct);
 
+    // ---- a family's check-in and attendance (D50, D76) ------------------------------------------
+
+    /// <summary>The family's current activities, each with its meeting now or next.</summary>
+    public Task<ApiResult<IReadOnlyList<FamilyActivity>>> FamilyActivitiesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<FamilyActivity>>("me/attendance/activities", signedIn: true, ct);
+
+    /// <summary>The family's attendance records, newest first.</summary>
+    public Task<ApiResult<IReadOnlyList<FamilyAttendance>>> FamilyAttendanceAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<FamilyAttendance>>("me/attendance", signedIn: true, ct);
+
+    /// <summary>A two-minute, single-use code for staff to scan, for one of the family's enrolments.</summary>
+    public Task<ApiResult<CheckinCode>> CheckinBadgeAsync(Guid enrollmentId, CancellationToken ct = default) =>
+        SendAsync<CheckinCode>(HttpMethod.Post, "me/attendance/badges", new { enrollmentId }, signedIn: true, ct);
+
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);
 

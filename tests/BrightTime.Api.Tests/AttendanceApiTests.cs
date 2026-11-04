@@ -151,6 +151,9 @@ public sealed class AttendanceApiTests(ApiFixture api)
         await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance", Record(meetings.Old), Ct), HttpStatusCode.BadRequest, "attendance.too_late");
         await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance", Record(meetings.Cancelled), Ct), HttpStatusCode.BadRequest, "attendance.occurrence");
         await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance", Record(meetings.Past.AddMinutes(7)), Ct), HttpStatusCode.BadRequest, "attendance.occurrence");
+        // A meeting left out reads as the earliest time there is, which no meeting can be.
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance", new { enrollmentId = zara, state = "present" }, Ct), HttpStatusCode.BadRequest, "attendance.occurrence");
+        await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance", Record(DateTimeOffset.MaxValue), Ct), HttpStatusCode.BadRequest, "attendance.occurrence");
         await ProblemAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/attendance", Record(meetings.Past, "napping"), Ct), HttpStatusCode.BadRequest, "attendance.state");
 
         // A correction supersedes: the old record stays, pointing at the new one, and can't be corrected again.
@@ -265,6 +268,7 @@ public sealed class AttendanceApiTests(ApiFixture api)
         token.Length.ShouldBe(43);
         token.ShouldNotContain(amani.ToString("N")[..8], Case.Insensitive);
         (badge.GetProperty("expiresAt").GetDateTimeOffset() - DateTimeOffset.UtcNow).ShouldBeLessThanOrEqualTo(TimeSpan.FromMinutes(2));
+        badge.GetProperty("validForSeconds").GetInt32().ShouldBe(120, "what the app counts down from (D76)");
         await ProblemAsync(await otherFamily.PostAsJsonAsync("api/v1/me/attendance/badges", new { enrollmentId = amani }, Ct), HttpStatusCode.NotFound, "checkin.enrolment");
 
         // Another organisation's staff can't use it; this organisation's staff spend it once.
@@ -304,6 +308,21 @@ public sealed class AttendanceApiTests(ApiFixture api)
         baraka.GetProperty("occurrenceStartsAt").GetDateTimeOffset().ShouldBe(now);
         await JsonAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[1] }, Ct), HttpStatusCode.Created);
         await ProblemAsync(await family.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.Conflict, "attendance.exists");
+
+        // The app's check-in screen (D76): both young people, under the activity's title, with the
+        // meeting on now; their attendance carries the title too. Another family sees none of it.
+        string title = await api.ScalarAsync<string>("select title from opportunity.listing where id = @l", ("l", listing));
+        JsonElement activities = await JsonAsync(await family.GetAsync(new Uri("api/v1/me/attendance/activities", UriKind.Relative), Ct));
+        activities.EnumerateArray().Select(a => a.GetProperty("enrollmentId").GetGuid()).Order().ShouldBe(enrolled.Order());
+        JsonElement neema = activities.EnumerateArray().Single(a => a.GetProperty("enrollmentId").GetGuid() == enrolled[1]);
+        neema.GetProperty("memberFirstName").GetString().ShouldBe("Neema");
+        neema.GetProperty("listingTitle").GetString().ShouldBe(title);
+        neema.GetProperty("meetingStartsAt").GetDateTimeOffset().ShouldBe(now);
+        neema.GetProperty("meetingNow").GetBoolean().ShouldBeTrue();
+        JsonElement recorded = await JsonAsync(await family.GetAsync(new Uri("api/v1/me/attendance", UriKind.Relative), Ct));
+        recorded.EnumerateArray().Where(r => r.GetProperty("occurrenceStartsAt").GetDateTimeOffset() == now)
+            .Select(r => r.GetProperty("listingTitle").GetString()).ShouldBe([title, title]);
+        (await JsonAsync(await otherFamily.GetAsync(new Uri("api/v1/me/attendance/activities", UriKind.Relative), Ct))).GetArrayLength().ShouldBe(0);
 
         // Only for one's own young people, and only with a kiosk's code while it lasts.
         await ProblemAsync(await otherFamily.PostAsJsonAsync("api/v1/attendance/checkin", new { token = kiosk, enrollmentId = enrolled[0] }, Ct), HttpStatusCode.NotFound, "checkin.enrolment");

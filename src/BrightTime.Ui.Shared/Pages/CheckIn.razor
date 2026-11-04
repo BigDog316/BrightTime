@@ -1,0 +1,117 @@
+@page "/check-in"
+@* A family's check-in (D50, D76): their current activities, each with its meeting now or next and
+   a code to show staff, and the attendance recorded for them, newest first. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.checkin.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p class="hint">@T["app.checkin.intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_activities is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_activities is not null)
+    {
+        <section aria-labelledby="activities">
+            <h2 id="activities">@T["app.checkin.activities"]</h2>
+            @if (_activities.Count == 0)
+            {
+                <p>@T["app.checkin.none"]</p>
+            }
+            else
+            {
+                <ul class="cards">
+                    @foreach (FamilyActivity a in _activities)
+                    {
+                        FamilyAttendance? recorded = RecordedNow(a);
+                        <li class="card" @key="a.EnrollmentId">
+                            <h3 dir="auto">@a.ListingTitle</h3>
+                            <p>@T.Format("app.checkin.for", ("name", Text.Name(a.MemberFirstName)))</p>
+                            <p class="hint">
+                                @if (recorded is not null)
+                                {
+                                    <strong>@T.Format("app.checkin.recorded", ("state", T["app.attendance." + recorded.State]))</strong>
+                                }
+                                else if (a.MeetingNow && a.MeetingEndsAt is { } ends)
+                                {
+                                    <strong>@T.Format("app.checkin.on_now", ("time", T.Time(ends)))</strong>
+                                }
+                                else if (a.MeetingStartsAt is { } next)
+                                {
+                                    @T.Format("app.checkin.next", ("when", T.DayTime(next)))
+                                }
+                                else
+                                {
+                                    @T["app.checkin.no_meeting"]
+                                }
+                            </p>
+                            <a class="@(a.MeetingNow && recorded is null ? "button primary" : "button")" href="check-in/@a.EnrollmentId.ToString("D")">@T["app.checkin.show_code"]</a>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+
+    @if (_history is not null)
+    {
+        <section aria-labelledby="history">
+            <h2 id="history">@T["app.checkin.history"]</h2>
+            @if (_history.Count == 0)
+            {
+                <p>@T["app.checkin.history_none"]</p>
+            }
+            else
+            {
+                <ul class="attendance-history">
+                    @foreach (FamilyAttendance r in _history)
+                    {
+                        <li @key="(r.EnrollmentId, r.OccurrenceStartsAt)">
+                            <strong>@T["app.attendance." + r.State]</strong>
+                            · @Text.Name(r.MemberFirstName) · <span dir="auto">@r.ListingTitle</span>
+                            <span class="hint">@T.DayTime(r.OccurrenceStartsAt)</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+}
+
+@code {
+    /// <summary>The newest records shown; the server sends at most 500.</summary>
+    private const int HistoryShown = 30;
+
+    private IReadOnlyList<FamilyActivity>? _activities;
+    private IReadOnlyList<FamilyAttendance>? _history;
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<FamilyActivity>> activities = await Api.FamilyActivitiesAsync();
+        ApiResult<IReadOnlyList<FamilyAttendance>> history = await Api.FamilyAttendanceAsync();
+        _problem = activities.Problem ?? history.Problem;
+        _activities = activities.Value ?? _activities;
+        _history = history.Value?.Take(HistoryShown).ToList() ?? _history;
+    }
+
+    /// <summary>
+    /// What staff have already recorded for the meeting on now, if anything: a young person checked
+    /// in is told so, rather than offered a code a second scan would only refuse.
+    /// </summary>
+    private FamilyAttendance? RecordedNow(FamilyActivity a) =>
+        a is { MeetingNow: true, MeetingStartsAt: { } starts }
+            ? _history?.FirstOrDefault(r => r.EnrollmentId == a.EnrollmentId && r.OccurrenceStartsAt == starts)
+            : null;
+}

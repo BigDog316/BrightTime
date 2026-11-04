@@ -119,6 +119,22 @@ public sealed record AttendanceSyncOutcome(Guid ClientRecordId, string Status, G
 /// <summary>What the server tells a device on contact: whether to wipe, and how long it may stay offline.</summary>
 public sealed record AttendanceDeviceContact(bool Registered, bool Wipe, int MaxOfflineHours);
 
+/// <summary>
+/// One of the family's current activities (D76): for whom, which, and its meeting under way now or
+/// next. <c>MeetingNow</c> runs from an hour before that meeting until it ends.
+/// </summary>
+public sealed record FamilyActivity(Guid EnrollmentId, string MemberFirstName, Guid ListingId, string ListingTitle, DateTimeOffset? MeetingStartsAt, DateTimeOffset? MeetingEndsAt, bool MeetingNow);
+
+/// <summary>One of the family's attendance records: present, late, absent or excused. Never the staff's note.</summary>
+public sealed record FamilyAttendance(Guid EnrollmentId, string MemberFirstName, Guid ListingId, string ListingTitle, DateTimeOffset OccurrenceStartsAt, string State, DateTimeOffset? CheckedInAt, DateTimeOffset? CheckedOutAt);
+
+/// <summary>
+/// A check-in code to show as a QR (D50). It names nobody and works once. The screen counts down
+/// <c>ValidForSeconds</c> from when it arrived, not to <c>ExpiresAt</c>, so a phone whose clock is
+/// wrong still shows it for as long as it works.
+/// </summary>
+public sealed record CheckinCode(string Token, DateTimeOffset ExpiresAt, int ValidForSeconds);
+
 /// <summary>The signed-in person: who, what kind of account (<c>adult</c>, <c>youth</c>), and what they may do.</summary>
 public sealed record Me(
     Guid Id,

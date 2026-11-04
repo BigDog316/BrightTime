@@ -171,8 +171,9 @@ The owner alone reads or changes a family profile.
 
 | Route | |
 |---|---|
-| `GET /me/attendance` | A family's own attendance |
-| `POST /me/attendance/badges` | A two-minute, single-use check-in code for an enrolment, for staff to scan |
+| `GET /me/attendance` | A family's own attendance, each record with its activity's title (`listingTitle`, D76) |
+| `GET /me/attendance/activities` | The family's current enrolments, each with its activity's title and its meeting on now or next (D76) |
+| `POST /me/attendance/badges` | A two-minute, single-use check-in code for an enrolment, for staff to scan; `validForSeconds` says how long (D76) |
 | `POST /attendance/checkin` | Check in by scanning a kiosk's one-minute code |
 | `POST /attendance/devices/contact` | A device's check-in with the server, without signing in: says whether it's revoked and must wipe |
 

@@ -61,6 +61,7 @@ public static class AttendanceEndpoints
         org.MapPatch("/attendance/{id:guid}", CorrectAsync).Audits(AttendanceRecords.Corrected).Produces<AttendanceView>();
 
         api.MapGet("/me/attendance", FamilyAsync).RequireAuthorization().Audits(AttendanceRecords.FamilyRead).Produces<IReadOnlyList<FamilyAttendance>>();
+        api.MapGet("/me/attendance/activities", ActivitiesAsync).RequireAuthorization().Audits(AttendanceRecords.FamilyRead).Produces<IReadOnlyList<FamilyActivity>>();
 
         // Check-in by QR (D50): codes carry no identifier, so issuing one reads no youth record.
         org.MapPost("/checkin-tokens", KioskCodeAsync).Produces<CheckinCode>(StatusCodes.Status201Created);
@@ -158,6 +159,10 @@ public static class AttendanceEndpoints
 
     private static async Task<IResult> FamilyAsync(ClaimsPrincipal user, AttendanceRecords attendance, CancellationToken ct) =>
         Results.Ok(await attendance.ForFamilyAsync(Actor(user), ct));
+
+    /// <summary>The family's current enrolments with their meeting now or next: what the app's check-in screen lists (D76).</summary>
+    private static async Task<IResult> ActivitiesAsync(ClaimsPrincipal user, AttendanceRecords attendance, CancellationToken ct) =>
+        Results.Ok(await attendance.ActivitiesForFamilyAsync(Actor(user), ct));
 
     /// <summary>A rotating code for a kiosk screen. Staff ask for a fresh one about every minute.</summary>
     private static async Task<IResult> KioskCodeAsync(Guid orgId, KioskCodeRequest body, ClaimsPrincipal user, IAuthorizationService authorization, CheckIns checkIns, CancellationToken ct)

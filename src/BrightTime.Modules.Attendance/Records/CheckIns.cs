@@ -12,8 +12,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Attendance.Records;
 
-/// <summary>A check-in code to show as a QR, and when it stops working.</summary>
-public sealed record CheckinCode(string Token, DateTimeOffset ExpiresAt);
+/// <summary>
+/// A check-in code to show as a QR, and when it stops working: at <c>ExpiresAt</c> by the server's
+/// clock, which is <c>ValidForSeconds</c> after it was issued. A screen counts down from the
+/// latter (D76), so a phone whose clock is wrong still shows the code for as long as it works.
+/// </summary>
+public sealed record CheckinCode(string Token, DateTimeOffset ExpiresAt, int ValidForSeconds);
 
 /// <summary>
 /// Check-in by QR (M3b, D50), in both directions:
@@ -131,7 +135,7 @@ public sealed class CheckIns(
         };
         db.CheckinTokens.Add(code);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        return new CheckinCode(token, code.ExpiresAt);
+        return new CheckinCode(token, code.ExpiresAt, (int)lifetime.TotalSeconds);
     }
 
     private async Task<CheckinTokenRecord?> FindAsync(string token, string kind, CancellationToken ct)

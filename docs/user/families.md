@@ -15,7 +15,7 @@ children's profiles and consent. Young people with their own account have
 - [Applying (app)](#applying-app)
 - [Paying fees (app)](#paying-fees-app)
 - [Messages (app)](#messages-app)
-- [Check-in: coming soon](#check-in-coming-soon)
+- [Check-in and attendance (app)](#check-in-and-attendance-app)
 - [Your privacy](#your-privacy)
 
 ## Finding activities
@@ -264,11 +264,21 @@ at the top of your **Inbox**. Tapping a new-message notification opens the conve
 A young person who has their own account sees the conversations they are in. Programs can only
 message a young person once their consent allows it; until then, **Messages** says so.
 
-## Check-in: coming soon
+## Check-in and attendance (app)
 
-This is built and being tested, and the screens for families come next. When it arrives you'll
-be able to **check in** with a code on your phone that staff scan, and see your child's
-attendance.
+Find **Check-in** under **Account**. It lists each activity your child has a place in, with its
+next meeting. An activity that is meeting now (or starts within the hour) says *On now*. Once
+staff have marked your child for that meeting, it says so instead, for example *This meeting:
+Present*.
+
+- **Show check-in code** shows a square code for staff to scan when you arrive. It works once, for
+  two minutes, and the screen counts down. When it runs out, the code goes away: tap **Show a new
+  code**. The code doesn't contain your child's name or anything else about them.
+- **Attendance** lists what staff have recorded, newest first: present, late, absent or excused.
+  Staff notes aren't shown.
+
+Staff can't scan the code with the app yet; that comes next. Until then, they mark your child on
+their roster as before.
 
 ## Your privacy
 

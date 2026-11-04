@@ -52,7 +52,16 @@ public sealed record AttendanceView(
 public sealed record SyncOutcome(Guid ClientRecordId, string Status, Guid? ServerId, string? Reason);
 
 [YouthData]
-public sealed record FamilyAttendance(Guid EnrollmentId, string MemberFirstName, Guid ListingId, DateTimeOffset OccurrenceStartsAt, string State, DateTimeOffset? CheckedInAt, DateTimeOffset? CheckedOutAt);
+public sealed record FamilyAttendance(Guid EnrollmentId, string MemberFirstName, Guid ListingId, string ListingTitle, DateTimeOffset OccurrenceStartsAt, string State, DateTimeOffset? CheckedInAt, DateTimeOffset? CheckedOutAt);
+
+/// <summary>
+/// One of the family's current enrolments, as the app's check-in screen shows it (D76): who, which
+/// activity, and its meeting under way now or else the next one in the fortnight ahead.
+/// <c>MeetingNow</c> is true from an hour before that meeting starts until it ends, the window in
+/// which staff can record it.
+/// </summary>
+[YouthData]
+public sealed record FamilyActivity(Guid EnrollmentId, string MemberFirstName, Guid ListingId, string ListingTitle, DateTimeOffset? MeetingStartsAt, DateTimeOffset? MeetingEndsAt, bool MeetingNow);
 
 /// <summary>
 /// Attendance (M3b, D49): rosters per meeting, records taken one at a time or synced from a phone
@@ -390,8 +399,60 @@ public sealed class AttendanceRecords(
                 .Where(r => ids.Contains(r.EnrollmentId) && r.SupersededBy == null)
                 .OrderByDescending(r => r.OccurrenceStartsAt).Take(500).ToListAsync(ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = FamilyRead, SubjectKind = "enrollment", SubjectIds = ids }, ct).ConfigureAwait(false);
-            return [.. records.Select(r => new FamilyAttendance(r.EnrollmentId, byId[r.EnrollmentId].MemberFirstName, r.ListingId, r.OccurrenceStartsAt, r.State, r.CheckedInAt, r.CheckedOutAt))];
+            Dictionary<Guid, string> titles = [];
+            List<FamilyAttendance> seen = [];
+            foreach (AttendanceRecordRecord r in records)
+            {
+                seen.Add(new FamilyAttendance(r.EnrollmentId, byId[r.EnrollmentId].MemberFirstName, r.ListingId, await TitleAsync(r.ListingId, titles, ct).ConfigureAwait(false),
+                    r.OccurrenceStartsAt, r.State, r.CheckedInAt, r.CheckedOutAt));
+            }
+
+            return seen;
         }, cancellationToken);
+
+    /// <summary>How far ahead the check-in screen looks for an activity's next meeting (D76).</summary>
+    public static readonly TimeSpan ActivityLookAhead = TimeSpan.FromDays(14);
+
+    /// <summary>
+    /// The family's current enrolments (D76), each with its activity's title and its meeting under
+    /// way now or next: what the app's check-in screen offers a code for. Audited like the records.
+    /// </summary>
+    public Task<IReadOnlyList<FamilyActivity>> ActivitiesForFamilyAsync(UserId owner, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<FamilyActivity>>(async ct =>
+        {
+            List<FamilyEnrolment> current = [.. (await enrolments.ForOwnerAsync(owner.Value, ct).ConfigureAwait(false)).Where(e => e.Status == EnrollmentStatuses.Active)];
+            DateTimeOffset now = clock.StoredNow();
+            Dictionary<Guid, string> titles = [];
+            Dictionary<Guid, ListingTime?> meetings = [];
+            List<FamilyActivity> activities = [];
+            foreach (FamilyEnrolment e in current)
+            {
+                if (!meetings.TryGetValue(e.ListingId, out ListingTime? meeting))
+                {
+                    // From twelve hours back, so a long meeting that began earlier and is still on is found.
+                    IReadOnlyList<ListingTime> near = await occurrences.GetAsync(e.ListingId, now.AddHours(-12), now + ActivityLookAhead, ct).ConfigureAwait(false);
+                    meetings[e.ListingId] = meeting = near.Where(m => m.EndsAt >= now).OrderBy(m => m.StartsAt).FirstOrDefault();
+                }
+
+                activities.Add(new FamilyActivity(e.EnrollmentId, e.MemberFirstName, e.ListingId, await TitleAsync(e.ListingId, titles, ct).ConfigureAwait(false),
+                    meeting?.StartsAt, meeting?.EndsAt, meeting is { } on && on.StartsAt <= now.AddHours(1)));
+            }
+
+            await audit.RecordInTransactionAsync(db, new AuditAccess { Action = FamilyRead, SubjectKind = "enrollment", SubjectIds = [.. current.Select(e => e.EnrollmentId)] }, ct).ConfigureAwait(false);
+            return [.. activities.OrderBy(a => a.MeetingStartsAt ?? DateTimeOffset.MaxValue).ThenBy(a => a.MemberFirstName, StringComparer.CurrentCulture)];
+        }, cancellationToken);
+
+    /// <summary>A listing's title in the asker's language, looked up once per listing.</summary>
+    private async Task<string> TitleAsync(Guid listingId, Dictionary<Guid, string> titles, CancellationToken ct)
+    {
+        if (!titles.TryGetValue(listingId, out string? title))
+        {
+            title = (await listings.GetForReviewAsync(tenant.TenantId, listingId, tenant.Locale.Code, ct).ConfigureAwait(false))?.Title ?? string.Empty;
+            titles[listingId] = title;
+        }
+
+        return title;
+    }
 
     // ---- checks ------------------------------------------------------------------------------
 
@@ -451,8 +512,14 @@ public sealed class AttendanceRecords(
     }
 
     /// <summary>The listing's meeting starting at <paramref name="startsAt"/> (to the second), or null.</summary>
+    /// <remarks>A request that leaves the meeting out binds it as the earliest time there is, so the window can't be built there.</remarks>
     private async Task<ListingTime?> MeetingAsync(Guid listingId, DateTimeOffset startsAt, CancellationToken ct)
     {
+        if (startsAt.UtcDateTime < DateTime.MinValue.AddSeconds(1) || startsAt.UtcDateTime > DateTime.MaxValue.AddSeconds(-1))
+        {
+            return null;
+        }
+
         IReadOnlyList<ListingTime> found = await occurrences.GetAsync(listingId, startsAt.AddSeconds(-1), startsAt.AddSeconds(1), ct).ConfigureAwait(false);
         return found.Count > 0 ? found[0] : null;
     }

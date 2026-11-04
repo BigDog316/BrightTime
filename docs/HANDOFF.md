@@ -214,6 +214,12 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   always says who is in it and, with a young person, that the organisation's admin reads it;
   replies go from the thread, and an announcement takes none. The new-message push now lands on
   it. One server change: conversations carry `orgName`.
+- **Check-in and attendance in the app** (D76, proposed): **Check-in**, under Account, lists
+  the family's current activities with the meeting on now or next, and their attendance. **Show
+  check-in code** draws D50's two-minute badge as a QR (QRCoder), with a countdown; when it runs
+  out the QR goes. Server changes: `GET /me/attendance/activities`, `listingTitle` on the family's
+  records, and `validForSeconds` on a code. Nothing scans the badge yet but the API: a staff
+  scanner (camera) is the next attendance slice.
 - **The M4 report** ([m4-report.md](m4-report.md)), not yet signed off: two of three acceptance
   criteria are met; the third needs a validator check on a public host. Evidence uploads (media
   storage) and quizzes remain of M4's scope.
@@ -226,6 +232,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D75 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 on 2026-11-04).
+D76 (check-in and attendance in the app) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

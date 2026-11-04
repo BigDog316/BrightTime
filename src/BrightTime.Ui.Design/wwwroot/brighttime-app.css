@@ -445,6 +445,37 @@ dl.facts dd {
     overflow-wrap: anywhere;
 }
 
+/* A check-in code (D76): black on white in either theme, as wide as a phone allows but no wider
+   than a scanner needs, and centred so a staff member can aim at it. */
+.qr-frame {
+    display: flex;
+    justify-content: center;
+    margin-block: var(--bt-space-4);
+}
+
+.qr {
+    display: block;
+    width: min(100%, 18rem);
+    height: auto;
+    background: #fff;
+    border-radius: var(--bt-radius);
+}
+
+.countdown {
+    font-variant-numeric: tabular-nums;
+}
+
+.attendance-history {
+    display: grid;
+    gap: var(--bt-space-2);
+    padding: 0;
+    list-style: none;
+}
+
+.attendance-history .hint {
+    display: block;
+}
+
 .disclosure {
     padding: var(--bt-space-3);
     border-inline-start: 4px solid var(--bt-line);

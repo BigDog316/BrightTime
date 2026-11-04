@@ -22,6 +22,8 @@
     <PackageVersion Include="Asp.Versioning.Http" Version="10.2.3" />
     <PackageVersion Include="Fido2.AspNet" Version="4.2.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+    <!-- Check-in badges drawn as QR codes in the app (D76). Pure managed, MIT. -->
+    <PackageVersion Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
   <ItemGroup Label="Mobile (BrightTime.Mobile; the MAUI workload's version)">

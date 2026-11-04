@@ -358,6 +358,10 @@ with a reason, superseding) and `GET /me/attendance`.
 `POST /me/attendance/badges {enrollmentId}` (a family's badge) and
 `POST /org/{orgId}/attendance/scan {token, occurrenceStartsAt}` (staff scanning it).
 
+*Built (2026-11-04, D76):* `GET /me/attendance/activities` (a family's current enrolments with the
+meeting on now or next, for the app's check-in screen); `GET /me/attendance` records carry
+`listingTitle`, and a check-in code carries `validForSeconds`.
+
 *Built (2026-10-21, D51):* `GET` and `POST /org/{orgId}/kiosk-devices`,
 `POST /org/{orgId}/kiosk-devices/{id}/revoke {reason}` (asks for a wipe), and
 `POST /attendance/devices/contact {deviceId}`, which needs no sign-in and says whether to wipe.

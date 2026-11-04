@@ -2489,6 +2489,53 @@ request.
 says there is one); attendance and the check-in code; the young person's portfolio screens; and
 the web's family pages.
 
+### D76 — Check-in and attendance, in the app (**proposed 2026-11-04**)
+
+The fifth family slice, after the household, applying, paying and messages (D71 to D75). A family
+shows staff a check-in code and sees the attendance recorded, as the server built it in M3b (D49,
+D50):
+- **Check-in**, under **Account** beside the household and applications, lists the family's
+  current activities. Each card shows the young person, the activity's title, and its meeting:
+  *on now, until 5:30 PM* from an hour before it starts until it ends (the window in which staff
+  can record it), else the next one in the fortnight ahead, else none. **Show check-in code** is
+  the primary button on the card whose meeting is on now. Once staff have recorded that meeting,
+  the card says so (*This meeting: Present*) and the button is no longer the primary one: a
+  second scan would only be refused as `attendance.exists`.
+- **The code** (`/check-in/{enrollmentId}`) is D50's badge: two minutes, single use, 256 random
+  bits that name nobody. It is drawn as a QR, black on white in either theme, with the quiet zone
+  a scanner needs. Its value is never shown or read aloud; a screen reader hears *Check-in code
+  for Kofi*. A countdown runs beside it. When it runs out, the QR goes, so nobody scans a dead
+  code, and **Show a new code** asks for another.
+  - The countdown runs on the phone's monotonic clock from the lifetime the server gives, less
+    five seconds for the trip, not to the server's `expiresAt`. A phone whose clock is wrong
+    still shows the code for exactly as long as it works.
+- **Attendance**, below: the newest 30 records, each with its state (present, late, absent,
+  excused), the young person and the activity. Staff notes are never sent (D49).
+- **QR encoding is QRCoder** (MIT, pure managed, chosen over a hand-written encoder), at error
+  correction level M. A 43-character code is a version 4 symbol. The app draws its module matrix
+  as one SVG path, so no image library or native code is involved.
+
+**Three server changes:**
+- `GET /me/attendance/activities`: the family's current enrolments, each with its listing's title
+  and its meeting now or next (`meetingStartsAt`, `meetingEndsAt`, `meetingNow`). Audited as
+  `attendance.family_read`, like the records.
+- `GET /me/attendance` records carry `listingTitle`, which a family couldn't otherwise read.
+- A check-in code carries `validForSeconds` beside `expiresAt`, for the countdown.
+
+**Found on the emulator:** a staff record, scan or sync that left out `occurrenceStartsAt` failed
+with a 500. The missing value binds as `DateTimeOffset.MinValue`, and widening it by a second to
+find the meeting threw. It is now refused as `attendance.occurrence`, like any time that isn't a
+meeting.
+
+**Nothing scans the badge yet** except the API (`POST /org/{orgId}/attendance/scan`). Staff need
+a scanner, in the app or the console, which means the camera and a barcode reader: a package to
+choose, and a native permission. That is the next attendance slice, together with the family
+scanning a kiosk's code (`POST /attendance/checkin`), which needs the same camera.
+
+**Not yet:** the scanners above; keeping the screen awake and bright while a code shows; check-in
+by a young person's own account (the server ties badges to the family profile's owner); check-out;
+and the web's family pages.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -1,0 +1,25 @@
+@* A QR code (D76), black on white whatever the theme, with the quiet zone scanners need. Its
+   value is never shown or read aloud: the label says what the code is for. *@
+<svg class="qr" viewBox="0 0 @_size @_size" role="img" aria-label="@Label" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect width="@_size" height="@_size" fill="#fff" />
+    <path d="@_path" fill="#000" />
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+
+    private int _size;
+    private string _path = string.Empty;
+    private string? _drawn;
+
+    protected override void OnParametersSet()
+    {
+        if (_drawn != Value)
+        {
+            (_size, _path) = QrDrawing.Draw(Value);
+            _drawn = Value;
+        }
+    }
+}

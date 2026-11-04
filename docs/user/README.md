@@ -55,7 +55,7 @@ nothing in these guides promises a screen that doesn't exist yet.
 | Paying fees, by card on Stripe's page or to the organisation directly | Coming | Yes | |
 | A household's family profile, and choosing and stopping what it shares | Coming | Yes | |
 | Messages from organisations, and replying | Coming | Yes | |
-| A family's own attendance and check-in | Coming | Coming | As above |
+| A family's own attendance and check-in code | Coming | Yes | |
 | A young person's portfolio, badges and playlists | Coming | Coming | As above |
 | **Organisations:** playlists | Coming | | As above |
 | **Organisations:** badges | Coming | | As above |

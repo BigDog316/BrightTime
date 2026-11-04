@@ -1,0 +1,138 @@
+@page "/check-in/{EnrollmentId:guid}"
+@* A check-in code for one young person's activity (D50, D76): a QR that staff scan, which names
+   nobody and works once. It counts down on the phone's own monotonic clock from the lifetime the
+   server gives, so a wrong clock can't show a dead code, and when it runs out the QR goes and a
+   fresh one is a tap away. *@
+@using System.Diagnostics
+@implements IDisposable
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.checkin.code_title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    @if (_activity is { } a)
+    {
+        <p>@T.Format("app.checkin.code_for", ("name", Text.Name(a.MemberFirstName)), ("activity", Text.Name(a.ListingTitle)))</p>
+    }
+
+    <ProblemNotice Problem="_problem" Retry="ShowCodeAsync" />
+    @if (_code is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_code is { } shown && Left > TimeSpan.Zero)
+    {
+        <div class="qr-frame">
+            <QrCode Value="@shown.Token" Label="@CodeLabel" />
+        </div>
+        <p>@T["app.checkin.code_hint"]</p>
+        <p class="hint countdown">@T.Format("app.checkin.left", ("time", Clock(Left)))</p>
+    }
+    else if (_code is not null)
+    {
+        <p class="notice" role="status">@T["app.checkin.expired"]</p>
+        <div class="actions">
+            <button type="button" class="primary" @onclick="ShowCodeAsync" disabled="@_busy">@T["app.checkin.new_code"]</button>
+        </div>
+    }
+
+    <div class="actions">
+        <a class="button" href="check-in">@T["app.checkin.back"]</a>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// Taken off the lifetime the server gives: the code's clock started before the answer reached
+    /// the phone, and a code shown for its last seconds would fail as staff scan it.
+    /// </summary>
+    private static readonly TimeSpan Margin = TimeSpan.FromSeconds(5);
+
+    [Parameter] public Guid EnrollmentId { get; set; }
+
+    private readonly CancellationTokenSource _stop = new();
+    private FamilyActivity? _activity;
+    private CheckinCode? _code;
+    private long _arrivedAt;
+    private ApiProblem? _problem;
+    private bool _busy;
+    private bool _ticking;
+
+    /// <summary>What the QR is, for a screen reader: never its value.</summary>
+    private string CodeLabel => T.Format("app.checkin.code_label", ("name", Text.Name(_activity?.MemberFirstName ?? string.Empty)));
+
+    /// <summary>How long the code shown still works.</summary>
+    private TimeSpan Left => _code is null ? TimeSpan.Zero
+        : TimeSpan.FromSeconds(_code.ValidForSeconds) - Margin - Stopwatch.GetElapsedTime(_arrivedAt);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Session.IsSignedIn)
+        {
+            return;
+        }
+
+        ApiResult<IReadOnlyList<FamilyActivity>> activities = await Api.FamilyActivitiesAsync();
+        _activity = activities.Value?.FirstOrDefault(a => a.EnrollmentId == EnrollmentId);
+        await ShowCodeAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!_ticking && _code is not null)
+        {
+            _ticking = true;
+            _ = TickAsync();
+        }
+    }
+
+    private async Task ShowCodeAsync()
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            ApiResult<CheckinCode> issued = await Api.CheckinBadgeAsync(EnrollmentId);
+            _problem = issued.Problem;
+            _code = issued.Value ?? _code;
+            _arrivedAt = Stopwatch.GetTimestamp();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>Redraws the countdown each second, and once more as the code runs out.</summary>
+    private async Task TickAsync()
+    {
+        using PeriodicTimer timer = new(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page has gone.
+        }
+    }
+
+    /// <summary>Minutes and seconds left, as 1:47.</summary>
+    private static string Clock(TimeSpan left) =>
+        string.Create(CultureInfo.InvariantCulture, $"{(int)left.TotalMinutes}:{left.Seconds:00}");
+
+    public void Dispose()
+    {
+        _stop.Cancel();
+        _stop.Dispose();
+    }
+}

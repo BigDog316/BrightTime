@@ -1,0 +1,147 @@
+@page "/messages/{Id:guid}"
+@* One conversation (D53, D75): who is in it, always, and its messages; a reply unless it's an
+   announcement (D54). Staff are named by their organisation only. Opening it marks it read. The
+   push for a new message links here (notify.message.new). *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+@if (!Session.IsSignedIn)
+{
+    <h1>@T["app.messages.title"]</h1>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (_conversation is not { } c)
+{
+    <h1>@T["app.messages.title"]</h1>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_problem is null)
+    {
+        <Busy />
+    }
+}
+else
+{
+    <h1 dir="auto">@(c.Subject ?? T["app.messages.no_subject"])</h1>
+    <p>@T.Format(c.IsAnnouncement ? "app.messages.announcement_from" : "app.messages.from", ("org", Text.Name(c.OrgName)))</p>
+
+    <section aria-labelledby="who">
+        <h2 id="who">@T["app.messages.who"]</h2>
+        <ul>
+            <li>@T["app.messages.who.you"]</li>
+            @foreach (string role in c.Roles.Where(r => r is "staff" or "org_admin_observer" or "mentor"))
+            {
+                <li>@T.Format("app.messages.who." + role, ("org", Text.Name(c.OrgName)))</li>
+            }
+        </ul>
+        @if (c.IsAnnouncement)
+        {
+            <p class="hint">@T["app.messages.announcement_hint"]</p>
+        }
+        @if (c.ReadByOrganisation)
+        {
+            <p class="notice">@T.Format("app.messages.read_by_org", ("org", Text.Name(c.OrgName)))</p>
+        }
+    </section>
+
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    <ol class="messages">
+        @foreach (ConversationMessage m in c.Messages)
+        {
+            <li class="@(m.FromMe ? "mine" : null)" @key="m.Id">
+                <p class="hint">
+                    @Sender(c, m) · @T.DayTime(m.SentAt)
+                    @if (m.IsHeld)
+                    {
+                        <strong>@(" · " + T["app.messages.held"])</strong>
+                    }
+                </p>
+                <p class="body" dir="auto">@m.Body</p>
+            </li>
+        }
+    </ol>
+
+    @if (c.IsAnnouncement)
+    {
+        <p class="hint">@T["app.messages.no_replies"]</p>
+    }
+    else
+    {
+        <div class="field">
+            <label for="reply">@T["app.messages.reply"]</label>
+            <textarea id="reply" rows="4" maxlength="@MaxBody" dir="auto" @bind="_draft" @bind:event="oninput"></textarea>
+        </div>
+        @* Beside the button: on a long thread the top of the page is off screen. *@
+        <ProblemNotice Problem="_sendProblem" />
+        @if (_sendNote is not null)
+        {
+            <p class="notice" role="status">@_sendNote</p>
+        }
+        <div class="actions">
+            <button type="button" class="primary" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_draft))">@T["app.messages.send"]</button>
+        </div>
+    }
+
+    <div class="actions">
+        <button type="button" @onclick="LoadAsync" disabled="@_busy">@T["app.messages.check"]</button>
+        <a class="button" href="messages">@T["app.messages.back"]</a>
+    </div>
+}
+
+@code {
+    /// <summary>The server's limit (Conversations.MaxBody).</summary>
+    private const int MaxBody = 8000;
+
+    [Parameter] public Guid Id { get; set; }
+
+    private Conversation? _conversation;
+    private ApiProblem? _problem;
+    private ApiProblem? _sendProblem;
+    private string? _sendNote;
+    private string _draft = string.Empty;
+    private bool _busy;
+
+    protected override Task OnParametersSetAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<Conversation> found = await Api.ConversationAsync(Id);
+        _problem = found.Problem;
+        _conversation = found.Value ?? _conversation;
+    }
+
+    private async Task SendAsync()
+    {
+        if (_conversation is not { } c || string.IsNullOrWhiteSpace(_draft))
+        {
+            return;
+        }
+
+        _busy = true;
+        _sendProblem = null;
+        _sendNote = null;
+        try
+        {
+            ApiResult<ConversationMessage> sent = await Api.SendMessageAsync(c.Id, _draft);
+            if (sent.Value is not { } message)
+            {
+                _sendProblem = sent.Problem;
+                return;
+            }
+
+            _conversation = c with { Messages = [.. c.Messages, message] };
+            _draft = string.Empty;
+            _sendNote = message.IsHeld ? T["app.messages.sent_held"] : T["app.messages.sent"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>Who wrote it: the person themself, or the organisation's staff, never by name.</summary>
+    private string Sender(Conversation c, ConversationMessage m) =>
+        m.FromMe ? T["app.messages.me"]
+        : T.Has("app.messages.sender." + m.SenderRole) ? T.Format("app.messages.sender." + m.SenderRole, ("org", Text.Name(c.OrgName)))
+        : T["app.messages.sender.other"];
+}

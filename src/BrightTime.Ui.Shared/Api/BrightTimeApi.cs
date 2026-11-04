@@ -247,6 +247,19 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<Payment>> PayAsync(Guid applicationId, Guid feeScheduleId, Guid? tierId, string key, CancellationToken ct = default) =>
         SendAsync<Payment>(HttpMethod.Post, "payments/intents", new { applicationId, feeScheduleId, tierId }, signedIn: true, key, ct);
 
+    // ---- messages (D53, D54, D75) ------------------------------------------------------------
+
+    /// <summary>The person's conversations, newest activity first.</summary>
+    public Task<ApiResult<IReadOnlyList<ConversationSummary>>> ConversationsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ConversationSummary>>("conversations", signedIn: true, ct);
+
+    /// <summary>A conversation's messages. Reading it marks it read.</summary>
+    public Task<ApiResult<Conversation>> ConversationAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<Conversation>($"conversations/{id:D}", signedIn: true, ct);
+
+    public Task<ApiResult<ConversationMessage>> SendMessageAsync(Guid id, string body, CancellationToken ct = default) =>
+        SendAsync<ConversationMessage>(HttpMethod.Post, $"conversations/{id:D}/messages", new { body }, signedIn: true, ct);
+
     // ---- guardians, children and consent (D31, D34, D35) -------------------------------------
 
     public Task<ApiResult<IReadOnlyList<Child>>> ChildrenAsync(CancellationToken ct = default) =>

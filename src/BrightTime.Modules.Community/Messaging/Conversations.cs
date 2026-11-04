@@ -19,7 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BrightTime.Modules.Community.Messaging;
 
 [YouthData]
-public sealed record ConversationSummary(Guid Id, Guid OrgId, string Kind, string? Subject, bool IsOrgVisible, bool IncludesMinor, DateTimeOffset? LastMessageAt, int Unread, DateTimeOffset? ClosedAt);
+public sealed record ConversationSummary(Guid Id, Guid OrgId, string OrgName, string Kind, string? Subject, bool IsOrgVisible, bool IncludesMinor, DateTimeOffset? LastMessageAt, int Unread, DateTimeOffset? ClosedAt);
 
 /// <summary>A message as one participant sees it. A held message is shown only to its sender, marked so.</summary>
 [YouthData]
@@ -28,9 +28,10 @@ public sealed record MessageView(Guid Id, bool FromMe, string SenderRole, string
 /// <summary>
 /// A thread as a participant sees it. <see cref="ReadByOrganisation"/> is what the screen tells
 /// everyone: when a young person is in it, the organisation's admin reads it too (T1).
+/// <see cref="OrgName"/> is for the family, who know the organisation by name, not id (D75).
 /// </summary>
 [YouthData]
-public sealed record ConversationView(Guid Id, Guid OrgId, string Kind, string? Subject, bool ReadByOrganisation, IReadOnlyList<string> Roles, IReadOnlyList<MessageView> Messages);
+public sealed record ConversationView(Guid Id, Guid OrgId, string OrgName, string Kind, string? Subject, bool ReadByOrganisation, IReadOnlyList<string> Roles, IReadOnlyList<MessageView> Messages);
 
 /// <summary>An announcement as sent: the conversation, how many families it reached, and how many young people it had to leave out.</summary>
 [YouthData]
@@ -269,6 +270,7 @@ public sealed class Conversations(
                               where p.UserId == user.Value && p.RemovedAt == null
                               select new { c, p.LastReadAt }).ToListAsync(ct).ConfigureAwait(false);
             List<ConversationSummary> list = [];
+            Dictionary<Guid, string> names = [];
             foreach (var x in mine)
             {
                 Guid id = x.c.Id;
@@ -277,7 +279,7 @@ public sealed class Conversations(
                 DateTimeOffset since = x.LastReadAt ?? DateTimeOffset.MinValue;
                 int unread = await db.Messages.AsNoTracking().CountAsync(m => m.ConversationId == id && m.State == MessageStates.Sent
                     && m.SenderUserId != user.Value && m.SentAt > since, ct).ConfigureAwait(false);
-                list.Add(new ConversationSummary(id, x.c.OrgId, x.c.ConversationKind, x.c.Subject, x.c.IsOrgVisible, x.c.IncludesMinor, last, unread, x.c.ClosedAt));
+                list.Add(new ConversationSummary(id, x.c.OrgId, await NameAsync(x.c.OrgId, names, ct).ConfigureAwait(false), x.c.ConversationKind, x.c.Subject, x.c.IsOrgVisible, x.c.IncludesMinor, last, unread, x.c.ClosedAt));
             }
 
             await AuditAsync(Read, null, [.. list.Select(c => c.Id)], ct).ConfigureAwait(false);
@@ -426,9 +428,21 @@ public sealed class Conversations(
         // The database marks a conversation with a minor as visible to the organisation at commit;
         // a conversation just made may not show it yet, so read it from the people in it.
         bool readByOrganisation = conversation.IsOrgVisible && (conversation.IncludesMinor || people.Any(p => p.IsMinor) || people.Any(p => p.IsImplicitReader));
-        return new ConversationView(conversation.Id, conversation.OrgId, conversation.ConversationKind, conversation.Subject, readByOrganisation,
+        string org = await directory.GetOrganisationNameAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false) ?? "";
+        return new ConversationView(conversation.Id, conversation.OrgId, org, conversation.ConversationKind, conversation.Subject, readByOrganisation,
             [.. people.Select(p => p.ParticipantRole).Distinct().Order(StringComparer.Ordinal)],
             [.. messages.Select(m => new MessageView(m.Id, m.SenderUserId == viewer.Value, roles.GetValueOrDefault(m.SenderUserId, ""), m.Body, m.State, m.SentAt))]);
+    }
+
+    private async Task<string> NameAsync(Guid org, Dictionary<Guid, string> names, CancellationToken ct)
+    {
+        if (!names.TryGetValue(org, out string? name))
+        {
+            name = await directory.GetOrganisationNameAsync(new OrganisationId(org), ct).ConfigureAwait(false) ?? "";
+            names[org] = name;
+        }
+
+        return name;
     }
 
     private Task AuditAsync(string action, ConversationRecord? conversation, IReadOnlyCollection<Guid> conversations, CancellationToken ct, OrganisationId? org = null) =>

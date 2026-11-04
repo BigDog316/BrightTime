@@ -54,7 +54,8 @@ nothing in these guides promises a screen that doesn't exist yet.
 | Families applying to programs and signing waivers | Coming | Yes | |
 | Paying fees, by card on Stripe's page or to the organisation directly | Coming | Yes | |
 | A household's family profile, and choosing and stopping what it shares | Coming | Yes | |
-| Messages from organisations, and a family's own attendance | Coming | Coming | As above |
+| Messages from organisations, and replying | Coming | Yes | |
+| A family's own attendance and check-in | Coming | Coming | As above |
 | A young person's portfolio, badges and playlists | Coming | Coming | As above |
 | **Organisations:** playlists | Coming | | As above |
 | **Organisations:** badges | Coming | | As above |

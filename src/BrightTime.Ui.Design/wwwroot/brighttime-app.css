@@ -396,6 +396,39 @@ dl.facts dd {
     border-inline-start: 4px solid var(--bt-brand);
 }
 
+/* A conversation (D75): each message a block, the person's own set in from the start edge. */
+.card.unread {
+    border-inline-start: 4px solid var(--bt-brand);
+}
+
+.messages {
+    display: grid;
+    gap: var(--bt-space-3);
+    padding: 0;
+    list-style: none;
+}
+
+.messages li {
+    padding: var(--bt-space-3);
+    border: 1px solid var(--bt-line);
+    border-radius: var(--bt-radius);
+    background: var(--bt-paper-raised);
+}
+
+.messages li.mine {
+    margin-inline-start: var(--bt-space-6);
+    background: var(--bt-notice-paper);
+}
+
+.messages p {
+    margin-block: var(--bt-space-1);
+}
+
+.messages .body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .disclosure {
     padding: var(--bt-space-3);
     border-inline-start: 4px solid var(--bt-line);

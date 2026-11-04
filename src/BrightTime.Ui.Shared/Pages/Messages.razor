@@ -1,0 +1,70 @@
+@page "/messages"
+@* Conversations with the family's programs and their announcements (D53, D54, D75), newest
+   first, each with who it's from and how many messages are new. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.messages.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p class="hint">@T["app.messages.intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_conversations is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_conversations is { Count: 0 })
+    {
+        <p>@T["app.messages.none"]</p>
+        @if (Session.Me?.IsYouth == true && Session.Capabilities is { CanBeMessagedByOrganisation: false })
+        {
+            <p class="hint">@T["app.cannot.be_messaged"]</p>
+        }
+    }
+    else if (_conversations is not null)
+    {
+        <ul class="cards">
+            @foreach (ConversationSummary c in _conversations)
+            {
+                <li class="@(c.Unread > 0 ? "card unread" : "card")" @key="c.Id">
+                    <h2><a href="messages/@c.Id.ToString("D")" dir="auto">@(c.Subject ?? T["app.messages.no_subject"])</a></h2>
+                    <p>@T.Format(c.IsAnnouncement ? "app.messages.announcement_from" : "app.messages.from", ("org", Text.Name(c.OrgName)))</p>
+                    <p class="hint">
+                        @if (c.LastMessageAt is { } last)
+                        {
+                            @T.DayTime(last)
+                        }
+                        @if (c.Unread > 0)
+                        {
+                            <strong>@(" · " + T.Format("app.messages.unread", ("count", c.Unread)))</strong>
+                        }
+                        @if (c.ClosedAt is not null)
+                        {
+                            @(" · " + T["app.messages.closed"])
+                        }
+                    </p>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<ConversationSummary>? _conversations;
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<ConversationSummary>> found = await Api.ConversationsAsync();
+        _problem = found.Problem;
+        _conversations = found.Value;
+    }
+}

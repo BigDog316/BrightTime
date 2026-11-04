@@ -258,6 +258,9 @@ kiosk shows. The codes are built; the scanning and kiosk screens are still to co
   Families don't reply and never see each other. A young person gets it only with consent and
   an admin reading along; the page tells you how many were left out.
 
+Families read and answer in the app, under **Messages**. They see your organisation's name, not yours,
+and each conversation lists who is in it.
+
 ## Reports
 
 **Reports** makes a file when you download it, as **PDF**, **Excel** or **CSV**. Nothing is kept on

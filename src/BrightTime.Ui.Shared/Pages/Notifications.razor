@@ -15,7 +15,10 @@
 }
 else
 {
-    <p><a href="notifications/settings">@T["app.notifications.settings"]</a></p>
+    <ul class="menu">
+        <li><a href="messages">@T["app.messages.title"]</a></li>
+        <li><a href="notifications/settings">@T["app.notifications.settings"]</a></li>
+    </ul>
     <ProblemNotice Problem="_problem" Retry="LoadAsync" />
     @if (_items is null && _problem is null)
     {

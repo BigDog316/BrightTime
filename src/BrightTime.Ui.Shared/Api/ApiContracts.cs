@@ -257,6 +257,30 @@ public sealed record FormQuestion(
 
 public sealed record FormChoice(string Key, string Label);
 
+/// <summary>A conversation the person is in (D53, D75), with how many messages they haven't read.</summary>
+public sealed record ConversationSummary(
+    Guid Id, Guid OrgId, string OrgName, string Kind, string? Subject, bool IncludesMinor, DateTimeOffset? LastMessageAt, int Unread, DateTimeOffset? ClosedAt)
+{
+    /// <summary>An announcement to an activity's families (D54): read, never answered.</summary>
+    public bool IsAnnouncement => Kind == "org_broadcast";
+}
+
+/// <summary>
+/// A conversation's messages. <see cref="ReadByOrganisation"/> is what the screen tells everyone:
+/// with a young person in it, an admin of the organisation reads it too (T1).
+/// </summary>
+public sealed record Conversation(
+    Guid Id, Guid OrgId, string OrgName, string Kind, string? Subject, bool ReadByOrganisation, IReadOnlyList<string> Roles, IReadOnlyList<ConversationMessage> Messages)
+{
+    public bool IsAnnouncement => Kind == "org_broadcast";
+}
+
+/// <summary>A message; a held one is shown only to its sender, until a moderator lets it through.</summary>
+public sealed record ConversationMessage(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt)
+{
+    public bool IsHeld => State == "held";
+}
+
 /// <summary>A waiver an application asks for (D47), signed against its exact text's <see cref="Hash"/>.</summary>
 public sealed record ApplicationWaiver(Guid WaiverId, string Title, int Version, string BodyMarkdown, string Hash, bool IsRequired, DateTimeOffset? SignedAt);
 

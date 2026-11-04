@@ -14,7 +14,8 @@ children's profiles and consent. Young people with their own account have
 - [Your household (app)](#your-household-app)
 - [Applying (app)](#applying-app)
 - [Paying fees (app)](#paying-fees-app)
-- [Messages and check-in: coming soon](#messages-and-check-in-coming-soon)
+- [Messages (app)](#messages-app)
+- [Check-in: coming soon](#check-in-coming-soon)
 - [Your privacy](#your-privacy)
 
 ## Finding activities
@@ -245,13 +246,29 @@ Choose **Pay this fee**. How you pay depends on your county:
 The application then shows it as *Paid*. If the organisation waives a fee, it shows *You don't need
 to pay this*. **Payments so far** lists each payment, its amount and where it stands.
 
-## Messages and check-in: coming soon
+## Messages (app)
 
-These are built and being tested, and the screens for families come next. When they arrive you'll
-be able to:
+Programs your family takes part in write to you under **Messages**. Find it under **Account**, or
+at the top of your **Inbox**. Tapping a new-message notification opens the conversation itself.
 
-- **Check in** with a code on your phone that staff scan, and see your child's attendance.
-- **Read messages** from your child's programs and their announcements.
+- **The list** shows each conversation with its subject, the organisation it's from, when it last
+  had a message, and how many are new.
+- **A conversation** always says who is in it: you, the organisation's staff, and, when a young
+  person is in it, an admin of the organisation who reads along. Staff are shown by their
+  organisation's name, not their own.
+- **Reply** by typing under **Your reply** and tapping **Send**. Tap **Check for new messages** to
+  see anything that has arrived since you opened it.
+- **Announcements** go to every family in an activity. You can't reply to one, and nobody sees who
+  else got it.
+
+A young person who has their own account sees the conversations they are in. Programs can only
+message a young person once their consent allows it; until then, **Messages** says so.
+
+## Check-in: coming soon
+
+This is built and being tested, and the screens for families come next. When it arrives you'll
+be able to **check in** with a code on your phone that staff scan, and see your child's
+attendance.
 
 ## Your privacy
 

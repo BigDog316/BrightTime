@@ -6,6 +6,7 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [Getting your own account](#getting-your-own-account)
 - [Finding things to do](#finding-things-to-do)
 - [What your account can do](#what-your-account-can-do)
+- [Messages](#messages)
 - [Staying safe](#staying-safe)
 - [Your portfolio, badges and playlists: coming soon](#your-portfolio-badges-and-playlists-coming-soon)
 
@@ -50,6 +51,12 @@ guardian. A program can also confirm your account.
 
 To sign up for programs yourself, you need to **agree to the terms of use**. Read them under
 **Terms** in the app or on the website, and tap **I agree**.
+
+## Messages
+
+When a program writes to you, it shows under **Messages**, in **Account** or at the top of your
+**Inbox**. Each conversation says who is in it. You can reply, except to an announcement. A
+program can only message you once your consent allows it.
 
 ## Staying safe
 

@@ -180,7 +180,7 @@ The owner alone reads or changes a family profile.
 
 | Route | |
 |---|---|
-| `GET /conversations`, `GET /conversations/{id}` | The person's conversations |
+| `GET /conversations`, `GET /conversations/{id}` | The person's conversations, each with its organisation's name (`orgName`, D75); reading one marks it read |
 | `POST /conversations/{id}/messages` | Reply. A message from an adult to a minor may be held for a moderator |
 | `POST /devices`, `DELETE /devices/{id}` | Register a phone for push, and forget it |
 

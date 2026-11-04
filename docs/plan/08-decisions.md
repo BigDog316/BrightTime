@@ -2462,6 +2462,33 @@ intents and client secret; D56's signature checks, worker and forward-only statu
 **Not yet:** refunds started here (the gateway needs a payment's `pi_…` reference, which only a
 payment confirmed has), and cards in the provider console, which has no reason to take one yet.
 
+### D75 — Messages, in the app (**proposed 2026-11-03**)
+
+The fourth family slice, after the household, applying and paying (D71 to D74). Families read and
+answer what programs send them, as the server built it in M3b (D53, D54):
+- **Messages**, under **Account** and at the top of the **Inbox**: each conversation with its
+  subject, who it's from (by organisation), when it last moved, and how many messages are new.
+  An announcement says so. A young person whose consent doesn't yet allow messages from programs
+  is told that's why there are none.
+- **A conversation:** who is in it, always, as plan/06 asks: *you*, *staff of {organisation}*, and
+  *an admin of {organisation}, reading along* when there is one. With a young person in it, it says
+  the organisation's admin reads it too (T1). Staff are named by their organisation, never by
+  person, as the server sends no names. A message held for a moderator shows only to its sender,
+  marked so. **Your reply** and **Send**, with the result beside the button; **Check for new
+  messages** reloads, since the thread doesn't poll.
+- **An announcement** says every family in the activity got it, that families can't reply and
+  nobody sees who else got it. It has no reply box.
+- The push for a new message (`notify.message.new`) already links to `/messages/{id}`, which is
+  this screen; until now that link led nowhere in the app.
+
+**One server change:** `ConversationSummary` and `ConversationView` carry `orgName`. They carried
+only the organisation's id, which a family can't read. The list looks each name up once per
+request.
+
+**Not yet:** a count of new messages on the tab bar or the Account menu (the inbox's push already
+says there is one); attendance and the check-in code; the young person's portfolio screens; and
+the web's family pages.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

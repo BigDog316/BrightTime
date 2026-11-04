@@ -2,6 +2,10 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BrightTime.Ui.Shared;
+using BrightTime.Ui.Shared.State;
+using Microsoft.Extensions.DependencyInjection;
+using AppApi = BrightTime.Ui.Shared.Api;
 
 namespace BrightTime.Api.Tests;
 
@@ -147,6 +151,20 @@ public sealed class MessagingApiTests(ApiFixture api)
         // Nobody else reads it or opens one.
         await ProblemAsync(await stranger.GetAsync(new Uri($"api/v1/conversations/{conversation}", UriKind.Relative), Ct), HttpStatusCode.NotFound, "messaging.not_found");
         await ProblemAsync(await family.PostAsJsonAsync($"api/v1/org/{org}/conversations", new { applicationId = application, body = "Hi" }, Ct), HttpStatusCode.Forbidden, "messaging.forbidden");
+
+        // The app reads it through its own client and records, knowing the organisation by name (D75), and replies.
+        string orgName = await api.ScalarAsync<string>("select display_name from directory.organisation where id = @o", ("o", org));
+        await using ServiceProvider app = new ServiceCollection().AddLogging()
+            .AddBrightTimeApp(new AppEndpoints(new Uri("https://kettle.localhost/api/v1/"), new Uri("https://kettle.localhost/")), _ => api.AppClient())
+            .BuildServiceProvider();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        (await app.GetRequiredService<AppApi.AppSession>().SignInAsync(familyEmail, await api.SetPasswordAsync(familyEmail), Ct)).ShouldBeNull();
+        AppApi.BrightTimeApi client = app.GetRequiredService<AppApi.BrightTimeApi>();
+        AppApi.ConversationSummary listed = (await client.ConversationsAsync(Ct)).Value!.Single();
+        (listed.Id, listed.OrgName, listed.IsAnnouncement, listed.Unread).ShouldBe((conversation, orgName, false, 0));
+        AppApi.Conversation thread = (await client.ConversationAsync(conversation, Ct)).Value!;
+        (thread.OrgName, thread.Messages.Count, thread.Messages[0].SenderRole, thread.Messages[1].FromMe).ShouldBe((orgName, 2, "staff", true));
+        (await client.SendMessageAsync(conversation, "Is there parking?", Ct)).Value!.IsHeld.ShouldBeFalse();
     }
 
     [Fact]

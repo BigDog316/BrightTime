@@ -2489,7 +2489,7 @@ request.
 says there is one); attendance and the check-in code; the young person's portfolio screens; and
 the web's family pages.
 
-### D76 — Check-in and attendance, in the app (**proposed 2026-11-04**)
+### D76 — Check-in and attendance, in the app (**accepted 2026-11-04**)
 
 The fifth family slice, after the household, applying, paying and messages (D71 to D75). A family
 shows staff a check-in code and sees the attendance recorded, as the server built it in M3b (D49,

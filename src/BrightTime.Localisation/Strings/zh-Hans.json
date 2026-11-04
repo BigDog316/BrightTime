@@ -403,7 +403,6 @@
   "app.messages.held": "等待审核；只有您能看到",
   "app.messages.intro": "您家人参加的项目会在这里给您写信。任何成年人都不会与青少年单独对话，项目的管理员也会阅读这些对话。",
   "app.messages.me": "您",
-  "app.messages.no_replies": "这是一则公告，不接受回复。",
   "app.messages.no_subject": "无主题",
   "app.messages.none": "还没有消息。您申请的项目可以在这里给您写信。",
   "app.messages.read_by_org": "此对话有青少年参与，因此{org}的一名管理员也会阅读。",

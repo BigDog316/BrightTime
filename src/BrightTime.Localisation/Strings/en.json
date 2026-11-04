@@ -403,7 +403,6 @@
   "app.messages.held": "Held for a moderator; only you can see it",
   "app.messages.intro": "Programs your family takes part in write to you here. No adult is ever alone in a chat with a young person. An admin of the program reads those too.",
   "app.messages.me": "You",
-  "app.messages.no_replies": "This is an announcement. It doesn't take replies.",
   "app.messages.no_subject": "No subject",
   "app.messages.none": "No messages yet. Programs you apply to can write to you here.",
   "app.messages.read_by_org": "A young person is in this conversation, so an admin of {org} reads it too.",

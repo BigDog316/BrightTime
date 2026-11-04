@@ -28,7 +28,7 @@ else
         <h2 id="who">@T["app.messages.who"]</h2>
         <ul>
             <li>@T["app.messages.who.you"]</li>
-            @foreach (string role in c.Roles.Where(r => r is "staff" or "org_admin_observer" or "mentor"))
+            @foreach (string role in OrgRoles.Where(c.Roles.Contains))
             {
                 <li>@T.Format("app.messages.who." + role, ("org", Text.Name(c.OrgName)))</li>
             }
@@ -60,11 +60,8 @@ else
         }
     </ol>
 
-    @if (c.IsAnnouncement)
-    {
-        <p class="hint">@T["app.messages.no_replies"]</p>
-    }
-    else
+    @* An announcement takes no reply: the hint above already says so. *@
+    @if (!c.IsAnnouncement)
     {
         <div class="field">
             <label for="reply">@T["app.messages.reply"]</label>
@@ -88,6 +85,9 @@ else
 }
 
 @code {
+    /// <summary>The organisation's people a family is shown, in this order: who writes, then who reads along.</summary>
+    private static readonly string[] OrgRoles = ["staff", "mentor", "org_admin_observer"];
+
     /// <summary>The server's limit (Conversations.MaxBody).</summary>
     private const int MaxBody = 8000;
 
@@ -105,6 +105,8 @@ else
     private async Task LoadAsync()
     {
         _problem = null;
+        _sendProblem = null;
+        _sendNote = null;
         ApiResult<Conversation> found = await Api.ConversationAsync(Id);
         _problem = found.Problem;
         _conversation = found.Value ?? _conversation;

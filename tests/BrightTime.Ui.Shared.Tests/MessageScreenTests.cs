@@ -60,7 +60,7 @@ public sealed class MessageScreenTests
         shown.ShouldContain("No subject");
         shown.ShouldContain("2 new");
         shown.ShouldContain($"href=\"messages/{Talk}\"");
-        shown.ShouldContain($"<li class=\"card unread\"");
+        shown.ShouldContain("<li class=\"card conversation unread\"", Case.Sensitive, "the whole card opens it, and a new message marks it");
         shown.ShouldNotContain("app.messages");
     }
 
@@ -86,6 +86,7 @@ public sealed class MessageScreenTests
         shown.ShouldContain("<li>You</li>");
         shown.ShouldContain("<li>Staff of Kettle Rowing</li>");
         shown.ShouldContain("<li>An admin of Kettle Rowing, reading along</li>");
+        shown.IndexOf("Staff of", StringComparison.Ordinal).ShouldBeLessThan(shown.IndexOf("An admin of Kettle Rowing, reading", StringComparison.Ordinal), "who writes, then who reads along");
         shown.ShouldContain("A young person is in this conversation, so an admin of Kettle Rowing reads it too.");
         shown.ShouldContain("Kettle Rowing staff ·");
         shown.ShouldContain("Kettle Rowing admin ·");
@@ -117,7 +118,7 @@ public sealed class MessageScreenTests
 
         shown.ShouldContain("Announcement from Kettle Rowing");
         shown.ShouldContain("Families can't reply, and nobody sees who else got it.");
-        shown.ShouldContain("This is an announcement. It doesn't take replies.");
+        CountOf(shown, "reply").ShouldBe(1, "said once, not again under the message");
         html.ShouldNotContain("<textarea");
         html.ShouldNotContain(">Send</button>");
     }
@@ -159,6 +160,17 @@ public sealed class MessageScreenTests
         using JsonDocument request = JsonDocument.Parse(body!);
         request.RootElement.GetProperty("body").GetString().ShouldBe("See you Tuesday.");
         (sent.FromMe, sent.IsHeld).ShouldBe((true, false));
+    }
+
+    private static int CountOf(string text, string part)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + part.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>The page's text as a reader sees it: entities decoded, and the isolates around names dropped.</summary>

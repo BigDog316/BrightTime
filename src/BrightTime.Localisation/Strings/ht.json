@@ -403,7 +403,6 @@
   "app.messages.held": "Kenbe pou yon moderatè; se ou sèl ki ka wè l",
   "app.messages.intro": "Pwogram fanmi w patisipe ladan yo ekri w isit la. Okenn granmoun pa janm pou kont li nan yon konvèsasyon ak yon jèn. Yon administratè pwogram nan li yo tou.",
   "app.messages.me": "Ou",
-  "app.messages.no_replies": "Sa a se yon anons. Li pa pran repons.",
   "app.messages.no_subject": "San sijè",
   "app.messages.none": "Poko gen mesaj. Pwogram ou aplike pou yo ka ekri w isit la.",
   "app.messages.read_by_org": "Gen yon jèn nan konvèsasyon sa a, kidonk yon administratè {org} li l tou.",

@@ -403,7 +403,6 @@
   "app.messages.held": "Retenido para un moderador; solo usted lo ve",
   "app.messages.intro": "Los programas en los que participa su familia le escriben aquí. Ningún adulto está nunca a solas en una conversación con un joven. Un administrador del programa también las lee.",
   "app.messages.me": "Usted",
-  "app.messages.no_replies": "Esto es un anuncio. No admite respuestas.",
   "app.messages.no_subject": "Sin asunto",
   "app.messages.none": "Todavía no hay mensajes. Los programas a los que usted solicita pueden escribirle aquí.",
   "app.messages.read_by_org": "Un joven participa en esta conversación, así que un administrador de {org} también la lee.",

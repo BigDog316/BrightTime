@@ -31,7 +31,7 @@ else
         <ul class="cards">
             @foreach (ConversationSummary c in _conversations)
             {
-                <li class="@(c.Unread > 0 ? "card unread" : "card")" @key="c.Id">
+                <li class="@(c.Unread > 0 ? "card conversation unread" : "card conversation")" @key="c.Id">
                     <h2><a href="messages/@c.Id.ToString("D")" dir="auto">@(c.Subject ?? T["app.messages.no_subject"])</a></h2>
                     <p>@T.Format(c.IsAnnouncement ? "app.messages.announcement_from" : "app.messages.from", ("org", Text.Name(c.OrgName)))</p>
                     <p class="hint">

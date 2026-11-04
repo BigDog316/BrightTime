@@ -2462,7 +2462,7 @@ intents and client secret; D56's signature checks, worker and forward-only statu
 **Not yet:** refunds started here (the gateway needs a payment's `pi_…` reference, which only a
 payment confirmed has), and cards in the provider console, which has no reason to take one yet.
 
-### D75 — Messages, in the app (**proposed 2026-11-03**)
+### D75 — Messages, in the app (**accepted 2026-11-04**)
 
 The fourth family slice, after the household, applying and paying (D71 to D74). Families read and
 answer what programs send them, as the server built it in M3b (D53, D54):

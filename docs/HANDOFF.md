@@ -209,7 +209,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   the phone's browser; the client secret is gone. Stripe returns the family to `/payment/done`, and
   only signed callbacks settle a payment. Checked against Stripe's documentation and a stand-in
   only. Before going live, add the `checkout.session.*` events in Stripe and try it with test keys.
-- **Messages in the app** (D75, proposed): **Messages**, under Account and atop the Inbox, lists
+- **Messages in the app** (D75): **Messages**, under Account and atop the Inbox, lists
   the family's conversations and announcements by organisation, with what's new. A conversation
   always says who is in it and, with a young person, that the organisation's admin reads it;
   replies go from the thread, and an announcement takes none. The new-message push now lands on
@@ -225,8 +225,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D74 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31).
-D75 (messages in the app) is proposed.
+Every decision through D75 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 on 2026-11-04).
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

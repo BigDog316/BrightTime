@@ -25,9 +25,12 @@ public sealed record BadgeClassView(Guid Id, string Slug, string Name, string De
 [YouthData]
 public sealed record AwardView(Guid Id, string? RecipientName, string VerifySlug, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, DateTimeOffset? RevokedAt, string? RevocationReason);
 
-/// <summary>A badge as the young person who holds it sees it, with the credential to take anywhere.</summary>
+/// <summary>
+/// A badge as the young person who holds it sees it, with the credential to take anywhere:
+/// <paramref name="Verify"/> is the credential itself, <paramref name="Page"/> the web page a person reads to check it (D77).
+/// </summary>
 [YouthData]
-public sealed record HeldBadge(Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Verify, string Credential);
+public sealed record HeldBadge(Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Verify, string Credential, Uri Page);
 
 /// <summary>What the public verification page says about a credential. Never who holds it.</summary>
 public sealed record Verification(string Status, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, DateTimeOffset? RevokedAt, string? RevocationReason, JsonElement Credential, string Jwt);
@@ -281,7 +284,7 @@ public sealed partial class Badges(
                               select new { a, c.Name, Issuer = i.Name }).ToListAsync(ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = "badge_assertion", SubjectIds = [.. held.Select(h => h.a.Id)] }, ct).ConfigureAwait(false);
             return [.. held.Select(h => new HeldBadge(h.a.Id, h.Name, h.Issuer, h.a.IssuedOn, h.a.ExpiresOn, h.a.RevokedAt is not null,
-                BadgeDocuments.Credential(site, h.a.VerifySlug), h.a.CredentialJwt ?? string.Empty))];
+                BadgeDocuments.Credential(site, h.a.VerifySlug), h.a.CredentialJwt ?? string.Empty, BadgeDocuments.Page(site, h.a.VerifySlug)))];
         }, cancellationToken);
 
     // ---- anyone, without signing in -------------------------------------------------------------

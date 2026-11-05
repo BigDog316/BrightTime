@@ -476,6 +476,16 @@ dl.facts dd {
     display: block;
 }
 
+/* A young person's portfolio (D77): a hidden record stays in their own view, set apart. */
+.card.hidden-record {
+    background: var(--bt-paper);
+    border-style: dashed;
+}
+
+.share-link {
+    overflow-wrap: anywhere;
+}
+
 .disclosure {
     padding: var(--bt-space-3);
     border-inline-start: 4px solid var(--bt-line);

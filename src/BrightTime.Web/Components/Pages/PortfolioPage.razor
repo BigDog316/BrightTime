@@ -1,0 +1,146 @@
+@page "/portfolios/{Slug}"
+@* A portfolio its owner chose to show (D65, D77): what anyone with the link sees. It is read only
+   through Portfolios.PublicAsync, which returns the display name they chose, what they wrote, and
+   the records they haven't hidden: never their account, legal name or the programs that enrolled
+   them. A link-only portfolio is kept out of search engines. *@
+@attribute [YouthRecord(Portfolios.PublicRead)]
+@using BrightTime.Modules.Learning.Portfolio
+@using BrightTime.SharedKernel.Privacy
+@inject Portfolios Portfolios
+@inject NavigationManager Navigation
+
+@if (_portfolio is { } p)
+{
+    <PageTitle>@T.Format("portfolio.export.title", ("name", p.DisplayName)) · BrightTime</PageTitle>
+    <HeadContent>
+        @if (!p.Listed)
+        {
+            <meta name="robots" content="noindex, nofollow" />
+        }
+    </HeadContent>
+
+    <article class="portfolio" aria-labelledby="portfolio-title">
+        <header>
+            <p class="eyebrow">@T["portfolio.export.title_plain"]</p>
+            <h1 id="portfolio-title" dir="auto">@p.DisplayName</h1>
+            @if (p.Headline is { Length: > 0 } headline)
+            {
+                <p class="lead" dir="auto">@headline</p>
+            }
+        </header>
+
+        @if (p.Bio is { Length: > 0 } bio)
+        {
+            <p class="bio" dir="auto">@bio</p>
+        }
+
+        <dl class="facts totals">
+            <dt>@T["portfolio.export.col.hours"]</dt>
+            <dd>@T.Number(p.TotalHours)</dd>
+            <dt>@T["portfolio.page.activities"]</dt>
+            <dd>@T.Number(p.Participation.Count)</dd>
+        </dl>
+
+        <section aria-labelledby="taking-part">
+            <h2 id="taking-part">@T["portfolio.export.participation"]</h2>
+            @if (p.Participation.Count == 0)
+            {
+                <p>@T["portfolio.page.none"]</p>
+            }
+            else
+            {
+                <ul class="records">
+                    @foreach (PublicParticipation r in p.Participation)
+                    {
+                        <li>
+                            <h3 dir="auto">@r.Title</h3>
+                            @if (r.Organisation is { Length: > 0 } org)
+                            {
+                                <p dir="auto">@org</p>
+                            }
+                            <p class="note">@When(r.StartedOn, r.EndedOn) · @T.Format("portfolio.page.activity_facts", ("sessions", T.Number(r.SessionsAttended)), ("hours", T.Number(r.Hours)))</p>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        @if (p.Skills.Count > 0)
+        {
+            <section aria-labelledby="skills">
+                <h2 id="skills">@T["portfolio.export.skills"]</h2>
+                <ul class="records">
+                    @foreach (PublicSkill s in p.Skills)
+                    {
+                        <li>
+                            <strong dir="auto">@s.Name</strong>
+                            @if (s.Level is { } level && T.Has("portfolio.export.level." + level))
+                            {
+                                <span> · @T["portfolio.export.level." + level]</span>
+                            }
+                            @if (s.Endorsed)
+                            {
+                                <span class="note">@T["portfolio.page.endorsed"]</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        @if (p.Projects.Count > 0)
+        {
+            <section aria-labelledby="projects">
+                <h2 id="projects">@T["portfolio.export.projects"]</h2>
+                <ul class="records">
+                    @foreach (PublicProject project in p.Projects)
+                    {
+                        <li>
+                            <h3 dir="auto">@project.Title</h3>
+                            @if (project.Description is { Length: > 0 } description)
+                            {
+                                <p class="bio" dir="auto">@description</p>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        <p class="note">@T["portfolio.page.note"]</p>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private PublicPortfolio? _portfolio;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _portfolio = await Portfolios.PublicAsync(Slug, HttpContext?.RequestAborted ?? default);
+        if (_portfolio is null)
+        {
+            // A private portfolio, a hidden one and a name never used all look the same.
+            Navigation.NotFound();
+            return;
+        }
+
+        if (HttpContext is { Response: { HasStarted: false } response })
+        {
+            // What it shows is the owner's to take back at any moment: nothing keeps a copy.
+            response.Headers.CacheControl = "no-store";
+            if (!_portfolio.Listed)
+            {
+                response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+            }
+        }
+    }
+
+    private string When(DateOnly started, DateOnly? ended) =>
+        ended is { } end && end != started
+            ? T.Range(T.DateShort(started), T.DateShort(end))
+            : ended is null ? T.Format("portfolio.page.since", ("date", T.DateShort(started))) : T.DateShort(started);
+}

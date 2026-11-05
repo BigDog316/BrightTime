@@ -98,7 +98,7 @@ All anonymous and rate-limited.
 | `GET /public/neighbourhoods`, `GET /public/neighbourhoods/{code}` | Neighbourhoods, and one with its boundary and what's on |
 | `GET /public/organisations/{slug}` | An organisation's public page |
 | `GET /public/taxonomy/{vocabulary}` | `category`, `interest`, `accommodation` or `skill`, named in the request's language |
-| `GET /public/portfolios/{slug}` | A portfolio its owner chose to show (D65). `noindex` when link-only |
+| `GET /public/portfolios/{slug}` | A portfolio its owner chose to show (D65). `noindex` when link-only. The website shows it to people at `/portfolios/{slug}` (D77) |
 | `GET /public/issuers/{orgId}/did.json` | An organisation's DID document (`application/did+json`), every non-compromised key (D66). With the tenant's own id, the site's, which signs CLRs (D68) |
 | `GET /public/issuers/{orgId}/ob2` | The OB 2.0 Issuer |
 | `GET /public/issuers/{orgId}/revocations` | The `1EdTechRevocationList` of its revoked credentials (`no-store`) |
@@ -192,7 +192,7 @@ The owner alone reads or changes a family profile.
 | `GET`, `PUT /me/portfolio` | The young person's portfolio and its settings (display name, headline, bio, visibility, link name) |
 | `POST /me/portfolio/participation/{id}/hide`, `/show` | Hide a record from the total and any shown page, or show it again |
 | `POST /me/portfolio/export` | `{ format }`: `pdf` (a printable portfolio in the person's language), `json_ob3` (their badges' OB 3.0 credentials and JWTs) or `clr2` (a CLR 2.0 VC-JWT signed by the site, `application/jwt`; needs at least one badge). Returned at once, never stored (D68) |
-| `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT |
+| `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT, `verify` (the credential's address, which is its id) and `page` (the website's check page, `/badges/{slug}`, D77) |
 | `POST /playlists/{id}/enroll` | Start a published playlist: needs the account's sign-up capability and any badge the playlist asks for. Starting one already started returns it |
 | `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note |
 | `PUT /me/playlists/{id}/steps/{stepId}` | Mark a step done (`{ reflection }` for a reflection step): completed, or submitted when it needs review. Completing the last required step completes the playlist and awards its badge |

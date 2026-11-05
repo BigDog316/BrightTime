@@ -51,6 +51,18 @@ public static class Words
         };
     }
 
+    /// <summary>
+    /// Why a password sign-in failed. A wrong password and an unknown address read the same (T21):
+    /// the server refuses both, and a locked account, with a 400. Anything else (offline, a server or
+    /// gateway failure, too many tries) is said as what it is, never as a wrong password.
+    /// </summary>
+    public static string SignInFailed(Text t, ApiProblem problem)
+    {
+        ArgumentNullException.ThrowIfNull(t);
+        ArgumentNullException.ThrowIfNull(problem);
+        return problem.Status == 400 ? t["app.sign_in.failed"] : Problem(t, problem);
+    }
+
     /// <summary>The price line of a result.</summary>
     public static string Price(Text t, Cost cost)
     {

@@ -111,12 +111,16 @@ public sealed class NotificationApiTests(ApiFixture api)
         RequireDatabase();
         using HttpClient me = await SignedInAsync(Admin(48));
         DateTimeOffset now = DateTimeOffset.UtcNow;
+        // The listing's next meeting, not just one of them, is two days off: a listing that also
+        // meets within the hour would have its reminder already past, and be refused.
         Guid listing = await api.ScalarAsync<Guid>(
             """
             select o.listing_id from opportunity.listing_occurrence o
             join opportunity.listing l on l.id = o.listing_id and l.status = 'published'
-            where o.starts_at > now() + interval '2 days' and not o.is_cancelled
-            order by o.starts_at limit 1
+            where o.starts_at > now() and not o.is_cancelled
+            group by o.listing_id
+            having min(o.starts_at) > now() + interval '2 days'
+            order by min(o.starts_at), o.listing_id limit 1
             """);
 
         HttpResponseMessage made = await me.PostAsJsonAsync("api/v1/me/reminders", new { listingId = listing, anchor = "next_session", leadMinutes = 60 }, Ct);

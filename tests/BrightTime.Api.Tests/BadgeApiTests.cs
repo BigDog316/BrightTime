@@ -202,6 +202,9 @@ public sealed class BadgeApiTests(ApiFixture api)
             // The young person holds it, with the credential to take anywhere.
             JsonElement held = (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/badges"), Ct))).EnumerateArray().Single();
             (held.GetProperty("name").GetString(), held.GetProperty("revoked").GetBoolean(), held.GetProperty("credential").GetString()).ShouldBe(("River Surveyor", false, jwt));
+            // And the web page a person reads to check it (D77), beside the credential software reads.
+            (held.GetProperty("verify").GetString(), held.GetProperty("page").GetString())
+                .ShouldBe(($"https://{ApiFixture.Host}/api/v1/public/badges/{slug}", $"https://{ApiFixture.Host}/badges/{slug}"));
 
             // Revoked with a reason, by an admin of the organisation: verifiers see it at once, and OB 2.0 answers 410 Gone.
             await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-assertions/{assertion}/revoke", new { reason = "" }, Ct), HttpStatusCode.BadRequest, "badges.reason");

@@ -332,6 +332,24 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<CheckinCode>> CheckinBadgeAsync(Guid enrollmentId, CancellationToken ct = default) =>
         SendAsync<CheckinCode>(HttpMethod.Post, "me/attendance/badges", new { enrollmentId }, signedIn: true, ct);
 
+    // ---- a young person's portfolio and badges (D65, D66, D77) ---------------------------------
+
+    /// <summary>The young person's own portfolio, hidden records included.</summary>
+    public Task<ApiResult<PortfolioView>> PortfolioAsync(CancellationToken ct = default) =>
+        GetAsync<PortfolioView>("me/portfolio", signedIn: true, ct);
+
+    /// <summary>How the portfolio appears and who may see it.</summary>
+    public Task<ApiResult<PortfolioView>> SavePortfolioAsync(PortfolioDraft draft, CancellationToken ct = default) =>
+        SendAsync<PortfolioView>(HttpMethod.Put, "me/portfolio", draft, signedIn: true, ct);
+
+    /// <summary>Hides a record from the portfolio, or shows it again. Nothing is deleted.</summary>
+    public Task<ApiResult<PortfolioView>> HideParticipationAsync(Guid id, bool hidden, CancellationToken ct = default) =>
+        SendAsync<PortfolioView>(HttpMethod.Post, $"me/portfolio/participation/{id:D}/{(hidden ? "hide" : "show")}", null, signedIn: true, ct);
+
+    /// <summary>The badges the young person holds, newest first, revoked ones marked.</summary>
+    public Task<ApiResult<IReadOnlyList<HeldBadge>>> HeldBadgesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<HeldBadge>>("me/badges", signedIn: true, ct);
+
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);
 

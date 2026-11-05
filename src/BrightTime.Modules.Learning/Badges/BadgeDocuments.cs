@@ -76,6 +76,9 @@ public static class BadgeDocuments
 
     public static Uri Assertion2(Uri site, string verifySlug) => new(site, $"api/v1/public/badges/{verifySlug}/ob2");
 
+    /// <summary>The web page a person reads to check a badge (D77): what the credential says, in words.</summary>
+    public static Uri Page(Uri site, string verifySlug) => new(site, $"badges/{verifySlug}");
+
     // ---- the recipient -----------------------------------------------------------------------
 
     /// <summary>The identifier both versions hash: the account, as a URN, never an email.</summary>

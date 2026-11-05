@@ -2536,6 +2536,59 @@ scanning a kiosk's code (`POST /attendance/checkin`), which needs the same camer
 by a young person's own account (the server ties badges to the family profile's owner); check-out;
 and the web's family pages.
 
+### D77 — A young person's portfolio and badges, in the app, and the pages their links open (**proposed 2026-11-04**)
+
+The sixth app slice, and the first for a young person's own account: the portfolio (D65) and the
+badges (D66) the server has held since M4. The links a young person shares had nowhere to land
+but the API's JSON, so this slice also gives the website the two pages they open.
+- **Your portfolio**, under **Account** for a young person's own account (`youth`, and `child`
+  under 13), shows:
+  - **who can see it**: only you, anyone with the link (kept from search engines), or anyone. A
+    shown portfolio's link is spelt out, with **Share** (the phone's share sheet) and **Open the
+    page**. Under 13 it says showing it isn't open to them yet, as the server's `canShow` says;
+  - **the hours and activities** from attendance, newest first. **Hide** takes one out of the total
+    and anything shown. A hidden record stays in view, set apart and marked, with **Show again**.
+    Nothing is deleted;
+  - **the badges** held: who awarded each and when, and whether it expires, has expired or was
+    revoked. **Check it** opens its check page, and **Share** sends that page. The credential
+    itself is for other software and isn't shown.
+- **Who sees your portfolio** (`/portfolio/settings`) sets the display name, headline, bio, who
+  can see it and the link name, with the link previewed as it's typed. The server makes every
+  call: the showcase capability, the link name's form and uniqueness, and no family name in the
+  display name. The screen explains, and shows the server's reason when it refuses. Under 13 the
+  two shown choices are disabled, with the reason beside them. A private portfolio keeps its link
+  name, so showing it again later gives the same link.
+- **On the website**, without signing in:
+  - **`/portfolios/{link name}`** shows a portfolio its owner chose to show: the display name,
+    headline, bio, hours, unhidden activities, skills (with level, and *Endorsed by an
+    organisation*, never which) and published projects. It is read only through
+    `Portfolios.PublicAsync` and its definer functions (D65, D69), and audited.
+    - A link-only portfolio has `noindex, nofollow` in both the page and `X-Robots-Tag`.
+    - Every answer is `no-store`, because what it shows is the owner's to take back at once.
+    - A private portfolio, a hidden one and a name never used are all the same 404.
+  - **`/badges/{verification name}`** says in words whether a badge is genuine and still stands,
+    has expired, or was revoked (with the reason), who awarded it and when. It never names the
+    holder: they prove it's theirs by sharing the link. It links to the credential at the API's
+    address for software, and is `noindex` and `no-store`, so a revocation shows at once.
+  - The pages carry `[YouthRecord]` like the console's, and the web host now registers Learning's
+    request side (`AddLearning`) in place of only its eligibility answers.
+- **One server change:** `GET /me/badges` gives each badge a `page`, the check page above, beside
+  `verify`, the credential's own address, which stays its id.
+
+**Found on the emulator:**
+- **Sign-in blamed the password for any failure.** A gateway that had lost the API (502) told a
+  young person their email and password didn't match. Only the server's 400 refusal, which covers
+  a wrong password, an unknown address and a locked account alike (T21), says that now. Anything
+  else is worded as what it is (`Words.SignInFailed`).
+- **The family-name rule only knows linked household members.** `SurnamesOfAsync` reads the
+  members linked to the young person's account. A teenager who made their own household and isn't
+  linked to the member that is them has no surname on file, so any display name passes. That is
+  D65's rule, unchanged here; widening it to the households they own is a question for Sam.
+
+**Not yet:** goals, skills and projects in the app (D69's routes); playlists (D67); downloading
+the portfolio as a PDF, OB 3.0 or a CLR (D68), which needs saving a file on the phone; and a
+guardian's view of a child's portfolio, which D65 left for later.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -47,9 +47,10 @@ public static class RegistrationServices
         services.AddPaymentGateway(configuration);
         services.AddEnrollment();
 
-        // Eligibility's badge and playlist rules are judged by Learning (D67).
+        // Learning: eligibility's badge and playlist rules (D67), and the shown portfolios and badge
+        // checks anyone can open without signing in (D77).
         services.AddBrightTimeDbContext<LearningDbContext>(connection, LearningDbContext.SchemaName, LearningDbContext.MigrationsHistoryTable);
-        services.AddAchievementQueries();
+        services.AddLearning();
 
         services.AddBrightTimeDbContext<AttendanceDbContext>(connection, AttendanceDbContext.SchemaName, AttendanceDbContext.MigrationsHistoryTable);
         services.AddAttendance();

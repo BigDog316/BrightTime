@@ -8,7 +8,8 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [What your account can do](#what-your-account-can-do)
 - [Messages](#messages)
 - [Staying safe](#staying-safe)
-- [Your portfolio, badges and playlists: coming soon](#your-portfolio-badges-and-playlists-coming-soon)
+- [Your portfolio and badges (app)](#your-portfolio-and-badges-app)
+- [Playlists, goals, skills and projects: coming soon](#playlists-goals-skills-and-projects-coming-soon)
 
 ## Getting your own account
 
@@ -69,32 +70,37 @@ program can only message you once your consent allows it.
 - **Sign out on all devices**, under **Account**, if you lose your phone or think someone else
   has used your account.
 
-## Your portfolio, badges and playlists: coming soon
+## Your portfolio and badges (app)
 
-These are built behind the scenes; their screens are next. When they arrive:
+Find **Your portfolio** under **Account**.
 
 **Your portfolio** is a record of what you've taken part in. The hours come from attendance:
 each program you attend adds its sessions and hours.
 - It's **private** until you choose to show it.
-- You can **hide** any record. A hidden record leaves your total and anything you've shown, and
-  you can show it again later. Nothing is deleted.
-- You can show it to **anyone with the link**, or make it **public**. To do that you choose a
-  **link name** (like `kwesi-builds`) and a **display name**, which can't include your family
-  name. Anyone you share the link with sees your display name, a headline and short bio you
-  write, your hours and your records. Never your account, your legal name or which programs
-  enrolled you.
+- Tap **Hide** on any record to leave it out of your total and anything you've shown. It stays
+  in your own list, marked *Hidden*, and **Show again** puts it back. Nothing is deleted.
+- **Change who sees it** lets you show it to **anyone with the link**, or make it **public**. To
+  do that you choose a **link name** (like `kwesi-builds`) and a **display name**, which can't
+  include your family name. The screen shows your link as you type it. Anyone you share the link
+  with sees your display name, a headline and short bio you write, your hours and your records.
+  Never your account, your legal name or which programs enrolled you.
+- Once it's shown, **Share** sends the link, and **Open the page** shows you what others see.
 - A link-only portfolio is never shown to search engines.
 - Showing your portfolio isn't open to anyone under 13.
 
 **Badges** are awarded by the organisations whose programs you take part in, for something you
-did, like *River Surveyor*.
+did, like *River Surveyor*. They're listed under your records, with who gave each one and when.
 - Each badge is a digital credential in the **Open Badges** standard, so you can take it to other
   places that read badges, such as a college application or a professional profile.
 - The badge never names you. It carries a scrambled code that only proves it's yours when you show
   it.
-- Anyone can check a badge is real from its link. If an organisation takes a badge back (for
-  example, it was given by mistake), the badge shows as **revoked**, with the reason. You still
-  see it in your list, marked as revoked.
+- **Check it** opens the badge's page, where anyone can check it's real. **Share** sends that
+  page to someone. If an organisation takes a badge back (for example, it was given by mistake),
+  the page says so, with the reason, and your list marks it as **revoked**.
+
+## Playlists, goals, skills and projects: coming soon
+
+These are built behind the scenes; their screens are next. When they arrive:
 
 **Playlists** are sets of steps an organisation puts together, like *Watershed Explorer*, with a
 badge at the end.

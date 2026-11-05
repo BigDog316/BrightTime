@@ -1,0 +1,175 @@
+@page "/portfolio"
+@* A young person's own portfolio (D65, D66, D77): who can see it, the hours and activities from
+   their attendance, each of which they can hide or show again, and the badges they hold, each with
+   the web page anyone can check it on. Under 13 it stays private: the server says so (CanShow). *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject AppEndpoints Endpoints
+@inject IShareService Share
+@inject IExternalLauncher Launcher
+
+<h1>@T["app.portfolio.title"]</h1>
+
+@if (Session.Me is not { } me)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (!HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else
+{
+    <p class="hint">@T["app.portfolio.intro"]</p>
+    @* Says what Hide or Show again did. The card shows it already, so this is for a screen reader,
+       and it is on the page from the start so the change is announced. *@
+    <p class="visually-hidden" role="status">@_said</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_portfolio is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_portfolio is { } p)
+    {
+        <section aria-labelledby="who">
+            <h2 id="who">@T["app.portfolio.who"]</h2>
+            <p>@T["app.portfolio.who." + p.Visibility]</p>
+            @if (ShownLink(p) is { } link)
+            {
+                <p class="share-link" dir="ltr">@link.AbsoluteUri</p>
+                <div class="actions">
+                    <button type="button" @onclick="() => ShareAsync(p, link)">@T["app.portfolio.share"]</button>
+                    <button type="button" @onclick="() => Launcher.OpenAsync(link)">@T["app.portfolio.open"]</button>
+                </div>
+            }
+            else if (!p.CanShow)
+            {
+                <p class="hint">@T["error.portfolio.showcase"]</p>
+            }
+            <a class="button" href="portfolio/settings">@T["app.portfolio.change"]</a>
+        </section>
+
+        <section aria-labelledby="taking-part">
+            <h2 id="taking-part">@T["portfolio.export.participation"]</h2>
+            <p><strong>@T.Format("portfolio.export.hours", ("hours", T.Number(p.TotalHours)))</strong></p>
+            @if (p.Participation.Count == 0)
+            {
+                <p>@T["app.portfolio.none"]</p>
+            }
+            else
+            {
+                <ul class="cards">
+                    @foreach (ParticipationView r in p.Participation)
+                    {
+                        <li class="@(r.IsHidden ? "card hidden-record" : "card")" @key="r.Id">
+                            <h3 dir="auto">@r.Title</h3>
+                            @if (r.Organisation is { Length: > 0 } org)
+                            {
+                                <p dir="auto">@org</p>
+                            }
+                            <p class="hint">@When(r.StartedOn, r.EndedOn)</p>
+                            <p class="hint">@T.Format("portfolio.page.activity_facts", ("sessions", T.Number(r.SessionsAttended)), ("hours", T.Number(r.Hours)))</p>
+                            @if (r.IsHidden)
+                            {
+                                <p><strong>@T["app.portfolio.hidden"]</strong></p>
+                                <button type="button" disabled="@(_busy == r.Id)" @onclick="() => HideAsync(r, hidden: false)">@T["app.portfolio.show"]</button>
+                            }
+                            else
+                            {
+                                <button type="button" disabled="@(_busy == r.Id)" @onclick="() => HideAsync(r, hidden: true)">@T["app.portfolio.hide"]</button>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+
+    @if (_badges is { } badges)
+    {
+        <section aria-labelledby="badges">
+            <h2 id="badges">@T["portfolio.export.badges"]</h2>
+            @if (badges.Count == 0)
+            {
+                <p>@T["app.portfolio.badges_none"]</p>
+            }
+            else
+            {
+                <ul class="cards">
+                    @foreach (HeldBadge b in badges)
+                    {
+                        <li class="card" @key="b.Id">
+                            <h3 dir="auto">@b.Name</h3>
+                            <p>@T.Format("app.portfolio.badge_from", ("issuer", Text.Name(b.Issuer)))</p>
+                            <p class="hint">@T.Format("app.portfolio.badge_awarded", ("date", T.DateShort(b.IssuedOn)))</p>
+                            @if (b.Revoked)
+                            {
+                                <p><strong>@T["app.portfolio.badge_revoked"]</strong></p>
+                            }
+                            else if (b.ExpiresOn is { } expires)
+                            {
+                                <p class="hint">@T.Format(expires <= DateTimeOffset.UtcNow ? "app.portfolio.badge_expired" : "app.portfolio.badge_expires", ("date", T.DateShort(expires)))</p>
+                            }
+                            <div class="actions">
+                                <button type="button" @onclick="() => Launcher.OpenAsync(b.Page)">@T["app.portfolio.badge_check"]</button>
+                                @if (!b.Revoked)
+                                {
+                                    <button type="button" @onclick="() => Share.ShareAsync(b.Name, b.Page)">@T["app.portfolio.share"]</button>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+}
+
+@code {
+    private PortfolioView? _portfolio;
+    private IReadOnlyList<HeldBadge>? _badges;
+    private ApiProblem? _problem;
+    private Guid? _busy;
+    private string _said = "";
+
+    /// <summary>A portfolio belongs to a young person's own account, under 13 included.</summary>
+    internal static bool HasPortfolio(Me me) => me.AccountKind is "youth" or "child";
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<PortfolioView> portfolio = await Api.PortfolioAsync();
+        ApiResult<IReadOnlyList<HeldBadge>> badges = await Api.HeldBadgesAsync();
+        _problem = portfolio.Problem ?? badges.Problem;
+        _portfolio = portfolio.Value ?? _portfolio;
+        _badges = badges.Value ?? _badges;
+    }
+
+    private async Task HideAsync(ParticipationView record, bool hidden)
+    {
+        _busy = record.Id;
+        _said = "";
+        ApiResult<PortfolioView> changed = await Api.HideParticipationAsync(record.Id, hidden);
+        _problem = changed.Problem;
+        if (changed.Value is { } view)
+        {
+            _portfolio = view;
+            _said = T[hidden ? "app.portfolio.now_hidden" : "app.portfolio.now_shown"];
+        }
+
+        _busy = null;
+    }
+
+    private Task ShareAsync(PortfolioView p, Uri link) =>
+        Share.ShareAsync(T.Format("portfolio.export.title", ("name", p.DisplayName ?? string.Empty)), link);
+
+    private Uri? ShownLink(PortfolioView p) =>
+        p.Visibility is "link_only" or "public" && p.PublicSlug is { Length: > 0 } slug ? Endpoints.Portfolio(slug) : null;
+
+    private string When(DateOnly started, DateOnly? ended) =>
+        ended is { } end && end != started
+            ? T.Range(T.DateShort(started), T.DateShort(end))
+            : ended is null ? T.Format("portfolio.page.since", ("date", T.DateShort(started))) : T.DateShort(started);
+}

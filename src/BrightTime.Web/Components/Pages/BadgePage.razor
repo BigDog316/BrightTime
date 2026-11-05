@@ -1,0 +1,81 @@
+@page "/badges/{Slug}"
+@* A badge check (D66, D77): the page a badge's holder sends someone to, saying in words whether it
+   is genuine and still stands, who awarded it and when. It never names the holder: the
+   credential carries only a salted hash, and they prove it's theirs by showing it. Software reads
+   the credential itself at the API's address. *@
+@using BrightTime.Modules.Learning.Badges
+@inject Badges Badges
+@inject NavigationManager Navigation
+
+@if (_badge is { } b)
+{
+    <PageTitle>@b.Name · @T["badge.page.eyebrow"] · BrightTime</PageTitle>
+    <HeadContent>
+        <meta name="robots" content="noindex, nofollow" />
+    </HeadContent>
+
+    <article class="badge-check" aria-labelledby="badge-title">
+        <header>
+            <p class="eyebrow">@T["badge.page.eyebrow"]</p>
+            <h1 id="badge-title" dir="auto">@b.Name</h1>
+        </header>
+
+        <p class="badge-status @b.Status" role="status">
+            @switch (b.Status)
+            {
+                case "revoked":
+                    @T.Format("badge.page.revoked", ("issuer", Text.Name(b.Issuer)), ("date", T.DateShort(b.RevokedAt ?? b.IssuedOn)))
+                    break;
+                case "expired":
+                    @T.Format("badge.page.expired", ("date", T.DateShort(b.ExpiresOn ?? b.IssuedOn)))
+                    break;
+                default:
+                    @T["badge.page.valid"]
+                    break;
+            }
+        </p>
+        @if (b.Status == "revoked" && b.RevocationReason is { Length: > 0 } reason)
+        {
+            <p>@T["badge.page.reason"] <span dir="auto">@reason</span></p>
+        }
+
+        <dl class="facts">
+            <dt>@T["portfolio.export.col.issuer"]</dt>
+            <dd dir="auto">@b.Issuer</dd>
+            <dt>@T["portfolio.export.col.awarded"]</dt>
+            <dd>@T.DateShort(b.IssuedOn)</dd>
+            @if (b.ExpiresOn is { } expires)
+            {
+                <dt>@T["badge.page.expires"]</dt>
+                <dd>@T.DateShort(expires)</dd>
+            }
+        </dl>
+
+        <p class="note">@T["badge.page.note"]</p>
+        <p><a href="/api/v1/public/badges/@Uri.EscapeDataString(Slug)" rel="alternate" type="application/json">@T["badge.page.credential"]</a></p>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private Verification? _badge;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _badge = Slug.Length is > 0 and <= 64 ? await Badges.VerifyAsync(Slug, HttpContext?.RequestAborted ?? default) : null;
+        if (_badge is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (HttpContext is { Response: { HasStarted: false } response })
+        {
+            // A revocation must show the moment it happens.
+            response.Headers.CacheControl = "no-store";
+        }
+    }
+}

@@ -135,6 +135,30 @@ public sealed record FamilyAttendance(Guid EnrollmentId, string MemberFirstName,
 /// </summary>
 public sealed record CheckinCode(string Token, DateTimeOffset ExpiresAt, int ValidForSeconds);
 
+/// <summary>
+/// One thing a young person took part in (D65, D77), built from attendance. A hidden record stays
+/// in their own view, marked, and leaves their total and anything they've shown.
+/// </summary>
+public sealed record ParticipationView(Guid Id, string Title, string? Organisation, DateOnly StartedOn, DateOnly? EndedOn, int SessionsAttended, decimal Hours, string Source, bool IsHidden);
+
+/// <summary>
+/// A young person's own portfolio (D65, D77): how it appears, who may see it
+/// (<c>private</c>, <c>link_only</c>, <c>public</c>), and everything in it. <c>CanShow</c> is the
+/// server's answer to whether they may show it at all (nobody under 13).
+/// </summary>
+public sealed record PortfolioView(
+    string? DisplayName, string? Headline, string? Bio, string Visibility, string? PublicSlug, decimal TotalHours, bool CanShow,
+    IReadOnlyList<ParticipationView> Participation);
+
+/// <summary>What the young person sets: their display name, what they write, who sees it, and its link name.</summary>
+public sealed record PortfolioDraft(string DisplayName, string? Headline, string? Bio, string Visibility, string? PublicSlug);
+
+/// <summary>
+/// A badge the young person holds (D66, D77). <c>Page</c> is the web page anyone can check it on;
+/// the credential itself isn't read by the app.
+/// </summary>
+public sealed record HeldBadge(Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Page);
+
 /// <summary>The signed-in person: who, what kind of account (<c>adult</c>, <c>youth</c>), and what they may do.</summary>
 public sealed record Me(
     Guid Id,

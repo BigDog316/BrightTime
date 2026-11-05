@@ -431,6 +431,10 @@ CLR is signed by the county's site under `did:web:{host}:api:v1:public:issuers:{
 `POST /org/{orgId}/projects/{id}/review` (approve or send back), and
 `POST /org/{orgId}/skills/endorse`. Projects live under `/me`, not `/projects`.
 
+*Built (2026-11-04, D77):* `GET /me/badges` gives each badge a `page`, the website's check page
+at `/badges/{slug}`, beside `verify`, the credential's own address. The website shows a shown
+portfolio at `/portfolios/{slug}`; the API's JSON routes are unchanged.
+
 ```
 
 GET    /api/v1/playlists

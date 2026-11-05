@@ -66,8 +66,7 @@
         _busy = false;
         if (failed is not null)
         {
-            // A wrong password and an unknown address read the same (T21).
-            _problem = failed.Type is ApiProblem.OfflineType ? Words.Problem(T, failed) : T["app.sign_in.failed"];
+            _problem = Words.SignInFailed(T, failed);
             return;
         }
 

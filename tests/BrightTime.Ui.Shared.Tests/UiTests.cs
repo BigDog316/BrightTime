@@ -75,6 +75,22 @@ public sealed class UiTests
     }
 
     [Fact]
+    public async Task Only_a_refused_password_reads_as_a_wrong_password()
+    {
+        using FakeApi api = new FakeApi().Json(HttpMethod.Get, "public/tenant", FakeApi.Tenant);
+        await using ServiceProvider app = api.Services();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        Text t = app.GetRequiredService<Text>();
+
+        Words.SignInFailed(t, new ApiProblem("https://tools.ietf.org/html/rfc6749#section-5.2", "Those details did not work.", 400)).ShouldBe(t["app.sign_in.failed"]);
+        // Found on the emulator: a gateway that lost the API (502) told a young person their password was wrong.
+        Words.SignInFailed(t, new ApiProblem(ApiProblem.UnreadableType, null, 502)).ShouldBe(t["site.error.body"]);
+        Words.SignInFailed(t, new ApiProblem("about:blank", "Internal Server Error", 500)).ShouldBe(t["site.error.body"]);
+        Words.SignInFailed(t, ApiProblem.Offline).ShouldBe(t["app.error.offline"]);
+        Words.SignInFailed(t, new ApiProblem("about:blank", null, 429)).ShouldBe(t["app.error.too_many"]);
+    }
+
+    [Fact]
     public void The_age_question_reads_the_younger_way_as_the_server_does()
     {
         DateOnly today = new(2026, 10, 20);

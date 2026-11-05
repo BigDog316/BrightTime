@@ -25,6 +25,9 @@ public sealed record AppEndpoints(Uri ApiBase, Uri SiteBase)
 
     /// <summary>A listing's web page, for sharing with someone who has no app.</summary>
     public Uri Listing(string slug) => new(SiteBase, $"/listings/{Uri.EscapeDataString(slug)}");
+
+    /// <summary>A shown portfolio's web page (D77), by its link name, for its owner to share.</summary>
+    public Uri Portfolio(string slug) => new(SiteBase, $"/portfolios/{Uri.EscapeDataString(slug)}");
 }
 
 public static class AppServices

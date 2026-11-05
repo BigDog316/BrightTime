@@ -1,0 +1,128 @@
+@page "/portfolio/settings"
+@* Who sees a young person's portfolio, and how it appears (D65, D77). Showing it needs a link name
+   and a display name without their family name; the server checks both, and refuses anyone under
+   13, so the screen only explains. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject AppEndpoints Endpoints
+@inject NavigationManager Navigation
+
+<h1>@T["app.portfolio.settings_title"]</h1>
+
+@if (Session.Me is not { } me || !Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else if (_loaded is null && _problem is null)
+{
+    <Busy />
+}
+else if (_loaded is null)
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+}
+else
+{
+    <form class="stack" @onsubmit="SaveAsync">
+        <div class="field">
+            <label for="display-name">@T["app.portfolio.display_name"]</label>
+            <p class="hint" id="display-name-hint">@T["app.portfolio.display_name_hint"]</p>
+            <input id="display-name" required maxlength="60" autocomplete="off" @bind="_name" aria-describedby="display-name-hint" />
+        </div>
+        <div class="field">
+            <label for="headline">@T["app.portfolio.headline"]</label>
+            <p class="hint" id="headline-hint">@T["app.portfolio.headline_hint"]</p>
+            <input id="headline" maxlength="120" autocomplete="off" dir="auto" @bind="_headline" aria-describedby="headline-hint" />
+        </div>
+        <div class="field">
+            <label for="bio">@T["app.portfolio.bio"]</label>
+            <textarea id="bio" rows="5" maxlength="2000" dir="auto" @bind="_bio"></textarea>
+        </div>
+
+        <fieldset aria-describedby="@(_loaded.CanShow ? null : "who-hint")">
+            <legend>@T["app.portfolio.who"]</legend>
+            @if (!_loaded.CanShow)
+            {
+                <p class="hint" id="who-hint">@T["error.portfolio.showcase"]</p>
+            }
+            @foreach (string choice in Choices)
+            {
+                bool shown = choice != "private";
+                <div class="field">
+                    <label class="check">
+                        <input type="radio" name="visibility" value="@choice" checked="@(_visibility == choice)"
+                               disabled="@(shown && !_loaded.CanShow)" @onchange="() => _visibility = choice" />
+                        @T["app.portfolio.choice." + choice]
+                    </label>
+                    <p class="hint">@T["app.portfolio.who." + choice]</p>
+                </div>
+            }
+        </fieldset>
+
+        @if (_visibility != "private")
+        {
+            <div class="field">
+                <label for="slug">@T["app.portfolio.link_name"]</label>
+                <p class="hint" id="slug-hint">@T["app.portfolio.link_name_hint"]</p>
+                <input id="slug" required maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" dir="ltr"
+                       @bind="_slug" @bind:event="oninput" aria-describedby="slug-hint slug-preview" />
+                @* The link as it will be, once there's a name to show in it. *@
+                <p class="hint" id="slug-preview" dir="ltr">@(_slug.Trim() is { Length: > 0 } s ? Endpoints.Portfolio(s.ToLowerInvariant()).AbsoluteUri : "")</p>
+            </div>
+        }
+
+        <ProblemNotice Problem="_problem" />
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@_busy">@T["app.portfolio.save"]</button>
+            <a class="button" href="portfolio">@T["app.portfolio.back"]</a>
+        </div>
+    </form>
+}
+
+@code {
+    private static readonly string[] Choices = ["private", "link_only", "public"];
+
+    private PortfolioView? _loaded;
+    private ApiProblem? _problem;
+    private bool _busy;
+
+    private string _name = "";
+    private string _headline = "";
+    private string _bio = "";
+    private string _visibility = "private";
+    private string _slug = "";
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<PortfolioView> loaded = await Api.PortfolioAsync();
+        _problem = loaded.Problem;
+        if (loaded.Value is { } p)
+        {
+            _loaded = p;
+            _name = p.DisplayName ?? "";
+            _headline = p.Headline ?? "";
+            _bio = p.Bio ?? "";
+            _visibility = Choices.Contains(p.Visibility) ? p.Visibility : "private";
+            _slug = p.PublicSlug ?? "";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        // A private portfolio keeps the link name it had, so showing it again later gives the same link.
+        PortfolioDraft draft = new(_name.Trim(), Optional(_headline), Optional(_bio), _visibility, Optional(_slug)?.ToLowerInvariant());
+        ApiResult<PortfolioView> saved = await Api.SavePortfolioAsync(draft);
+        _problem = saved.Problem;
+        _busy = false;
+        if (saved.Value is not null)
+        {
+            Navigation.NavigateTo("portfolio");
+        }
+    }
+
+    private static string? Optional(string text) => text.Trim() is { Length: > 0 } t ? t : null;
+}

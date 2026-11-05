@@ -1,0 +1,203 @@
+@page "/portfolio/skills"
+@* A young person's skills (D69, D78): those they list, at a level they choose, and those an
+   organisation vouched for. Either can be removed: the portfolio is theirs. They show on a shown
+   portfolio page, each marked as endorsed or not. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.skills.title"]</h1>
+
+@if (Session.Me is not { } me)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (!Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else
+{
+    <p class="hint">@T["app.skills.intro"]</p>
+    <p class="visually-hidden" role="status">@_said</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_skills is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_skills is { } skills)
+    {
+        @if (skills.Count == 0)
+        {
+            <p>@T["app.skills.none"]</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (SkillView s in skills)
+                {
+                    <li class="card" @key="s.Id">
+                        <h3 dir="auto">@s.Name</h3>
+                        @if (s.Endorsed)
+                        {
+                            @* Their own skill's level is in its drop-down; an endorsed one's is said once, here. *@
+                            <p>@(s.Level is { } level ? T["portfolio.export.level." + level.ToString(CultureInfo.InvariantCulture)] : T["app.skills.no_level"])</p>
+                            <p class="hint">@(s.EndorsedBy is { Length: > 0 } org ? T.Format("app.skills.endorsed_by", ("org", Text.Name(org))) : T["portfolio.page.endorsed"])</p>
+                        }
+                        else
+                        {
+                            <div class="field">
+                                <label for="level-@s.Id.ToString("N")">@T["app.skills.level"]</label>
+                                <select id="level-@s.Id.ToString("N")" value="@Value(s.Level)" disabled="@(_busy == s.Id)" @onchange="e => LevelAsync(s, e.Value as string)">
+                                    <option value="">@T["app.skills.no_level"]</option>
+                                    @for (short l = 1; l <= 4; l++)
+                                    {
+                                        <option value="@Value(l)">@T["portfolio.export.level." + Value(l)]</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="actions">
+                            @if (_confirm == s.Id)
+                            {
+                                @if (s.Endorsed)
+                                {
+                                    <p class="hint">@T["app.skills.remove_endorsed_hint"]</p>
+                                }
+                                <button type="button" class="danger" disabled="@(_busy == s.Id)" @onclick="() => RemoveAsync(s)">@T["app.skills.remove_confirm"]</button>
+                                <button type="button" @onclick="() => _confirm = null">@T["app.cancel"]</button>
+                            }
+                            else
+                            {
+                                <button type="button" @onclick="() => _confirm = s.Id">@T["app.skills.remove"]</button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
+        <section aria-labelledby="add-skill">
+            <h2 id="add-skill">@T["app.skills.add"]</h2>
+            @if (Offered(skills) is { Count: > 0 } offered)
+            {
+                <form class="stack" @onsubmit="AddAsync">
+                    <div class="field">
+                        <label for="new-skill">@T["app.skills.skill"]</label>
+                        <select id="new-skill" required @bind="_newTerm">
+                            <option value="">@T["app.skills.choose"]</option>
+                            @foreach (LearningTerm term in offered)
+                            {
+                                <option value="@term.Id.ToString("D")">@term.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="new-level">@T["app.skills.level"]</label>
+                        <select id="new-level" @bind="_newLevel">
+                            <option value="">@T["app.skills.no_level"]</option>
+                            @for (short l = 1; l <= 4; l++)
+                            {
+                                <option value="@Value(l)">@T["portfolio.export.level." + Value(l)]</option>
+                            }
+                        </select>
+                    </div>
+                    <ProblemNotice Problem="_addProblem" />
+                    <div class="actions">
+                        <button type="submit" class="primary" disabled="@_adding">@T["app.skills.add_button"]</button>
+                    </div>
+                </form>
+            }
+            else
+            {
+                <p>@T[_terms.Any(t => t.Vocabulary == "skill") ? "app.skills.all_listed" : "app.skills.no_terms"]</p>
+            }
+        </section>
+    }
+    <a class="button" href="portfolio">@T["app.portfolio.back"]</a>
+}
+
+@code {
+    private IReadOnlyList<SkillView>? _skills;
+    private IReadOnlyList<LearningTerm> _terms = [];
+    private ApiProblem? _problem;
+    private ApiProblem? _addProblem;
+    private Guid? _busy;
+    private Guid? _confirm;
+    private bool _adding;
+    private string _said = "";
+
+    private string _newTerm = "";
+    private string _newLevel = "";
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<SkillView>> skills = await Api.SkillsAsync();
+        ApiResult<IReadOnlyList<LearningTerm>> terms = await Api.LearningTermsAsync();
+        _problem = skills.Problem ?? terms.Problem;
+        _skills = skills.Value ?? _skills;
+        _terms = terms.Value ?? _terms;
+    }
+
+    /// <summary>The county's skills the young person hasn't listed themselves. One an organisation endorsed can still be listed: the two say different things.</summary>
+    private List<LearningTerm> Offered(IReadOnlyList<SkillView> skills) =>
+        [.. _terms.Where(t => t.Vocabulary == "skill" && !skills.Any(s => !s.Endorsed && s.TermId == t.Id))];
+
+    private static string Value(short? level) => level is { } l ? l.ToString(CultureInfo.InvariantCulture) : "";
+
+    private static short? Level(string? value) => short.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out short l) ? l : null;
+
+    private async Task LevelAsync(SkillView skill, string? value)
+    {
+        _busy = skill.Id;
+        _said = "";
+        ApiResult<SkillView> set = await Api.SetSkillAsync(skill.TermId, Level(value));
+        _problem = set.Problem;
+        if (set.Value is { } changed && _skills is { } skills)
+        {
+            _skills = [.. skills.Select(s => s.Id == changed.Id ? changed : s)];
+            _said = T["app.skills.saved"];
+        }
+
+        _busy = null;
+    }
+
+    private async Task AddAsync()
+    {
+        if (!Guid.TryParse(_newTerm, out Guid term))
+        {
+            return;
+        }
+
+        _adding = true;
+        _said = "";
+        ApiResult<SkillView> added = await Api.SetSkillAsync(term, Level(_newLevel));
+        _addProblem = added.Problem;
+        _adding = false;
+        if (added.Value is { } skill && _skills is { } skills)
+        {
+            _skills = [.. skills, skill];
+            _newTerm = "";
+            _newLevel = "";
+            _said = T.Format("app.skills.added", ("skill", Text.Name(skill.Name)));
+        }
+    }
+
+    private async Task RemoveAsync(SkillView skill)
+    {
+        _busy = skill.Id;
+        _said = "";
+        ApiResult removed = await Api.RemoveSkillAsync(skill.Id);
+        _problem = removed.Problem;
+        if (removed.Problem is null && _skills is { } skills)
+        {
+            _skills = [.. skills.Where(s => s.Id != skill.Id)];
+            _said = T.Format("app.skills.removed", ("skill", Text.Name(skill.Name)));
+        }
+
+        _confirm = null;
+        _busy = null;
+    }
+}

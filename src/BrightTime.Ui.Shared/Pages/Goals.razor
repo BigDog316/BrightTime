@@ -1,0 +1,111 @@
+@page "/portfolio/goals"
+@* A young person's goals (D69, D78): theirs alone, never on a shown portfolio or in an export.
+   Each moves between working on it, done, on hold and set aside from here; the words and target
+   are changed on the goal's own screen. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.goals.title"]</h1>
+
+@if (Session.Me is not { } me)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (!Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else
+{
+    <p class="hint">@T["app.goals.intro"]</p>
+    <p class="visually-hidden" role="status">@_said</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    <div class="actions">
+        <a class="button primary" href="portfolio/goals/new">@T["app.goals.add"]</a>
+    </div>
+    @if (_goals is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_goals is { Count: 0 })
+    {
+        <p>@T["app.goals.none"]</p>
+    }
+    else if (_goals is { } goals)
+    {
+        <ul class="cards">
+            @foreach (GoalView g in goals)
+            {
+                <li class="card" @key="g.Id">
+                    <h3 dir="auto">@g.Title</h3>
+                    <p><strong>@T["app.goals.status." + g.Status]</strong></p>
+                    @if (g.Detail is { Length: > 0 } detail)
+                    {
+                        <p dir="auto">@detail</p>
+                    }
+                    @if (g.Target is { Length: > 0 } target)
+                    {
+                        <p class="hint">@T.Format("app.goals.about", ("target", Text.Name(target)))</p>
+                    }
+                    @if (g.Status == "achieved" && g.AchievedAt is { } done)
+                    {
+                        <p class="hint">@T.Format("app.goals.achieved_on", ("date", T.DateShort(done)))</p>
+                    }
+                    else if (g.TargetDate is { } by)
+                    {
+                        <p class="hint">@T.Format("app.goals.by", ("date", T.DateShort(by)))</p>
+                    }
+                    <div class="actions">
+                        @foreach (string next in Moves(g.Status))
+                        {
+                            <button type="button" disabled="@(_busy == g.Id)" @onclick="() => MoveAsync(g, next)">@T["app.goals.mark." + next]</button>
+                        }
+                        <a class="button" href="portfolio/goals/@g.Id.ToString("D")">@T["app.goals.change"]</a>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+    <a class="button" href="portfolio">@T["app.portfolio.back"]</a>
+}
+
+@code {
+    private IReadOnlyList<GoalView>? _goals;
+    private ApiProblem? _problem;
+    private Guid? _busy;
+    private string _said = "";
+
+    /// <summary>Where a goal can go from where it stands.</summary>
+    internal static string[] Moves(string status) => status switch
+    {
+        "active" => ["achieved", "paused", "abandoned"],
+        "paused" => ["active", "abandoned"],
+        _ => ["active"],
+    };
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<GoalView>> loaded = await Api.GoalsAsync();
+        _problem = loaded.Problem;
+        _goals = loaded.Value ?? _goals;
+    }
+
+    private async Task MoveAsync(GoalView goal, string status)
+    {
+        _busy = goal.Id;
+        _said = "";
+        // The server replaces the goal whole, so everything it has goes back with the new status.
+        ApiResult<GoalView> moved = await Api.ChangeGoalAsync(goal.Id, new GoalDraft(goal.Title, goal.Detail, goal.TargetTermId, goal.TargetDate, status));
+        _problem = moved.Problem;
+        if (moved.Value is { } changed && _goals is { } goals)
+        {
+            _goals = [.. goals.Select(g => g.Id == changed.Id ? changed : g)];
+            _said = T.Format("app.goals.now", ("status", T["app.goals.status." + status]));
+        }
+
+        _busy = null;
+    }
+}

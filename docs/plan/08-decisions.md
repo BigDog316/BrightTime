@@ -2589,6 +2589,57 @@ but the API's JSON, so this slice also gives the website the two pages they open
 the portfolio as a PDF, OB 3.0 or a CLR (D68), which needs saving a file on the phone; and a
 guardian's view of a child's portfolio, which D65 left for later.
 
+### D78 — A young person's skills, projects and goals, in the app (**proposed 2026-11-05**)
+
+The seventh app slice: the rest of a young person's portfolio, on D69's routes. **Your portfolio**
+now leads to three screens, under *More of your portfolio*. Each offers only the next step the
+server allows from where a record stands; the server still makes every call.
+- **Your skills** (`/portfolio/skills`) lists each skill with its level, and *Endorsed by
+  {organisation}* for one an organisation vouched for.
+  - The young person's own skill has its level in a drop-down, which saves as it changes. An
+    endorsed one's level is the organisation's, so it's said, not offered.
+  - **Add a skill** offers the county's skills they haven't listed themselves. One an organisation
+    endorsed can still be listed as their own: the two say different things.
+  - **Remove** asks first; for an endorsed skill it says only the organisation can add it back.
+  - With no skills on the county's list, it says so instead of offering an empty choice.
+- **Your projects** (`/portfolio/projects`) lists each project with the activity it came from and
+  where it stands:
+  - a **draft** has **Send for approval**, once it names an activity; without one it says to choose
+    it. A note from staff who sent it back shows as *Sent back to you: …* until it's sent again;
+  - **sent for approval**: only they and the organisation can see it;
+  - **approved**: **Show with your link** or **Show to everyone**. Under 13 it says showing isn't
+    open to them yet, from the portfolio's `canShow`;
+  - **shown**: to whom, with the other choice and **Stop showing it**. While the portfolio itself is
+    private, a hint says nobody else sees shown projects yet.
+  - **Change** opens the project. For one that was sent, approved or shown, it says first that
+    saving makes it a draft again, to be sent and approved anew (D69's rule). **Remove** asks first.
+  - The activity is chosen from the portfolio's records that came through the platform, once each.
+    A record imported from elsewhere has no organisation here to approve it.
+- **Your goals** (`/portfolio/goals`) says goals are theirs alone and never shown. Each shows
+  where it stands (working on it, done, on hold, set aside), the skill or interest it's about and
+  the date aimed for, or the day it was done.
+  - The buttons move it on: **I did it**, **Put it on hold** or **Set it aside**, and
+    **Work on it again**. A move sends the goal whole, since the server replaces it.
+  - **Add a goal** and **Change** take a title, more about it, a skill or interest (grouped as
+    skills, then interests) and a date. A change keeps where it stands.
+- **Server changes:**
+  - `GET /me/learning/terms`, signed in: the county's skills and interests with their ids, in the
+    request's language. The skill and goal routes take term ids; the public taxonomy names terms
+    by code and leaves out skills, which label no listing (a test holds that).
+  - A portfolio record (`/me/portfolio`) carries its `listingId`, the activity a project names.
+
+**Found on the emulator:**
+- **A project waiting for approval was listed twice.** `Projects.SubmittedAsync` joined projects to
+  participation records, so a young person with two records for one activity (a second season, a
+  re-enrolment) appeared once per record in the organisation's list. It tests for a record now
+  instead of joining, and names the activity from the latest. `LearnerRecordApiTests` gives its
+  young person two seasons, and failed before the change.
+- **An own skill's level was said twice**, as text and in its drop-down. The drop-down alone says it.
+
+**Not yet:** playlists (D67); downloading the portfolio (D68); the console's screens for staff to
+review projects and endorse skills (the API has them); and evidence images, waiting on media
+storage.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

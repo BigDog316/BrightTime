@@ -18,7 +18,7 @@ using Npgsql;
 namespace BrightTime.Modules.Learning.Portfolio;
 
 [YouthData]
-public sealed record ParticipationView(Guid Id, string Title, string? Organisation, DateOnly StartedOn, DateOnly? EndedOn, int SessionsAttended, decimal Hours, string Source, bool IsHidden);
+public sealed record ParticipationView(Guid Id, string Title, string? Organisation, DateOnly StartedOn, DateOnly? EndedOn, int SessionsAttended, decimal Hours, string Source, bool IsHidden, Guid? ListingId);
 
 /// <summary>A young person's own portfolio, as they see it: everything, hidden records included.</summary>
 [YouthData]
@@ -249,7 +249,7 @@ public sealed partial class Portfolios(
     }
 
     private static ParticipationView View(ParticipationRecordRecord r) =>
-        new(r.Id, r.TitleSnapshot, r.OrgNameSnapshot, r.StartedOn, r.EndedOn, r.SessionsAttended, r.Hours, r.Source, r.IsHidden);
+        new(r.Id, r.TitleSnapshot, r.OrgNameSnapshot, r.StartedOn, r.EndedOn, r.SessionsAttended, r.Hours, r.Source, r.IsHidden, r.ListingId);
 
     private static string? Optional(string? text) => text?.Trim() is { Length: > 0 } t ? t : null;
 

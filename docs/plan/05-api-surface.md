@@ -435,6 +435,9 @@ CLR is signed by the county's site under `did:web:{host}:api:v1:public:issuers:{
 at `/badges/{slug}`, beside `verify`, the credential's own address. The website shows a shown
 portfolio at `/portfolios/{slug}`; the API's JSON routes are unchanged.
 
+*Built (2026-11-05, D78):* `GET /me/learning/terms`, the county's skills and interests with the
+ids the skill and goal routes take; and `listingId` on each record of `GET /me/portfolio`.
+
 ```
 
 GET    /api/v1/playlists

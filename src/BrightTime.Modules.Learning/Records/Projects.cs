@@ -194,13 +194,24 @@ public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditT
     public Task<IReadOnlyList<ProjectSubmission>> SubmittedAsync(OrganisationId org, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<IReadOnlyList<ProjectSubmission>>(async ct =>
         {
+            // A young person can have more than one record for an activity (a second season, say):
+            // the project is asked about once, so the records are tested for, not joined (D78).
+            IQueryable<ParticipationRecordRecord> ours = db.Participation.Where(r => r.OrgId == org.Value);
             var waiting = await (from p in db.Projects.AsNoTracking()
-                                 join r in db.Participation on new { p.UserId, ListingId = p.ListingId } equals new { r.UserId, r.ListingId }
+                                 where p.Status == Submitted && ours.Any(r => r.UserId == p.UserId && r.ListingId == p.ListingId)
                                  join lp in db.Profiles on p.UserId equals lp.UserId into profiles
                                  from lp in profiles.DefaultIfEmpty()
-                                 where p.Status == Submitted && r.OrgId == org.Value
                                  orderby p.UpdatedAt
-                                 select new { p.Id, p.UserId, p.Title, p.Description, Activity = r.TitleSnapshot, Name = lp == null ? null : lp.DisplayName, p.UpdatedAt })
+                                 select new
+                                 {
+                                     p.Id,
+                                     p.UserId,
+                                     p.Title,
+                                     p.Description,
+                                     Activity = ours.Where(r => r.UserId == p.UserId && r.ListingId == p.ListingId).OrderByDescending(r => r.StartedOn).Select(r => r.TitleSnapshot).FirstOrDefault(),
+                                     Name = lp == null ? null : lp.DisplayName,
+                                     p.UpdatedAt,
+                                 })
                 .Take(500).ToListAsync(ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {

@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Learning.Records;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -16,6 +18,9 @@ public sealed record ProjectVisibilityRequest(string? Visibility);
 
 public sealed record ProjectReviewRequest(bool Approve, string? Note);
 
+/// <summary>A skill or interest a young person can list, or aim a goal at, named in the request's language.</summary>
+public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);
+
 /// <summary>
 /// The rest of a young person's portfolio (M4, D69): their goals, their skills (their own, and those
 /// an organisation endorses), and their projects, approved by an organisation's staff before they
@@ -28,6 +33,7 @@ public static class LearnerRecordEndpoints
         ArgumentNullException.ThrowIfNull(api);
 
         RouteGroupBuilder me = api.MapGroup("/me").RequireAuthorization();
+        me.MapGet("/learning/terms", TermsAsync).Produces<IReadOnlyList<LearningTerm>>();
         me.MapGet("/goals", GoalsAsync).WithMetadata(new YouthRecordAttribute(Goals.Read)).Produces<IReadOnlyList<GoalView>>();
         me.MapPost("/goals", AddGoalAsync).WithMetadata(new YouthRecordAttribute(Goals.Changed)).Produces<GoalView>(StatusCodes.Status201Created);
         me.MapPut("/goals/{id:guid}", ChangeGoalAsync).WithMetadata(new YouthRecordAttribute(Goals.Changed)).Produces<GoalView>();
@@ -48,6 +54,25 @@ public static class LearnerRecordEndpoints
         org.MapPost("/projects/{id:guid}/review", ReviewAsync).WithMetadata(new YouthRecordAttribute(Projects.Reviewed));
         org.MapPost("/skills/endorse", EndorseAsync).WithMetadata(new YouthRecordAttribute(Skills.Endorsed));
         return api;
+    }
+
+    // ---- terms -----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The county's skills and interests, with the ids the routes below take (D78). The public
+    /// taxonomy names terms by code and leaves skills out: they label no listing.
+    /// </summary>
+    private static async Task<IResult> TermsAsync(ITenantContext tenant, ITaxonomyQueries taxonomy, CancellationToken ct)
+    {
+        List<LearningTerm> terms = [];
+        foreach (string vocabulary in (string[])["skill", "interest"])
+        {
+            IReadOnlyList<VocabularyTerm> found = await taxonomy.GetVocabularyAsync(vocabulary, tenant.Locale.Code, ct).ConfigureAwait(false);
+            terms.AddRange(found.OrderBy(t => t.SortOrder).ThenBy(t => t.Name, StringComparer.CurrentCulture)
+                .Select(t => new LearningTerm(t.Id, vocabulary, t.Name, t.ParentId)));
+        }
+
+        return Results.Ok(terms);
     }
 
     // ---- goals -----------------------------------------------------------------------------------

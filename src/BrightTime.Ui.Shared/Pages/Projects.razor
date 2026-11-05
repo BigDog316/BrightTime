@@ -1,0 +1,172 @@
+@page "/portfolio/projects"
+@* A young person's projects (D69, D78): written, sent to the organisation of the activity they came
+   from, approved, then shown with the portfolio. A change makes a project a private draft again, so
+   what anyone sees is what staff approved. The server holds every rule; this screen offers only
+   the next step it allows. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.projects.title"]</h1>
+
+@if (Session.Me is not { } me)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (!Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else
+{
+    <p class="hint">@T["app.projects.intro"]</p>
+    <p class="visually-hidden" role="status">@_said</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    <div class="actions">
+        <a class="button primary" href="portfolio/projects/new">@T["app.projects.add"]</a>
+    </div>
+    @if (_projects is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_projects is { Count: 0 })
+    {
+        <p>@T["app.projects.none"]</p>
+    }
+    else if (_projects is { } projects)
+    {
+        @if (_portfolio is { Visibility: "private" } && projects.Any(p => p.Status == "published"))
+        {
+            <p class="hint">@T["app.projects.portfolio_private"]</p>
+        }
+        <ul class="cards">
+            @foreach (ProjectView p in projects)
+            {
+                <li class="card" @key="p.Id">
+                    <h3 dir="auto">@p.Title</h3>
+                    @if (p.Activity is { Length: > 0 } activity)
+                    {
+                        <p class="hint">@T.Format("app.projects.from", ("activity", Text.Name(p.Organisation is { Length: > 0 } org ? activity + " · " + org : activity)))</p>
+                    }
+                    <p><strong>@Status(p)</strong></p>
+                    @if (p.ReviewNote is { Length: > 0 } note && p.Status == "draft")
+                    {
+                        <p>@T.Format("app.projects.sent_back", ("note", Text.Name(note)))</p>
+                    }
+                    @if (p.Description is { Length: > 0 } description)
+                    {
+                        <p class="project-text" dir="auto">@description</p>
+                    }
+                    <div class="actions">
+                        @if (p.Status == "draft")
+                        {
+                            @if (p.ListingId is not null)
+                            {
+                                <button type="button" class="primary" disabled="@(_busy == p.Id)" @onclick="() => SubmitAsync(p)">@T["app.projects.submit"]</button>
+                            }
+                            else
+                            {
+                                <p class="hint">@T["app.projects.needs_activity"]</p>
+                            }
+                        }
+                        else if (p.Status is "approved" or "published")
+                        {
+                            @if (_portfolio is { CanShow: false })
+                            {
+                                <p class="hint">@T["error.projects.showcase"]</p>
+                            }
+                            else
+                            {
+                                @foreach (string to in ShowChoices(p))
+                                {
+                                    <button type="button" disabled="@(_busy == p.Id)" @onclick="() => ShowAsync(p, to)">@T["app.projects.show." + to]</button>
+                                }
+                            }
+                        }
+                        <a class="button" href="portfolio/projects/@p.Id.ToString("D")">@T["app.projects.change"]</a>
+                        @if (_confirm == p.Id)
+                        {
+                            <button type="button" class="danger" disabled="@(_busy == p.Id)" @onclick="() => RemoveAsync(p)">@T["app.projects.remove_confirm"]</button>
+                            <button type="button" @onclick="() => _confirm = null">@T["app.cancel"]</button>
+                        }
+                        else
+                        {
+                            <button type="button" @onclick="() => _confirm = p.Id">@T["app.projects.remove"]</button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+    <a class="button" href="portfolio">@T["app.portfolio.back"]</a>
+}
+
+@code {
+    private IReadOnlyList<ProjectView>? _projects;
+    private PortfolioView? _portfolio;
+    private ApiProblem? _problem;
+    private Guid? _busy;
+    private Guid? _confirm;
+    private string _said = "";
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<ProjectView>> projects = await Api.ProjectsAsync();
+        // The portfolio says whether projects may be shown at all, and whether the page is.
+        ApiResult<PortfolioView> portfolio = await Api.PortfolioAsync();
+        _problem = projects.Problem ?? portfolio.Problem;
+        _projects = projects.Value ?? _projects;
+        _portfolio = portfolio.Value ?? _portfolio;
+    }
+
+    /// <summary>What the card says of where a project stands, and for a shown one, to whom.</summary>
+    private string Status(ProjectView p) =>
+        T["app.projects.status." + (p.Status == "published" ? "published." + (p.Visibility == "public" ? "public" : "link_only") : p.Status)];
+
+    /// <summary>The ways an approved project can be shown, or taken back, from where it is.</summary>
+    internal static IEnumerable<string> ShowChoices(ProjectView p) =>
+        ((string[])["link_only", "public", "private"]).Where(v => v != p.Visibility);
+
+    private async Task SubmitAsync(ProjectView project)
+    {
+        await ReplaceAsync(project, () => Api.SubmitProjectAsync(project.Id), T["app.projects.now_submitted"]);
+    }
+
+    private async Task ShowAsync(ProjectView project, string visibility)
+    {
+        await ReplaceAsync(project, () => Api.ShowProjectAsync(project.Id, visibility), T["app.projects.now." + visibility]);
+    }
+
+    private async Task ReplaceAsync(ProjectView project, Func<Task<ApiResult<ProjectView>>> call, string said)
+    {
+        _busy = project.Id;
+        _said = "";
+        ApiResult<ProjectView> done = await call();
+        _problem = done.Problem;
+        if (done.Value is { } changed && _projects is { } projects)
+        {
+            _projects = [.. projects.Select(p => p.Id == changed.Id ? changed : p)];
+            _said = said;
+        }
+
+        _busy = null;
+    }
+
+    private async Task RemoveAsync(ProjectView project)
+    {
+        _busy = project.Id;
+        _said = "";
+        ApiResult removed = await Api.RemoveProjectAsync(project.Id);
+        _problem = removed.Problem;
+        if (removed.Problem is null && _projects is { } projects)
+        {
+            _projects = [.. projects.Where(p => p.Id != project.Id)];
+            _said = T["app.projects.removed"];
+        }
+
+        _confirm = null;
+        _busy = null;
+    }
+}

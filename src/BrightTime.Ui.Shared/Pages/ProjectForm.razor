@@ -1,0 +1,130 @@
+@page "/portfolio/projects/new"
+@page "/portfolio/projects/{Id:guid}"
+@* Writes or changes a project (D69, D78): what it is, in words, and the activity it came from,
+   whose organisation approves it. Changing one that was sent, approved or shown makes it a private
+   draft again: the screen says so before it's saved. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+<h1>@T[Id is null ? "app.projects.add" : "app.projects.change_title"]</h1>
+
+@if (Session.Me is not { } me || !Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else if (!_ready && _problem is null)
+{
+    <Busy />
+}
+else if (!_ready)
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+}
+else if (_missing)
+{
+    <p>@T["error.projects.not_found"]</p>
+    <a class="button" href="portfolio/projects">@T["app.projects.back"]</a>
+}
+else
+{
+    @if (_project is { Status: not "draft" })
+    {
+        <p><strong>@T["app.projects.change_warning"]</strong></p>
+    }
+    <form class="stack" @onsubmit="SaveAsync">
+        <div class="field">
+            <label for="project-title">@T["app.projects.project_title"]</label>
+            <input id="project-title" required maxlength="200" autocomplete="off" dir="auto" @bind="_title" />
+        </div>
+        <div class="field">
+            <label for="project-text">@T["app.projects.description"]</label>
+            <p class="hint" id="project-text-hint">@T["app.projects.description_hint"]</p>
+            <textarea id="project-text" rows="8" maxlength="10000" dir="auto" @bind="_description" aria-describedby="project-text-hint"></textarea>
+        </div>
+        <div class="field">
+            <label for="project-activity">@T["app.projects.activity"]</label>
+            <p class="hint" id="project-activity-hint">@T[_activities.Count == 0 ? "app.projects.no_activities" : "app.projects.activity_hint"]</p>
+            <select id="project-activity" @bind="_listing" aria-describedby="project-activity-hint">
+                <option value="">@T["app.projects.activity_none"]</option>
+                @foreach (ParticipationView a in _activities)
+                {
+                    <option value="@a.ListingId!.Value.ToString("D")">@(a.Organisation is { Length: > 0 } org ? a.Title + " · " + org : a.Title)</option>
+                }
+            </select>
+        </div>
+        <ProblemNotice Problem="_problem" />
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@_busy">@T["app.projects.save"]</button>
+            <a class="button" href="portfolio/projects">@T["app.projects.back"]</a>
+        </div>
+    </form>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private IReadOnlyList<ParticipationView> _activities = [];
+    private ProjectView? _project;
+    private ApiProblem? _problem;
+    private bool _ready;
+    private bool _missing;
+    private bool _busy;
+
+    private string _title = "";
+    private string _description = "";
+    private string _listing = "";
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<PortfolioView> portfolio = await Api.PortfolioAsync();
+        if (portfolio.Problem is { } problem)
+        {
+            _problem = problem;
+            return;
+        }
+
+        // An activity is one the young person took part in, through this platform: a record with a
+        // listing. One taken part in more than once is offered once.
+        _activities = [.. portfolio.Value!.Participation.Where(r => r.ListingId is not null).DistinctBy(r => r.ListingId)];
+        if (Id is { } id)
+        {
+            ApiResult<IReadOnlyList<ProjectView>> projects = await Api.ProjectsAsync();
+            if (projects.Problem is { } failed)
+            {
+                _problem = failed;
+                return;
+            }
+
+            _project = projects.Value!.FirstOrDefault(p => p.Id == id);
+            if (_project is { } project)
+            {
+                _title = project.Title;
+                _description = project.Description ?? "";
+                _listing = project.ListingId?.ToString("D") ?? "";
+            }
+            else
+            {
+                _missing = true;
+            }
+        }
+
+        _ready = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        ProjectDraft draft = new(_title.Trim(), _description.Trim() is { Length: > 0 } d ? d : null, Guid.TryParse(_listing, out Guid l) ? l : null);
+        ApiResult<ProjectView> saved = Id is { } id ? await Api.ChangeProjectAsync(id, draft) : await Api.AddProjectAsync(draft);
+        _problem = saved.Problem;
+        _busy = false;
+        if (saved.Value is not null)
+        {
+            Navigation.NavigateTo("portfolio/projects");
+        }
+    }
+}

@@ -102,10 +102,22 @@ public sealed class LearnerRecordApiTests(ApiFixture api)
             Guid interest = await TermAsync("interest", "Rivers");
             Guid enrolment = await EnrolledAsync(learner, learnerId, admin, listing, org);
             string activity = api.Data.Listings.Single(l => l.Id == listing).Title;
+            // Two seasons of the same activity: the project is still one project to review (D78).
             await api.ExecuteAsync("""
                 insert into learning.participation_record (id, tenant_id, user_id, listing_id, org_id, title_snapshot, org_name_snapshot, started_on, sessions_attended, hours, source, created_at)
-                values (gen_random_uuid(), @t, @u, @l, @o, @title, 'The organisation', current_date - 30, 6, 9, 'attendance', now())
+                values (gen_random_uuid(), @t, @u, @l, @o, @title, 'The organisation', current_date - 30, 6, 9, 'attendance', now()),
+                       (gen_random_uuid(), @t, @u, @l, @o, @title, 'The organisation', current_date - 400, 4, 6, 'attendance', now())
                 """, ("t", api.Data.TenantId), ("u", learnerId), ("l", listing), ("o", org), ("title", activity));
+
+            // The app picks skills and goal targets from the county's terms, by id (D78), and a
+            // project's activity from the portfolio's records, by listing.
+            (await anonymous.GetAsync(Relative("api/v1/me/learning/terms"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+            JsonElement[] terms = [.. (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/learning/terms"), Ct))).EnumerateArray()];
+            terms.ShouldContain(t => t.GetProperty("id").GetGuid() == teamwork && t.GetProperty("vocabulary").GetString() == "skill" && t.GetProperty("name").GetString() == "Teamwork");
+            terms.ShouldContain(t => t.GetProperty("id").GetGuid() == interest && t.GetProperty("vocabulary").GetString() == "interest");
+            terms.Select(t => t.GetProperty("vocabulary").GetString()).Distinct().ShouldBe(["skill", "interest"], ignoreOrder: true);
+            (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/portfolio"), Ct))).GetProperty("participation").EnumerateArray()
+                .Select(r => r.GetProperty("listingId").GetGuid()).ShouldBe([listing, listing]);
 
             // Goals: their own, about an interest or a skill, and private.
             await ProblemAsync(await learner.PostAsJsonAsync("api/v1/me/goals", new { title = "Lead a river walk", status = "someday" }, Ct), HttpStatusCode.BadRequest, "goals.status");

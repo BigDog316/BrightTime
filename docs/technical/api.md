@@ -189,7 +189,7 @@ The owner alone reads or changes a family profile.
 
 | Route | |
 |---|---|
-| `GET`, `PUT /me/portfolio` | The young person's portfolio and its settings (display name, headline, bio, visibility, link name) |
+| `GET`, `PUT /me/portfolio` | The young person's portfolio and its settings (display name, headline, bio, visibility, link name). Each record carries its `listingId`, the activity a project can name (D78) |
 | `POST /me/portfolio/participation/{id}/hide`, `/show` | Hide a record from the total and any shown page, or show it again |
 | `POST /me/portfolio/export` | `{ format }`: `pdf` (a printable portfolio in the person's language), `json_ob3` (their badges' OB 3.0 credentials and JWTs) or `clr2` (a CLR 2.0 VC-JWT signed by the site, `application/jwt`; needs at least one badge). Returned at once, never stored (D68) |
 | `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT, `verify` (the credential's address, which is its id) and `page` (the website's check page, `/badges/{slug}`, D77) |
@@ -201,6 +201,7 @@ The owner alone reads or changes a family profile.
 
 | Route | |
 |---|---|
+| `GET /me/learning/terms` | The county's `skill` and `interest` terms with their ids, named in the request's language, for the skill and goal routes below (D78) |
 | `GET`, `POST /me/goals`; `PUT /me/goals/{id}` | Private goals: a title, detail, an optional interest or skill term, a target date, and `active`, `achieved`, `paused` or `abandoned` (D69) |
 | `GET /me/skills` | Skills, each with its level (1 to 4), and whether and by which organisation it was endorsed |
 | `POST /me/skills` | `{ termId, level }`: list a skill from the `skill` vocabulary as one's own, or change its level |

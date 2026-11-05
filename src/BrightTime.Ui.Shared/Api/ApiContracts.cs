@@ -137,9 +137,12 @@ public sealed record CheckinCode(string Token, DateTimeOffset ExpiresAt, int Val
 
 /// <summary>
 /// One thing a young person took part in (D65, D77), built from attendance. A hidden record stays
-/// in their own view, marked, and leaves their total and anything they've shown.
+/// in their own view, marked, and leaves their total and anything they've shown. <c>ListingId</c>
+/// is the activity a project can be about (D78); a record imported from elsewhere has none.
 /// </summary>
-public sealed record ParticipationView(Guid Id, string Title, string? Organisation, DateOnly StartedOn, DateOnly? EndedOn, int SessionsAttended, decimal Hours, string Source, bool IsHidden);
+public sealed record ParticipationView(
+    Guid Id, string Title, string? Organisation, DateOnly StartedOn, DateOnly? EndedOn, int SessionsAttended, decimal Hours, string Source, bool IsHidden,
+    Guid? ListingId = null);
 
 /// <summary>
 /// A young person's own portfolio (D65, D77): how it appears, who may see it
@@ -158,6 +161,38 @@ public sealed record PortfolioDraft(string DisplayName, string? Headline, string
 /// the credential itself isn't read by the app.
 /// </summary>
 public sealed record HeldBadge(Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Page);
+
+/// <summary>A skill or interest from the county's lists (D78), by the id the goal and skill routes take.</summary>
+public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);
+
+/// <summary>
+/// A young person's goal (D69, D78): theirs alone, never shown or exported. <c>Status</c> is
+/// <c>active</c>, <c>achieved</c>, <c>paused</c> or <c>abandoned</c>; <c>Target</c> names the
+/// skill or interest it's about.
+/// </summary>
+public sealed record GoalView(
+    Guid Id, string Title, string? Detail, Guid? TargetTermId, string? Target, DateOnly? TargetDate, string Status, DateTimeOffset CreatedAt, DateTimeOffset? AchievedAt);
+
+/// <summary>A goal as written or changed. A null status leaves it where it stands.</summary>
+public sealed record GoalDraft(string Title, string? Detail, Guid? TargetTermId, DateOnly? TargetDate, string? Status);
+
+/// <summary>
+/// A skill on the portfolio (D69, D78): one the young person listed, at a level from 1 to 4 they
+/// chose, or one an organisation endorsed (<c>EndorsedBy</c>). The same skill can be both.
+/// </summary>
+public sealed record SkillView(Guid Id, Guid TermId, string Name, short? Level, bool Endorsed, string? EndorsedBy, DateTimeOffset AssertedAt);
+
+/// <summary>
+/// A project (D69, D78): <c>draft</c>, <c>submitted</c> to the organisation of its activity,
+/// <c>approved</c>, then <c>published</c> (<c>link_only</c> or <c>public</c>). A change makes it a
+/// private draft again.
+/// </summary>
+public sealed record ProjectView(
+    Guid Id, string Title, string? Description, Guid? ListingId, string? Activity, string? Organisation,
+    string Status, string Visibility, string? ReviewNote, DateTimeOffset? ApprovedAt, DateTimeOffset UpdatedAt);
+
+/// <summary>A project as written or changed: what it is, and the activity it came from.</summary>
+public sealed record ProjectDraft(string Title, string? Description, Guid? ListingId);
 
 /// <summary>The signed-in person: who, what kind of account (<c>adult</c>, <c>youth</c>), and what they may do.</summary>
 public sealed record Me(

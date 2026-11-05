@@ -9,7 +9,8 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [Messages](#messages)
 - [Staying safe](#staying-safe)
 - [Your portfolio and badges (app)](#your-portfolio-and-badges-app)
-- [Playlists, goals, skills and projects: coming soon](#playlists-goals-skills-and-projects-coming-soon)
+- [Your skills, projects and goals (app)](#your-skills-projects-and-goals-app)
+- [Playlists and downloads: coming soon](#playlists-and-downloads-coming-soon)
 
 ## Getting your own account
 
@@ -98,7 +99,37 @@ did, like *River Surveyor*. They're listed under your records, with who gave eac
   page to someone. If an organisation takes a badge back (for example, it was given by mistake),
   the page says so, with the reason, and your list marks it as **revoked**.
 
-## Playlists, goals, skills and projects: coming soon
+## Your skills, projects and goals (app)
+
+Find them under **Your portfolio**, in *More of your portfolio*.
+
+**Your skills** come from your county's list.
+- **Add a skill** and say how far along you are, from beginning to advanced. You can change the
+  level any time.
+- An organisation you're enrolled with can also **endorse** a skill, vouching that you showed it.
+  It says *Endorsed by* and the organisation's name.
+- You can **Remove** any skill, endorsed or not. If you remove an endorsed one, only the
+  organisation can add it back.
+- When your portfolio is shown, your skills are on it, each marked if an organisation endorsed it.
+
+**Your projects** are things you made, like a map or a write-up, about an activity you took part
+in.
+- **Add a project**: give it a name, say what you made, and choose the activity it came from.
+- **Send for approval** sends it to the organisation that ran that activity. Its staff approve it
+  or send it back, saying what to change. You see their note on the project.
+- Once it's approved, **Show with your link** or **Show to everyone** puts it on your portfolio
+  page. Your portfolio has to be shown too, or nobody else sees it. Showing work isn't open to
+  anyone under 13.
+- If you change a project after it's approved, it goes back to a draft. Send it for approval again
+  before you show it.
+
+**Your goals** are your own aims, like *lead a river walk*. Nobody else sees them, and they're
+never on your portfolio page.
+- Give a goal a skill or interest it's about, and a date to aim for, if you like.
+- Mark it **I did it**, **Put it on hold** or **Set it aside**, and **Work on it again** whenever
+  you want.
+
+## Playlists and downloads: coming soon
 
 These are built behind the scenes; their screens are next. When they arrive:
 
@@ -111,16 +142,6 @@ badge at the end.
 - Finish every required step and the playlist is complete: you're given its badge.
 - Some playlists, and some programs, are open only to people who hold a certain badge, or who have
   completed a certain playlist. The program's page says so before you apply.
-
-**Goals, skills and projects.**
-- **Goals** are your own aims, like *lead a river walk*. They're private: nobody else sees them.
-- **Skills** come from your county's list. Add the ones you have and say how far along you are,
-  from beginning to advanced. An organisation you're enrolled with can also **endorse** a skill,
-  vouching that you showed it. You can remove any skill, endorsed or not.
-- **Projects** are things you made, like a map or a write-up, about an activity you took part in.
-  You send a project to that organisation, and its staff approve it or ask you to change something.
-  Once it's approved you can show it on your portfolio. If you change it after that, it goes back
-  to private until it's approved again.
 
 **Taking it with you.** You'll be able to download your portfolio:
 - as a **PDF** to print or attach, with your activities and your badges, each with the link where

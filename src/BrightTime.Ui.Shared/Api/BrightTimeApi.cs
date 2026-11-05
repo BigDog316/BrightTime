@@ -350,6 +350,55 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<IReadOnlyList<HeldBadge>>> HeldBadgesAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<HeldBadge>>("me/badges", signedIn: true, ct);
 
+    // ---- goals, skills and projects (D69, D78) --------------------------------------------------
+
+    /// <summary>The county's skills and interests, in the app's language, with their ids.</summary>
+    public Task<ApiResult<IReadOnlyList<LearningTerm>>> LearningTermsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<LearningTerm>>("me/learning/terms", signedIn: true, ct);
+
+    /// <summary>The young person's goals, active ones first.</summary>
+    public Task<ApiResult<IReadOnlyList<GoalView>>> GoalsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<GoalView>>("me/goals", signedIn: true, ct);
+
+    public Task<ApiResult<GoalView>> AddGoalAsync(GoalDraft draft, CancellationToken ct = default) =>
+        SendAsync<GoalView>(HttpMethod.Post, "me/goals", draft, signedIn: true, ct);
+
+    /// <summary>Changes a goal. The server replaces it whole, so the draft carries everything.</summary>
+    public Task<ApiResult<GoalView>> ChangeGoalAsync(Guid id, GoalDraft draft, CancellationToken ct = default) =>
+        SendAsync<GoalView>(HttpMethod.Put, $"me/goals/{id:D}", draft, signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<SkillView>>> SkillsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<SkillView>>("me/skills", signedIn: true, ct);
+
+    /// <summary>Lists a skill as the young person's own, or changes the level they gave it.</summary>
+    public Task<ApiResult<SkillView>> SetSkillAsync(Guid termId, short? level, CancellationToken ct = default) =>
+        SendAsync<SkillView>(HttpMethod.Post, "me/skills", new { termId, level }, signedIn: true, ct);
+
+    /// <summary>Takes a skill off the portfolio, an endorsed one included.</summary>
+    public Task<ApiResult> RemoveSkillAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"me/skills/{id:D}", null, signedIn: true, ct);
+
+    public Task<ApiResult<IReadOnlyList<ProjectView>>> ProjectsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ProjectView>>("me/projects", signedIn: true, ct);
+
+    public Task<ApiResult<ProjectView>> AddProjectAsync(ProjectDraft draft, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Post, "me/projects", draft, signedIn: true, ct);
+
+    /// <summary>Changes a project, which makes it a private draft again.</summary>
+    public Task<ApiResult<ProjectView>> ChangeProjectAsync(Guid id, ProjectDraft draft, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Put, $"me/projects/{id:D}", draft, signedIn: true, ct);
+
+    /// <summary>Asks the organisation of the project's activity to approve it.</summary>
+    public Task<ApiResult<ProjectView>> SubmitProjectAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Post, $"me/projects/{id:D}/submit", null, signedIn: true, ct);
+
+    /// <summary>Shows an approved project (<c>link_only</c>, <c>public</c>) or takes it back (<c>private</c>).</summary>
+    public Task<ApiResult<ProjectView>> ShowProjectAsync(Guid id, string visibility, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Put, $"me/projects/{id:D}/visibility", new { visibility }, signedIn: true, ct);
+
+    public Task<ApiResult> RemoveProjectAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"me/projects/{id:D}", null, signedIn: true, ct);
+
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);
 

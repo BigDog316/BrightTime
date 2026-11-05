@@ -57,7 +57,8 @@ nothing in these guides promises a screen that doesn't exist yet.
 | Messages from organisations, and replying | Coming | Yes | |
 | A family's own attendance and check-in code | Coming | Yes | |
 | A young person's portfolio and badges | A shown portfolio's page, and checking a badge (anyone) | Yes | |
-| A young person's goals, skills, projects and playlists, and downloading a portfolio | Coming | Coming | |
+| A young person's skills, projects and goals | Shown skills and projects, on the portfolio's page | Yes | |
+| A young person's playlists, and downloading a portfolio | Coming | Coming | |
 | **Organisations:** playlists | Coming | | |
 | **Organisations:** badges | Coming | | |
 

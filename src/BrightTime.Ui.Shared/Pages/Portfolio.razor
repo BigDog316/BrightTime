@@ -1,7 +1,8 @@
 @page "/portfolio"
 @* A young person's own portfolio (D65, D66, D77): who can see it, the hours and activities from
    their attendance, each of which they can hide or show again, and the badges they hold, each with
-   the web page anyone can check it on. Under 13 it stays private: the server says so (CanShow). *@
+   the web page anyone can check it on. Under 13 it stays private: the server says so (CanShow).
+   Their skills, projects and goals have screens of their own (D78). *@
 @inject BrightTimeApi Api
 @inject AppSession Session
 @inject AppEndpoints Endpoints
@@ -48,6 +49,15 @@ else
             }
             <a class="button" href="portfolio/settings">@T["app.portfolio.change"]</a>
         </section>
+
+        <nav aria-labelledby="more">
+            <h2 id="more">@T["app.portfolio.more"]</h2>
+            <ul class="menu">
+                <li><a href="portfolio/skills">@T["app.skills.title"]</a></li>
+                <li><a href="portfolio/projects">@T["app.projects.title"]</a></li>
+                <li><a href="portfolio/goals">@T["app.goals.title"]</a></li>
+            </ul>
+        </nav>
 
         <section aria-labelledby="taking-part">
             <h2 id="taking-part">@T["portfolio.export.participation"]</h2>

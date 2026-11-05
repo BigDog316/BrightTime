@@ -1,0 +1,132 @@
+@page "/portfolio/goals/new"
+@page "/portfolio/goals/{Id:guid}"
+@* Writes or changes a goal (D69, D78): what it is, more about it, a skill or interest it's about,
+   and a date to aim for. Where it stands is changed on the list, so a change here keeps it. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject NavigationManager Navigation
+
+<h1>@T[Id is null ? "app.goals.add" : "app.goals.change_title"]</h1>
+
+@if (Session.Me is not { } me || !Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.portfolio.youth_only"]</p>
+}
+else if (!_ready && _problem is null)
+{
+    <Busy />
+}
+else if (!_ready)
+{
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+}
+else if (_missing)
+{
+    <p>@T["error.goals.not_found"]</p>
+    <a class="button" href="portfolio/goals">@T["app.goals.back"]</a>
+}
+else
+{
+    <p class="hint">@T["app.goals.intro"]</p>
+    <form class="stack" @onsubmit="SaveAsync">
+        <div class="field">
+            <label for="goal-title">@T["app.goals.goal_title"]</label>
+            <input id="goal-title" required maxlength="200" autocomplete="off" dir="auto" @bind="_title" />
+        </div>
+        <div class="field">
+            <label for="goal-detail">@T["app.goals.detail"]</label>
+            <textarea id="goal-detail" rows="4" maxlength="2000" dir="auto" @bind="_detail"></textarea>
+        </div>
+        <div class="field">
+            <label for="goal-target">@T["app.goals.target"]</label>
+            <select id="goal-target" @bind="_target">
+                <option value="">@T["app.goals.target_none"]</option>
+                @foreach (string vocabulary in Groups)
+                {
+                    IReadOnlyList<LearningTerm> group = [.. _terms.Where(t => t.Vocabulary == vocabulary)];
+                    @if (group.Count > 0)
+                    {
+                        <optgroup label="@T[vocabulary == "skill" ? "app.goals.target_skills" : "app.goals.target_interests"]">
+                            @foreach (LearningTerm term in group)
+                            {
+                                <option value="@term.Id.ToString("D")">@term.Name</option>
+                            }
+                        </optgroup>
+                    }
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="goal-by">@T["app.goals.target_date"]</label>
+            <input id="goal-by" type="date" @bind="_by" />
+        </div>
+        <ProblemNotice Problem="_problem" />
+        <div class="actions">
+            <button type="submit" class="primary" disabled="@_busy">@T["app.goals.save"]</button>
+            <a class="button" href="portfolio/goals">@T["app.goals.back"]</a>
+        </div>
+    </form>
+}
+
+@code {
+    private static readonly string[] Groups = ["skill", "interest"];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private IReadOnlyList<LearningTerm> _terms = [];
+    private ApiProblem? _problem;
+    private bool _ready;
+    private bool _missing;
+    private bool _busy;
+
+    private string _title = "";
+    private string _detail = "";
+    private string _target = "";
+    private DateOnly? _by;
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        // Without the lists a goal can still be written; it just can't name a skill or interest.
+        ApiResult<IReadOnlyList<LearningTerm>> terms = await Api.LearningTermsAsync();
+        _terms = terms.Value ?? [];
+        if (Id is { } id)
+        {
+            ApiResult<IReadOnlyList<GoalView>> goals = await Api.GoalsAsync();
+            if (goals.Problem is { } problem)
+            {
+                _problem = problem;
+                return;
+            }
+
+            if (goals.Value!.FirstOrDefault(g => g.Id == id) is { } goal)
+            {
+                _title = goal.Title;
+                _detail = goal.Detail ?? "";
+                _target = goal.TargetTermId?.ToString("D") ?? "";
+                _by = goal.TargetDate;
+            }
+            else
+            {
+                _missing = true;
+            }
+        }
+
+        _ready = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        GoalDraft draft = new(_title.Trim(), _detail.Trim() is { Length: > 0 } d ? d : null, Guid.TryParse(_target, out Guid t) ? t : null, _by, Status: null);
+        ApiResult<GoalView> saved = Id is { } id ? await Api.ChangeGoalAsync(id, draft) : await Api.AddGoalAsync(draft);
+        _problem = saved.Problem;
+        _busy = false;
+        if (saved.Value is not null)
+        {
+            Navigation.NavigateTo("portfolio/goals");
+        }
+    }
+}

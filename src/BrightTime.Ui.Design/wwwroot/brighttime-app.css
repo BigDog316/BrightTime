@@ -486,6 +486,11 @@ dl.facts dd {
     overflow-wrap: anywhere;
 }
 
+/* A project is written in paragraphs: keep the young person's line breaks. */
+.project-text {
+    white-space: pre-line;
+}
+
 .disclosure {
     padding: var(--bt-space-3);
     border-inline-start: 4px solid var(--bt-line);

@@ -57,6 +57,7 @@ public static class AppServices
         services.TryAddSingleton<IAppPreferences, MemoryPreferences>();
         services.TryAddSingleton<IOfflineStore, MemoryOfflineStore>();
         services.TryAddSingleton<IBlobStore, MemoryBlobStore>();
+        services.TryAddSingleton<IFileShare, MemoryFileShare>();
         services.TryAddSingleton<ILocationProvider, NoLocation>();
         services.TryAddSingleton<IPushRegistrar, NoPush>();
         services.TryAddSingleton<IPasskeyAuthenticator, NoPasskeys>();

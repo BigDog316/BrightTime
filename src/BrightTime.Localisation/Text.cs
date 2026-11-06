@@ -129,6 +129,9 @@ public sealed partial class Text(Catalogue catalogue, ITextContext tenant, IWord
 
     public string Money(int cents) => new Money(cents).Format(Locale);
 
+    /// <summary>The day it is in the region at that instant, for a file's name: 2026-11-05, never localised.</summary>
+    public string FileDay(DateTimeOffset at) => Local(at).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
     private DateTimeOffset Local(DateTimeOffset at) => TimeZoneInfo.ConvertTime(at, tenant.TimeZone);
 
     // ---- rendering --------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -97,10 +98,14 @@ public sealed class PortfolioExportApiTests(ApiFixture api)
             string badgeJwt = (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/badges"), Ct))).EnumerateArray().Single().GetProperty("credential").GetString()!;
 
             // The printable portfolio.
+            // Named by the region's day, as its "Made on" line is (D81): a New York evening isn't tomorrow.
+            TimeZoneInfo region = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+            string before = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, region).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             HttpResponseMessage pdf = await ExportAsync(learner, "pdf");
+            string after = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, region).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             pdf.StatusCode.ShouldBe(HttpStatusCode.OK);
             pdf.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
-            pdf.Content.Headers.ContentDisposition!.FileNameStar!.ShouldStartWith("portfolio-");
+            pdf.Content.Headers.ContentDisposition!.FileNameStar!.ShouldBeOneOf($"portfolio-{before}.pdf", $"portfolio-{after}.pdf");
             Encoding.ASCII.GetString((await pdf.Content.ReadAsByteArrayAsync(Ct))[..5]).ShouldBe("%PDF-");
 
             // The badges as OB 3.0: each with its signed JWT.

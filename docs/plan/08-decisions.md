@@ -2719,6 +2719,41 @@ linked, then shows a portfolio under a name the household doesn't yet carry. A m
 that name takes the page down once, on the worker's login, and asks for the notification. Linking
 the member that is them asks for the check too.
 
+### D81 — Downloading a portfolio, in the app (**proposed 2026-11-05**)
+
+The last of a young person's portfolio in the app, on D68's route. **Your portfolio** ends with
+*Take it with you*:
+- **Printable portfolio (PDF)**, always;
+- **Your badges (Open Badges)** and **Learner record (CLR)**, once they hold a badge that isn't
+  revoked. Without one, it says that these come with a badge. CLR 2.0 needs a credential to hold,
+  and the server refuses one with none (`portfolio.nothing_to_export`), so the screen doesn't offer
+  it.
+
+Each button asks the server for the file, made then and kept nowhere there (D68), and hands it to
+the phone's share sheet to save or send.
+- **The client** reads a file answer as bytes, its type, and the name in `Content-Disposition`,
+  with any path in that name dropped. A refusal is a problem, said above the buttons.
+- **The phone** (`IFileShare`, MAUI's own `ShareFileRequest`, so no new package) writes the file
+  to a folder of its own in the app's cache and opens the sheet. The receiving app reads it after
+  the sheet closes, so it can't be deleted then. Instead the folder is emptied:
+  - before each new export, so the device keeps at most the last one;
+  - when nobody is signed in any more: on signing out, and when a refresh is refused;
+  - at a start with nobody signed in. A young person's session isn't kept on the device (M2), so
+    a closed app's export doesn't outlive the next start.
+
+  The cache isn't backed up (Android's backups are off), and the system may clear it sooner.
+- **One server change, found on the emulator.** Export files were named by the UTC day, so a
+  portfolio made on a New York evening was named for tomorrow, though its *Made on* line said
+  today. The PDF, badge and learner-record files, and provider reports too, are now named by the
+  region's day (`Text.FileDay`). `PortfolioExportApiTests` holds it.
+- `AppClientContractTests` reads the real API's PDF and badge files through the app's client, and
+  the refused learner record.
+- **The walk** downloaded the PDF and the learner record to Android's share sheet, and saw the
+  export folder emptied on signing out and at the next start.
+
+**Not yet:** a guardian's download of a child's portfolio (D68 left it for later), and the `zip`
+format.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

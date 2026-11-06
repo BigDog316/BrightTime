@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using BrightTime.Ui.Shared.Api;
 using BrightTime.Ui.Shared.Platform;
 
 namespace BrightTime.Mobile.Services;
@@ -160,6 +161,46 @@ internal sealed class DeviceShare : IShareService
 {
     public Task ShareAsync(string title, Uri link) =>
         Share.Default.RequestAsync(new ShareTextRequest { Title = title, Uri = link.AbsoluteUri });
+}
+
+/// <summary>
+/// A file through the share sheet. It is written to its own folder in the app's cache, which is
+/// emptied first, so the device keeps at most the last export; the receiving app reads it after
+/// the sheet closes, so it can't be deleted then. Signing out empties the folder.
+/// </summary>
+internal sealed class DeviceFileShare : IFileShare
+{
+    private static string Folder => Path.Combine(FileSystem.CacheDirectory, "exports");
+
+    public async Task ShareAsync(string title, DownloadedFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        await ForgetAsync().ConfigureAwait(false);
+        Directory.CreateDirectory(Folder);
+        string path = Path.Combine(Folder, Path.GetFileName(file.FileName));
+        await File.WriteAllBytesAsync(path, file.Bytes).ConfigureAwait(false);
+        await Share.Default.RequestAsync(new ShareFileRequest { Title = title, File = new ShareFile(path, file.ContentType) }).ConfigureAwait(false);
+    }
+
+    public Task ForgetAsync()
+    {
+        try
+        {
+            if (Directory.Exists(Folder))
+            {
+                Directory.Delete(Folder, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Another app still has it open: the next export or sign-out tries again.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Opens a link with the system: the browser, or the app that handles it (a calendar file).</summary>

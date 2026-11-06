@@ -194,6 +194,9 @@ public sealed record ProjectView(
 /// <summary>A project as written or changed: what it is, and the activity it came from.</summary>
 public sealed record ProjectDraft(string Title, string? Description, Guid? ListingId);
 
+/// <summary>A portfolio export: the server's file, its type and the name it gave it (D68, D81).</summary>
+public sealed record DownloadedFile(byte[] Bytes, string ContentType, string FileName);
+
 /// <summary>
 /// One step of a playlist (D67): <c>attend_listing</c>, <c>external_activity</c>, <c>reflection</c>
 /// or <c>mentor_checkin</c>. A step to attend names its activity, with its slug while it's published (D79).

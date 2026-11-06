@@ -20,6 +20,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IBlobStore, DeviceBlobStore>();
         builder.Services.AddSingleton<ILocationProvider, DeviceLocation>();
         builder.Services.AddSingleton<IShareService, DeviceShare>();
+        builder.Services.AddSingleton<IFileShare, DeviceFileShare>();
         builder.Services.AddSingleton<IExternalLauncher, DeviceLauncher>();
         builder.Services.AddSingleton<IExternalAuthenticator, DeviceExternalAuthenticator>();
 #if ANDROID

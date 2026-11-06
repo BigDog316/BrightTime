@@ -11,8 +11,10 @@ namespace BrightTime.Ui.Shared.State;
 /// The region's details are kept on the device after the first start, so the app opens
 /// offline in the right language and shows what it kept (saved items) instead of failing.
 /// </remarks>
-public sealed class AppState(BrightTimeApi api, AppSession session, AppRegion region, Text text, IOfflineStore offline, IAppPreferences preferences)
+public sealed class AppState(BrightTimeApi api, AppSession session, AppRegion region, Text text, IOfflineStore offline, IAppPreferences preferences, IFileShare files)
 {
+    private bool _watchingSession;
+
     public const string LocaleKey = "brighttime.locale";
     public const string TenantCacheKey = "tenant";
 
@@ -53,6 +55,26 @@ public sealed class AppState(BrightTimeApi api, AppSession session, AppRegion re
         region.Use(info, preferences.Get(LocaleKey), CultureInfo.CurrentUICulture.Name);
         await text.LoadAsync(cancellationToken).ConfigureAwait(false);
         await session.RestoreAsync(cancellationToken).ConfigureAwait(false);
+
+        // A portfolio export left in the cache belongs to whoever was signed in (D81): it goes when
+        // they sign out, and at a start with nobody signed in (a young person's session isn't kept).
+        if (!_watchingSession)
+        {
+            _watchingSession = true;
+            session.Changed += (_, _) =>
+            {
+                if (!session.IsSignedIn)
+                {
+                    _ = files.ForgetAsync();
+                }
+            };
+        }
+
+        if (!session.IsSignedIn)
+        {
+            await files.ForgetAsync().ConfigureAwait(false);
+        }
+
         IsReady = true;
         Changed?.Invoke(this, EventArgs.Empty);
     }

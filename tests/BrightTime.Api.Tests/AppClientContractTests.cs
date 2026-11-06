@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using BrightTime.Localisation;
 using BrightTime.Ui.Shared;
 using BrightTime.Ui.Shared.Api;
@@ -193,5 +194,13 @@ public sealed class AppClientContractTests(ApiFixture api)
         session.Me!.IsYouth.ShouldBeTrue();
         (await app.GetRequiredService<ISecretStore>().GetAsync(AppSession.RefreshTokenKey)).ShouldBeNull("a young person's device is often shared");
         Ok(await client.FeedAsync(ct: Ct));
+
+        // Their portfolio as a file (D81): the PDF read as the server sends it; with no badge, no learner record.
+        DownloadedFile pdf = Ok(await client.ExportPortfolioAsync("pdf", Ct));
+        (pdf.ContentType, pdf.FileName.EndsWith(".pdf", StringComparison.Ordinal), pdf.FileName.Contains('/', StringComparison.Ordinal)).ShouldBe(("application/pdf", true, false));
+        Encoding.ASCII.GetString(pdf.Bytes, 0, 5).ShouldBe("%PDF-");
+        (await client.ExportPortfolioAsync("clr2", Ct)).Problem!.Code.ShouldBe("portfolio.nothing_to_export");
+        DownloadedFile badges = Ok(await client.ExportPortfolioAsync("json_ob3", Ct));
+        (badges.ContentType, badges.FileName.StartsWith("badges-", StringComparison.Ordinal)).ShouldBe(("application/json", true));
     }
 }

@@ -101,7 +101,8 @@ public sealed class PortfolioExports(
                               where a.RecipientUserId == user.Value && a.RevokedAt == null && a.CredentialJwt != null
                               orderby a.IssuedOn
                               select new { a.VerifySlug, a.CredentialJwt, a.CredentialJson, c.Name, Issuer = i.Name }).ToListAsync(ct).ConfigureAwait(false);
-            string day = clock.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            // The region's day, as the PDF's "Made on" line has it: a New York evening isn't tomorrow.
+            string day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.UtcNow, tenant.TimeZone).DateTime).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (format == PortfolioExportFormats.OpenBadges)
             {
                 JsonArray credentials = [];

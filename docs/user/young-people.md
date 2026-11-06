@@ -11,7 +11,7 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [Your portfolio and badges (app)](#your-portfolio-and-badges-app)
 - [Your skills, projects and goals (app)](#your-skills-projects-and-goals-app)
 - [Playlists (app)](#playlists-app)
-- [Downloads: coming soon](#downloads-coming-soon)
+- [Taking it with you (app)](#taking-it-with-you-app)
 
 ## Getting your own account
 
@@ -156,14 +156,17 @@ far along you are, then others to try.
 - Some programs are open only to people who hold a certain badge, or who have completed a certain
   playlist. The program's page says so before you apply.
 
-## Downloads: coming soon
+## Taking it with you (app)
 
-**Taking it with you.** You'll be able to download your portfolio:
-- as a **PDF** to print or attach, with your activities and your badges, each with the link where
-  anyone can check it;
-- your **badges** as Open Badges credentials, for a digital wallet or another platform;
-- a **Comprehensive Learner Record**, a single credential holding your activities and badges that
-  colleges and employers' systems can read. It's signed by your county's BrightTime, and each badge
-  inside keeps its own organisation's signature.
+At the bottom of **Your portfolio**, *Take it with you* makes a file of your portfolio. Tap one,
+and your phone asks where to save or send it.
+- **Printable portfolio (PDF)**: your activities, hours and badges, each badge with the link where
+  anyone can check it. Print it or attach it to an application.
+- **Your badges (Open Badges)**: your badges as credentials, for a digital wallet or another
+  platform.
+- **Learner record (CLR)**: a single credential holding your activities and badges that colleges
+  and employers' systems can read. It's signed by your county's BrightTime, and each badge inside
+  keeps its own organisation's signature.
 
-Records you've hidden are left out, and your legal name never appears.
+The last two are there once you hold a badge. Records you've hidden are left out, and your legal
+name never appears. The app keeps only the last file you made, and deletes it when you sign out.

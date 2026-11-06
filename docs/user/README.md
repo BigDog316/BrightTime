@@ -59,7 +59,7 @@ nothing in these guides promises a screen that doesn't exist yet.
 | A young person's portfolio and badges | A shown portfolio's page, and checking a badge (anyone) | Yes | |
 | A young person's skills, projects and goals | Shown skills and projects, on the portfolio's page | Yes | |
 | A young person's playlists | Coming | Yes | |
-| Downloading a portfolio | Coming | Coming | |
+| Downloading a portfolio | Coming | Yes | |
 | **Organisations:** playlists | Coming | | |
 | **Organisations:** badges | Coming | | |
 

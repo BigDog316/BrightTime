@@ -1,3 +1,5 @@
+using BrightTime.Ui.Shared.Api;
+
 namespace BrightTime.Ui.Shared.Platform;
 
 // What the shared UI needs from the device (docs/plan/01, "Mobile sharing model"). The MAUI host
@@ -41,6 +43,19 @@ public interface ILocationProvider
 public interface IShareService
 {
     Task ShareAsync(string title, Uri link);
+}
+
+/// <summary>
+/// Hands a file the server made to another app or a place to save it, through the system share
+/// sheet: a young person's portfolio export (D68, D81). The file holds their record, so the host
+/// keeps only the last one it was given, in the app's cache, until <see cref="ForgetAsync"/>.
+/// </summary>
+public interface IFileShare
+{
+    Task ShareAsync(string title, DownloadedFile file);
+
+    /// <summary>Deletes any file kept for sharing: on signing out, and at start with nobody signed in. Never throws.</summary>
+    Task ForgetAsync();
 }
 
 /// <summary>Opens a link outside the app: a provider's website, a calendar file, the web's set-password page.</summary>
@@ -191,6 +206,27 @@ public sealed class MemoryOfflineStore : IOfflineStore
     public Task ClearAsync()
     {
         _values.Clear();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Files handed to the share sheet, kept in memory for a test to look at.</summary>
+public sealed class MemoryFileShare : IFileShare
+{
+    private readonly List<(string Title, DownloadedFile File)> _shared = [];
+
+    /// <summary>What was shared and not yet forgotten.</summary>
+    public IReadOnlyList<(string Title, DownloadedFile File)> Shared => _shared;
+
+    public Task ShareAsync(string title, DownloadedFile file)
+    {
+        _shared.Add((title, file));
+        return Task.CompletedTask;
+    }
+
+    public Task ForgetAsync()
+    {
+        _shared.Clear();
         return Task.CompletedTask;
     }
 }

@@ -83,7 +83,7 @@ public static class PortfolioDocuments
         {
             Notes = notes,
             RightToLeft = text.Culture.TextInfo.IsRightToLeft,
-            FileName = $"portfolio-{now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
+            FileName = $"portfolio-{text.FileDay(now)}",
         };
     }
 }

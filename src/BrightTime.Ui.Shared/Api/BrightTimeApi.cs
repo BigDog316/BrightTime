@@ -399,6 +399,13 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> RemoveProjectAsync(Guid id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"me/projects/{id:D}", null, signedIn: true, ct);
 
+    /// <summary>
+    /// The portfolio as a file, made when asked and not kept on the server (D68): <c>pdf</c>,
+    /// <c>json_ob3</c> (their badges) or <c>clr2</c> (a learner record, which needs a badge).
+    /// </summary>
+    public Task<ApiResult<DownloadedFile>> ExportPortfolioAsync(string format, CancellationToken ct = default) =>
+        SendAsync<DownloadedFile>(HttpMethod.Post, "me/portfolio/export", new { format }, signedIn: true, ct);
+
     // ---- playlists (D67, D79) -----------------------------------------------------------------
 
     /// <summary>The county's published playlists.</summary>
@@ -502,6 +509,11 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
             return ApiResult<T>.Success(default!);
         }
 
+        if (typeof(T) == typeof(DownloadedFile))
+        {
+            return ApiResult<T>.Success((T)(object)await FileAsync(response, ct).ConfigureAwait(false));
+        }
+
         try
         {
             T? value = await response.Content.ReadFromJsonAsync<T>(AppSession.Json, ct).ConfigureAwait(false);
@@ -513,6 +525,18 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
         {
             return ApiResult<T>.Failure(new ApiProblem(ApiProblem.UnreadableType, null, (int)response.StatusCode));
         }
+    }
+
+    /// <summary>A file answer: its bytes, its type, and the name in Content-Disposition, without any path.</summary>
+    private static async Task<DownloadedFile> FileAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        byte[] bytes = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        string type = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        string? named = response.Content.Headers.ContentDisposition is { } disposition
+            ? (disposition.FileNameStar ?? disposition.FileName)?.Trim('"')
+            : null;
+        string name = named is { Length: > 0 } ? Path.GetFileName(named) : "portfolio";
+        return new DownloadedFile(bytes, type, name.Length > 0 ? name : "portfolio");
     }
 
     /// <summary>Reads an RFC 9457 problem; anything else becomes a problem named by its status.</summary>

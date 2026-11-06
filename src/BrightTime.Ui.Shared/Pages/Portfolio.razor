@@ -2,12 +2,14 @@
 @* A young person's own portfolio (D65, D66, D77): who can see it, the hours and activities from
    their attendance, each of which they can hide or show again, and the badges they hold, each with
    the web page anyone can check it on. Under 13 it stays private: the server says so (CanShow).
-   Their skills, projects and goals have screens of their own (D78). *@
+   Their skills, projects and goals have screens of their own (D78), and the portfolio downloads
+   as a file to save or send (D81). *@
 @inject BrightTimeApi Api
 @inject AppSession Session
 @inject AppEndpoints Endpoints
 @inject IShareService Share
 @inject IExternalLauncher Launcher
+@inject IFileShare Files
 
 <h1>@T["app.portfolio.title"]</h1>
 
@@ -133,6 +135,30 @@ else
             }
         </section>
     }
+
+    @if (_portfolio is not null && _badges is { } held)
+    {
+        @* Downloads (D68, D81): the server makes the file when asked and keeps none; the phone's
+           share sheet saves or sends it. A badge export and a learner record need a badge. *@
+        <section aria-labelledby="download">
+            <h2 id="download">@T["app.portfolio.download"]</h2>
+            <p class="hint">@T["app.portfolio.download.intro"]</p>
+            <ProblemNotice Problem="_downloadProblem" />
+            <ul class="cards">
+                @foreach (string format in Formats(held))
+                {
+                    <li class="card" @key="format">
+                        <button type="button" disabled="@(_making is not null)" @onclick="() => DownloadAsync(format)">@T["app.portfolio.download." + format]</button>
+                        <p class="hint">@T["app.portfolio.download." + format + "_hint"]</p>
+                    </li>
+                }
+            </ul>
+            @if (!held.Any(b => !b.Revoked))
+            {
+                <p class="hint">@T["app.portfolio.download.no_badges"]</p>
+            }
+        </section>
+    }
 }
 
 @code {
@@ -141,6 +167,8 @@ else
     private ApiProblem? _problem;
     private Guid? _busy;
     private string _said = "";
+    private string? _making;
+    private ApiProblem? _downloadProblem;
 
     /// <summary>A portfolio belongs to a young person's own account, under 13 included.</summary>
     internal static bool HasPortfolio(Me me) => me.AccountKind is "youth" or "child";
@@ -170,6 +198,28 @@ else
         }
 
         _busy = null;
+    }
+
+    /// <summary>The files on offer: the printable portfolio always; the badges and a learner record once they hold a badge.</summary>
+    internal static IEnumerable<string> Formats(IReadOnlyList<HeldBadge> badges) =>
+        badges.Any(b => !b.Revoked) ? ["pdf", "json_ob3", "clr2"] : ["pdf"];
+
+    private async Task DownloadAsync(string format)
+    {
+        _making = format;
+        _said = "";
+        _downloadProblem = null;
+        ApiResult<DownloadedFile> made = await Api.ExportPortfolioAsync(format);
+        _making = null;
+        if (made.Value is { } file)
+        {
+            _said = T["app.portfolio.download.ready"];
+            await Files.ShareAsync(T["app.portfolio.download." + format], file);
+        }
+        else
+        {
+            _downloadProblem = made.Problem;
+        }
     }
 
     private Task ShareAsync(PortfolioView p, Uri link) =>

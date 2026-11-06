@@ -2682,7 +2682,7 @@ the badge then opening the playlist that asks for it.
 **Not yet:** the console's screens for playlists and for reviewing steps (the API has them);
 completing a step to attend when attendance arrives (D67); downloading the portfolio (D68).
 
-### D80 — A family name a shown portfolio must not carry: the households a teenager owns, and names that arrive later (**proposed 2026-11-05**)
+### D80 — A family name a shown portfolio must not carry: the households a teenager owns, and names that arrive later (**accepted 2026-11-05**)
 
 Answers D77's question. D65's rule, *a shown portfolio's display name doesn't carry the young
 person's family name*, had two gaps.
@@ -2719,7 +2719,7 @@ linked, then shows a portfolio under a name the household doesn't yet carry. A m
 that name takes the page down once, on the worker's login, and asks for the notification. Linking
 the member that is them asks for the check too.
 
-### D81 — Downloading a portfolio, in the app (**proposed 2026-11-05**)
+### D81 — Downloading a portfolio, in the app (**accepted 2026-11-05**)
 
 The last of a young person's portfolio in the app, on D68's route. **Your portfolio** ends with
 *Take it with you*:

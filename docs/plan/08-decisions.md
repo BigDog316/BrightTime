@@ -2754,7 +2754,7 @@ the phone's share sheet to save or send.
 **Not yet:** a guardian's download of a child's portfolio (D68 left it for later), and the `zip`
 format.
 
-### D82 — Young people's work, in the provider console (**proposed 2026-11-05**)
+### D82 — Young people's work, in the provider console (**accepted 2026-11-06**)
 
 The staff side of D69's projects and D67's playlist steps, which until now were reviewed only
 through the API, so a young person's project or check-in sent from the app waited on someone calling

@@ -1517,6 +1517,8 @@
   "map.online": "{count, plural, one {En línea: # actividad} other {En línea: # actividades}}",
   "notify.message.new.body": "{org} te envió un mensaje.",
   "notify.message.new.title": "Mensaje nuevo",
+  "notify.portfolio.hidden.body": "Tu nombre visible incluye tu apellido, así que tu portafolio ya no se muestra. Elige otro nombre para mostrarlo de nuevo.",
+  "notify.portfolio.hidden.title": "Tu portafolio vuelve a ser privado",
   "notify.reminder.deadline.body": "Las solicitudes para {listing} cierran el {at}.",
   "notify.reminder.deadline.title": "Se acerca la fecha límite",
   "notify.reminder.session.body": "{listing} empieza el {at}.",

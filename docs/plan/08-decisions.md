@@ -2584,6 +2584,7 @@ but the API's JSON, so this slice also gives the website the two pages they open
   members linked to the young person's account. A teenager who made their own household and isn't
   linked to the member that is them has no surname on file, so any display name passes. That is
   D65's rule, unchanged here; widening it to the households they own is a question for Sam.
+  D80 answers it: the households they own count, and a name that arrives later closes the page.
 
 **Not yet:** goals, skills and projects in the app (D69's routes); playlists (D67); downloading
 the portfolio as a PDF, OB 3.0 or a CLR (D68), which needs saving a file on the phone; and a
@@ -2680,6 +2681,43 @@ the badge then opening the playlist that asks for it.
 
 **Not yet:** the console's screens for playlists and for reviewing steps (the API has them);
 completing a step to attend when attendance arrives (D67); downloading the portfolio (D68).
+
+### D80 — A family name a shown portfolio must not carry: the households a teenager owns, and names that arrive later (**proposed 2026-11-05**)
+
+Answers D77's question. D65's rule, *a shown portfolio's display name doesn't carry the young
+person's family name*, had two gaps.
+- **The names it knows.** `SurnamesOfAsync` read only the household members linked to the young
+  person's account. A teenager who made their own household (D71), and never linked the member
+  that is them, had no family name on file, so any display name passed, their full legal name
+  included. It now also reads every member of a household the account owns.
+  - A sibling with another family name, or a family name that is also a word, can now refuse a
+    display name. The young person chooses another; the error says why. That cost is small beside
+    a minor's family name on a page anyone with the link can open, and it can't be taken back
+    once copied. So there is no override.
+  - A parent's household that lists the teenager, but isn't linked to their account, still can't
+    be read: nothing ties that member to the account. The link stays the only way to know.
+  - The matching is unchanged: a whole word, any case, two letters or more.
+- **When it's checked.** The check ran only when the portfolio was saved, so a name that arrived
+  after showing never closed the page. Enrollment now publishes `FamilyNamesChanged(userId)`
+  through the outbox:
+  - for the household's owner, when a member is added or changed;
+  - for the account a member is linked to, when that member is changed or linked.
+
+  The message carries the account and nothing else. On the worker, Learning's
+  `PortfolioNameCheck` reads the shown portfolio, if there is one, and the account's family
+  names. If the display name now carries one, the portfolio goes back to **private**, keeping its
+  link name. The change is audited (`learning.portfolio.changed`, `hidden_family_name`), and the
+  young person is told in their inbox, opening **Who sees your portfolio** (`notify.portfolio.hidden`,
+  kind `system`). A redelivered message finds it private and does nothing.
+  - Checked on every page view instead, each anonymous read of a shown page would decrypt
+    household names; checking on change does it once per change, on the worker.
+  - Most messages find no shown portfolio (an adult's household, a private portfolio) and stop
+    after one read.
+
+**Tested:** `PortfolioApiTests` refuses a family name from an owned household with nothing
+linked, then shows a portfolio under a name the household doesn't yet carry. A member added with
+that name takes the page down once, on the worker's login, and asks for the notification. Linking
+the member that is them asks for the check too.
 
 ## Open questions
 

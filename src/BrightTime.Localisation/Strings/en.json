@@ -1517,6 +1517,8 @@
   "map.online": "{count, plural, one {Online: # activity} other {Online: # activities}}",
   "notify.message.new.body": "{org} sent you a message.",
   "notify.message.new.title": "New message",
+  "notify.portfolio.hidden.body": "Your display name has your family name in it, so your portfolio isn't shown any more. Choose another name to show it again.",
+  "notify.portfolio.hidden.title": "Your portfolio is private again",
   "notify.reminder.deadline.body": "Applications for {listing} close on {at}.",
   "notify.reminder.deadline.title": "Deadline coming up",
   "notify.reminder.session.body": "{listing} starts on {at}.",

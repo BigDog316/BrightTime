@@ -124,6 +124,7 @@ Messages and their handlers today:
 | `NotificationRequested` | Any module | Notifications: the inbox and push, under the person's preferences and quiet hours. Email delivery of notifications isn't built yet |
 | `AttendanceChanged` | Attendance (every write path) | Learning: rebuilds that enrolment's participation record |
 | `EnrolmentAccountChanged` | Enrollment (linking a member to an account) | Learning: moves participation to or from the account |
+| `FamilyNamesChanged` | Enrollment (a member added, changed or linked) | Learning: makes a shown portfolio private if its display name now carries a family name, and asks for a notification (D80) |
 
 3. **Asking upwards.** Sometimes a lower module needs an answer only a higher one has. The lower
    module states the question as an interface in its own contracts, and the higher module

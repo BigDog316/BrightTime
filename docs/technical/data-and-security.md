@@ -246,7 +246,7 @@ result: an honest caller should be told why.
 | Small-cell re-identification (T17) | Reports hide counts under the tenant's threshold, with complementary suppression, and say what they hid | Reporting |
 | Payment scope (T20) | Card entry on Stripe Checkout's hosted page; webhooks believed only by signature | Enrollment |
 | Account takeover (T21) | Passkeys first, Argon2id, breached-password check, step-up, rate limits | Identity, Web, Api |
-| Portfolio and badges (T5) | Private by default; display names without the family name; recipients only as salted hashes | Learning |
+| Portfolio and badges (T5) | Private by default; display names without the family name of anyone linked to the account or in a household it owns, checked on saving and again when a family name arrives (D80); recipients only as salted hashes | Learning |
 
 ## Known gaps
 

@@ -137,7 +137,7 @@ public sealed partial class Portfolios(
 
                 // The schema leaves this to the application: nothing shown carries a family name.
                 IReadOnlyList<string> surnames = await enrolments.SurnamesOfAsync(user.Value, ct).ConfigureAwait(false);
-                if (surnames.Any(s => s.Length >= 2 && Words(name).Contains(s, StringComparer.OrdinalIgnoreCase)))
+                if (CarriesFamilyName(name, surnames))
                 {
                     return Result<PortfolioView>.Failure(Error.Validation("portfolio.display_name_legal", "Choose a display name without your family name."));
                 }
@@ -253,6 +253,13 @@ public sealed partial class Portfolios(
 
     private static string? Optional(string? text) => text?.Trim() is { Length: > 0 } t ? t : null;
 
+    /// <summary>Whether a display name carries one of the family names: as a whole word, any case, of two letters or more.</summary>
+    internal static bool CarriesFamilyName(string displayName, IEnumerable<string> surnames)
+    {
+        string[] words = Words(displayName);
+        return surnames.Any(s => s.Length >= 2 && words.Contains(s, StringComparer.OrdinalIgnoreCase));
+    }
+
     private static string[] Words(string text) => Separators().Split(text).Where(w => w.Length > 0).ToArray();
 
     [GeneratedRegex("^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")]
@@ -289,12 +296,14 @@ public static class LearningModule
         return services;
     }
 
-    /// <summary>The worker's side: participation kept in step with attendance and with the account an enrolment belongs to.</summary>
+    /// <summary>The worker's side: participation kept in step with attendance and with the account an enrolment belongs to, and a shown portfolio checked again when a family name arrives (D80).</summary>
     public static IServiceCollection AddLearningJobs(this IServiceCollection services)
     {
         services.AddScoped<ParticipationProjector>();
         services.AddMessageHandler<Attendance.Contracts.AttendanceChanged, AttendanceChangedHandler>();
         services.AddMessageHandler<EnrolmentAccountChanged, EnrolmentAccountChangedHandler>();
+        services.AddScoped<PortfolioNameCheck>();
+        services.AddMessageHandler<FamilyNamesChanged, FamilyNamesChangedHandler>();
         return services;
     }
 }

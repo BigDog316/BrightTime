@@ -1517,6 +1517,8 @@
   "map.online": "{count, plural, one {অনলাইনে: #টি কার্যক্রম} other {অনলাইনে: #টি কার্যক্রম}}",
   "notify.message.new.body": "{org} আপনাকে একটি বার্তা পাঠিয়েছে।",
   "notify.message.new.title": "নতুন বার্তা",
+  "notify.portfolio.hidden.body": "তোমার প্রদর্শিত নামে তোমার পারিবারিক নাম আছে, তাই তোমার পোর্টফোলিও আর দেখানো হচ্ছে না। আবার দেখাতে অন্য একটি নাম বেছে নাও।",
+  "notify.portfolio.hidden.title": "তোমার পোর্টফোলিও আবার ব্যক্তিগত হয়েছে",
   "notify.reminder.deadline.body": "{listing}-এর আবেদন {at}-এ বন্ধ হবে।",
   "notify.reminder.deadline.title": "শেষ তারিখ কাছে এসেছে",
   "notify.reminder.session.body": "{listing} শুরু হবে {at}-এ।",

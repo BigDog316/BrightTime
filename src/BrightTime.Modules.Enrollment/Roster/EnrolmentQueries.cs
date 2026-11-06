@@ -71,7 +71,10 @@ public sealed class EnrolmentQueries(EnrollmentDbContext db, IFieldCipher cipher
     public Task<IReadOnlyList<string>> SurnamesOfAsync(Guid youthUserId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<IReadOnlyList<string>>(async ct =>
         {
-            List<byte[]> sealedNames = await db.FamilyMembers.AsNoTracking().Where(m => m.UserId == youthUserId).Select(m => m.LastNameEnc).ToListAsync(ct).ConfigureAwait(false);
+            IQueryable<Guid> owned = db.FamilyProfiles.Where(p => p.OwnerUserId == youthUserId).Select(p => p.Id);
+            List<byte[]> sealedNames = await db.FamilyMembers.AsNoTracking()
+                .Where(m => m.UserId == youthUserId || owned.Contains(m.FamilyProfileId))
+                .Select(m => m.LastNameEnc).ToListAsync(ct).ConfigureAwait(false);
             HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
             foreach (byte[] name in sealedNames)
             {

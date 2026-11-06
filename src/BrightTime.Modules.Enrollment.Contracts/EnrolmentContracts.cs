@@ -70,8 +70,10 @@ public interface IEnrolmentQueries
     Task<IReadOnlyList<EnrolmentFacts>> FactsAsync(IReadOnlyCollection<Guid> enrollmentIds, DateOnly asOf, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The family names the young person with this account is known by, from the household members
-    /// linked to it (D65): what a portfolio shown to the public must not carry.
+    /// The family names the young person with this account is known by (D65, D80): those of the
+    /// household members linked to it, and of every member of a household it owns, since a teenager
+    /// who made their own household may never have linked the member that is them. What a portfolio
+    /// shown to the public must not carry.
     /// </summary>
     Task<IReadOnlyList<string>> SurnamesOfAsync(Guid youthUserId, CancellationToken cancellationToken = default);
 }

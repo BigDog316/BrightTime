@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BrightTime.Abstractions.Security;
+using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Persistence;
 using BrightTime.Infrastructure.Security;
 using BrightTime.Infrastructure.Tenancy;
@@ -19,11 +21,11 @@ using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Contracts.Messages;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Time;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BrightTime.Api.Tests;
@@ -77,7 +79,19 @@ public sealed class PortfolioApiTests(ApiFixture api)
         (await JsonAsync(response, status)).GetProperty("type").GetString().ShouldBe("urn:brighttime:problem:" + code);
 
     /// <summary>The projector, on the worker's login, as the jobs host runs it when the outbox delivers.</summary>
-    private async Task ProjectAsync(Guid enrollmentId)
+    private Task ProjectAsync(Guid enrollmentId) =>
+        WorkerAsync(sp => sp.GetRequiredService<ParticipationProjector>().ProjectAsync(enrollmentId, Ct));
+
+    /// <summary>The family-name check (D80), on the worker's login, as the jobs host runs it for <see cref="FamilyNamesChanged"/>.</summary>
+    private async Task<bool> CheckNamesAsync(Guid userId)
+    {
+        bool hidden = false;
+        await WorkerAsync(async sp => hidden = await sp.GetRequiredService<PortfolioNameCheck>().CheckAsync(userId, Ct));
+        return hidden;
+    }
+
+    /// <summary>Learning's worker services on the jobs login, with no person acting, for one tenant.</summary>
+    private async Task WorkerAsync(Func<IServiceProvider, Task> work)
     {
         string jobs = api.JobsConnection;
         ServiceCollection services = new();
@@ -91,7 +105,9 @@ public sealed class PortfolioApiTests(ApiFixture api)
         services.AddBrightTimeDbContext<OpportunitiesDbContext>(jobs, OpportunitiesDbContext.SchemaName, OpportunitiesDbContext.MigrationsHistoryTable);
         services.AddBrightTimeDbContext<DirectoryDbContext>(jobs, DirectoryDbContext.SchemaName, DirectoryDbContext.MigrationsHistoryTable);
         services.AddBrightTimeDbContext<PlatformDbContext>(jobs, PlatformDbContext.SchemaName, PlatformDbContext.MigrationsHistoryTable);
-        services.AddFieldEncryption(new ConfigurationBuilder().Build(), development: true);
+        // The API host's cipher: in Development its keys are made up per process, and the worker
+        // reads the family names the API sealed.
+        services.AddSingleton(api.Factory.Services.GetRequiredService<IFieldCipher>());
         services.AddScoped<IEnrolmentQueries, EnrolmentQueries>();
         services.AddScoped<IAttendanceQueries, AttendanceQueries>();
         services.AddScoped<IListingOccurrences, ListingOccurrences>();
@@ -101,11 +117,17 @@ public sealed class PortfolioApiTests(ApiFixture api)
         services.AddScoped<ITaxonomyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddScoped<ParticipationProjector>();
+        services.AddScoped(sp => new AuditTrail(sp.GetRequiredService<ITenantContext>(), NoAuditRequestInfo.Instance, sp.GetRequiredService<IClock>()));
+        services.AddScoped<PortfolioNameCheck>();
         await using ServiceProvider worker = services.BuildServiceProvider();
         await using AsyncServiceScope scope = worker.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<TenantContext>().SetTenant(new TenantId(api.Data.TenantId), TimeZoneInfo.FindSystemTimeZoneById("America/New_York"), Locale.English);
-        await scope.ServiceProvider.GetRequiredService<ParticipationProjector>().ProjectAsync(enrollmentId, Ct);
+        await work(scope.ServiceProvider);
     }
+
+    private Task<long> NamesChangedAsync(Guid userId) =>
+        api.ScalarAsync<long>("select count(*) from platform.outbox_message where message_type = @t and payload->>'userId' = @u",
+            ("t", FamilyNamesChanged.MessageType), ("u", userId.ToString()));
 
     private Task<long> OutboxAsync(string type, Guid enrollmentId) =>
         api.ScalarAsync<long>("select count(*) from platform.outbox_message where message_type = @t and payload->>'enrollmentId' = @e",
@@ -218,6 +240,51 @@ public sealed class PortfolioApiTests(ApiFixture api)
             await JsonAsync(await learner.PutAsJsonAsync($"api/v1/family-profile/members/{member}/account", new { userId = (Guid?)null }, Ct));
             await ProjectAsync(enrolment);
             (await JsonAsync(await learner.GetAsync(new Uri("api/v1/me/portfolio", UriKind.Relative), Ct))).GetProperty("participation").GetArrayLength().ShouldBe(0);
+        }
+    }
+
+    [Fact]
+    public async Task A_family_name_from_a_household_they_own_is_caught_when_showing_and_after_it()
+    {
+        RequireDatabase();
+        (HttpClient learner, Guid learnerId) = await SignedInAsync(await api.NewAdultAsync());
+        using HttpClient anonymous = api.Client();
+        using (learner)
+        {
+            // Their own household, with the member that is them never linked to their account.
+            await JsonAsync(await learner.PutAsJsonAsync("api/v1/family-profile", new { householdSize = 2 }, Ct));
+            string dob = DateTime.UtcNow.AddYears(-19).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            Guid self = (await JsonAsync(await learner.PostAsJsonAsync("api/v1/family-profile/members",
+                new { role = "youth", firstName = "Ama", lastName = "Mensah", dateOfBirth = dob }, Ct), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+            (await NamesChangedAsync(learnerId)).ShouldBe(1);
+
+            // The household's names count though nothing is linked (D80).
+            string slug = "ama-" + Guid.NewGuid().ToString("N")[..8];
+            await ProblemAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Ama Mensah", visibility = "link_only", publicSlug = slug }, Ct),
+                HttpStatusCode.BadRequest, "portfolio.display_name_legal");
+            await JsonAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Ama Asante", visibility = "link_only", publicSlug = slug }, Ct));
+            (await CheckNamesAsync(learnerId)).ShouldBeFalse("nothing in the household says Asante yet");
+            await JsonAsync(await anonymous.GetAsync(new Uri($"api/v1/public/portfolios/{slug}", UriKind.Relative), Ct));
+
+            // A member added afterwards carries the name: the worker takes the page down, once, and says why.
+            await JsonAsync(await learner.PostAsJsonAsync("api/v1/family-profile/members",
+                new { role = "guardian", firstName = "Kofi", lastName = "Asante" }, Ct), HttpStatusCode.Created);
+            (await NamesChangedAsync(learnerId)).ShouldBe(2);
+            (await CheckNamesAsync(learnerId)).ShouldBeTrue();
+            (await CheckNamesAsync(learnerId)).ShouldBeFalse("a redelivery finds it private");
+            JsonElement mine = await JsonAsync(await learner.GetAsync(new Uri("api/v1/me/portfolio", UriKind.Relative), Ct));
+            (mine.GetProperty("visibility").GetString(), mine.GetProperty("publicSlug").GetString()).ShouldBe(("private", slug));
+            await ProblemAsync(await anonymous.GetAsync(new Uri($"api/v1/public/portfolios/{slug}", UriKind.Relative), Ct), HttpStatusCode.NotFound, "portfolio.not_shown");
+            (await api.ScalarAsync<long>("""
+                select count(*) from platform.outbox_message
+                where message_type = @t and payload->>'userId' = @u and payload->>'titleKey' = 'notify.portfolio.hidden'
+                """, ("t", NotificationRequested.MessageType), ("u", learnerId.ToString()))).ShouldBe(1);
+
+            // Another name shows it again; linking the member that is them asks for the check too.
+            await JsonAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Ama Paints", visibility = "link_only", publicSlug = slug }, Ct));
+            await JsonAsync(await learner.PutAsJsonAsync($"api/v1/family-profile/members/{self}/account", new { userId = learnerId }, Ct));
+            (await NamesChangedAsync(learnerId)).ShouldBe(3);
+            (await CheckNamesAsync(learnerId)).ShouldBeFalse();
         }
     }
 }

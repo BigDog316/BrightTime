@@ -1517,6 +1517,8 @@
   "map.online": "{count, plural, other {Sou entènèt: # aktivite}}",
   "notify.message.new.body": "{org} voye yon mesaj ba ou.",
   "notify.message.new.title": "Nouvo mesaj",
+  "notify.portfolio.hidden.body": "Non ou montre a gen siyati fanmi w ladan l, kidonk yo pa montre pòtfolyo w la ankò. Chwazi yon lòt non pou w montre l ankò.",
+  "notify.portfolio.hidden.title": "Pòtfolyo w la prive ankò",
   "notify.reminder.deadline.body": "Aplikasyon pou {listing} ap fèmen {at}.",
   "notify.reminder.deadline.title": "Dat limit la ap pwoche",
   "notify.reminder.session.body": "{listing} ap kòmanse {at}.",

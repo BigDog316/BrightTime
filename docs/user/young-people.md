@@ -83,12 +83,16 @@ each program you attend adds its sessions and hours.
   in your own list, marked *Hidden*, and **Show again** puts it back. Nothing is deleted.
 - **Change who sees it** lets you show it to **anyone with the link**, or make it **public**. To
   do that you choose a **link name** (like `kwesi-builds`) and a **display name**, which can't
-  include your family name. The screen shows your link as you type it. Anyone you share the link
+  include your family name, or the family name of anyone in a household you set up. The screen
+  shows your link as you type it. Anyone you share the link
   with sees your display name, a headline and short bio you write, your hours and your records.
   Never your account, your legal name or which programs enrolled you.
 - Once it's shown, **Share** sends the link, and **Open the page** shows you what others see.
 - A link-only portfolio is never shown to search engines.
 - Showing your portfolio isn't open to anyone under 13.
+- If a family name is added to your household after your portfolio is shown, and your display
+  name has it in, your portfolio goes back to **private** and your inbox says why. Choose another
+  display name to show it again; your link name stays the same.
 
 **Badges** are awarded by the organisations whose programs you take part in, for something you
 did, like *River Surveyor*. They're listed under your records, with who gave each one and when.

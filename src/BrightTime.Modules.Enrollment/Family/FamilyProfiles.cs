@@ -168,6 +168,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             await ApplyAsync(member, input, now, ct).ConfigureAwait(false);
             db.FamilyMembers.Add(member);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await NamesChangedAsync(owner, member, ct).ConfigureAwait(false);
             await AuditAsync(Changed, profile.Id, ct, "member_added").ConfigureAwait(false);
             return Result<MemberView>.Success(await MemberAsync(member, [], ct).ConfigureAwait(false));
         }, cancellationToken);
@@ -188,6 +189,7 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
             member.MemberRole = input.Role;
             await ApplyAsync(member, input, clock.StoredNow(), ct).ConfigureAwait(false);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await NamesChangedAsync(owner, member, ct).ConfigureAwait(false);
             await AuditAsync(Changed, member.FamilyProfileId, ct, "member_changed").ConfigureAwait(false);
             List<SupportNeedRecord> needs = await db.SupportNeeds.AsNoTracking().Where(n => n.FamilyMemberId == member.Id).ToListAsync(ct).ConfigureAwait(false);
             return Result<MemberView>.Success(await MemberAsync(member, needs, ct).ConfigureAwait(false));
@@ -231,10 +233,30 @@ public sealed class FamilyProfiles(EnrollmentDbContext db, IFieldCipher cipher, 
                 await db.PublishAsync(tenant.TenantId, new EnrolmentAccountChanged(enrolment.Id, account?.Value), ct).ConfigureAwait(false);
             }
 
+            // Linked, the account takes on this member's family name; unlinked, it loses one, which
+            // can't make a shown name carry it.
+            if (account is { } named)
+            {
+                await db.PublishAsync(tenant.TenantId, new FamilyNamesChanged(named.Value), ct).ConfigureAwait(false);
+            }
+
             await AuditAsync(Changed, member.FamilyProfileId, ct, account is null ? "member_unlinked" : "member_linked").ConfigureAwait(false);
             List<SupportNeedRecord> needs = await db.SupportNeeds.AsNoTracking().Where(n => n.FamilyMemberId == member.Id).ToListAsync(ct).ConfigureAwait(false);
             return Result<MemberView>.Success(await MemberAsync(member, needs, ct).ConfigureAwait(false));
         }, cancellationToken);
+
+    /// <summary>
+    /// A member was added or changed, so the family names known for the household's owner, and for
+    /// the account the member is linked to, may be new (D80). Each is checked against what it shows.
+    /// </summary>
+    private async Task NamesChangedAsync(UserId owner, FamilyMemberRecord member, CancellationToken ct)
+    {
+        await db.PublishAsync(tenant.TenantId, new FamilyNamesChanged(owner.Value), ct).ConfigureAwait(false);
+        if (member.UserId is { } linked && linked != owner.Value)
+        {
+            await db.PublishAsync(tenant.TenantId, new FamilyNamesChanged(linked), ct).ConfigureAwait(false);
+        }
+    }
 
     /// <summary>Removes a member, and with them their support needs.</summary>
     public Task<Result> RemoveMemberAsync(UserId owner, Guid memberId, CancellationToken cancellationToken = default) =>

@@ -1517,6 +1517,8 @@
   "map.online": "{count, plural, zero {عبر الإنترنت: لا شيء} one {عبر الإنترنت: نشاط واحد} two {عبر الإنترنت: نشاطان} few {عبر الإنترنت: # أنشطة} many {عبر الإنترنت: # نشاطًا} other {عبر الإنترنت: # نشاط}}",
   "notify.message.new.body": "أرسلت {org} إليك رسالة.",
   "notify.message.new.title": "رسالة جديدة",
+  "notify.portfolio.hidden.body": "اسمك الظاهر يتضمّن اسم عائلتك، لذلك لم يعد ملف إنجازاتك معروضًا. اختر اسمًا آخر لعرضه من جديد.",
+  "notify.portfolio.hidden.title": "أصبح ملف إنجازاتك خاصًا من جديد",
   "notify.reminder.deadline.body": "يُغلق التقديم على {listing} في {at}.",
   "notify.reminder.deadline.title": "الموعد النهائي يقترب",
   "notify.reminder.session.body": "يبدأ {listing} في {at}.",

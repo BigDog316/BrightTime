@@ -1517,6 +1517,8 @@
   "map.online": "{count, plural, other {线上：# 个活动}}",
   "notify.message.new.body": "{org} 给你发了一条消息。",
   "notify.message.new.title": "新消息",
+  "notify.portfolio.hidden.body": "你的显示名称包含你的姓氏，所以你的作品集已不再公开展示。换一个名称即可再次展示。",
+  "notify.portfolio.hidden.title": "你的作品集已恢复为私密",
   "notify.reminder.deadline.body": "{listing} 的申请将于 {at} 截止。",
   "notify.reminder.deadline.title": "截止日期快到了",
   "notify.reminder.session.body": "{listing} 将于 {at} 开始。",

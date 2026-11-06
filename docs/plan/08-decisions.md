@@ -2754,6 +2754,39 @@ the phone's share sheet to save or send.
 **Not yet:** a guardian's download of a child's portfolio (D68 left it for later), and the `zip`
 format.
 
+### D82 — Young people's work, in the provider console (**proposed 2026-11-05**)
+
+The staff side of D69's projects and D67's playlist steps, which until now were reviewed only
+through the API, so a young person's project or check-in sent from the app waited on someone calling
+it. A new tab, **Young people's work** (`/provider/orgs/{id}/work`), shows to staff and above with
+`projects.review` or `playlists.review_steps`.
+- **Projects** about the organisation's activities, sent for approval: the title, the activity,
+  when it was sent, and the description as written.
+- **Playlist steps** its staff check, across every playlist it published (archived ones too, since
+  those on them carry on): the step, the playlist, and what the young person wrote, or that they
+  wrote nothing.
+- **Each** has a note box and **Approve** or **Send back**. Sending back needs a note, saying what
+  to change, which the young person sees in the app (D78, D79). Approving a playlist's last
+  required step completes it and awards its badge, signed by the organisation, from the web host as
+  from the API.
+- **Who they are:** a young person is named only by their portfolio's display name ("By a young
+  person with no display name" without one). Nothing else of the account is on the page. Reading
+  the lists and every decision are audited, as through the API.
+- **Who can't:** someone without either permission is refused; with one, they see only that
+  section. Another organisation's staff are refused.
+- **No server change.** The page uses the module's own queries. `WorkReviewPageTests` runs it end
+  to end: two projects, one approved and one sent back (refused first without a note), and a
+  check-in approved into a completed playlist and an awarded badge.
+- **Found in the browser, on the compose stack:** every console form's redirect after saving went
+  to `http://kettle.localhost/`, without the port, where nothing listens. The page had saved, but
+  the browser never came back to it. The development proxy passed `$host`, which drops the port,
+  and the apps build their redirects from the request's host. It passes `$http_host` now; the apps
+  strip the port before telling tenants apart, so nothing else changes. Production sits on 443.
+
+**Not yet:** endorsing a skill from the console (D69's `POST /org/{id}/skills/endorse`), the
+console's screens for writing playlists and badges, and telling a young person in their inbox
+when their work is reviewed.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -1,0 +1,228 @@
+@page "/provider/orgs/{OrgId:guid}/work"
+@using BrightTime.Hosting.Tenancy
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Playlists
+@using BrightTime.Modules.Learning.Records
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Projects.Read)]
+@inherits ConsoleComponent
+
+@*
+    Young people's work waiting for this organisation (D82): projects about its activities, sent for
+    approval (D69), and the playlist steps its staff check (D67). Each is approved, or sent back with
+    a note saying what to change, which the young person sees in the app. A young person is named
+    only by their portfolio's display name; nothing else about them is here. Approving a playlist's
+    last required step completes it and awards its badge.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.work.denied"]</h1>
+    <p>@T["provider.work.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_loaded)
+{
+    <PageTitle>@T["provider.work.title"] · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId">@_organisation</a></p>
+    <h1>@T["provider.work.title"]</h1>
+    <OrgNav OrgId="@OrgId" Current="work" Role="@(RoleIn(Org) ?? "")" />
+    <p class="hint">@T["provider.work.intro"]</p>
+
+    @if (Done is "approved" or "sent_back")
+    {
+        <p class="notice success" role="status">@T["provider.work.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_projects is { } projects)
+    {
+        <section aria-labelledby="projects-heading">
+            <h2 id="projects-heading">@T["provider.work.projects"]</h2>
+            @if (projects.Count == 0)
+            {
+                <p>@T["provider.work.no_projects"]</p>
+            }
+            else
+            {
+                <ul class="card-list">
+                    @foreach (ProjectSubmission p in projects)
+                    {
+                        string id = p.Id.ToString("N");
+                        <li>
+                            <h3 dir="auto">@p.Title</h3>
+                            <p class="note">@Who(p.DisplayName)@(p.Activity is { Length: > 0 } a ? " · " + T.Format("provider.work.about", ("activity", a)) : "") · @T.Format("provider.work.sent_on", ("date", T.DateShort(p.SubmittedAt)))</p>
+                            @if (p.Description is { Length: > 0 } description)
+                            {
+                                <p class="body" dir="auto">@description</p>
+                            }
+                            <form method="post" @formname="@("project-" + id)" @onsubmit="ReviewProjectAsync" class="review-form">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="project" value="@p.Id" />
+                                <div class="field">
+                                    <label for="note-@id">@T["provider.work.note"]</label>
+                                    <textarea id="note-@id" name="note" rows="3" maxlength="1000" dir="auto"></textarea>
+                                    <p class="hint">@T["provider.work.note_hint"]</p>
+                                </div>
+                                <div class="inline-actions">
+                                    <button type="submit" name="decision" value="approve">@T["provider.work.approve"]</button>
+                                    <button type="submit" name="decision" value="send_back" class="secondary-button">@T["provider.work.send_back"]</button>
+                                </div>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+
+    @if (_steps is { } steps)
+    {
+        <section aria-labelledby="steps-heading">
+            <h2 id="steps-heading">@T["provider.work.steps"]</h2>
+            @if (steps.Count == 0)
+            {
+                <p>@T["provider.work.no_steps"]</p>
+            }
+            else
+            {
+                <ul class="card-list">
+                    @foreach ((PlaylistView playlist, StepSubmission s) in steps)
+                    {
+                        string id = s.EnrollmentId.ToString("N") + "-" + s.StepId.ToString("N");
+                        <li>
+                            <h3 dir="auto">@s.StepTitle</h3>
+                            <p class="note">@Who(s.DisplayName) · @T.Format("provider.work.in_playlist", ("playlist", playlist.Title))</p>
+                            @if (s.Reflection is { Length: > 0 } reflection)
+                            {
+                                <p class="body" dir="auto">@reflection</p>
+                            }
+                            else
+                            {
+                                <p class="hint">@T["provider.work.nothing_written"]</p>
+                            }
+                            <form method="post" @formname="@("step-" + id)" @onsubmit="ReviewStepAsync" class="review-form">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="playlist" value="@playlist.Id" />
+                                <input type="hidden" name="step" value="@s.StepId" />
+                                <input type="hidden" name="enrollment" value="@s.EnrollmentId" />
+                                <div class="field">
+                                    <label for="note-@id">@T["provider.work.note"]</label>
+                                    <textarea id="note-@id" name="note" rows="3" maxlength="1000" dir="auto"></textarea>
+                                    <p class="hint">@T["provider.work.note_hint"]</p>
+                                </div>
+                                <div class="inline-actions">
+                                    <button type="submit" name="decision" value="approve">@T["provider.work.approve"]</button>
+                                    <button type="submit" name="decision" value="send_back" class="secondary-button">@T["provider.work.send_back"]</button>
+                                </div>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private bool _loaded;
+    private string? _organisation;
+    private IReadOnlyList<ProjectSubmission>? _projects;
+    private List<(PlaylistView Playlist, StepSubmission Step)>? _steps;
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        bool projects = await CanActForAsync(Org, Permissions.Projects.Review);
+        bool steps = await CanActForAsync(Org, Permissions.Playlists.ReviewSteps);
+        if (!projects && !steps)
+        {
+            Forbid();
+            return;
+        }
+
+        _organisation = await Get<BrightTime.Modules.Directory.Contracts.IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (projects)
+        {
+            _projects = await Get<Projects>().SubmittedAsync(Org);
+        }
+
+        if (steps)
+        {
+            _steps = [];
+            Playlists playlists = Get<Playlists>();
+            foreach (PlaylistView playlist in (await playlists.ListAsync(Org)).Where(p => p.Status != Playlists.Draft))
+            {
+                if ((await playlists.SubmissionsAsync(Org, playlist.Id)) is { IsSuccess: true } waiting)
+                {
+                    _steps.AddRange(waiting.Value.Select(s => (playlist, s)));
+                }
+            }
+        }
+
+        _loaded = true;
+    }
+
+    /// <summary>A young person, by the display name of their portfolio, or not named at all.</summary>
+    private string Who(string? displayName) =>
+        displayName is { Length: > 0 } name ? T.Format("provider.work.by", ("name", name)) : T["provider.work.by_unnamed"];
+
+    private async Task ReviewProjectAsync()
+    {
+        if (_projects is null || !Guid.TryParse(FormValue("project"), out Guid project))
+        {
+            return;
+        }
+
+        bool approve = FormValue("decision") == "approve";
+        Result reviewed = await Get<Projects>().ReviewAsync(Org, Actor, project, approve, approve ? null : FormValue("note"));
+        Answer(reviewed, approve);
+    }
+
+    private async Task ReviewStepAsync()
+    {
+        if (_steps is null
+            || !Guid.TryParse(FormValue("playlist"), out Guid playlist)
+            || !Guid.TryParse(FormValue("step"), out Guid step)
+            || !Guid.TryParse(FormValue("enrollment"), out Guid enrollment))
+        {
+            return;
+        }
+
+        bool approve = FormValue("decision") == "approve";
+        Uri site = Get<SiteContext>().BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
+        Result reviewed = await Get<Playlists>().ReviewAsync(Org, Actor, site, playlist, step, enrollment, approve, approve ? null : FormValue("note"));
+        Answer(reviewed, approve);
+    }
+
+    private void Answer(Result reviewed, bool approved)
+    {
+        if (!reviewed.IsSuccess)
+        {
+            _problem = T.Error(reviewed.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/work?done={(approved ? "approved" : "sent_back")}");
+    }
+}

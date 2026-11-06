@@ -569,6 +569,11 @@ button.secondary-button {
     display: block;
 }
 
+/* A young person's own words, kept as they wrote them (D82). */
+.card-list .body {
+    white-space: pre-line;
+}
+
 .count {
     color: var(--bt-muted);
     font-weight: 400;

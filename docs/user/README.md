@@ -60,7 +60,8 @@ nothing in these guides promises a screen that doesn't exist yet.
 | A young person's skills, projects and goals | Shown skills and projects, on the portfolio's page | Yes | |
 | A young person's playlists | Coming | Yes | |
 | Downloading a portfolio | Coming | Yes | |
-| **Organisations:** playlists | Coming | | |
+| **Organisations:** reviewing young people's projects and playlist steps | Yes | | |
+| **Organisations:** writing playlists | Coming | | |
 | **Organisations:** badges | Coming | | |
 
 Where a listing says *"Registration through BrightTime opens soon"*, contact the organisation

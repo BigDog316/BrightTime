@@ -16,6 +16,7 @@ of it happens in the **console** on the website. Taking attendance on a phone ha
 - [Reports](#reports)
 - [Badges](#badges)
 - [Playlists](#playlists)
+- [Young people's work](#young-peoples-work)
 - [What you can see about families, and why](#what-you-can-see-about-families-and-why)
 
 ## Joining BrightTime
@@ -56,9 +57,10 @@ Each person has one role in each organisation.
 | Write forms, waivers and eligibility rules | ● | |
 | Set an activity's places | ● | |
 | Set fees, waive a fee, mark a payment received | ● | |
+| Approve or send back young people's projects and playlist steps | ● | ● |
 
 An organisation can also give someone the **mentor** or **viewer** role. Neither can use the
-applications, attendance, messages, payments or reports pages.
+applications, attendance, messages, payments, young people's work or reports pages.
 
 ## Your organisation: profile, sites and staff
 
@@ -307,16 +309,11 @@ When they arrive:
   marked for review, and a check-in always is. Steps are required unless you say otherwise.
 - **Publish** it, and from then on it never changes, because everyone's progress refers to its
   steps. **Archive** stops anyone new starting; those already on it carry on.
-- Staff **review** submitted steps: approve one, or send it back with a note saying what to do
-  again. You see each young person only by the display name they chose for their portfolio.
+- Staff **review** submitted steps on the **Young people's work** tab (below).
 - When someone finishes every required step, they're given the playlist's badge, signed by your
   organisation.
 
-**Projects and skills.** When the screens arrive:
-- **Projects.** Young people can send you projects they made about one of your activities. Staff
-  **approve** one, or **send it back** with a note saying what to change. Only approved work can
-  appear on a young person's portfolio, and if they change it, it needs approving again. You see the
-  project and the young person's portfolio display name, nothing more.
+**Skills.** When the screen arrives:
 - **Skills.** Staff can **endorse a skill** for a young person enrolled with you, such as
   *Teamwork* or *Field research*, at a level from beginning to advanced. It appears on their
   portfolio as endorsed. The skills come from the county's list, which network organisers keep in
@@ -326,6 +323,21 @@ When they arrive:
 completed playlist, as a rule that must be met. A young person who doesn't hold it can't submit an
 application. For now these two rules are set through the API; the console's eligibility page shows
 them but doesn't add them yet.
+
+## Young people's work
+
+The **Young people's work** tab lists what young people have sent you to check:
+- **Projects** they made about one of your activities, such as a map or a write-up, with the
+  activity it came from and what they wrote about it.
+- **Playlist steps** your staff check, such as a check-in with a ranger, with what they wrote.
+
+For each, write a note if you like, then **Approve** or **Send back**. To send something back, say
+what to change: the young person sees your note in the app and can send it again.
+- Only approved projects can appear on a young person's portfolio. If they change one, it comes
+  back to you to approve again.
+- Approving the last required step of a playlist completes it, and they're given its badge,
+  signed by your organisation.
+- You see each young person only by the display name they chose for their portfolio, nothing more.
 
 ## What you can see about families, and why
 

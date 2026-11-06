@@ -1,0 +1,145 @@
+@page "/playlists"
+@* Playlists in the app (D67, D79): the ones a young person started, with how far along they are,
+   then the county's others to try. Each opens on its own screen, where it's started and worked
+   through. Whether they may start one is the server's to say (sign-up capability, a badge it asks
+   for); this screen only lists. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.playlists.title"]</h1>
+
+@if (Session.Me is not { } me)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (!Portfolio.HasPortfolio(me))
+{
+    <p>@T["app.playlists.youth_only"]</p>
+}
+else
+{
+    <p class="hint">@T["app.playlists.intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_mine is null && _published is null && _problem is null)
+    {
+        <Busy />
+    }
+    else
+    {
+        @if (_mine is { } mine)
+        {
+            <section aria-labelledby="yours">
+                <h2 id="yours">@T["app.playlists.yours"]</h2>
+                @if (mine.Count == 0)
+                {
+                    <p>@T["app.playlists.yours_none"]</p>
+                }
+                else
+                {
+                    <ul class="cards">
+                        @foreach (MyPlaylist p in mine)
+                        {
+                            <li class="card" @key="p.PlaylistId">
+                                <h3 dir="auto"><a href="playlists/@Uri.EscapeDataString(p.Slug)">@p.Title</a></h3>
+                                @if (p.Organisation is { Length: > 0 } org)
+                                {
+                                    <p class="hint">@T.Format("app.playlists.from", ("organisation", Text.Name(org)))</p>
+                                }
+                                <p><strong>@Progress(p)</strong></p>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+
+        @if (_published is { } published)
+        {
+            <section aria-labelledby="to-try">
+                <h2 id="to-try">@T["app.playlists.to_try"]</h2>
+                @if (ToTry(published) is { Count: > 0 } offered)
+                {
+                    <ul class="cards">
+                        @foreach (PlaylistSummary p in offered)
+                        {
+                            <li class="card" @key="p.Id">
+                                <h3 dir="auto"><a href="playlists/@Uri.EscapeDataString(p.Slug)">@p.Title</a></h3>
+                                @if (p.Organisation is { Length: > 0 } org)
+                                {
+                                    <p class="hint">@T.Format("app.playlists.from", ("organisation", Text.Name(org)))</p>
+                                }
+                                @foreach (string fact in Facts(T, p))
+                                {
+                                    <p class="hint">@fact</p>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p>@T[published.Count == 0 ? "app.playlists.none" : "app.playlists.all_started"]</p>
+                }
+            </section>
+        }
+    }
+}
+
+@code {
+    private IReadOnlyList<MyPlaylist>? _mine;
+    private IReadOnlyList<PlaylistSummary>? _published;
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<MyPlaylist>> mine = await Api.MyPlaylistsAsync();
+        ApiResult<IReadOnlyList<PlaylistSummary>> published = await Api.PlaylistsAsync();
+        _problem = mine.Problem ?? published.Problem;
+        _mine = mine.Value ?? _mine;
+        _published = published.Value ?? _published;
+    }
+
+    /// <summary>The published playlists not yet started.</summary>
+    private List<PlaylistSummary> ToTry(IReadOnlyList<PlaylistSummary> published) =>
+        [.. published.Where(p => _mine?.Any(m => m.PlaylistId == p.Id) != true)];
+
+    private string Progress(MyPlaylist p) =>
+        p.CompletedAt is { } done
+            ? T.Format("app.playlists.finished", ("date", T.DateShort(done)))
+            : T.Format("app.playlists.progress", ("done", p.Steps.Count(s => s.State == "completed")), ("total", p.Steps.Count));
+
+    /// <summary>What a playlist says of itself before it's started: time, ages, the badge it gives, and the one it asks for.</summary>
+    internal static IEnumerable<string> Facts(Text t, PlaylistSummary p)
+    {
+        if (p.EstimatedHours is { } hours)
+        {
+            yield return t.Format("app.playlists.hours", ("hours", hours));
+        }
+
+        if ((p.AgeMin, p.AgeMax) is ({ } from, { } to))
+        {
+            yield return t.Format("app.playlists.ages", ("min", from), ("max", to));
+        }
+        else if (p.AgeMin is { } min)
+        {
+            yield return t.Format("app.playlists.ages_from", ("min", min));
+        }
+        else if (p.AgeMax is { } max)
+        {
+            yield return t.Format("app.playlists.ages_to", ("max", max));
+        }
+
+        if (p.CompletionBadge is { Length: > 0 } earns)
+        {
+            yield return t.Format("app.playlists.earns", ("badge", Text.Name(earns)));
+        }
+
+        if (p.RequiresBadge is { Length: > 0 } needs)
+        {
+            yield return t.Format("app.playlists.needs", ("badge", Text.Name(needs)));
+        }
+    }
+}

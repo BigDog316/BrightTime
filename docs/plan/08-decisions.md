@@ -2640,6 +2640,47 @@ server allows from where a record stands; the server still makes every call.
 review projects and endorse skills (the API has them); and evidence images, waiting on media
 storage.
 
+### D79 — Playlists, in the app (**proposed 2026-11-05**)
+
+The eighth app slice: a young person's playlists, on D67's routes. **Playlists** joins the Account
+menu for a young person's own account, next to **Your portfolio**.
+- **Playlists** (`/playlists`) lists theirs first, newest first, each with *{n} of {m} steps done*
+  or the day they finished it. Then *Playlists to try*: the county's published playlists they
+  haven't started, each with what it says of itself before starting: about how many hours, the
+  ages it's for, the badge it gives, and the badge it asks for.
+- **A playlist** (`/playlists/{slug}`) says what it is, and whether the steps go in order.
+  - **Before starting**: its steps, and **Start this playlist**. An account that can't sign up for
+    itself (under 13) is told so instead, from the account's capabilities; a playlist that asks
+    for a badge they don't hold is refused by the server, and the screen says why.
+  - **Once started**: how far along, then each step with its kind, whether it's optional, the
+    minutes it takes and whether staff check it, its instructions, and where it stands: *Done on
+    {date}*, *Sent to staff to check*, or *Sent back to you: {note}*.
+  - **A step open to them** has its form. A step to attend links to its activity and is done once
+    attendance is recorded (the server says so if it isn't yet). A reflection takes 20 to 2,000
+    characters. A check-in or an activity elsewhere takes a note if they like; the activity's link
+    opens in the phone's browser, and only an https link is offered. A step staff check says
+    **Send to staff**; any other, **Mark it done**. A step sent back keeps what they wrote, to
+    change.
+  - **A step not open yet** (an ordered playlist, with a required step before it not done) says
+    to finish the steps before it, and has no form.
+  - **Finished**: the day, and the badge they earned, with a link to the portfolio where it is.
+  - An **archived** playlist is gone from the public list, but stays on the screen of those who
+    started it, who carry on (D67).
+- **Server changes:**
+  - A step to attend names its activity, wherever steps are read: `listingTitle`, in the request's
+    language, and `listingSlug` while the listing is published, for the link. Before, a step gave
+    only the listing's id, which the app can't open.
+  - `GET /me/playlists` gives each playlist its `description` and `completionBadge`, so a playlist
+    archived since it was started can still be shown in full.
+
+**Found on the emulator:** a refused **Start** (a badge they don't hold) came with **Try again**,
+which only reloads the page. The refusal is now said beside **Start**, with nothing to retry. The
+walk took a playlist from start to its badge, with a step sent back by staff and sent again, and
+the badge then opening the playlist that asks for it.
+
+**Not yet:** the console's screens for playlists and for reviewing steps (the API has them);
+completing a step to attend when attendance arrives (D67); downloading the portfolio (D68).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

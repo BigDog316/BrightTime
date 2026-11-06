@@ -1,0 +1,283 @@
+@page "/playlists/{Slug}"
+@* One playlist (D67, D79). Before it's started: what it is, its steps, and Start, which the server
+   allows only to an account that can sign up for itself (nobody under 13) and, where the playlist
+   asks for one, holding its badge. Once started: each step and where it stands, with what it takes
+   to do it. A step to attend links to its activity, and is done once attendance is recorded; a
+   reflection takes 20 to 2,000 characters; a step staff check goes to them, and may come back with
+   a note. Steps can't be undone. The last required step completes the playlist and gives its badge. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject IExternalLauncher Launcher
+
+@if (Session.Me is not { } me)
+{
+    <h1>@T["app.playlists.title"]</h1>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (!Portfolio.HasPortfolio(me))
+{
+    <h1>@T["app.playlists.title"]</h1>
+    <p>@T["app.playlists.youth_only"]</p>
+}
+else if (!_loaded && _problem is null)
+{
+    <h1>@T["app.playlists.title"]</h1>
+    <Busy />
+}
+else if (_mine is null && _playlist is null)
+{
+    <h1>@T["app.playlists.title"]</h1>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_problem is null)
+    {
+        <p>@T["error.playlists.not_found"]</p>
+    }
+}
+else
+{
+    <h1 dir="auto">@(_mine?.Title ?? _playlist!.Title)</h1>
+    @if ((_mine?.Organisation ?? _playlist?.Organisation) is { Length: > 0 } org)
+    {
+        <p class="hint">@T.Format("app.playlists.from", ("organisation", Text.Name(org)))</p>
+    }
+    @if ((_mine?.Description ?? _playlist?.Description) is { Length: > 0 } description)
+    {
+        <p class="project-text" dir="auto">@description</p>
+    }
+    <p class="visually-hidden" role="status">@_said</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+    @if (_mine is { } mine)
+    {
+        @if (mine.CompletedAt is { } finished)
+        {
+            <div class="notice" role="note">
+                <p><strong>@T.Format("app.playlists.complete", ("date", T.DateShort(finished)))</strong></p>
+                @if (mine.AwardedAssertionId is not null && mine.CompletionBadge is { Length: > 0 } badge)
+                {
+                    <p>@T.Format("app.playlists.earned", ("badge", Text.Name(badge)))</p>
+                    <a class="button" href="portfolio">@T["app.playlists.see_portfolio"]</a>
+                }
+            </div>
+        }
+        else
+        {
+            <p><strong>@T.Format("app.playlists.progress", ("done", mine.Steps.Count(s => s.State == "completed")), ("total", mine.Steps.Count))</strong></p>
+        }
+        <p class="hint">@T[mine.IsOrdered ? "app.playlists.ordered" : "app.playlists.any_order"]</p>
+
+        <h2>@T["app.playlists.steps"]</h2>
+        <ol class="cards">
+            @foreach (MyStep s in mine.Steps)
+            {
+                <li class="card" @key="s.Step.Id">
+                    @Heading(s.Step)
+                    @switch (s.State)
+                    {
+                        case "completed":
+                            <p><strong>@(s.CompletedAt is { } at ? T.Format("app.playlists.state.completed", ("date", T.DateShort(at))) : T["app.playlists.state.done"])</strong></p>
+                            break;
+                        case "submitted":
+                            <p><strong>@T["app.playlists.state.submitted"]</strong></p>
+                            break;
+                        case "needs_rework":
+                            <p><strong>@T.Format("app.playlists.state.needs_rework", ("note", Text.Name(s.ReviewNote ?? "")))</strong></p>
+                            break;
+                    }
+                    @if (s.Reflection is { Length: > 0 } wrote && !s.IsOpen)
+                    {
+                        <p class="hint">@T["app.playlists.you_wrote"]</p>
+                        <p class="project-text" dir="auto">@wrote</p>
+                    }
+                    @Links(s.Step)
+                    @if (s.IsOpen && !s.Available)
+                    {
+                        <p class="hint">@T["error.playlists.out_of_order"]</p>
+                    }
+                    else if (s.IsOpen)
+                    {
+                        string id = s.Step.Id.ToString("N");
+                        <form class="stack" @onsubmit="() => DoAsync(s)">
+                            @if (s.Step.Kind != "attend_listing")
+                            {
+                                bool needed = s.Step.Kind == "reflection";
+                                <div class="field">
+                                    <label for="say-@id">@T[needed ? "app.playlists.reflection" : "app.playlists.note"]</label>
+                                    <textarea id="say-@id" rows="4" required="@needed" minlength="@(needed ? 20 : 0)" maxlength="2000" dir="auto"
+                                              value="@Written(s)" @oninput="e => _written[s.Step.Id] = e.Value as string ?? string.Empty"></textarea>
+                                    @if (needed)
+                                    {
+                                        <p class="hint">@T["app.playlists.reflection_hint"]</p>
+                                    }
+                                </div>
+                            }
+                            @if (_stepProblem.GetValueOrDefault(s.Step.Id) is { } problem)
+                            {
+                                <ProblemNotice Problem="problem" />
+                            }
+                            <div class="actions">
+                                <button type="submit" class="primary" disabled="@(_busy == s.Step.Id)">@T[s.Step.RequiresReview ? "app.playlists.send" : "app.playlists.done"]</button>
+                            </div>
+                        </form>
+                    }
+                </li>
+            }
+        </ol>
+    }
+    else if (_playlist is { } p)
+    {
+        @foreach (string fact in Playlists.Facts(T, p))
+        {
+            <p class="hint">@fact</p>
+        }
+        <p class="hint">@T[p.IsOrdered ? "app.playlists.ordered" : "app.playlists.any_order"]</p>
+        @if (Session.Capabilities is { CanSelfEnroll: false })
+        {
+            <p class="hint">@T["error.playlists.cannot_start"]</p>
+        }
+        else
+        {
+            @* A refusal (a badge they don't hold) is said here, with no Try again: reloading can't change it. *@
+            <ProblemNotice Problem="_startProblem" />
+            <div class="actions">
+                <button type="button" class="primary" disabled="@_starting" @onclick="StartAsync">@T["app.playlists.start"]</button>
+            </div>
+        }
+
+        <h2>@T["app.playlists.steps"]</h2>
+        <ol class="cards">
+            @foreach (PlaylistStep s in p.Steps)
+            {
+                <li class="card" @key="s.Id">
+                    @Heading(s)
+                    @Links(s)
+                </li>
+            }
+        </ol>
+    }
+    <a class="button" href="playlists">@T["app.playlists.back"]</a>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private MyPlaylist? _mine;
+    private PlaylistSummary? _playlist;
+    private bool _loaded;
+    private ApiProblem? _problem;
+    private bool _starting;
+    private ApiProblem? _startProblem;
+    private Guid? _busy;
+    private string _said = "";
+    private readonly Dictionary<Guid, string> _written = [];
+    private readonly Dictionary<Guid, ApiProblem> _stepProblem = [];
+
+    protected override Task OnParametersSetAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<MyPlaylist>> mine = await Api.MyPlaylistsAsync();
+        ApiResult<PlaylistSummary> playlist = await Api.PlaylistAsync(Slug);
+        _mine = mine.Value?.FirstOrDefault(p => p.Slug == Slug) ?? _mine;
+        _playlist = playlist.Value ?? _playlist;
+        // An archived playlist is gone from the public list, but those who started it carry on.
+        _problem = mine.Problem ?? (playlist.Problem is { Status: 404 } ? null : playlist.Problem);
+        _loaded = true;
+    }
+
+    private string Written(MyStep s) => _written.GetValueOrDefault(s.Step.Id) ?? (s.State == "needs_rework" ? s.Reflection ?? "" : "");
+
+    private async Task StartAsync()
+    {
+        _starting = true;
+        _said = "";
+        ApiResult<MyPlaylist> started = await Api.StartPlaylistAsync(_playlist!.Id);
+        _startProblem = started.Problem;
+        if (started.Value is { } mine)
+        {
+            _mine = mine;
+            _said = T["app.playlists.started"];
+        }
+
+        _starting = false;
+    }
+
+    private async Task DoAsync(MyStep step)
+    {
+        _busy = step.Step.Id;
+        _said = "";
+        _stepProblem.Remove(step.Step.Id);
+        string? written = Written(step).Trim() is { Length: > 0 } w ? w : null;
+        ApiResult<MyPlaylist> done = await Api.DoStepAsync(_mine!.PlaylistId, step.Step.Id, written);
+        if (done.Value is { } mine)
+        {
+            _mine = mine;
+            _written.Remove(step.Step.Id);
+            _said = mine.CompletedAt is not null
+                ? T.Format("app.playlists.complete", ("date", T.DateShort(mine.CompletedAt.Value)))
+                : T.Format(step.Step.RequiresReview ? "app.playlists.now_sent" : "app.playlists.now_done", ("step", step.Step.Order));
+        }
+        else if (done.Problem is { } problem)
+        {
+            _stepProblem[step.Step.Id] = problem;
+        }
+
+        _busy = null;
+    }
+
+    /// <summary>A step's number and title, what kind it is, and what it says to do.</summary>
+    private RenderFragment Heading(PlaylistStep s) =>
+        @<text>
+            <h3 dir="auto">@T.Format("app.playlists.step", ("n", s.Order), ("title", Text.Name(s.Title)))</h3>
+            <p class="hint">@string.Join(" · ", About(T, s))</p>
+            @if (s.Instructions is { Length: > 0 } instructions)
+            {
+                <p class="project-text" dir="auto">@instructions</p>
+            }
+        </text>;
+
+    /// <summary>Where a step is done: the activity to attend, or the link to an activity elsewhere.</summary>
+    private RenderFragment Links(PlaylistStep s) =>
+        @<text>
+            @if (s.Kind == "attend_listing" && s.ListingSlug is { Length: > 0 } slug)
+            {
+                <p><a href="listings/@Uri.EscapeDataString(slug)">@T.Format("app.playlists.go_to", ("activity", Text.Name(s.ListingTitle ?? slug)))</a></p>
+            }
+            else if (s.Kind == "attend_listing" && s.ListingTitle is { Length: > 0 } title)
+            {
+                <p>@T.Format("app.playlists.activity_gone", ("activity", Text.Name(title)))</p>
+            }
+            else if (s.Kind == "external_activity" && Link(s) is { } link)
+            {
+                <div class="actions">
+                    <button type="button" @onclick="() => Launcher.OpenAsync(link)">@T["app.playlists.open_link"]</button>
+                </div>
+                <p class="hint" dir="ltr">@link.Host</p>
+            }
+        </text>;
+
+    /// <summary>What kind of step it is, whether it's optional, how long it takes, and whether staff check it.</summary>
+    internal static IEnumerable<string> About(Text t, PlaylistStep s)
+    {
+        yield return t["app.playlists.kind." + s.Kind];
+        if (!s.IsRequired)
+        {
+            yield return t["app.playlists.optional"];
+        }
+
+        if (s.ExpectedMinutes is { } minutes)
+        {
+            yield return t.Format("app.playlists.minutes", ("minutes", minutes));
+        }
+
+        if (s.RequiresReview)
+        {
+            yield return t["app.playlists.reviewed"];
+        }
+    }
+
+    /// <summary>An activity elsewhere opens in the phone's browser, and only over https, as the server requires.</summary>
+    internal static Uri? Link(PlaylistStep s) =>
+        Uri.TryCreate(s.ExternalUrl, UriKind.Absolute, out Uri? link) && link.Scheme == Uri.UriSchemeHttps ? link : null;
+}

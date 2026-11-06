@@ -107,7 +107,7 @@ All anonymous and rate-limited.
 | `GET /public/badges/classes/{id}/image.svg` | Its generated image |
 | `GET /public/badges/{slug}` | A credential's standing (`valid`, `expired`, `revoked`), with the credential and its JWT. `no-store`, `noindex` |
 | `GET /public/badges/{slug}/ob2` | The OB 2.0 hosted assertion, or `410 Gone` with `revoked: true` and the reason |
-| `GET /public/playlists`, `GET /public/playlists/{slug}` | Published playlists: steps, estimated hours, the badge at the end, and any badge needed to start (D67) |
+| `GET /public/playlists`, `GET /public/playlists/{slug}` | Published playlists: steps, estimated hours, the badge at the end, and any badge needed to start (D67). A step to attend names its activity: `listingTitle`, and `listingSlug` while it's published (D79) |
 | `GET /terms` | The current terms of use, with their hash |
 
 ## Your account
@@ -194,7 +194,7 @@ The owner alone reads or changes a family profile.
 | `POST /me/portfolio/export` | `{ format }`: `pdf` (a printable portfolio in the person's language), `json_ob3` (their badges' OB 3.0 credentials and JWTs) or `clr2` (a CLR 2.0 VC-JWT signed by the site, `application/jwt`; needs at least one badge). Returned at once, never stored (D68) |
 | `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT, `verify` (the credential's address, which is its id) and `page` (the website's check page, `/badges/{slug}`, D77) |
 | `POST /playlists/{id}/enroll` | Start a published playlist: needs the account's sign-up capability and any badge the playlist asks for. Starting one already started returns it |
-| `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note |
+| `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note; with the playlist's `description` and `completionBadge` (D79) |
 | `PUT /me/playlists/{id}/steps/{stepId}` | Mark a step done (`{ reflection }` for a reflection step): completed, or submitted when it needs review. Completing the last required step completes the playlist and awards its badge |
 
 ## Learning: goals, skills and projects

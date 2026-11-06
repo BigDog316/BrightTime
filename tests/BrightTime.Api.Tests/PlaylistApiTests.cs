@@ -138,6 +138,12 @@ public sealed class PlaylistApiTests(ApiFixture api)
                 .ShouldBe((api.Data.Organisations.Single(o => o.Id == org).DisplayName, "Watershed Explorer", 3));
             (await JsonAsync(await anonymous.GetAsync(Relative("api/v1/public/playlists"), Ct))).EnumerateArray().Select(p => p.GetProperty("slug").GetString()).ShouldContain(slug);
 
+            // The step to attend names its activity, and links to it while it's published (D79).
+            (string Title, string Slug) seeded = api.Data.Listings.Where(l => l.Id == listing).Select(l => (l.Title, l.Slug)).Single();
+            JsonElement attending = shown.GetProperty("steps")[2];
+            (attending.GetProperty("listingTitle").GetString(), attending.GetProperty("listingSlug").GetString()).ShouldBe((seeded.Title, seeded.Slug));
+            shown.GetProperty("steps")[0].GetProperty("listingTitle").ValueKind.ShouldBe(JsonValueKind.Null);
+
             // Before the badge, the gated listing refuses the young person's application.
             Guid application = await DraftApplicationAsync(learner, learnerId, listing);
             await ProblemAsync(await learner.PostAsJsonAsync($"api/v1/applications/{application}/submit", new { shareFields = new[] { "member_names" } }, Ct),
@@ -146,6 +152,8 @@ public sealed class PlaylistApiTests(ApiFixture api)
             // The young person starts it; the steps open in order, and a reflection must say something.
             JsonElement mine = await JsonAsync(await learner.PostAsync(Relative($"api/v1/playlists/{playlist}/enroll"), null, Ct));
             States(mine).ShouldBe(["not_started", "not_started", "not_started"]);
+            (mine.GetProperty("description").GetString(), mine.GetProperty("completionBadge").GetString(), mine.GetProperty("steps")[2].GetProperty("step").GetProperty("listingSlug").GetString())
+                .ShouldBe(("Three steps along the river.", "Watershed Explorer", seeded.Slug));
             mine.GetProperty("steps")[1].GetProperty("available").GetBoolean().ShouldBeFalse();
             await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{checkin}", new { }, Ct), HttpStatusCode.Conflict, "playlists.out_of_order");
             await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{reflect}", new { reflection = "Fish." }, Ct), HttpStatusCode.BadRequest, "playlists.reflection");

@@ -194,6 +194,34 @@ public sealed record ProjectView(
 /// <summary>A project as written or changed: what it is, and the activity it came from.</summary>
 public sealed record ProjectDraft(string Title, string? Description, Guid? ListingId);
 
+/// <summary>
+/// One step of a playlist (D67): <c>attend_listing</c>, <c>external_activity</c>, <c>reflection</c>
+/// or <c>mentor_checkin</c>. A step to attend names its activity, with its slug while it's published (D79).
+/// </summary>
+public sealed record PlaylistStep(
+    Guid Id, int Order, string Kind, string Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes,
+    bool IsRequired, bool RequiresReview, string? ListingTitle = null, string? ListingSlug = null);
+
+/// <summary>A published playlist, as anyone reads it (<c>GET /public/playlists</c>).</summary>
+public sealed record PlaylistSummary(
+    Guid Id, string Slug, string Title, string? Description, string? Organisation, bool IsOrdered, short? AgeMin, short? AgeMax,
+    decimal? EstimatedHours, string? CompletionBadge, Guid? CompletionBadgeClassId, string? RequiresBadge, IReadOnlyList<PlaylistStep> Steps);
+
+/// <summary>
+/// Where a young person is on one step: <c>not_started</c>, <c>submitted</c> (waiting for staff),
+/// <c>needs_rework</c> (sent back, with a note) or <c>completed</c>; and whether it's open to them yet.
+/// </summary>
+public sealed record MyStep(PlaylistStep Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt)
+{
+    /// <summary>Waiting on the young person: never done, or sent back.</summary>
+    public bool IsOpen => State is "not_started" or "needs_rework";
+}
+
+/// <summary>A playlist the young person started (<c>GET /me/playlists</c>), and the badge it gave them once complete.</summary>
+public sealed record MyPlaylist(
+    Guid PlaylistId, string Slug, string Title, string? Organisation, bool IsOrdered, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt,
+    Guid? AwardedAssertionId, IReadOnlyList<MyStep> Steps, string? Description = null, string? CompletionBadge = null);
+
 /// <summary>The signed-in person: who, what kind of account (<c>adult</c>, <c>youth</c>), and what they may do.</summary>
 public sealed record Me(
     Guid Id,

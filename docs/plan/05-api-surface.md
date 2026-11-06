@@ -438,6 +438,10 @@ portfolio at `/portfolios/{slug}`; the API's JSON routes are unchanged.
 *Built (2026-11-05, D78):* `GET /me/learning/terms`, the county's skills and interests with the
 ids the skill and goal routes take; and `listingId` on each record of `GET /me/portfolio`.
 
+*Built (2026-11-05, D79):* a playlist step to attend names its activity, `listingTitle` and, while
+it's published, `listingSlug`, wherever steps are read; `GET /me/playlists` gives each playlist its
+`description` and `completionBadge`.
+
 ```
 
 GET    /api/v1/playlists

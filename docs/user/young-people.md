@@ -10,7 +10,8 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [Staying safe](#staying-safe)
 - [Your portfolio and badges (app)](#your-portfolio-and-badges-app)
 - [Your skills, projects and goals (app)](#your-skills-projects-and-goals-app)
-- [Playlists and downloads: coming soon](#playlists-and-downloads-coming-soon)
+- [Playlists (app)](#playlists-app)
+- [Downloads: coming soon](#downloads-coming-soon)
 
 ## Getting your own account
 
@@ -129,19 +130,29 @@ never on your portfolio page.
 - Mark it **I did it**, **Put it on hold** or **Set it aside**, and **Work on it again** whenever
   you want.
 
-## Playlists and downloads: coming soon
+## Playlists (app)
 
-These are built behind the scenes; their screens are next. When they arrive:
+**Playlists** are sets of steps an organisation puts together, like *Watershed Explorer*, often
+with a badge at the end. Find them under **Account**, then **Playlists**: yours first, with how
+far along you are, then others to try.
+- Open one to see what it is, how long it takes, the ages it's for and the badge it gives. Tap
+  **Start this playlist** to begin. Starting one on your own isn't open to anyone under 13.
+- Some playlists open only to people who hold a certain badge. The playlist says which.
+- Each step says what to do:
+  - **Go to an activity**: it links to the activity. The step is done once your attendance there
+    is recorded.
+  - **Something to do elsewhere**: **Open the activity** opens it in your browser.
+  - **Write about it**: write at least 20 characters about what you think.
+  - **Check in with staff**: talk to a member of staff, and add a note if you like.
+- **Mark it done** finishes a step. A step that says *Staff check this step* has **Send to staff**
+  instead. Staff may send it back, saying what to change: change it and send it again.
+- Some playlists go in order, so a step opens once the required steps before it are done.
+  *Optional* steps don't hold you up. A step you've done can't be undone.
+- Finish every required step and the playlist is complete. Its badge goes on your portfolio.
+- Some programs are open only to people who hold a certain badge, or who have completed a certain
+  playlist. The program's page says so before you apply.
 
-**Playlists** are sets of steps an organisation puts together, like *Watershed Explorer*, with a
-badge at the end.
-- A step might be coming to one of the organisation's sessions, an activity somewhere else,
-  writing a short reflection, or a check-in with a member of staff.
-- Some playlists go in order, so a step opens once the ones before it are done. Some steps are
-  checked by staff, who may ask you to do one again and say why.
-- Finish every required step and the playlist is complete: you're given its badge.
-- Some playlists, and some programs, are open only to people who hold a certain badge, or who have
-  completed a certain playlist. The program's page says so before you apply.
+## Downloads: coming soon
 
 **Taking it with you.** You'll be able to download your portfolio:
 - as a **PDF** to print or attach, with your activities and your badges, each with the link where

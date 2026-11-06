@@ -399,6 +399,28 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> RemoveProjectAsync(Guid id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"me/projects/{id:D}", null, signedIn: true, ct);
 
+    // ---- playlists (D67, D79) -----------------------------------------------------------------
+
+    /// <summary>The county's published playlists.</summary>
+    public Task<ApiResult<IReadOnlyList<PlaylistSummary>>> PlaylistsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<PlaylistSummary>>("public/playlists", signedIn: false, ct);
+
+    /// <summary>One published playlist. An archived one is gone from here, but stays on the playlists of those who started it.</summary>
+    public Task<ApiResult<PlaylistSummary>> PlaylistAsync(string slug, CancellationToken ct = default) =>
+        GetAsync<PlaylistSummary>($"public/playlists/{Uri.EscapeDataString(slug)}", signedIn: false, ct);
+
+    /// <summary>The playlists the young person started, newest first.</summary>
+    public Task<ApiResult<IReadOnlyList<MyPlaylist>>> MyPlaylistsAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MyPlaylist>>("me/playlists", signedIn: true, ct);
+
+    /// <summary>Starts a playlist; starting one already started gives it back.</summary>
+    public Task<ApiResult<MyPlaylist>> StartPlaylistAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<MyPlaylist>(HttpMethod.Post, $"playlists/{id:D}/enroll", null, signedIn: true, ct);
+
+    /// <summary>Marks a step done, or sends it for review when staff check it. A reflection step takes what they wrote.</summary>
+    public Task<ApiResult<MyPlaylist>> DoStepAsync(Guid playlistId, Guid stepId, string? reflection, CancellationToken ct = default) =>
+        SendAsync<MyPlaylist>(HttpMethod.Put, $"me/playlists/{playlistId:D}/steps/{stepId:D}", new { reflection }, signedIn: true, ct);
+
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);
 

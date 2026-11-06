@@ -20,8 +20,13 @@ public sealed record PlaylistInput(
 public sealed record StepInput(
     string? Kind, string? Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes, bool? IsRequired, bool? RequiresReview);
 
+/// <summary>
+/// One step. An <c>attend_listing</c> step names its activity (D79): its title in the request's
+/// language, and its slug while it's published, for a link to it.
+/// </summary>
 public sealed record StepView(
-    Guid Id, int Order, string Kind, string Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes, bool IsRequired, bool RequiresReview);
+    Guid Id, int Order, string Kind, string Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes, bool IsRequired, bool RequiresReview,
+    string? ListingTitle = null, string? ListingSlug = null);
 
 /// <summary>A playlist as its organisation sees it.</summary>
 public sealed record PlaylistView(
@@ -41,7 +46,7 @@ public sealed record MyStep(StepView Step, string State, bool Available, string?
 [YouthData]
 public sealed record MyPlaylist(
     Guid PlaylistId, string Slug, string Title, string? Organisation, bool IsOrdered, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt,
-    Guid? AwardedAssertionId, IReadOnlyList<MyStep> Steps);
+    Guid? AwardedAssertionId, IReadOnlyList<MyStep> Steps, string? Description = null, string? CompletionBadge = null);
 
 /// <summary>A step waiting for review, named only as the young person names themselves on their portfolio.</summary>
 [YouthData]
@@ -583,11 +588,13 @@ public sealed partial class Playlists(
         Dictionary<Guid, PlaylistStepProgressRecord> progress = await db.PlaylistProgress.AsNoTracking().Where(pr => pr.PlaylistEnrollmentId == enrollment.Id)
             .ToDictionaryAsync(pr => pr.StepId, ct).ConfigureAwait(false);
         string? organisation = playlist.OrgId is { } org ? await directory.GetOrganisationNameAsync(new OrganisationId(org), ct).ConfigureAwait(false) : null;
+        Dictionary<Guid, StepView> views = (await StepsAsync(steps, ct).ConfigureAwait(false)).ToDictionary(v => v.Id);
         return new MyPlaylist(playlist.Id, playlist.Slug, playlist.Title, organisation, playlist.IsOrdered, enrollment.StartedAt, enrollment.CompletedAt,
             enrollment.AwardedAssertionId,
             [.. steps.Select(s => progress.GetValueOrDefault(s.Id) is { } p
-                ? new MyStep(Step(s), p.State, Available(playlist, steps, progress, s), p.Reflection, p.ReviewNote, p.CompletedAt)
-                : new MyStep(Step(s), "not_started", Available(playlist, steps, progress, s), null, null, null))]);
+                ? new MyStep(views[s.Id], p.State, Available(playlist, steps, progress, s), p.Reflection, p.ReviewNote, p.CompletedAt)
+                : new MyStep(views[s.Id], "not_started", Available(playlist, steps, progress, s), null, null, null))],
+            playlist.Description, await BadgeNameAsync(playlist.CompletionBadgeClassId, ct).ConfigureAwait(false));
     }
 
     private async Task<PlaylistView> ViewAsync(PlaylistRecord p, CancellationToken ct)
@@ -598,7 +605,7 @@ public sealed partial class Playlists(
         int completed = await db.PlaylistEnrollments.CountAsync(e => e.PlaylistId == p.Id && e.CompletedAt != null, ct).ConfigureAwait(false);
         return new PlaylistView(p.Id, p.Slug, p.Title, p.Description, p.IsOrdered, p.AgeMin, p.AgeMax, p.EstimatedHours,
             p.CompletionBadgeClassId, await BadgeNameAsync(p.CompletionBadgeClassId, ct).ConfigureAwait(false),
-            requires, await BadgeNameAsync(requires, ct).ConfigureAwait(false), p.RequiredStepCount, p.Status, [.. steps.Select(Step)], started, completed);
+            requires, await BadgeNameAsync(requires, ct).ConfigureAwait(false), p.RequiredStepCount, p.Status, await StepsAsync(steps, ct).ConfigureAwait(false), started, completed);
     }
 
     private async Task<PublicPlaylist> PublicViewAsync(PlaylistRecord p, CancellationToken ct)
@@ -607,11 +614,29 @@ public sealed partial class Playlists(
         string? organisation = p.OrgId is { } org ? await directory.GetOrganisationNameAsync(new OrganisationId(org), ct).ConfigureAwait(false) : null;
         return new PublicPlaylist(p.Id, p.Slug, p.Title, p.Description, organisation, p.IsOrdered, p.AgeMin, p.AgeMax, p.EstimatedHours,
             await BadgeNameAsync(p.CompletionBadgeClassId, ct).ConfigureAwait(false), p.CompletionBadgeClassId,
-            await BadgeNameAsync(await RequiredBadgeAsync(p.Id, ct).ConfigureAwait(false), ct).ConfigureAwait(false), [.. steps.Select(Step)]);
+            await BadgeNameAsync(await RequiredBadgeAsync(p.Id, ct).ConfigureAwait(false), ct).ConfigureAwait(false), await StepsAsync(steps, ct).ConfigureAwait(false));
     }
 
-    private static StepView Step(PlaylistStepRecord s) =>
-        new(s.Id, s.SortOrder + 1, s.StepKind, s.Title, s.InstructionsMd, s.ListingId, s.ExternalUrl, s.ExpectedMinutes, s.IsRequired, s.RequiresReview);
+    /// <summary>The steps in order, each activity to attend named once however many steps name it.</summary>
+    private async Task<IReadOnlyList<StepView>> StepsAsync(IReadOnlyList<PlaylistStepRecord> steps, CancellationToken ct)
+    {
+        Dictionary<Guid, (string Title, string? Slug)> named = [];
+        foreach (Guid id in steps.Where(s => s.StepKind == "attend_listing").Select(s => s.ListingId).OfType<Guid>().Distinct())
+        {
+            if (await listings.GetForReviewAsync(tenant.TenantId, id, tenant.Locale.Code, ct).ConfigureAwait(false) is { } listing)
+            {
+                bool shown = await listings.GetPublishedAsync(tenant.TenantId, listing.Slug, tenant.Locale.Code, ct).ConfigureAwait(false) is not null;
+                named[id] = (listing.Title, shown ? listing.Slug : null);
+            }
+        }
+
+        return [.. steps.Select(s =>
+        {
+            (string Title, string? Slug)? listing = s.ListingId is { } id && named.TryGetValue(id, out (string, string?) n) ? n : null;
+            return new StepView(s.Id, s.SortOrder + 1, s.StepKind, s.Title, s.InstructionsMd, s.ListingId, s.ExternalUrl, s.ExpectedMinutes, s.IsRequired, s.RequiresReview,
+                listing?.Title, listing?.Slug);
+        })];
+    }
 
     private Task<Guid?> RequiredBadgeAsync(Guid playlistId, CancellationToken ct) =>
         db.UnlockRules.AsNoTracking().Where(u => u.UnlocksPlaylistId == playlistId).Select(u => (Guid?)u.BadgeClassId).FirstOrDefaultAsync(ct);

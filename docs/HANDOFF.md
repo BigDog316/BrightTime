@@ -180,7 +180,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   at the end. Completing one awards the badge, and a listing's eligibility can now ask for a badge
   or a completed playlist, so M4's acceptance path runs end to end. Enrollment asks Learning
   through `IAchievementQueries`, which the Web host now registers too. No console or app screens
-  for playlists yet.
+  for playlists yet. The app has them since D79; the console still doesn't.
 - **Portfolio exports** (D68): the young person's printable portfolio (PDF), their badges as OB
   3.0 credentials, and a CLR 2.0 that the county's site signs under its own `did:web` DID, nesting
   the badges' JWTs. Made when asked, never stored.
@@ -234,6 +234,14 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   it, done, on hold and set aside. Server changes: `GET /me/learning/terms` (skills and interests
   with ids) and `listingId` on portfolio records. The walk found the organisation's review list
   showed a project once per participation record; fixed. Playlists and downloads remain.
+- **Playlists in the app** (D79, proposed): **Playlists** in the Account menu lists the ones a
+  young person started, with how far along they are, then the county's others to try. A
+  playlist's screen says what it is, offers **Start** to an account that can sign up for itself,
+  and once started shows each step, where it stands and what it takes: a link to the activity to
+  attend, a button to open an activity elsewhere, a box for a reflection, the note from staff who
+  sent a step back. Server changes: each step to attend names its activity (`listingTitle`,
+  `listingSlug`), and `/me/playlists` carries the description and the badge at the end.
+  Downloads remain.
 - **The M4 report** ([m4-report.md](m4-report.md)), not yet signed off: two of three acceptance
   criteria are met; the third needs a validator check on a public host. Evidence uploads (media
   storage) and quizzes remain of M4's scope.
@@ -249,7 +257,7 @@ Every decision through D76 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on
 D77 (a young person's portfolio and badges in the app, and their web pages) is proposed. It also
 asks whether the portfolio's family-name rule should read the households a teenager owns, not
 only the members linked to their account. D78 (their skills, projects and goals in the app) is
-proposed.
+proposed, and so is D79 (playlists in the app).
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

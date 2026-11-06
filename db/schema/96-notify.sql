@@ -49,7 +49,7 @@ create table notification (
     ('deadline_reminder','session_reminder','saved_item_update','application_decision',
      'waitlist_offer','new_message','space_activity','badge_awarded','playlist_progress',
      'gig_match','gig_decision','moderation_outcome','consent_request','report_ready',
-     'listing_approved','listing_changes_requested','clearance_expiring','system')),
+     'listing_approved','listing_changes_requested','clearance_expiring','work_reviewed','system')),
   constraint ck_notification_priority check (priority in ('low','normal','high','urgent'))
 );
 create index ix_notification_inbox on notification (user_id, created_at desc)

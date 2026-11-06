@@ -76,7 +76,7 @@ shown, for example *matches 2 of your interests* or *starts in 3 days*.
 
 The **Inbox** holds every notification BrightTime sends you. Under **Account → Notifications**
 you choose, for each kind (session reminders, deadline reminders, changes to saved activities,
-new messages), whether it reaches you **in your inbox**, **on your phone** or **by email**.
+new messages, and for young people their work being checked and badges they earn), whether it reaches you **in your inbox**, **on your phone** or **by email**.
 
 **Quiet hours** stop your phone showing notifications between two times you choose. They still
 go to your inbox.

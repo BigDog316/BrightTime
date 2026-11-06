@@ -12,11 +12,17 @@ public static class NotificationKinds
     public const string NewMessage = "new_message";
     public const string System = "system";
 
+    /// <summary>A young person's project or playlist step approved or sent back by staff (D83).</summary>
+    public const string WorkReviewed = "work_reviewed";
+
+    /// <summary>A badge awarded to a young person, by staff or for finishing a playlist (D83).</summary>
+    public const string BadgeAwarded = "badge_awarded";
+
     /// <summary>
-    /// The kinds a person can switch on or off in M2. The rest arrive with the features that send
-    /// them (applications, messaging, badges).
+    /// The kinds a person can switch on or off. The rest arrive with the features that send them
+    /// (applications, waitlist offers).
     /// </summary>
-    public static readonly IReadOnlyList<string> UserConfigurable = [DeadlineReminder, SessionReminder, SavedItemUpdate, NewMessage];
+    public static readonly IReadOnlyList<string> UserConfigurable = [DeadlineReminder, SessionReminder, SavedItemUpdate, NewMessage, WorkReviewed, BadgeAwarded];
 }
 
 /// <summary>Delivery channels, as in <c>ck_preference_channel</c>.</summary>

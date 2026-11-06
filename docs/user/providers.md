@@ -332,7 +332,9 @@ The **Young people's work** tab lists what young people have sent you to check:
 - **Playlist steps** your staff check, such as a check-in with a ranger, with what they wrote.
 
 For each, write a note if you like, then **Approve** or **Send back**. To send something back, say
-what to change: the young person sees your note in the app and can send it again.
+what to change: the young person sees your note in the app and can send it again. Either way,
+they're told in their inbox, by your organisation's name. The notice doesn't repeat your note or
+what they wrote.
 - Only approved projects can appear on a young person's portfolio. If they change one, it comes
   back to you to approve again.
 - Approving the last required step of a playlist completes it, and they're given its badge,

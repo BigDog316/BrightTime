@@ -1,5 +1,6 @@
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Learning.Persistence;
 using BrightTime.SharedKernel.Ids;
@@ -38,7 +39,7 @@ public sealed record ProjectSubmission(Guid Id, string Title, string? Descriptio
 /// project's listing: they can only ask an organisation they took part with.
 /// </para>
 /// </remarks>
-public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, IIdentityQueries identity)
+public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, IIdentityQueries identity, IDirectoryQueries directory)
 {
     public const string Read = "learning.project.read";
     public const string Changed = "learning.project.changed";
@@ -250,6 +251,10 @@ public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditT
             project.UpdatedAt = now;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Reviewed, project, org, approve ? "approved" : "sent_back", ct).ConfigureAwait(false);
+            string name = await directory.GetOrganisationNameAsync(org, ct).ConfigureAwait(false) ?? "";
+            await WorkNotices.TellAsync(db, tenant, project.UserId, WorkNotices.WorkReviewedKind,
+                approve ? WorkNotices.ProjectApproved : WorkNotices.ProjectSentBack, WorkNotices.Args(("org", name)),
+                "/portfolio/projects/" + project.Id.ToString("D"), WorkNotices.Key("project-reviewed", project.Id, now), ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 

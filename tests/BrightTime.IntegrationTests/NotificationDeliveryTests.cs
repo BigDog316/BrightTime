@@ -149,6 +149,19 @@ public sealed class NotificationDeliveryTests(DatabaseFixture database)
         int before = push.Sent.Count;
         await HandleAsync(worker, tenant, Request(user, "after-" + Guid.NewGuid().ToString("N")));
         push.Sent.Skip(before).ShouldHaveSingleItem().Token.ShouldBe(Token);
+
+        // A young person's work checked and a badge earned (D83) are kinds of their own, worded on the way out.
+        before = push.Sent.Count;
+        await HandleAsync(worker, tenant, new(user, "work_reviewed", "notify.step.sent_back",
+            new Dictionary<string, string> { ["org"] = "Brannock Parks", ["playlist"] = "River Talk" }, "/playlists/river-talk", "work-" + Guid.NewGuid().ToString("N")));
+        await HandleAsync(worker, tenant, new(user, "badge_awarded", "notify.badge.awarded",
+            new Dictionary<string, string> { ["org"] = "Brannock Parks", ["badge"] = "River Talker" }, "/portfolio", "badge-" + Guid.NewGuid().ToString("N")));
+        (await Sql.ScalarAsync<long>(check, null, "select count(*) from notify.notification where user_id = @u and notification_kind in ('work_reviewed', 'badge_awarded')", [("u", user)]))
+            .ShouldBe(2);
+        PushMessage[] told = [.. push.Sent.Skip(before)];
+        told.Select(m => m.Title).ShouldBe(["A step needs another try", "You earned a badge"]);
+        told[0].Body.ShouldBe("⁨Brannock Parks⁩ sent back your step in ⁨River Talk⁩ with a note.");
+        told[1].Body.ShouldContain("River Talker");
     }
 
     private static Modules.Platform.Contracts.Messages.NotificationRequested Request(Guid user, string dedupe) =>

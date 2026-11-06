@@ -9,6 +9,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Learning.Records;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -454,6 +455,8 @@ public sealed partial class Badges(
         db.BadgeAssertions.Add(award);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         await AuditAsync(Issued, org, [award.Id], ct, playlistEnrollmentId is null ? null : "playlist", recipient).ConfigureAwait(false);
+        await WorkNotices.TellAsync(db, tenant, recipient, WorkNotices.BadgeAwardedKind, WorkNotices.BadgeAwarded,
+            WorkNotices.Args(("org", issuer.Name), ("badge", badge.Name)), "/portfolio", "badge-awarded:" + award.Id.ToString("N"), ct).ConfigureAwait(false);
         return award;
     }
 

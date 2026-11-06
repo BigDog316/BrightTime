@@ -150,6 +150,22 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
         html.ShouldContain("No playlist steps are waiting.");
         (await db.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'learning.project.reviewed' and actor_org_id = @o", ("o", provider.Id))).ShouldBe(2);
 
+        // The young person is told each time (D83): the badge with the playlist finished, and nothing they wrote.
+        string told = await db.ScalarAsync<string>(
+            """
+            select string_agg(substring(payload::text from 'notify\.[a-z_]+\.[a-z_]+'), ',' order by id)
+            from platform.outbox_message where message_type = 'platform.notification.requested' and payload::text like @u
+            """,
+            ("u", "%" + youth + "%"));
+        told.ShouldBe("notify.project.approved,notify.project.sent_back,notify.badge.awarded,notify.playlist.completed");
+        string payloads = await db.ScalarAsync<string>(
+            "select string_agg(payload::text, ' ') from platform.outbox_message where message_type = 'platform.notification.requested' and payload::text like @u",
+            ("u", "%" + youth + "%"));
+        payloads.ShouldContain("/portfolio/projects/" + kept.ToString("D"));
+        payloads.ShouldContain(provider.DisplayName);
+        payloads.ShouldNotContain("Mussel map");
+        payloads.ShouldNotContain("crayfish");
+
         // Another organisation's admin is turned away.
         using Browser stranger = db.NewBrowser();
         await stranger.SignInAsync(AdminOf(sorted[50]));

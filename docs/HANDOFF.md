@@ -247,8 +247,14 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   check, each approved or sent back with a note, the young person named only by their display
   name. Approving a playlist's last required step completes it and awards its badge. No server
   change. Browsing it on the compose stack found the development proxy dropping `:8000` from every
-  console redirect; `deploy/nginx/dev.conf` passes `$http_host` now. Endorsing skills, writing playlists and badges in the console, and an inbox note when
-  work is reviewed remain.
+  console redirect; `deploy/nginx/dev.conf` passes `$http_host` now. Endorsing skills and writing playlists and
+  badges in the console remain.
+- **Telling a young person when their work is checked** (D83, proposed): approving or sending back
+  a project or playlist step, and awarding a badge (by staff or for finishing a playlist), queue a
+  notification with the change. It names the organisation, the playlist and the badge, never what
+  the young person wrote, and opens the project, the playlist or the portfolio. Two kinds a person
+  can switch off: `work_reviewed` (new in `ck_notification_kind`: replace the constraint or rebuild
+  the compose volume) and `badge_awarded`.
 - **Downloading a portfolio in the app** (D81): *Take it with you* on **Your
   portfolio** makes the printable PDF, and once they hold a badge, the badges (OB 3.0) and a
   learner record (CLR 2.0), with D68's route. The phone's share sheet saves or sends the file. The
@@ -272,6 +278,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D82 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 on 2026-11-06).
+D83 (telling a young person when their work is checked, and when they earn a badge) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

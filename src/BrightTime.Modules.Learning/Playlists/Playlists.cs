@@ -4,6 +4,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Learning.Records;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -362,11 +363,18 @@ public sealed partial class Playlists(
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             PlaylistEnrollmentRecord enrollment = await db.PlaylistEnrollments.FirstAsync(e => e.Id == enrollmentId, ct).ConfigureAwait(false);
             await AuditAsync(Reviewed, org, [enrollmentId, enrollment.UserId], ct, approve ? "approved" : "needs_rework").ConfigureAwait(false);
+            bool open = enrollment.CompletedAt is null;
             if (approve)
             {
                 await CompleteIfDoneAsync(playlist, enrollment, site, ct).ConfigureAwait(false);
             }
 
+            // The last step checked is told as the playlist finished; its badge has a notice of its own.
+            string name = await directory.GetOrganisationNameAsync(org, ct).ConfigureAwait(false) ?? "";
+            string key = !approve ? WorkNotices.StepSentBack : open && enrollment.CompletedAt is not null ? WorkNotices.PlaylistCompleted : WorkNotices.StepApproved;
+            await WorkNotices.TellAsync(db, tenant, enrollment.UserId, WorkNotices.WorkReviewedKind, key,
+                WorkNotices.Args(("org", name), ("playlist", playlist.Title)), "/playlists/" + playlist.Slug,
+                WorkNotices.Key("step-reviewed:" + enrollmentId.ToString("N"), stepId, now), ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 

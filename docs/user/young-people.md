@@ -43,7 +43,9 @@ Signed in on the app, you also get:
 - **Picked for you**: a feed that puts your **interests** first. Each card says why it's there.
 - **Saved** activities that follow your account, with reminders a day before a deadline or an
   hour before a session.
-- An **inbox** and notifications, with **quiet hours** when your phone stays silent.
+- An **inbox** and notifications, with **quiet hours** when your phone stays silent. You're told
+  when a program checks your project or playlist step, and when you earn a badge. Turn either off
+  under **Account → Notifications**.
 
 ## What your account can do
 

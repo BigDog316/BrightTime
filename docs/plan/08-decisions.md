@@ -2787,6 +2787,37 @@ it. A new tab, **Young people's work** (`/provider/orgs/{id}/work`), shows to st
 console's screens for writing playlists and badges, and telling a young person in their inbox
 when their work is reviewed.
 
+### D83 — Telling a young person when their work is checked, and when they earn a badge (**proposed 2026-11-06**)
+
+D82's last gap. A project or playlist step sent to staff waited in silence: the young person
+learned it was approved, or sent back with a note, only by opening the app to look. Now Learning
+asks Notifications to tell them, with the change, through the outbox (so a review that fails tells
+nobody):
+- **A project** approved ("{org} approved your project…") or sent back with a note, opening the
+  project (`/portfolio/projects/{id}`).
+- **A playlist step** approved or sent back with a note, opening the playlist
+  (`/playlists/{slug}`). The step that finishes the playlist says so instead ("{org} checked your
+  last step in {playlist}").
+- **A badge**, however it was awarded: by staff (D66) or for finishing a playlist (D67), opening
+  the portfolio. Finishing a playlist with a badge sends both: the playlist, and the badge.
+
+**What it says.** The organisation's name, and the playlist's and badge's names, which are the
+organisation's own and public. Never the project's title or what the young person wrote: a push
+shows on a locked phone. Each review has its own notice, so work sent back, sent again and checked
+again is told twice.
+
+**Two new kinds** a person can switch off for the inbox or the phone under **Account →
+Notifications**, like the others: `work_reviewed` (*When your work is checked*) and the reserved
+`badge_awarded` (*Badges you earn*). `playlist_progress` stays unused: one switch for all checked
+work is simpler for a young person than one per kind of work. Push follows the account's
+capabilities as before, so an account without consent to be messaged has the inbox only.
+
+**Schema.** `ck_notification_kind` gains `work_reviewed`. An existing database needs the constraint
+replaced (or the compose volume rebuilt); the change is in `db/schema/96-notify.sql`.
+
+**Not yet:** endorsing a skill from the console, and the console's screens for writing playlists
+and badges. Self-checked steps the young person marks done tell them nothing, since they did it.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

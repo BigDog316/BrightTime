@@ -220,21 +220,21 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   out the QR goes. Server changes: `GET /me/attendance/activities`, `listingTitle` on the family's
   records, and `validForSeconds` on a code. Nothing scans the badge yet but the API: a staff
   scanner (camera) is the next attendance slice.
-- **A young person's portfolio and badges in the app** (D77, proposed): **Your portfolio**, under
+- **A young person's portfolio and badges in the app** (D77): **Your portfolio**, under
   Account for a young person's own account, shows who can see it (with its link to share), the
   hours and activities with **Hide** and **Show again**, and the badges held. **Who sees your
   portfolio** sets the display name, headline, bio, visibility and link name; the server decides.
   The website now has the pages those links open, without signing in: `/portfolios/{link name}`
   and `/badges/{verification name}`. One server change: `/me/badges` gives each badge its `page`.
   Goals, skills, projects, playlists and downloads aren't in the app yet.
-- **A young person's skills, projects and goals in the app** (D78, proposed): three screens under
+- **A young person's skills, projects and goals in the app** (D78): three screens under
   **Your portfolio**. **Your skills** lists skills with their level and who endorsed them, and adds
   and removes them. **Your projects** takes a project from draft to sent, approved and shown, and
   says what each step needs. **Your goals** keeps private goals and moves them between working on
   it, done, on hold and set aside. Server changes: `GET /me/learning/terms` (skills and interests
   with ids) and `listingId` on portfolio records. The walk found the organisation's review list
   showed a project once per participation record; fixed. Playlists and downloads remain.
-- **Playlists in the app** (D79, proposed): **Playlists** in the Account menu lists the ones a
+- **Playlists in the app** (D79): **Playlists** in the Account menu lists the ones a
   young person started, with how far along they are, then the county's others to try. A
   playlist's screen says what it is, offers **Start** to an account that can sign up for itself,
   and once started shows each step, where it stands and what it takes: a link to the activity to
@@ -253,11 +253,9 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D76 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04).
-D77 (a young person's portfolio and badges in the app, and their web pages) is proposed. It also
-asks whether the portfolio's family-name rule should read the households a teenager owns, not
-only the members linked to their account. D78 (their skills, projects and goals in the app) is
-proposed, and so is D79 (playlists in the app).
+Every decision through D79 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D79 on 2026-11-05).
+D77 still asks whether the portfolio's family-name rule should read the households a teenager
+owns, not only the members linked to their account.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

@@ -2536,7 +2536,7 @@ scanning a kiosk's code (`POST /attendance/checkin`), which needs the same camer
 by a young person's own account (the server ties badges to the family profile's owner); check-out;
 and the web's family pages.
 
-### D77 — A young person's portfolio and badges, in the app, and the pages their links open (**proposed 2026-11-04**)
+### D77 — A young person's portfolio and badges, in the app, and the pages their links open (**accepted 2026-11-05**)
 
 The sixth app slice, and the first for a young person's own account: the portfolio (D65) and the
 badges (D66) the server has held since M4. The links a young person shares had nowhere to land
@@ -2589,7 +2589,7 @@ but the API's JSON, so this slice also gives the website the two pages they open
 the portfolio as a PDF, OB 3.0 or a CLR (D68), which needs saving a file on the phone; and a
 guardian's view of a child's portfolio, which D65 left for later.
 
-### D78 — A young person's skills, projects and goals, in the app (**proposed 2026-11-05**)
+### D78 — A young person's skills, projects and goals, in the app (**accepted 2026-11-05**)
 
 The seventh app slice: the rest of a young person's portfolio, on D69's routes. **Your portfolio**
 now leads to three screens, under *More of your portfolio*. Each offers only the next step the
@@ -2640,7 +2640,7 @@ server allows from where a record stands; the server still makes every call.
 review projects and endorse skills (the API has them); and evidence images, waiting on media
 storage.
 
-### D79 — Playlists, in the app (**proposed 2026-11-05**)
+### D79 — Playlists, in the app (**accepted 2026-11-05**)
 
 The eighth app slice: a young person's playlists, on D67's routes. **Playlists** joins the Account
 menu for a young person's own account, next to **Your portfolio**.

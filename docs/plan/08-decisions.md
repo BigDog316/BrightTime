@@ -3010,7 +3010,7 @@ listing) runs without anyone pressing anything.
 awarded once (delivered twice), and an ordered one whose attended step waits for the reflection
 before it, then is done with it.
 
-### D92 — Quiz steps (**proposed 2026-11-21**)
+### D92 — Quiz steps (**accepted 2026-11-21**)
 
 D67 refused the `quiz` step kind for want of a design; M4's scope has it. This is the smallest that
 serves a playlist: a check that someone read or understood something, marked at once.

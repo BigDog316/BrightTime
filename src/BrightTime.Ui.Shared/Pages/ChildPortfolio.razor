@@ -1,0 +1,174 @@
+@page "/family/{Id:guid}/portfolio"
+@* A child profile's portfolio, for their guardian (D93): what the child took part in, with the
+   hours from attendance, the badges they hold and the skills organisations endorsed. Nothing here
+   changes it, and it's shown to nobody else. The guardian can download it as the young person
+   would (D68, D81). Once the child claims their account (D35), the portfolio is theirs and the
+   server says so. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject IExternalLauncher Launcher
+@inject IFileShare Files
+
+<ProblemNotice Problem="_problem" Retry="LoadAsync" />
+
+@if (Session.Me is null)
+{
+    <h1>@T["app.portfolio.title"]</h1>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (_portfolio is null && _problem is null)
+{
+    <Busy />
+}
+else if (_portfolio is { } p)
+{
+    string name = Text.Name(_child?.GivenName ?? string.Empty);
+    <h1>@T.Format("app.child_portfolio.title", ("child", name))</h1>
+    <p class="hint">@T.Format("app.child_portfolio.intro", ("child", name))</p>
+    <p class="visually-hidden" role="status">@_said</p>
+
+    <section aria-labelledby="taking-part">
+        <h2 id="taking-part">@T["portfolio.export.participation"]</h2>
+        <p><strong>@T.Format("portfolio.export.hours", ("hours", T.Number(p.TotalHours)))</strong></p>
+        @if (p.Participation.Count == 0)
+        {
+            <p>@T["app.child_portfolio.none"]</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (ParticipationView r in p.Participation)
+                {
+                    <li class="card" @key="r.Id">
+                        <h3 dir="auto">@r.Title</h3>
+                        @if (r.Organisation is { Length: > 0 } org)
+                        {
+                            <p dir="auto">@org</p>
+                        }
+                        <p class="hint">@When(r.StartedOn, r.EndedOn)</p>
+                        <p class="hint">@T.Format("portfolio.page.activity_facts", ("sessions", T.Number(r.SessionsAttended)), ("hours", T.Number(r.Hours)))</p>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="badges">
+        <h2 id="badges">@T["portfolio.export.badges"]</h2>
+        @if (p.Badges.Count == 0)
+        {
+            <p>@T["app.child_portfolio.badges_none"]</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (HeldBadge b in p.Badges)
+                {
+                    <li class="card" @key="b.Id">
+                        <h3 dir="auto">@b.Name</h3>
+                        <p>@T.Format("app.portfolio.badge_from", ("issuer", Text.Name(b.Issuer)))</p>
+                        <p class="hint">@T.Format("app.portfolio.badge_awarded", ("date", T.DateShort(b.IssuedOn)))</p>
+                        @if (b.Revoked)
+                        {
+                            <p><strong>@(b.RevokedAt is { } on ? T.Format("app.portfolio.badge_revoked_on", ("date", T.DateShort(on))) : T["app.portfolio.badge_revoked"])</strong></p>
+                            @if (b.RevocationReason is { Length: > 0 } why)
+                            {
+                                <p>@T["app.portfolio.badge_revoked_reason"] <span dir="auto">@why</span></p>
+                            }
+                        }
+                        <div class="actions">
+                            <button type="button" @onclick="() => Launcher.OpenAsync(b.Page)">@T["app.portfolio.badge_check"]</button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="skills">
+        <h2 id="skills">@T["portfolio.export.skills"]</h2>
+        @if (p.Skills.Count == 0)
+        {
+            <p>@T["app.child_portfolio.skills_none"]</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (SkillView s in p.Skills)
+                {
+                    <li class="card" @key="s.Id">
+                        <h3 dir="auto">@s.Name</h3>
+                        <p>@(s.Level is { } level ? T["portfolio.export.level." + level.ToString(CultureInfo.InvariantCulture)] : T["app.skills.no_level"])</p>
+                        @if (s.EndorsedBy is { Length: > 0 } by)
+                        {
+                            <p class="hint">@T.Format("app.skills.endorsed_by", ("org", Text.Name(by)))</p>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="download">
+        <h2 id="download">@T["app.portfolio.download"]</h2>
+        <p class="hint">@T["app.child_portfolio.download_intro"]</p>
+        <ProblemNotice Problem="_downloadProblem" />
+        <ul class="cards">
+            @foreach (string format in Portfolio.Formats(p.Badges))
+            {
+                <li class="card" @key="format">
+                    <button type="button" disabled="@(_making is not null)" @onclick="() => DownloadAsync(format)">@T["app.child_portfolio.download." + format]</button>
+                    <p class="hint">@T["app.child_portfolio.download." + format + "_hint"]</p>
+                </li>
+            }
+        </ul>
+    </section>
+
+    <a href="family/@Id.ToString("D")">@T.Format("app.child_portfolio.back", ("child", name))</a>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Child? _child;
+    private ChildPortfolioView? _portfolio;
+    private ApiProblem? _problem;
+    private string _said = "";
+    private string? _making;
+    private ApiProblem? _downloadProblem;
+
+    protected override Task OnParametersSetAsync() => Session.Me is null ? Task.CompletedTask : LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<Child> child = await Api.ChildAsync(Id);
+        ApiResult<ChildPortfolioView> portfolio = await Api.ChildPortfolioAsync(Id);
+        _child = child.Value ?? _child;
+        _portfolio = portfolio.Value ?? _portfolio;
+        _problem = portfolio.Problem ?? child.Problem;
+    }
+
+    private async Task DownloadAsync(string format)
+    {
+        _making = format;
+        _said = "";
+        _downloadProblem = null;
+        ApiResult<DownloadedFile> made = await Api.ExportChildPortfolioAsync(Id, format);
+        _making = null;
+        if (made.Value is { } file)
+        {
+            _said = T["app.portfolio.download.ready"];
+            await Files.ShareAsync(T["app.child_portfolio.download." + format], file);
+        }
+        else
+        {
+            _downloadProblem = made.Problem;
+        }
+    }
+
+    private string When(DateOnly started, DateOnly? ended) =>
+        ended is { } end && end != started
+            ? T.Range(T.DateShort(started), T.DateShort(end))
+            : ended is null ? T.Format("portfolio.page.since", ("date", T.DateShort(started))) : T.DateShort(started);
+}

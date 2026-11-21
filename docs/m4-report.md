@@ -163,7 +163,7 @@ Left for later, by decision:
 - **Screens.** Since this report: the app has portfolios, badges, skills, projects, goals and
   playlists (D77 to D79, D81, D88), and the console reviews work, endorses skills, and writes
   badges and playlists (D82, D84 to D86), with badge and playlist eligibility rules (D89).
-- **A guardian's view** of a child's portfolio, and exports on a child's behalf.
+- **A guardian's view** of a child's portfolio, and exports on a child's behalf: done since, D93.
 - **Completing an *attend a listing* step automatically** when attendance arrives: done since, D91.
 - **Mentors as reviewers**, which waits for M6.
 - **Issuer key management routes**: rotation happens in the vault, and marking a key compromised is

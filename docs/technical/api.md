@@ -192,6 +192,8 @@ The owner alone reads or changes a family profile.
 | `GET`, `PUT /me/portfolio` | The young person's portfolio and its settings (display name, headline, bio, visibility, link name). Each record carries its `listingId`, the activity a project can name (D78) |
 | `POST /me/portfolio/participation/{id}/hide`, `/show` | Hide a record from the total and any shown page, or show it again |
 | `POST /me/portfolio/export` | `{ format }`: `pdf` (a printable portfolio in the person's language), `json_ob3` (their badges' OB 3.0 credentials and JWTs) or `clr2` (a CLR 2.0 VC-JWT signed by the site, `application/jwt`; needs at least one badge). Returned at once, never stored (D68) |
+| `GET /children/{id}/portfolio` | A child profile's portfolio, for its verified guardian (D93): `totalHours`, `participation`, `badges` (as `/me/badges`) and `skills`. Refused once the child claims the account (`portfolio.child_claimed`), or when the link doesn't allow seeing their activity (`portfolio.guardian_view`); 404 for anyone else |
+| `POST /children/{id}/portfolio/export` | The child's files, as `/me/portfolio/export` makes them, for the same guardian |
 | `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT, `verify` (the credential's address, which is its id) and `page` (the website's check page, `/badges/{slug}`, D77) |
 | `POST /playlists/{id}/enroll` | Start a published playlist: needs the account's sign-up capability and any badge the playlist asks for. Starting one already started returns it |
 | `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note; with the playlist's `description` and `completionBadge` (D79) |

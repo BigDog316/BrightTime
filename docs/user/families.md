@@ -11,6 +11,7 @@ children's profiles and consent. Young people with their own account have
 - [Your account](#your-account)
 - [Children's profiles and consent (app)](#childrens-profiles-and-consent-app)
 - [Giving a child their own sign-in at 13](#giving-a-child-their-own-sign-in-at-13)
+- [Your child's portfolio (app)](#your-childs-portfolio-app)
 - [Your household (app)](#your-household-app)
 - [Applying (app)](#applying-app)
 - [Paying fees (app)](#paying-fees-app)
@@ -163,6 +164,23 @@ sign-in*.
 When a child on your account turns 13, they can have their own sign-in. On their page, choose
 **Give them their own sign-in** and enter their email address. We email them a link to choose a
 password; then they sign in themselves. You can still manage their consents.
+
+## Your child's portfolio (app)
+
+When an organisation records your child's attendance, it goes on their portfolio: what they took
+part in and for how many hours. Organisations can also give them badges and endorse their skills.
+On your child's page, choose **See their portfolio**. Only you can see it, and nothing on it can
+be changed here.
+
+- **Taking part**: each activity, with its organisation, dates, sessions and hours.
+- **Badges**: each one, who gave it and when. **Check it** opens the page anyone can use to check
+  it's real.
+- **Skills**: the skills organisations endorsed, and how far along your child is.
+- **Take it with you**: save or send a printable portfolio (PDF), and once they have a badge, their
+  badges (Open Badges) and a learner record (CLR). The files never have your child's legal name.
+
+The button shows once your consent is confirmed. When your child gets their own sign-in at 13,
+the portfolio becomes theirs, and you can't see it any more.
 
 ## Your household (app)
 

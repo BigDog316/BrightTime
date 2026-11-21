@@ -1,7 +1,8 @@
 @page "/family/{Id:guid}"
 @* The consent centre for one child (docs/plan/06): each scope, the exact words a consent is
    recorded against, and a way to give or withdraw it. Withdrawing takes effect on the child's
-   next request (D31). From 13 the profile can be handed to its owner (D35). *@
+   next request (D31). From 13 the profile can be handed to its owner (D35). Until then the
+   guardian sees the child's portfolio (D93). *@
 @inject BrightTimeApi Api
 @inject AppSession Session
 @inject TimeProvider Clock
@@ -36,6 +37,12 @@ else if (_child is { } child)
     }
     else
     {
+        @* A child profile's portfolio is the guardian's to see (D93); once claimed, it's the young person's. *@
+        @if (child.Link.Status == "verified" && !child.IsClaimed)
+        {
+            <a class="button" href="family/@child.Id.ToString("D")/portfolio">@T["app.child_portfolio.open"]</a>
+        }
+
         <section aria-labelledby="consents">
             <h2 id="consents">@T["app.consent.heading"]</h2>
             <p class="hint">@T["app.consent.explain"]</p>

@@ -3038,6 +3038,39 @@ serves a playlist: a check that someone read or understood something, marked at 
 `QuizStepApiTests` covers writing (bad quizzes refused), the answers hidden, a short try and a pass
 finishing the playlist, and nothing chosen kept; the app's and the console's tests cover the screens.
 
+### D93 — A guardian's view of a child's portfolio (**proposed 2026-11-21**)
+
+D65 left a guardian's view for later, and D68 and D81 left a guardian's download. Until now nobody
+could see a child profile's portfolio: a child profile has no sign-in of its own, so the hours,
+badges and skills organisations recorded for an under-13 went nowhere. docs/plan/04 already gives
+guardians `portfolio.view_own` and `portfolio.export` for their children; this builds them.
+- **Whose:** a child profile's only (`account_kind = 'child'`). Once the young person claims the
+  account (D35), the portfolio is theirs, as a youth account's always is, and the guardian no
+  longer sees it, though they still manage consents. Widening this to managed teens would take the
+  portfolio away from the young person who owns it, so it isn't done.
+- **Who:** a guardian whose link is verified, not revoked, and allows seeing the child's activity
+  (`guardian_link.can_view_activity`, true unless changed; nothing changes it yet).
+  `GuardianRelationship` gains `IsChildProfile` for this.
+- **What:** `GET /children/{id}/portfolio` returns the hours, every participation record, the
+  badges held (revoked ones marked) and the skills (with who endorsed them). It's read only: hiding
+  records and showing the portfolio stay the young person's, and a child can't show one anyway.
+- **Downloads:** `POST /children/{id}/portfolio/export` takes D68's formats and makes the child's
+  own files; nothing is stored, and the export is recorded against the child.
+- **Refused:** not their verified guardian, `portfolio.child_not_found` (404, so nobody learns
+  whether the profile exists); a link without activity, `portfolio.guardian_view` (403); claimed,
+  `portfolio.child_claimed` (403).
+- **Audit:** the read is `learning.portfolio.guardian_read`, with the guardian as actor and the
+  child as subject; a download is `learning.portfolio.exported` the same way. These are what
+  docs/plan/04's transparency right (`audit.read`, own) would show the young person later.
+- **In the app:** a child's page (**Your family**, then the child) offers **See their portfolio**
+  once the link is verified and while the profile is unclaimed. The screen shows what they took part
+  in, their badges (with **Check it**) and skills, and *Take it with you*'s three files.
+
+No schema change: the actor guard on `participation_record` asks only that someone is signed in,
+and the module decides who. `ChildPortfolioApiTests` covers the flow end to end (unverified,
+verified, the three files, a stranger, the activity flag, a claim); `ChildPortfolioScreenTests`
+covers the screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

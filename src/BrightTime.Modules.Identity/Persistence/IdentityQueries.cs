@@ -82,7 +82,10 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
                 new UserId(l.GuardianUserId),
                 new UserId(l.ChildUserId),
                 l.CanEnroll,
-                l.CanViewActivity))
+                l.CanViewActivity)
+            {
+                IsChildProfile = db.Users.Any(u => u.Id == l.ChildUserId && u.AccountKind == AccountKind.Child),
+            })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

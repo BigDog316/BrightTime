@@ -164,6 +164,13 @@ public sealed record HeldBadge(
     Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Page,
     DateTimeOffset? RevokedAt = null, string? RevocationReason = null);
 
+/// <summary>
+/// A child profile's portfolio as their guardian sees it (D93): what the child took part in, the
+/// badges they hold and the skills organisations endorsed. Read only; it's private to the guardian.
+/// </summary>
+public sealed record ChildPortfolioView(
+    decimal TotalHours, IReadOnlyList<ParticipationView> Participation, IReadOnlyList<HeldBadge> Badges, IReadOnlyList<SkillView> Skills);
+
 /// <summary>A skill or interest from the county's lists (D78), by the id the goal and skill routes take.</summary>
 public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);
 

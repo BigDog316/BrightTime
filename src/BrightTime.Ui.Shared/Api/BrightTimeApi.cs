@@ -406,6 +406,14 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<DownloadedFile>> ExportPortfolioAsync(string format, CancellationToken ct = default) =>
         SendAsync<DownloadedFile>(HttpMethod.Post, "me/portfolio/export", new { format }, signedIn: true, ct);
 
+    /// <summary>A child profile's portfolio, for their verified guardian (D93). Gone once the child claims their account.</summary>
+    public Task<ApiResult<ChildPortfolioView>> ChildPortfolioAsync(Guid child, CancellationToken ct = default) =>
+        GetAsync<ChildPortfolioView>($"children/{child:D}/portfolio", signedIn: true, ct);
+
+    /// <summary>A child profile's portfolio as a file, in the formats <see cref="ExportPortfolioAsync"/> takes.</summary>
+    public Task<ApiResult<DownloadedFile>> ExportChildPortfolioAsync(Guid child, string format, CancellationToken ct = default) =>
+        SendAsync<DownloadedFile>(HttpMethod.Post, $"children/{child:D}/portfolio/export", new { format }, signedIn: true, ct);
+
     // ---- playlists (D67, D79) -----------------------------------------------------------------
 
     /// <summary>The county's published playlists.</summary>

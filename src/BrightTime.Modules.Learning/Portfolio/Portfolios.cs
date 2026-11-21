@@ -248,7 +248,7 @@ public sealed partial class Portfolios(
             records.Where(r => !r.IsHidden).Sum(r => r.Hours), canShow, [.. records.Select(View)]);
     }
 
-    private static ParticipationView View(ParticipationRecordRecord r) =>
+    internal static ParticipationView View(ParticipationRecordRecord r) =>
         new(r.Id, r.TitleSnapshot, r.OrgNameSnapshot, r.StartedOn, r.EndedOn, r.SessionsAttended, r.Hours, r.Source, r.IsHidden, r.ListingId);
 
     private static string? Optional(string? text) => text?.Trim() is { Length: > 0 } t ? t : null;
@@ -279,6 +279,7 @@ public static class LearningModule
         services.AddScoped<Badges.Badges>();
         services.AddScoped<Playlists.Playlists>();
         services.AddScoped<PortfolioExports>();
+        services.AddScoped<ChildPortfolios>();
         services.AddScoped<Records.Goals>();
         services.AddScoped<Records.Skills>();
         services.AddScoped<Records.Projects>();

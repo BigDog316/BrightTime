@@ -4,8 +4,15 @@ using BrightTime.SharedKernel.Privacy;
 namespace BrightTime.Modules.Identity.Contracts;
 
 /// <summary>A verified guardian-of relationship.</summary>
+/// <remarks>
+/// <see cref="IsChildProfile"/> is true while the account is still a child profile (under 13,
+/// managed by the guardian), and false once its owner has claimed it as their own youth account (D35).
+/// </remarks>
 [YouthData]
-public sealed record GuardianRelationship(UserId GuardianUserId, UserId ChildUserId, bool CanEnroll, bool CanViewActivity);
+public sealed record GuardianRelationship(UserId GuardianUserId, UserId ChildUserId, bool CanEnroll, bool CanViewActivity)
+{
+    public bool IsChildProfile { get; init; }
+}
 
 /// <summary>A live grant of access to one young person's record.</summary>
 [YouthData]

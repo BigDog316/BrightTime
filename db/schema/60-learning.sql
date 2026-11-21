@@ -290,6 +290,9 @@ create table playlist_step (
   expected_minutes smallint,
   is_required boolean not null default true,
   requires_review boolean not null default false,
+  -- A quiz (D92): its questions, each with its options and the right one, and the share to get right.
+  quiz        jsonb,
+  quiz_pass_percent smallint,
   constraint ux_playlist_step_order unique (playlist_id, sort_order),
   constraint ck_playlist_step_kind check (step_kind in
     ('attend_listing','external_activity','upload_artifact','reflection','quiz','mentor_checkin')),
@@ -297,8 +300,10 @@ create table playlist_step (
     case step_kind
       when 'attend_listing'     then listing_id is not null
       when 'external_activity'  then external_url is not null
+      when 'quiz'               then quiz is not null and jsonb_typeof(quiz) = 'array' and quiz_pass_percent is not null
       else true
-    end)
+    end),
+  constraint ck_playlist_step_pass check (quiz_pass_percent is null or quiz_pass_percent between 1 and 100)
 );
 
 create table playlist_enrollment (
@@ -323,6 +328,9 @@ create table playlist_step_progress (
   reviewed_by  uuid references identity.app_user(id),
   reviewed_at  timestamptz,
   review_note  text,
+  -- A quiz's last try (D92): how many they got right, and how many tries. Never their answers.
+  quiz_correct smallint,
+  quiz_attempts smallint not null default 0,
   constraint pk_playlist_step_progress primary key (playlist_enrollment_id, step_id),
   constraint ck_step_progress_state check (state in
     ('not_started','in_progress','submitted','completed','needs_rework','skipped')),

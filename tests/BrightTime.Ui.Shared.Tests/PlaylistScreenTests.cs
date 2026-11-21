@@ -217,6 +217,59 @@ public sealed class PlaylistScreenTests
         (await RenderAsync<Account>(adult)).ShouldNotContain("href=\"playlists\"");
     }
 
+    private const string Quiz = "57e90000-0000-0000-0000-000000000010";
+
+    /// <summary>A playlist whose only step is a quiz (D92), tried once and short of its pass mark.</summary>
+    private const string QuizPlaylist = $$"""
+        [{"playlistId":"{{River}}","slug":"river-walk","title":"Watershed Explorer","organisation":"Kettle Parks","isOrdered":false,
+          "startedAt":"2026-10-01T12:00:00Z","completedAt":null,"awardedAssertionId":null,
+          "steps":[{"step":{"id":"{{Quiz}}","order":1,"kind":"quiz","title":"River quiz","instructions":null,"listingId":null,"externalUrl":null,
+                            "expectedMinutes":null,"isRequired":true,"requiresReview":false,"passPercent":60,
+                            "questions":[{"prompt":"What eats mayflies?","options":["Trout","Rocks"],"correct":null},
+                                         {"prompt":"Where do herons nest?","options":["In trees","Under water","In cars"],"correct":null},
+                                         {"prompt":"Is the river clean?","options":["Yes","No"],"correct":null}]},
+                    "state":"in_progress","available":true,"reflection":null,"reviewNote":null,"completedAt":null,"quizCorrect":1,"quizAttempts":1}]}]
+        """;
+
+    [Fact]
+    public async Task A_quiz_asks_each_question_with_its_answers_says_the_pass_mark_and_how_the_last_try_went()
+    {
+        using FakeApi api = SignedIn().Json(HttpMethod.Get, "me/playlists", QuizPlaylist);
+        string html = await RenderAsync<Playlist>(api, Slug("river-walk"));
+        string shown = Shown(html);
+
+        shown.ShouldContain("Answer a quiz");
+        shown.ShouldContain("Get 2 of 3 right to pass.");
+        shown.ShouldContain("Your last try got 1 of 3 right. Try again.");
+        shown.ShouldContain("1. What eats mayflies?");
+        shown.ShouldContain("3. Is the river clean?");
+        shown.ShouldContain("Under water");
+        string id = Quiz.Replace("-", "", StringComparison.Ordinal);
+        html.Split($"name=\"q-{id}-1\"").Length.ShouldBe(4, "one choice per answer, grouped by question");
+        shown.ShouldContain(">Check my answers</button>");
+        shown.ShouldNotContain($"id=\"say-{id}\"", Case.Sensitive, "a quiz is answered, not written");
+        shown.ShouldNotContain("app.playlists.");
+    }
+
+    [Fact]
+    public async Task A_quiz_try_sends_the_chosen_answers()
+    {
+        string? body = null;
+        using FakeApi api = SignedIn().On(HttpMethod.Put, $"me/playlists/{River}/steps/{Quiz}", r =>
+        {
+            body = r.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return FakeApi.Respond(HttpStatusCode.OK, JsonDocument.Parse(QuizPlaylist).RootElement[0].GetRawText());
+        });
+        await using ServiceProvider app = api.Services();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        (await app.GetRequiredService<AppSession>().SignInAsync("kofi@example.net", "pw", Ct)).ShouldBeNull();
+        MyPlaylist mine = (await app.GetRequiredService<BrightTimeApi>().DoStepAsync(Guid.Parse(River), Guid.Parse(Quiz), null, [0, 0, 1], Ct)).Value!;
+
+        (mine.Steps[0].IsOpen, mine.Steps[0].QuizCorrect, mine.Steps[0].Step.Questions!.Count).ShouldBe((true, 1, 3), "a try short of the pass mark stays open");
+        using JsonDocument sent = JsonDocument.Parse(body!);
+        sent.RootElement.GetProperty("answers").EnumerateArray().Select(a => a.GetInt32()).ShouldBe([0, 0, 1]);
+    }
+
     [Fact]
     public async Task Playlists_go_to_the_routes_the_server_has()
     {

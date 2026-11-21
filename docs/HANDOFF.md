@@ -288,6 +288,10 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   playlist finished that way awards its badge on the worker. The same check runs after a step is
   done or approved. New `ISiteAddress` gives the worker the site's address; the jobs host now
   reads `Tenancy:PublicScheme`/`PublicPort` and needs `Security:SigningKeys`.
+- **Quiz steps** (D92, proposed): multiple choice, 1 to 20 questions, a pass mark; written in the
+  console's step form, answered in the app, marked at once, kept only as the number right and the
+  tries. The right answers are in the organisation's views only. Schema: `playlist_step.quiz`,
+  `quiz_pass_percent`; `playlist_step_progress.quiz_correct`, `quiz_attempts`.
 - **System.Formats.Cbor pinned to 10.0.15** (D90): a DoS advisory (CVE-2026-118747) on
   the 9.0.0 that Fido2 brings made every fresh restore fail NuGet audit. Central transitive
   pinning is on; only that package changed. Drop the pin when Fido2 takes a fixed version.
@@ -314,6 +318,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D91 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D91 on 2026-11-21).
+D92 (quiz steps) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

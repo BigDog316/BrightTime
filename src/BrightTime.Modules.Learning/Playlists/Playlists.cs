@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
@@ -19,7 +20,14 @@ public sealed record PlaylistInput(
     Guid? CompletionBadgeClassId, Guid? RequiresBadgeClassId, short? RequiredStepCount);
 
 public sealed record StepInput(
-    string? Kind, string? Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes, bool? IsRequired, bool? RequiresReview);
+    string? Kind, string? Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes, bool? IsRequired, bool? RequiresReview,
+    IReadOnlyList<QuizQuestionInput>? Questions = null, short? PassPercent = null);
+
+/// <summary>A quiz question as staff write it (D92): what it asks, two to six answers, and which is right (from 0).</summary>
+public sealed record QuizQuestionInput(string? Prompt, IReadOnlyList<string>? Options, int? Correct);
+
+/// <summary>A quiz question as it's read. Which answer is right is there only for the organisation's own staff.</summary>
+public sealed record QuizQuestionView(string Prompt, IReadOnlyList<string> Options, int? Correct = null);
 
 /// <summary>
 /// One step. An <c>attend_listing</c> step names its activity (D79): its title in the request's
@@ -27,7 +35,7 @@ public sealed record StepInput(
 /// </summary>
 public sealed record StepView(
     Guid Id, int Order, string Kind, string Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes, bool IsRequired, bool RequiresReview,
-    string? ListingTitle = null, string? ListingSlug = null);
+    string? ListingTitle = null, string? ListingSlug = null, IReadOnlyList<QuizQuestionView>? Questions = null, short? PassPercent = null);
 
 /// <summary>A playlist as its organisation sees it.</summary>
 public sealed record PlaylistView(
@@ -41,8 +49,10 @@ public sealed record PublicPlaylist(
     decimal? EstimatedHours, string? CompletionBadge, Guid? CompletionBadgeClassId, string? RequiresBadge, IReadOnlyList<StepView> Steps);
 
 /// <summary>One step of a young person's playlist: where they are on it, and whether it's open to them yet.</summary>
+/// <remarks>A quiz (D92) says how many answers the last try got right, and how many tries there were; a try that fell short leaves it <c>in_progress</c>.</remarks>
 [YouthData]
-public sealed record MyStep(StepView Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt);
+public sealed record MyStep(
+    StepView Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt, int? QuizCorrect = null, int QuizAttempts = 0);
 
 [YouthData]
 public sealed record MyPlaylist(
@@ -90,7 +100,13 @@ public sealed partial class Playlists(
     public const string Published = "published";
     public const string Archived = "archived";
 
-    private static readonly HashSet<string> Kinds = new(StringComparer.Ordinal) { "attend_listing", "external_activity", "reflection", "mentor_checkin" };
+    private static readonly HashSet<string> Kinds = new(StringComparer.Ordinal) { "attend_listing", "external_activity", "reflection", "mentor_checkin", "quiz" };
+
+    public const int MaxQuestions = 20;
+    public const int MaxPrompt = 500;
+    public const int MaxOption = 200;
+
+    private static readonly JsonSerializerOptions QuizJson = new(JsonSerializerDefaults.Web);
 
     // ---- the organisation's ----------------------------------------------------------------------
 
@@ -213,7 +229,20 @@ public sealed partial class Playlists(
 
                 Guid? listingId = null;
                 string? url = null;
-                if (kind == "attend_listing")
+                string? quiz = null;
+                short? pass = null;
+                if (kind == "quiz")
+                {
+                    if (Quiz(s.Questions) is not { } questions || s.PassPercent is < 1 or > 100)
+                    {
+                        return Result<PlaylistView>.Failure(Error.Validation("playlists.step_quiz",
+                            "A quiz of 1 to 20 questions, each with 2 to 6 different answers and the right one marked, and a pass mark from 1 to 100 per cent.", arguments: at));
+                    }
+
+                    quiz = JsonSerializer.Serialize(questions, QuizJson);
+                    pass = s.PassPercent ?? 100;
+                }
+                else if (kind == "attend_listing")
                 {
                     if (s.ListingId is not { } listing || !await IsPublishedListingAsync(listing, ct).ConfigureAwait(false))
                     {
@@ -245,6 +274,8 @@ public sealed partial class Playlists(
                     ExpectedMinutes = s.ExpectedMinutes,
                     IsRequired = s.IsRequired ?? true,
                     RequiresReview = kind == "mentor_checkin" || (s.RequiresReview ?? false),
+                    Quiz = quiz,
+                    QuizPassPercent = pass,
                 });
             }
 
@@ -512,6 +543,11 @@ public sealed partial class Playlists(
     /// required step completes the playlist and awards its badge.
     /// </summary>
     public Task<Result<MyPlaylist>> DoStepAsync(UserId user, Uri site, Guid playlistId, Guid stepId, string? reflection, CancellationToken cancellationToken = default) =>
+        DoStepAsync(user, site, playlistId, stepId, reflection, null, cancellationToken);
+
+    /// <summary>Marks a step done; a quiz's <paramref name="answers"/> (D92) are the chosen option of each question, in order, from 0.</summary>
+    public Task<Result<MyPlaylist>> DoStepAsync(
+        UserId user, Uri site, Guid playlistId, Guid stepId, string? reflection, IReadOnlyList<int>? answers, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             ArgumentNullException.ThrowIfNull(site);
@@ -565,12 +601,40 @@ public sealed partial class Playlists(
                 return Result<MyPlaylist>.Failure(Error.Conflict("playlists.not_attended", "This step is done once your attendance at the activity is recorded."));
             }
 
+            // A quiz is marked here (D92): every question answered, and enough right to pass.
+            int? right = null;
+            if (step.StepKind == "quiz")
+            {
+                IReadOnlyList<QuizQuestionView> questions = Questions(step.Quiz, true);
+                if (answers is null || answers.Count != questions.Count || answers.Where((a, i) => a < 0 || a >= questions[i].Options.Count).Any())
+                {
+                    return Result<MyPlaylist>.Failure(Error.Validation("playlists.quiz_answers", "Answer every question."));
+                }
+
+                right = answers.Where((a, i) => a == questions[i].Correct).Count();
+            }
+
             DateTimeOffset now = clock.StoredNow();
             if (mine is null)
             {
                 mine = new PlaylistStepProgressRecord { PlaylistEnrollmentId = found.e.Id, StepId = stepId, State = "not_started" };
                 db.PlaylistProgress.Add(mine);
                 progress[stepId] = mine;
+            }
+
+            if (right is { } got)
+            {
+                mine.QuizCorrect = (short)got;
+                mine.QuizAttempts++;
+                if (got < Needed(Questions(step.Quiz, false).Count, step.QuizPassPercent))
+                {
+                    // Short of the pass mark: kept as a try, open for another.
+                    mine.State = "in_progress";
+                    mine.Reflection = written;
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Progressed, SubjectKind = "playlist_enrollment", SubjectIds = [found.e.Id], Detail = What("quiz_tried") }, ct).ConfigureAwait(false);
+                    return Result<MyPlaylist>.Success(await MineAsync(found.p, found.e, ct).ConfigureAwait(false));
+                }
             }
 
             mine.State = step.RequiresReview ? "submitted" : "completed";
@@ -705,7 +769,7 @@ public sealed partial class Playlists(
         return new MyPlaylist(playlist.Id, playlist.Slug, playlist.Title, organisation, playlist.IsOrdered, enrollment.StartedAt, enrollment.CompletedAt,
             enrollment.AwardedAssertionId,
             [.. steps.Select(s => progress.GetValueOrDefault(s.Id) is { } p
-                ? new MyStep(views[s.Id], p.State, Available(playlist, steps, progress, s), p.Reflection, p.ReviewNote, p.CompletedAt)
+                ? new MyStep(views[s.Id], p.State, Available(playlist, steps, progress, s), p.Reflection, p.ReviewNote, p.CompletedAt, p.QuizCorrect, p.QuizAttempts)
                 : new MyStep(views[s.Id], "not_started", Available(playlist, steps, progress, s), null, null, null))],
             playlist.Description, await BadgeNameAsync(playlist.CompletionBadgeClassId, ct).ConfigureAwait(false));
     }
@@ -718,7 +782,7 @@ public sealed partial class Playlists(
         int completed = await db.PlaylistEnrollments.CountAsync(e => e.PlaylistId == p.Id && e.CompletedAt != null, ct).ConfigureAwait(false);
         return new PlaylistView(p.Id, p.Slug, p.Title, p.Description, p.IsOrdered, p.AgeMin, p.AgeMax, p.EstimatedHours,
             p.CompletionBadgeClassId, await BadgeNameAsync(p.CompletionBadgeClassId, ct).ConfigureAwait(false),
-            requires, await BadgeNameAsync(requires, ct).ConfigureAwait(false), p.RequiredStepCount, p.Status, await StepsAsync(steps, ct).ConfigureAwait(false), started, completed);
+            requires, await BadgeNameAsync(requires, ct).ConfigureAwait(false), p.RequiredStepCount, p.Status, await StepsAsync(steps, ct, answers: true).ConfigureAwait(false), started, completed);
     }
 
     private async Task<PublicPlaylist> PublicViewAsync(PlaylistRecord p, CancellationToken ct)
@@ -731,7 +795,7 @@ public sealed partial class Playlists(
     }
 
     /// <summary>The steps in order, each activity to attend named once however many steps name it.</summary>
-    private async Task<IReadOnlyList<StepView>> StepsAsync(IReadOnlyList<PlaylistStepRecord> steps, CancellationToken ct)
+    private async Task<IReadOnlyList<StepView>> StepsAsync(IReadOnlyList<PlaylistStepRecord> steps, CancellationToken ct, bool answers = false)
     {
         Dictionary<Guid, (string Title, string? Slug)> named = [];
         foreach (Guid id in steps.Where(s => s.StepKind == "attend_listing").Select(s => s.ListingId).OfType<Guid>().Distinct())
@@ -747,9 +811,44 @@ public sealed partial class Playlists(
         {
             (string Title, string? Slug)? listing = s.ListingId is { } id && named.TryGetValue(id, out (string, string?) n) ? n : null;
             return new StepView(s.Id, s.SortOrder + 1, s.StepKind, s.Title, s.InstructionsMd, s.ListingId, s.ExternalUrl, s.ExpectedMinutes, s.IsRequired, s.RequiresReview,
-                listing?.Title, listing?.Slug);
+                listing?.Title, listing?.Slug, s.StepKind == "quiz" ? Questions(s.Quiz, answers) : null, s.QuizPassPercent);
         })];
     }
+
+    /// <summary>A quiz as written, checked: 1 to 20 questions, each with 2 to 6 different answers and the right one; null if it isn't.</summary>
+    private static List<QuizQuestionView>? Quiz(IReadOnlyList<QuizQuestionInput>? questions)
+    {
+        if (questions is not { Count: > 0 and <= MaxQuestions })
+        {
+            return null;
+        }
+
+        List<QuizQuestionView> quiz = [];
+        foreach (QuizQuestionInput q in questions)
+        {
+            string[] options = [.. (q?.Options ?? []).Select(o => o?.Trim() ?? string.Empty)];
+            if (q?.Prompt?.Trim() is not { Length: > 0 and <= MaxPrompt } prompt
+                || options.Length is < 2 or > 6 || options.Any(o => o.Length is 0 or > MaxOption)
+                || options.Distinct(StringComparer.CurrentCultureIgnoreCase).Count() != options.Length
+                || q.Correct is not { } correct || correct < 0 || correct >= options.Length)
+            {
+                return null;
+            }
+
+            quiz.Add(new QuizQuestionView(prompt, options, correct));
+        }
+
+        return quiz;
+    }
+
+    /// <summary>A stored quiz's questions; with the right answers only when asked for (the organisation's own view, and marking).</summary>
+    private static IReadOnlyList<QuizQuestionView> Questions(string? quiz, bool answers) =>
+        quiz is null ? [] : [.. (JsonSerializer.Deserialize<List<QuizQuestionView>>(quiz, QuizJson) ?? [])
+            .Select(q => answers ? q : q with { Correct = null })];
+
+    /// <summary>How many right answers pass: the pass mark's share of the questions, rounded up.</summary>
+    internal static int Needed(int questions, short? passPercent) =>
+        (int)Math.Ceiling(questions * (passPercent ?? 100) / 100m);
 
     private Task<Guid?> RequiredBadgeAsync(Guid playlistId, CancellationToken ct) =>
         db.UnlockRules.AsNoTracking().Where(u => u.UnlocksPlaylistId == playlistId).Select(u => (Guid?)u.BadgeClassId).FirstOrDefaultAsync(ct);

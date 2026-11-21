@@ -426,7 +426,11 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
 
     /// <summary>Marks a step done, or sends it for review when staff check it. A reflection step takes what they wrote.</summary>
     public Task<ApiResult<MyPlaylist>> DoStepAsync(Guid playlistId, Guid stepId, string? reflection, CancellationToken ct = default) =>
-        SendAsync<MyPlaylist>(HttpMethod.Put, $"me/playlists/{playlistId:D}/steps/{stepId:D}", new { reflection }, signedIn: true, ct);
+        DoStepAsync(playlistId, stepId, reflection, null, ct);
+
+    /// <summary>A step done; a quiz's answers (D92) are the option chosen for each question, from 0.</summary>
+    public Task<ApiResult<MyPlaylist>> DoStepAsync(Guid playlistId, Guid stepId, string? reflection, IReadOnlyList<int>? answers, CancellationToken ct = default) =>
+        SendAsync<MyPlaylist>(HttpMethod.Put, $"me/playlists/{playlistId:D}/steps/{stepId:D}", new { reflection, answers }, signedIn: true, ct);
 
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);

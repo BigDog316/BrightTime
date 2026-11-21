@@ -100,13 +100,31 @@ public sealed class PlaylistPagesTests(ConsoleFixture db)
         await staff.PostAsync($"{page}?edit=1", "step", ("index", "1"), ("kind", "reflection"), ("stepTitle", "Write about the waves"), ("instructions", ""), ("listing", ""), ("link", ""), ("minutes", "15"), ("required", "true"));
         await staff.GetAsync(page);
         await staff.PostAsync(page, "remove-2");
+
+        // A quiz (D92): a question with no answer marked is refused; marked, it's kept with its pass
+        // mark, a blank line of spaces still parting the questions, and shown back to change.
+        await staff.GetAsync(page);
+        (await staff.PostAsync(page, "step", ("index", ""), ("kind", "quiz"), ("stepTitle", "Shore quiz"), ("instructions", ""), ("listing", ""), ("link", ""), ("minutes", ""),
+            ("required", "true"), ("quiz", "What lives in a rock pool?\nCrabs\nCars"), ("pass", "50"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        WebUtility.HtmlDecode(staff.Html).Replace("\u2068", "", StringComparison.Ordinal).Replace("\u2069", "", StringComparison.Ordinal)
+            .ShouldContain("Step 3: write 1 to 20 questions");
+        await staff.GetAsync(page);
+        (await staff.PostAsync(page, "step", ("index", ""), ("kind", "quiz"), ("stepTitle", "Shore quiz"), ("instructions", ""), ("listing", ""), ("link", ""), ("minutes", ""),
+            ("required", "true"), ("quiz", "What lives in a rock pool?\r\n* Crabs\r\nCars\r\n   \r\nWhen is low tide?\r\nNever\r\n*Twice a day"), ("pass", "50")))
+            .Headers.Location!.PathAndQuery.ShouldBe($"{page}?done=steps");
+        await staff.GetAsync(page);
+        WebUtility.HtmlDecode(staff.Html).ShouldContain("A quiz · 2 questions, pass at 50%");
+        await staff.GetAsync($"{page}?edit=3");
+        WebUtility.HtmlDecode(staff.Html).ShouldContain("When is low tide?\nNever\n* Twice a day");
         PlaylistView written;
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, admin))
         {
             written = (await scope.ServiceProvider.GetRequiredService<Playlists>().GetAsync(org, id, Ct)).Value;
         }
 
-        written.Steps.Select(s => (s.Kind, s.Title)).ShouldBe([("reflection", "Write about the waves"), ("external_activity", "Read the shore guide")]);
+        written.Steps.Select(s => (s.Kind, s.Title)).ShouldBe([("reflection", "Write about the waves"), ("external_activity", "Read the shore guide"), ("quiz", "Shore quiz")]);
+        StepView quiz = written.Steps[2];
+        (quiz.PassPercent, quiz.Questions!.Count, quiz.Questions[1].Options.Count, quiz.Questions[1].Correct, quiz.Questions[0].Options[0]).ShouldBe(((short?)50, 2, 2, (int?)1, "Crabs"));
         (written.IsOrdered, written.AgeMin, written.AgeMax, written.EstimatedHours, written.CompletionBadgeClassId).ShouldBe((false, (short?)12, (short?)17, (decimal?)3.5m, (Guid?)badge));
         await staff.GetAsync(page);
         html = WebUtility.HtmlDecode(staff.Html);

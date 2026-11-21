@@ -291,6 +291,11 @@ public sealed class PlaylistStepRecord
     public bool IsRequired { get; init; }
 
     public bool RequiresReview { get; init; }
+
+    /// <summary>A quiz's questions (D92), as JSON: each with its prompt, options and the right one.</summary>
+    public string? Quiz { get; init; }
+
+    public short? QuizPassPercent { get; init; }
 }
 
 /// <summary>One young person on one playlist.</summary>
@@ -331,6 +336,11 @@ public sealed class PlaylistStepProgressRecord
     public DateTimeOffset? ReviewedAt { get; set; }
 
     public string? ReviewNote { get; set; }
+
+    /// <summary>A quiz's last try (D92): how many answers were right. Never the answers.</summary>
+    public short? QuizCorrect { get; set; }
+
+    public short QuizAttempts { get; set; }
 }
 
 /// <summary>A badge that opens something to those who hold it; D67 uses it for playlists.</summary>
@@ -577,6 +587,7 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
             b.ToTable("playlist_step");
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Quiz).HasColumnType("jsonb");
             b.HasIndex(x => new { x.PlaylistId, x.SortOrder }).IsUnique();
         });
 

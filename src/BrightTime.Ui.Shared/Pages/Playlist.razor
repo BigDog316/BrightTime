@@ -98,7 +98,32 @@ else
                     {
                         string id = s.Step.Id.ToString("N");
                         <form class="stack" @onsubmit="() => DoAsync(s)">
-                            @if (s.Step.Kind != "attend_listing")
+                            @if (s.Step.Kind == "quiz" && s.Step.Questions is { } questions)
+                            {
+                                <p class="hint">@T.Format("app.playlists.quiz.pass", ("needed", Needed(s.Step)), ("total", questions.Count))</p>
+                                @if (s.QuizCorrect is { } right && s.State == "in_progress")
+                                {
+                                    <p class="notice" role="status">@T.Format("app.playlists.quiz.short", ("right", right), ("total", questions.Count))</p>
+                                }
+                                @for (int q = 0; q < questions.Count; q++)
+                                {
+                                    int question = q;
+                                    <fieldset>
+                                        <legend dir="auto">@T.Format("app.playlists.quiz.question", ("n", question + 1), ("prompt", Text.Name(questions[question].Prompt)))</legend>
+                                        @for (int o = 0; o < questions[question].Options.Count; o++)
+                                        {
+                                            int option = o;
+                                            string choice = $"q-{id}-{question}-{option}";
+                                            <label class="check" for="@choice">
+                                                <input type="radio" id="@choice" name="@($"q-{id}-{question}")" required
+                                                       checked="@(Answer(s, question) == option)" @onchange="() => Choose(s, question, option)" />
+                                                <span dir="auto">@questions[question].Options[option]</span>
+                                            </label>
+                                        }
+                                    </fieldset>
+                                }
+                            }
+                            else if (s.Step.Kind != "attend_listing")
                             {
                                 bool needed = s.Step.Kind == "reflection";
                                 <div class="field">
@@ -116,7 +141,7 @@ else
                                 <ProblemNotice Problem="problem" />
                             }
                             <div class="actions">
-                                <button type="submit" class="primary" disabled="@(_busy == s.Step.Id)">@T[s.Step.RequiresReview ? "app.playlists.send" : "app.playlists.done"]</button>
+                                <button type="submit" class="primary" disabled="@(_busy == s.Step.Id)">@T[s.Step.Kind == "quiz" ? "app.playlists.quiz.check" : s.Step.RequiresReview ? "app.playlists.send" : "app.playlists.done"]</button>
                             </div>
                         </form>
                     }
@@ -171,6 +196,7 @@ else
     private string _said = "";
     private readonly Dictionary<Guid, string> _written = [];
     private readonly Dictionary<Guid, ApiProblem> _stepProblem = [];
+    private readonly Dictionary<Guid, int[]> _answers = [];
 
     protected override Task OnParametersSetAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
 
@@ -203,18 +229,42 @@ else
         _starting = false;
     }
 
+    /// <summary>A quiz's chosen answer to one question, or -1 for none yet.</summary>
+    private int Answer(MyStep s, int question) =>
+        _answers.TryGetValue(s.Step.Id, out int[]? chosen) && question < chosen.Length ? chosen[question] : -1;
+
+    private void Choose(MyStep s, int question, int option)
+    {
+        int count = s.Step.Questions?.Count ?? 0;
+        if (!_answers.TryGetValue(s.Step.Id, out int[]? chosen) || chosen.Length != count)
+        {
+            chosen = [.. Enumerable.Repeat(-1, count)];
+            _answers[s.Step.Id] = chosen;
+        }
+
+        chosen[question] = option;
+    }
+
+    /// <summary>How many right answers pass a quiz: its pass mark's share of the questions, rounded up, as the server marks it.</summary>
+    internal static int Needed(PlaylistStep s) =>
+        (int)Math.Ceiling((s.Questions?.Count ?? 0) * (s.PassPercent ?? 100) / 100m);
+
     private async Task DoAsync(MyStep step)
     {
         _busy = step.Step.Id;
         _said = "";
         _stepProblem.Remove(step.Step.Id);
-        string? written = Written(step).Trim() is { Length: > 0 } w ? w : null;
-        ApiResult<MyPlaylist> done = await Api.DoStepAsync(_mine!.PlaylistId, step.Step.Id, written);
+        string? written = step.Step.Kind == "quiz" ? null : Written(step).Trim() is { Length: > 0 } w ? w : null;
+        IReadOnlyList<int>? answers = step.Step.Kind == "quiz" ? _answers.GetValueOrDefault(step.Step.Id) ?? [] : null;
+        ApiResult<MyPlaylist> done = await Api.DoStepAsync(_mine!.PlaylistId, step.Step.Id, written, answers);
         if (done.Value is { } mine)
         {
             _mine = mine;
             _written.Remove(step.Step.Id);
-            _said = mine.CompletedAt is not null
+            _answers.Remove(step.Step.Id);
+            MyStep? now = mine.Steps.FirstOrDefault(s => s.Step.Id == step.Step.Id);
+            _said = now?.State == "in_progress" ? ""
+                : mine.CompletedAt is not null
                 ? T.Format("app.playlists.complete", ("date", T.DateShort(mine.CompletedAt.Value)))
                 : T.Format(step.Step.RequiresReview ? "app.playlists.now_sent" : "app.playlists.now_done", ("step", step.Step.Order));
         }

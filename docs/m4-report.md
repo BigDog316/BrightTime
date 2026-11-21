@@ -156,15 +156,15 @@ Playlists, unlock rules and exports (D67, D68) used tables the approved schema a
 ## Known gaps
 
 M4 scope not built:
-- **Evidence uploads on playlist steps**, and **images on projects**, which wait on media storage;
-  and **quizzes**, which have no design yet. Those step kinds are refused.
+- **Evidence uploads on playlist steps**, and **images on projects**, which wait on media storage.
+  That step kind is refused. (Quizzes, listed here before, are D92.)
 
 Left for later, by decision:
-- **Screens.** No console or app screens for portfolios, badges, playlists, goals, skills or projects. The console's
-  eligibility page shows badge and playlist rules but doesn't add them.
+- **Screens.** Since this report: the app has portfolios, badges, skills, projects, goals and
+  playlists (D77 to D79, D81, D88), and the console reviews work, endorses skills, and writes
+  badges and playlists (D82, D84 to D86), with badge and playlist eligibility rules (D89).
 - **A guardian's view** of a child's portfolio, and exports on a child's behalf.
-- **Completing an *attend a listing* step automatically** when attendance arrives; today the young
-  person marks it, and the server checks the participation record.
+- **Completing an *attend a listing* step automatically** when attendance arrives: done since, D91.
 - **Mentors as reviewers**, which waits for M6.
 - **Issuer key management routes**: rotation happens in the vault, and marking a key compromised is
   a database change.

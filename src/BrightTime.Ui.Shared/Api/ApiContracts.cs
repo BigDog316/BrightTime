@@ -200,12 +200,17 @@ public sealed record ProjectDraft(string Title, string? Description, Guid? Listi
 public sealed record DownloadedFile(byte[] Bytes, string ContentType, string FileName);
 
 /// <summary>
-/// One step of a playlist (D67): <c>attend_listing</c>, <c>external_activity</c>, <c>reflection</c>
-/// or <c>mentor_checkin</c>. A step to attend names its activity, with its slug while it's published (D79).
+/// One step of a playlist (D67): <c>attend_listing</c>, <c>external_activity</c>, <c>reflection</c>,
+/// <c>mentor_checkin</c> or <c>quiz</c> (D92). A step to attend names its activity, with its slug while
+/// it's published (D79). A quiz has its questions, never which answers are right, and its pass mark.
 /// </summary>
 public sealed record PlaylistStep(
     Guid Id, int Order, string Kind, string Title, string? Instructions, Guid? ListingId, string? ExternalUrl, short? ExpectedMinutes,
-    bool IsRequired, bool RequiresReview, string? ListingTitle = null, string? ListingSlug = null);
+    bool IsRequired, bool RequiresReview, string? ListingTitle = null, string? ListingSlug = null,
+    IReadOnlyList<QuizQuestion>? Questions = null, short? PassPercent = null);
+
+/// <summary>A quiz question (D92): what it asks, and the answers to choose from.</summary>
+public sealed record QuizQuestion(string Prompt, IReadOnlyList<string> Options);
 
 /// <summary>A published playlist, as anyone reads it (<c>GET /public/playlists</c>).</summary>
 public sealed record PlaylistSummary(
@@ -213,13 +218,15 @@ public sealed record PlaylistSummary(
     decimal? EstimatedHours, string? CompletionBadge, Guid? CompletionBadgeClassId, string? RequiresBadge, IReadOnlyList<PlaylistStep> Steps);
 
 /// <summary>
-/// Where a young person is on one step: <c>not_started</c>, <c>submitted</c> (waiting for staff),
-/// <c>needs_rework</c> (sent back, with a note) or <c>completed</c>; and whether it's open to them yet.
+/// Where a young person is on one step: <c>not_started</c>, <c>in_progress</c> (a quiz tried, short of
+/// its pass mark), <c>submitted</c> (waiting for staff), <c>needs_rework</c> (sent back, with a note)
+/// or <c>completed</c>; and whether it's open to them yet. A quiz says how many the last try got right.
 /// </summary>
-public sealed record MyStep(PlaylistStep Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt)
+public sealed record MyStep(
+    PlaylistStep Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt, int? QuizCorrect = null, int QuizAttempts = 0)
 {
-    /// <summary>Waiting on the young person: never done, or sent back.</summary>
-    public bool IsOpen => State is "not_started" or "needs_rework";
+    /// <summary>Waiting on the young person: never done, a quiz to try again, or sent back.</summary>
+    public bool IsOpen => State is "not_started" or "in_progress" or "needs_rework";
 }
 
 /// <summary>A playlist the young person started (<c>GET /me/playlists</c>), and the badge it gave them once complete.</summary>

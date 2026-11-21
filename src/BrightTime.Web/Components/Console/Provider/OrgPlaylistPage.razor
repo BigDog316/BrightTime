@@ -239,6 +239,15 @@ else if (_playlist is { } playlist)
                     <input id="step-link" name="link" type="url" maxlength="2000" value="@Posted("link", editing?.ExternalUrl)" aria-describedby="step-link-hint" />
                 </div>
                 <div class="field">
+                    <label for="step-quiz">@T["provider.playlists.step.quiz"]</label>
+                    <p class="hint" id="step-quiz-hint">@T["provider.playlists.step.quiz_hint"]</p>
+                    <textarea id="step-quiz" name="quiz" rows="8" maxlength="20000" dir="auto" aria-describedby="step-quiz-hint">@Posted("quiz", QuizText(editing?.Questions))</textarea>
+                </div>
+                <div class="field">
+                    <label for="step-pass">@T["provider.playlists.step.pass"]</label>
+                    <input id="step-pass" name="pass" type="number" min="1" max="100" inputmode="numeric" value="@Posted("pass", Number(editing?.PassPercent) ?? "100")" />
+                </div>
+                <div class="field">
                     <label for="step-minutes">@T["provider.playlists.step.minutes"]</label>
                     <input id="step-minutes" name="minutes" type="number" min="1" max="1440" inputmode="numeric" value="@Posted("minutes", Number(editing?.ExpectedMinutes))" />
                 </div>
@@ -297,7 +306,7 @@ else if (_playlist is { } playlist)
     /// <summary>The step being changed, counted from 1; none adds a step.</summary>
     [SupplyParameterFromQuery(Name = "edit")] public int? Edit { get; set; }
 
-    private static readonly string[] Kinds = ["attend_listing", "external_activity", "reflection", "mentor_checkin"];
+    private static readonly string[] Kinds = ["attend_listing", "external_activity", "reflection", "mentor_checkin", "quiz"];
 
     private PlaylistView? _playlist;
     private IReadOnlyList<BadgeClassView> _ownBadges = [];
@@ -361,6 +370,7 @@ else if (_playlist is { } playlist)
             T["provider.playlists.kind." + s.Kind],
             s.Kind == "attend_listing" ? s.ListingTitle : null,
             s.Kind == "external_activity" ? s.ExternalUrl : null,
+            s.Kind == "quiz" ? T.Format("provider.playlists.quiz_facts", ("count", s.Questions?.Count ?? 0), ("pass", (int)(s.PassPercent ?? 100))) : null,
             s.ExpectedMinutes is { } m ? T.Format("provider.playlists.minutes", ("count", (int)m)) : null,
             s.IsRequired ? null : T["provider.playlists.optional"],
             s.RequiresReview ? T["provider.playlists.reviewed"] : null,
@@ -415,7 +425,37 @@ else if (_playlist is { } playlist)
     private Guid? Id(string name) => Guid.TryParse(FormValue(name), out Guid id) ? id : null;
 
     private static StepInput Input(StepView s) =>
-        new(s.Kind, s.Title, s.Instructions, s.ListingId, s.ExternalUrl, s.ExpectedMinutes, s.IsRequired, s.RequiresReview);
+        new(s.Kind, s.Title, s.Instructions, s.ListingId, s.ExternalUrl, s.ExpectedMinutes, s.IsRequired, s.RequiresReview,
+            s.Questions?.Select(q => new QuizQuestionInput(q.Prompt, q.Options, q.Correct)).ToList(), s.PassPercent);
+
+    /// <summary>
+    /// A quiz as staff write it (D92): each question on a line, its answers on the lines below,
+    /// the right one starting with <c>*</c>, and a blank line between questions. A question with no
+    /// answer marked, or more than one, goes to the module unmarked, which refuses it.
+    /// </summary>
+    internal static List<QuizQuestionInput> ParseQuiz(string text)
+    {
+        List<QuizQuestionInput> questions = [];
+        foreach (string block in System.Text.RegularExpressions.Regex.Split(text.Replace("\r\n", "\n", StringComparison.Ordinal), @"\n[ \t]*\n"))
+        {
+            string[] lines = [.. block.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0)];
+            if (lines.Length == 0)
+            {
+                continue;
+            }
+
+            string[] answers = lines[1..];
+            int[] marked = [.. answers.Select((a, i) => (a, i)).Where(x => x.a.StartsWith('*')).Select(x => x.i)];
+            questions.Add(new QuizQuestionInput(lines[0], [.. answers.Select(a => a.TrimStart('*').Trim())], marked.Length == 1 ? marked[0] : null));
+        }
+
+        return questions;
+    }
+
+    /// <summary>A quiz back in the form staff write it, for changing.</summary>
+    internal static string? QuizText(IReadOnlyList<QuizQuestionView>? questions) =>
+        questions is null ? null : string.Join("\n\n", questions.Select(q =>
+            string.Join("\n", new[] { q.Prompt }.Concat(q.Options.Select((o, i) => i == q.Correct ? "* " + o : o)))));
 
     private async Task SaveStepAsync()
     {
@@ -424,8 +464,8 @@ else if (_playlist is { } playlist)
             return;
         }
 
-        Keep("kind", "stepTitle", "instructions", "listing", "link", "minutes", "required", "review");
-        if (!TryShort("minutes", out short? minutes))
+        Keep("kind", "stepTitle", "instructions", "listing", "link", "minutes", "required", "review", "quiz", "pass");
+        if (!TryShort("minutes", out short? minutes) || !TryShort("pass", out short? pass))
         {
             _problem = T["provider.playlists.number_invalid"];
             return;
@@ -435,7 +475,8 @@ else if (_playlist is { } playlist)
         string instructions = FormValue("instructions");
         StepInput step = new(kind, FormValue("stepTitle"), instructions.Trim().Length > 0 ? instructions : null,
             kind == "attend_listing" ? Id("listing") : null, kind == "external_activity" ? FormValue("link") : null,
-            minutes, FormValue("required") == "true", FormValue("review") == "true");
+            minutes, FormValue("required") == "true", FormValue("review") == "true",
+            kind == "quiz" ? ParseQuiz(FormValue("quiz")) : null, kind == "quiz" ? pass ?? 100 : null);
         List<StepInput> steps = [.. _playlist.Steps.Select(Input)];
         if (int.TryParse(FormValue("index"), NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n >= 1 && n <= steps.Count)
         {

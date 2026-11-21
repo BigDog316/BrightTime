@@ -152,6 +152,9 @@ far along you are, then others to try.
   - **Something to do elsewhere**: **Open the activity** opens it in your browser.
   - **Write about it**: write at least 20 characters about what you think.
   - **Check in with staff**: talk to a member of staff, and add a note if you like.
+  - **Answer a quiz**: choose an answer to each question, then **Check my answers**. It says how
+    many you need to get right. If you get fewer, it tells you how many you got, and you can try
+    again as many times as you like. Only your score is kept, not your answers.
 - **Mark it done** finishes a step. A step that says *Staff check this step* has **Send to staff**
   instead. Staff may send it back, saying what to change: change it and send it again.
 - Some playlists go in order, so a step opens once the required steps before it are done.

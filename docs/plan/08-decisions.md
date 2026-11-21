@@ -3010,6 +3010,34 @@ listing) runs without anyone pressing anything.
 awarded once (delivered twice), and an ordered one whose attended step waits for the reflection
 before it, then is done with it.
 
+### D92 — Quiz steps (**proposed 2026-11-21**)
+
+D67 refused the `quiz` step kind for want of a design; M4's scope has it. This is the smallest that
+serves a playlist: a check that someone read or understood something, marked at once.
+- **What a quiz is:** 1 to 20 multiple-choice questions, each with a prompt and 2 to 6 different
+  answers, one of them right, and a pass mark from 1 to 100 per cent of the questions (rounded
+  up: 60 per cent of 3 questions is 2). Kept on the step (`playlist_step.quiz`, jsonb, and
+  `quiz_pass_percent`); a published playlist never changes, so it needs no table of its own.
+  Anything else (open answers, several right answers, timing) is left out.
+- **The right answers** are in the organisation's own views only. The app, the public playlist
+  and the young person's own playlist read the questions and answers to choose from, and
+  `correct` is always null there.
+- **Trying it:** `PUT /me/playlists/{id}/steps/{step}` takes `answers`, the option chosen for each
+  question, in order. Every question must be answered (`playlists.quiz_answers`). Enough right
+  and the step is done (or sent for review, if staff check it); short of it, the step is
+  `in_progress` with how many were right, open for another try. Tries aren't limited.
+- **Kept:** only the last try's number right (`quiz_correct`) and the number of tries
+  (`quiz_attempts`). Never which answers they chose.
+- **Writing it in the console:** the step form's *Questions* box takes each question on a line
+  with its answers on the lines below, `*` before the right one, and a blank line between
+  questions; and a pass mark, 100 unless changed. A question with no answer marked, or more than
+  one, is refused with the step's number. Changing the step shows the quiz back in the same form.
+- **In the app:** each question with a choice per answer, the pass mark ("Get 2 of 3 right to
+  pass"), and after a short try how it went. **Check my answers** sends them.
+
+`QuizStepApiTests` covers writing (bad quizzes refused), the answers hidden, a short try and a pass
+finishing the playlist, and nothing chosen kept; the app's and the console's tests cover the screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

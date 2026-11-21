@@ -2980,7 +2980,7 @@ failed (NU1902): the compose images, CI, a clean clone.
 
 Approved by Sam in the session ("Pin System.Formats.Cbor to 10.0.15").
 
-### D91 — Attendance counts towards playlists (**proposed 2026-11-21**)
+### D91 — Attendance counts towards playlists (**accepted 2026-11-21**)
 
 D67 left it: a step to attend an activity said it was "done once your attendance is recorded",
 but it was only done when the young person came back and tapped **Mark it done**. Now the worker

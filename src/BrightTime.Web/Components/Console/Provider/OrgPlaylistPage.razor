@@ -1,0 +1,490 @@
+@page "/provider/orgs/{OrgId:guid}/playlists/{PlaylistId:guid}"
+@using System.Globalization
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Badges
+@using BrightTime.Modules.Learning.Playlists
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    One of the organisation's playlists (D86, over D67). A draft has its details and its steps
+    written here: each step added, changed, moved or removed, the whole list saved each time, as the
+    module keeps it. Publishing opens it to young people, after which it never changes, because
+    everyone's progress refers to its steps; archiving stops anyone new starting. Reads no young
+    person's progress beyond the counts, so audits nothing.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.playlists.denied"]</h1>
+    <p>@T["provider.playlists.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_playlist is { } playlist)
+{
+    bool draft = playlist.Status == Playlists.Draft;
+    <PageTitle>@playlist.Title · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/playlists">@T["provider.playlists.back"]</a></p>
+    <h1 dir="auto">@playlist.Title</h1>
+    <OrgNav OrgId="@OrgId" Current="playlists" Role="@(RoleIn(Org) ?? "")" />
+    <p class="note">
+        @T["provider.playlists.status." + playlist.Status]
+        @if (!draft)
+        {
+            @(" · " + T.Format("provider.playlists.started", ("count", playlist.Started)) + " · " + T.Format("provider.playlists.finished", ("count", playlist.Completed)))
+        }
+    </p>
+
+    @if (Done is "created" or "saved" or "steps" or "published" or "archived")
+    {
+        <p class="notice success" role="status">@T["provider.playlists.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (draft)
+    {
+        <section aria-labelledby="about-heading">
+            <h2 id="about-heading">@T["provider.playlists.about"]</h2>
+            <form method="post" @formname="details" @onsubmit="SaveDetailsAsync" class="editor">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="playlist-title">@T["provider.playlists.field.title"]</label>
+                    <input id="playlist-title" name="title" type="text" maxlength="200" required value="@Posted("title", playlist.Title)" dir="auto" />
+                </div>
+                <div class="field">
+                    <label for="playlist-description">@T["provider.playlists.field.description"]</label>
+                    <textarea id="playlist-description" name="description" rows="4" maxlength="4000" dir="auto">@Posted("description", playlist.Description)</textarea>
+                </div>
+                <div class="field checkbox">
+                    <input id="playlist-ordered" name="ordered" type="checkbox" value="true" checked="@(_posted is null ? playlist.IsOrdered : _posted.ContainsKey("ordered"))" />
+                    <label for="playlist-ordered">@T["provider.playlists.field.ordered"]</label>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="playlist-age-min">@T["provider.playlists.field.age_min"]</label>
+                        <input id="playlist-age-min" name="ageMin" type="number" min="5" max="25" inputmode="numeric" value="@Posted("ageMin", Number(playlist.AgeMin))" />
+                    </div>
+                    <div class="field">
+                        <label for="playlist-age-max">@T["provider.playlists.field.age_max"]</label>
+                        <input id="playlist-age-max" name="ageMax" type="number" min="5" max="25" inputmode="numeric" value="@Posted("ageMax", Number(playlist.AgeMax))" />
+                    </div>
+                    <div class="field">
+                        <label for="playlist-hours">@T["provider.playlists.field.hours"]</label>
+                        <input id="playlist-hours" name="hours" type="number" min="0" max="1000" step="0.5" inputmode="decimal" value="@Posted("hours", playlist.EstimatedHours?.ToString(CultureInfo.InvariantCulture))" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="playlist-badge">@T["provider.playlists.field.badge"]</label>
+                    <p class="hint" id="playlist-badge-hint">@T["provider.playlists.field.badge_hint"]</p>
+                    <select id="playlist-badge" name="badge" aria-describedby="playlist-badge-hint">
+                        <option value="">@T["provider.playlists.no_badge"]</option>
+                        @foreach (BadgeClassView b in _ownBadges)
+                        {
+                            <option value="@b.Id" selected="@(Posted("badge", playlist.CompletionBadgeClassId?.ToString()) == b.Id.ToString())">@b.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="playlist-requires">@T["provider.playlists.field.requires"]</label>
+                    <p class="hint" id="playlist-requires-hint">@T["provider.playlists.field.requires_hint"]</p>
+                    <select id="playlist-requires" name="requires" aria-describedby="playlist-requires-hint">
+                        <option value="">@T["provider.playlists.no_requirement"]</option>
+                        @foreach (CountyBadge b in _countyBadges)
+                        {
+                            <option value="@b.Id" selected="@(Posted("requires", playlist.RequiresBadgeClassId?.ToString()) == b.Id.ToString())">@T.Format("provider.playlists.badge_from", ("badge", b.Name), ("issuer", b.Issuer))</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="playlist-required-steps">@T["provider.playlists.field.required_steps"]</label>
+                    <p class="hint" id="playlist-required-steps-hint">@T["provider.playlists.field.required_steps_hint"]</p>
+                    <input id="playlist-required-steps" name="requiredSteps" type="number" min="1" max="@Playlists.MaxSteps" inputmode="numeric"
+                           value="@Posted("requiredSteps", Number(playlist.RequiredStepCount))" aria-describedby="playlist-required-steps-hint" />
+                </div>
+                <div class="actions">
+                    <button type="submit">@T["provider.playlists.save"]</button>
+                </div>
+            </form>
+        </section>
+    }
+    else
+    {
+        <dl class="facts">
+            @if (playlist.Description is { Length: > 0 } description)
+            {
+                <dt>@T["provider.playlists.field.description"]</dt>
+                <dd class="body" dir="auto">@description</dd>
+            }
+            <dt>@T["provider.playlists.order"]</dt>
+            <dd>@T[playlist.IsOrdered ? "provider.playlists.in_order" : "provider.playlists.any_order"]</dd>
+            @if (Ages(playlist) is { } ages)
+            {
+                <dt>@T["provider.playlists.ages"]</dt>
+                <dd>@ages</dd>
+            }
+            @if (playlist.EstimatedHours is { } hours)
+            {
+                <dt>@T["provider.playlists.field.hours"]</dt>
+                <dd>@hours.ToString("0.#", T.Culture)</dd>
+            }
+            <dt>@T["provider.playlists.field.badge"]</dt>
+            <dd dir="auto">@(playlist.CompletionBadge ?? T["provider.playlists.no_badge"])</dd>
+            @if (playlist.RequiresBadge is { } needed)
+            {
+                <dt>@T["provider.playlists.field.requires"]</dt>
+                <dd dir="auto">@needed</dd>
+            }
+        </dl>
+    }
+
+    <section aria-labelledby="steps" id="steps-section">
+        <h2 id="steps">@T["provider.playlists.steps"]</h2>
+        @if (playlist.Steps.Count == 0)
+        {
+            <p>@T["provider.playlists.no_steps"]</p>
+        }
+        else
+        {
+            <ol class="card-list steps">
+                @for (int index = 0; index < playlist.Steps.Count; index++)
+                {
+                    int i = index;
+                    StepView s = playlist.Steps[i];
+                    <li>
+                        <h3 dir="auto">@s.Title</h3>
+                        <p class="note">@StepFacts(s)</p>
+                        @if (s.Instructions is { Length: > 0 } instructions)
+                        {
+                            <p class="body" dir="auto">@instructions</p>
+                        }
+                        @if (draft)
+                        {
+                            <div class="inline-actions">
+                                <a href="/provider/orgs/@OrgId/playlists/@PlaylistId?edit=@(i + 1)#step-form">@T["provider.playlists.change_step"]</a>
+                                @if (i > 0)
+                                {
+                                    <form method="post" @formname="@($"up-{i}")" @onsubmit="() => MoveAsync(i, -1)" class="inline-form">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link-button" aria-label="@T.Format("provider.playlists.move_up_named", ("step", s.Title))">@T["provider.playlists.move_up"]</button>
+                                    </form>
+                                }
+                                @if (i < playlist.Steps.Count - 1)
+                                {
+                                    <form method="post" @formname="@($"down-{i}")" @onsubmit="() => MoveAsync(i, 1)" class="inline-form">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link-button" aria-label="@T.Format("provider.playlists.move_down_named", ("step", s.Title))">@T["provider.playlists.move_down"]</button>
+                                    </form>
+                                }
+                                @if (playlist.Steps.Count > 1)
+                                {
+                                    <form method="post" @formname="@($"remove-{i}")" @onsubmit="() => RemoveAsync(i)" class="inline-form">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link-button" aria-label="@T.Format("provider.playlists.remove_named", ("step", s.Title))">@T["provider.playlists.remove"]</button>
+                                    </form>
+                                }
+                            </div>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+
+        @if (draft)
+        {
+            StepView? editing = Edit is { } n && n >= 1 && n <= playlist.Steps.Count ? playlist.Steps[n - 1] : null;
+            <form method="post" @formname="step" @onsubmit="SaveStepAsync" class="editor" id="step-form">
+                <AntiforgeryToken />
+                <h3>@(editing is null ? T["provider.playlists.add_step"] : T.Format("provider.playlists.change_step_n", ("n", Edit!.Value)))</h3>
+                <input type="hidden" name="index" value="@(editing is null ? "" : Edit!.Value.ToString(CultureInfo.InvariantCulture))" />
+                <div class="field">
+                    <label for="step-kind">@T["provider.playlists.step.kind"]</label>
+                    <select id="step-kind" name="kind">
+                        @foreach (string kind in Kinds)
+                        {
+                            <option value="@kind" selected="@(Posted("kind", editing?.Kind) == kind)">@T["provider.playlists.kind." + kind]</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="step-title">@T["provider.playlists.step.title"]</label>
+                    <input id="step-title" name="stepTitle" type="text" maxlength="200" required value="@Posted("stepTitle", editing?.Title)" dir="auto" />
+                </div>
+                <div class="field">
+                    <label for="step-instructions">@T["provider.playlists.step.instructions"]</label>
+                    <textarea id="step-instructions" name="instructions" rows="3" maxlength="4000" dir="auto">@Posted("instructions", editing?.Instructions)</textarea>
+                </div>
+                <div class="field">
+                    <label for="step-listing">@T["provider.playlists.step.listing"]</label>
+                    <p class="hint" id="step-listing-hint">@T["provider.playlists.step.listing_hint"]</p>
+                    <select id="step-listing" name="listing" aria-describedby="step-listing-hint">
+                        <option value="">@T["provider.playlists.step.no_listing"]</option>
+                        @foreach (ListingRow l in _listings)
+                        {
+                            <option value="@l.Id" selected="@(Posted("listing", editing?.ListingId?.ToString()) == l.Id.ToString())">@l.Title</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="step-link">@T["provider.playlists.step.link"]</label>
+                    <p class="hint" id="step-link-hint">@T["provider.playlists.step.link_hint"]</p>
+                    <input id="step-link" name="link" type="url" maxlength="2000" value="@Posted("link", editing?.ExternalUrl)" aria-describedby="step-link-hint" />
+                </div>
+                <div class="field">
+                    <label for="step-minutes">@T["provider.playlists.step.minutes"]</label>
+                    <input id="step-minutes" name="minutes" type="number" min="1" max="1440" inputmode="numeric" value="@Posted("minutes", Number(editing?.ExpectedMinutes))" />
+                </div>
+                <div class="field checkbox">
+                    <input id="step-required" name="required" type="checkbox" value="true" checked="@(_posted is null ? editing?.IsRequired ?? true : _posted.ContainsKey("required"))" />
+                    <label for="step-required">@T["provider.playlists.step.required"]</label>
+                </div>
+                <div class="field checkbox">
+                    <input id="step-review" name="review" type="checkbox" value="true" checked="@(_posted is null ? editing?.RequiresReview ?? false : _posted.ContainsKey("review"))" aria-describedby="step-review-hint" />
+                    <label for="step-review">@T["provider.playlists.step.review"]</label>
+                    <p class="hint" id="step-review-hint">@T["provider.playlists.step.review_hint"]</p>
+                </div>
+                <div class="actions">
+                    <button type="submit">@T[editing is null ? "provider.playlists.add_step_button" : "provider.playlists.save_step"]</button>
+                    @if (editing is not null)
+                    {
+                        <a href="/provider/orgs/@OrgId/playlists/@PlaylistId#steps">@T["provider.playlists.cancel"]</a>
+                    }
+                </div>
+            </form>
+        }
+    </section>
+
+    @if (draft)
+    {
+        <section aria-labelledby="publish-heading">
+            <h2 id="publish-heading">@T["provider.playlists.publish_heading"]</h2>
+            <p class="hint">@T["provider.playlists.publish_hint"]</p>
+            <form method="post" @formname="publish" @onsubmit="PublishAsync">
+                <AntiforgeryToken />
+                <button type="submit">@T["provider.playlists.publish"]</button>
+            </form>
+        </section>
+    }
+    else if (playlist.Status == Playlists.Published)
+    {
+        <p><a href="/provider/orgs/@OrgId/work">@T["provider.playlists.review_link"]</a></p>
+        <section aria-labelledby="archive-heading">
+            <h2 id="archive-heading">@T["provider.playlists.archive_heading"]</h2>
+            <p class="hint">@T["provider.playlists.archive_hint"]</p>
+            <form method="post" @formname="archive" @onsubmit="ArchiveAsync">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">@T["provider.playlists.archive"]</button>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid PlaylistId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    /// <summary>The step being changed, counted from 1; none adds a step.</summary>
+    [SupplyParameterFromQuery(Name = "edit")] public int? Edit { get; set; }
+
+    private static readonly string[] Kinds = ["attend_listing", "external_activity", "reflection", "mentor_checkin"];
+
+    private PlaylistView? _playlist;
+    private IReadOnlyList<BadgeClassView> _ownBadges = [];
+    private IReadOnlyList<CountyBadge> _countyBadges = [];
+    private IReadOnlyList<ListingRow> _listings = [];
+    private string? _problem;
+
+    /// <summary>What was posted, kept when it's refused so nothing typed is lost.</summary>
+    private Dictionary<string, string>? _posted;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Playlists.Author))
+        {
+            Forbid();
+            return;
+        }
+
+        Result<PlaylistView> found = await Get<Playlists>().GetAsync(Org, PlaylistId);
+        if (!found.IsSuccess)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _playlist = found.Value;
+        if (_playlist.Status == Playlists.Draft)
+        {
+            _ownBadges = [.. (await Get<Badges>().ListAsync(Org)).Where(b => b.Status == Badges.Published)];
+            _countyBadges = await Get<Badges>().CountyAsync();
+            _listings = [.. (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+                .Where(r => r.Status == ListingStatus.Published).OrderBy(r => r.Title, StringComparer.CurrentCulture)];
+        }
+    }
+
+    private string? Posted(string name, string? stored) =>
+        _posted is null ? stored : _posted.GetValueOrDefault(name);
+
+    private static string? Number(short? value) => value?.ToString(CultureInfo.InvariantCulture);
+
+    private string? Ages(PlaylistView p) => (p.AgeMin, p.AgeMax) switch
+    {
+        ({ } min, { } max) => T.Format("provider.playlists.ages_range", ("min", (int)min), ("max", (int)max)),
+        ({ } min, null) => T.Format("provider.playlists.ages_from", ("min", (int)min)),
+        (null, { } max) => T.Format("provider.playlists.ages_to", ("max", (int)max)),
+        _ => null,
+    };
+
+    /// <summary>The kind of step, what it points at, how long it takes, and whether it's optional or checked.</summary>
+    private string StepFacts(StepView s) =>
+        string.Join(" · ", new[]
+        {
+            T["provider.playlists.kind." + s.Kind],
+            s.Kind == "attend_listing" ? s.ListingTitle : null,
+            s.Kind == "external_activity" ? s.ExternalUrl : null,
+            s.ExpectedMinutes is { } m ? T.Format("provider.playlists.minutes", ("count", (int)m)) : null,
+            s.IsRequired ? null : T["provider.playlists.optional"],
+            s.RequiresReview ? T["provider.playlists.reviewed"] : null,
+        }.OfType<string>());
+
+    /// <summary>Keeps every posted field, for showing back after a refusal.</summary>
+    private void Keep(params string[] names) =>
+        _posted = names.Select(n => (n, v: FormValue(n))).Where(x => x.v.Length > 0).ToDictionary(x => x.n, x => x.v, StringComparer.Ordinal);
+
+    /// <summary>A whole number from the form, null when left empty; false when it isn't one.</summary>
+    private bool TryShort(string name, out short? value)
+    {
+        string raw = FormValue(name).Trim();
+        value = null;
+        if (raw.Length == 0)
+        {
+            return true;
+        }
+
+        if (short.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out short n))
+        {
+            value = n;
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        if (_playlist is null)
+        {
+            return;
+        }
+
+        Keep("title", "description", "ordered", "ageMin", "ageMax", "hours", "badge", "requires", "requiredSteps");
+        string hoursRaw = FormValue("hours").Trim();
+        decimal? hours = null;
+        bool hoursOk = hoursRaw.Length == 0 || decimal.TryParse(hoursRaw, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal h) && (hours = h) is not null;
+        if (!TryShort("ageMin", out short? ageMin) || !TryShort("ageMax", out short? ageMax) || !TryShort("requiredSteps", out short? required) || !hoursOk)
+        {
+            _problem = T["provider.playlists.number_invalid"];
+            return;
+        }
+
+        string description = FormValue("description");
+        PlaylistInput input = new(FormValue("title"), description.Trim().Length > 0 ? description : null, FormValue("ordered") == "true",
+            ageMin, ageMax, hours, Id("badge"), Id("requires"), required);
+        Answer(await Get<Playlists>().UpdateAsync(Org, PlaylistId, input), "saved");
+    }
+
+    private Guid? Id(string name) => Guid.TryParse(FormValue(name), out Guid id) ? id : null;
+
+    private static StepInput Input(StepView s) =>
+        new(s.Kind, s.Title, s.Instructions, s.ListingId, s.ExternalUrl, s.ExpectedMinutes, s.IsRequired, s.RequiresReview);
+
+    private async Task SaveStepAsync()
+    {
+        if (_playlist is null)
+        {
+            return;
+        }
+
+        Keep("kind", "stepTitle", "instructions", "listing", "link", "minutes", "required", "review");
+        if (!TryShort("minutes", out short? minutes))
+        {
+            _problem = T["provider.playlists.number_invalid"];
+            return;
+        }
+
+        string kind = FormValue("kind");
+        string instructions = FormValue("instructions");
+        StepInput step = new(kind, FormValue("stepTitle"), instructions.Trim().Length > 0 ? instructions : null,
+            kind == "attend_listing" ? Id("listing") : null, kind == "external_activity" ? FormValue("link") : null,
+            minutes, FormValue("required") == "true", FormValue("review") == "true");
+        List<StepInput> steps = [.. _playlist.Steps.Select(Input)];
+        if (int.TryParse(FormValue("index"), NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n >= 1 && n <= steps.Count)
+        {
+            steps[n - 1] = step;
+        }
+        else
+        {
+            steps.Add(step);
+        }
+
+        Answer(await Get<Playlists>().SetStepsAsync(Org, PlaylistId, steps), "steps", "#steps");
+    }
+
+    private async Task MoveAsync(int index, int by)
+    {
+        if (_playlist is null || index + by < 0 || index + by >= _playlist.Steps.Count)
+        {
+            return;
+        }
+
+        List<StepInput> steps = [.. _playlist.Steps.Select(Input)];
+        (steps[index], steps[index + by]) = (steps[index + by], steps[index]);
+        Answer(await Get<Playlists>().SetStepsAsync(Org, PlaylistId, steps), "steps", "#steps");
+    }
+
+    private async Task RemoveAsync(int index)
+    {
+        if (_playlist is null || index < 0 || index >= _playlist.Steps.Count)
+        {
+            return;
+        }
+
+        List<StepInput> steps = [.. _playlist.Steps.Select(Input)];
+        steps.RemoveAt(index);
+        Answer(await Get<Playlists>().SetStepsAsync(Org, PlaylistId, steps), "steps", "#steps");
+    }
+
+    private async Task PublishAsync() => Answer(await Get<Playlists>().PublishAsync(Org, PlaylistId), "published");
+
+    private async Task ArchiveAsync() => Answer(await Get<Playlists>().ArchiveAsync(Org, PlaylistId), "archived");
+
+    private void Answer(Result<PlaylistView> done, string what, string fragment = "")
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/playlists/{PlaylistId}?done={what}{fragment}");
+    }
+}

@@ -1,0 +1,226 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/skills"
+@using System.Globalization
+@using BrightTime.Modules.Enrollment.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Records
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Skills.EndorsementsRead)]
+@inherits ConsoleComponent
+
+@*
+    Endorsing young people's skills (D84): for each young person enrolled in the activity, the skills
+    the organisation vouched for through that enrolment (D69), a skill to endorse at a level, and
+    taking one back. Only a young person with their own account can hold a skill. Each is named as
+    the roster names them, by the family's share. The young person is told, and the skill shows on
+    their portfolio as endorsed by the organisation; they can still remove it.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.skills.denied"]</h1>
+    <p>@T["provider.skills.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_roster is { } roster)
+{
+    <PageTitle>@T.Format("provider.skills.title", ("listing", _listing ?? "")) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/listings/@ListingId/roster">@T["provider.skills.back"]</a></p>
+    <h1 dir="auto">@T.Format("provider.skills.title", ("listing", _listing ?? ""))</h1>
+    <OrgNav OrgId="@OrgId" Current="attendance" Role="@(RoleIn(Org) ?? "")" />
+    <p class="hint">@T["provider.skills.intro"]</p>
+
+    @if (Done is "endorsed" or "withdrawn")
+    {
+        <p class="notice success" role="status">@T["provider.skills.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+    @if (_terms.Count == 0)
+    {
+        <p>@T["provider.skills.no_terms"]</p>
+    }
+
+    @if (roster.Count == 0)
+    {
+        <p>@T["provider.skills.empty"]</p>
+    }
+    else
+    {
+        <ul class="card-list">
+            @foreach (RosterEntry line in roster)
+            {
+                string id = line.EnrollmentId.ToString("N");
+                <li id="y-@id">
+                    <h2 dir="auto">@(line.DisplayName ?? T["provider.applications.not_shared"])</h2>
+                    @if (!_accounts.Contains(line.EnrollmentId))
+                    {
+                        <p class="hint">@T["provider.skills.no_account"]</p>
+                    }
+                    else
+                    {
+                        IReadOnlyList<EndorsementView> held = _endorsed.GetValueOrDefault(line.EnrollmentId) ?? [];
+                        @if (held.Count == 0)
+                        {
+                            <p>@T["provider.skills.none"]</p>
+                        }
+                        else
+                        {
+                            <ul class="endorsements">
+                                @foreach (EndorsementView e in held)
+                                {
+                                    <li>
+                                        <span dir="auto">@e.Name</span> · @Level(e.Level)
+                                        <form method="post" @formname="@($"withdraw-{id}-{e.TermId:N}")" @onsubmit="WithdrawAsync" class="inline-form">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="enrollment" value="@line.EnrollmentId" />
+                                            <input type="hidden" name="term" value="@e.TermId" />
+                                            <button type="submit" class="secondary-button" aria-label="@T.Format("provider.skills.withdraw_named", ("skill", e.Name))">@T["provider.skills.withdraw"]</button>
+                                        </form>
+                                    </li>
+                                }
+                            </ul>
+                        }
+
+                        @if (_terms.Count > 0)
+                        {
+                            <form method="post" @formname="@("endorse-" + id)" @onsubmit="EndorseAsync" class="endorse-form">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="enrollment" value="@line.EnrollmentId" />
+                                <div class="field">
+                                    <label for="skill-@id">@T["provider.skills.skill"]</label>
+                                    <select id="skill-@id" name="term">
+                                        <option value="">@T["provider.skills.choose"]</option>
+                                        @foreach (VocabularyTerm term in _terms)
+                                        {
+                                            <option value="@term.Id">@term.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="level-@id">@T["provider.skills.level"]</label>
+                                    <select id="level-@id" name="level">
+                                        <option value="">@T["provider.skills.no_level"]</option>
+                                        @foreach (short l in Levels)
+                                        {
+                                            <option value="@l.ToString(CultureInfo.InvariantCulture)">@Level(l)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="actions">
+                                    <button type="submit">@T["provider.skills.endorse"]</button>
+                                </div>
+                            </form>
+                        }
+                    }
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private static readonly short[] Levels = [1, 2, 3, 4];
+
+    private string? _listing;
+    private IReadOnlyList<RosterEntry>? _roster;
+    private HashSet<Guid> _accounts = [];
+    private Dictionary<Guid, IReadOnlyList<EndorsementView>> _endorsed = [];
+    private IReadOnlyList<VocabularyTerm> _terms = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Skills.Endorse))
+        {
+            Forbid();
+            return;
+        }
+
+        if (await Get<IListingDetails>().GetForReviewAsync(Tenant.TenantId, ListingId, Tenant.Locale.Code) is not { } listing
+            || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing.Title;
+        IEnrolmentQueries enrolments = Get<IEnrolmentQueries>();
+        IReadOnlyList<RosterEntry> roster = await enrolments.RosterAsync(ListingId);
+        Guid[] ids = [.. roster.Select(r => r.EnrollmentId)];
+        if (ids.Length > 0)
+        {
+            _accounts = [.. (await enrolments.FactsAsync(ids, DateOnly.FromDateTime(DateTime.UtcNow)))
+                .Where(f => f.YouthUserId is not null).Select(f => f.EnrollmentId)];
+            Skills skills = Get<Skills>();
+            _endorsed = (await skills.EndorsedAsync(Org, ids)).GroupBy(e => e.EnrollmentId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<EndorsementView>)[.. g]);
+            _terms = await skills.ListAsync();
+        }
+
+        _roster = roster;
+    }
+
+    private string Level(short? level) =>
+        level is { } l ? T["portfolio.export.level." + l.ToString(CultureInfo.InvariantCulture)] : T["provider.skills.no_level"];
+
+    private async Task EndorseAsync()
+    {
+        if (_roster is null || !Guid.TryParse(FormValue("enrollment"), out Guid enrollment))
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(FormValue("term"), out Guid term))
+        {
+            _problem = T["provider.skills.choose_first"];
+            return;
+        }
+
+        short? level = short.TryParse(FormValue("level"), NumberStyles.None, CultureInfo.InvariantCulture, out short l) ? l : null;
+        Answer(await Get<Skills>().EndorseAsync(Org, Actor, enrollment, term, level), "endorsed", enrollment);
+    }
+
+    private async Task WithdrawAsync()
+    {
+        if (_roster is null || !Guid.TryParse(FormValue("enrollment"), out Guid enrollment) || !Guid.TryParse(FormValue("term"), out Guid term))
+        {
+            return;
+        }
+
+        Answer(await Get<Skills>().WithdrawAsync(Org, enrollment, term), "withdrawn", enrollment);
+    }
+
+    private void Answer(Result done, string what, Guid enrollment)
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/skills?done={what}#y-{enrollment:N}");
+    }
+}

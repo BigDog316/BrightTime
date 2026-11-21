@@ -116,7 +116,11 @@ else
                             <p class="hint">@T.Format("app.portfolio.badge_awarded", ("date", T.DateShort(b.IssuedOn)))</p>
                             @if (b.Revoked)
                             {
-                                <p><strong>@T["app.portfolio.badge_revoked"]</strong></p>
+                                <p><strong>@(b.RevokedAt is { } on ? T.Format("app.portfolio.badge_revoked_on", ("date", T.DateShort(on))) : T["app.portfolio.badge_revoked"])</strong></p>
+                                @if (b.RevocationReason is { Length: > 0 } why)
+                                {
+                                    <p>@T["app.portfolio.badge_revoked_reason"] <span dir="auto">@why</span></p>
+                                }
                             }
                             else if (b.ExpiresOn is { } expires)
                             {

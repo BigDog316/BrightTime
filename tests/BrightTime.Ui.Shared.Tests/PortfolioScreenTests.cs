@@ -37,7 +37,8 @@ public sealed class PortfolioScreenTests
         [{"id":"b0b00000-0000-0000-0000-000000000001","name":"River Surveyor","issuer":"Kettle Rowing Club","issuedOn":"2026-10-01T15:00:00Z",
           "expiresOn":"2099-10-01T15:00:00Z","revoked":false,"verify":"https://kettle.test/api/v1/public/badges/abc","credential":"eyJ","page":"https://kettle.test/badges/abc"},
          {"id":"b0b00000-0000-0000-0000-000000000002","name":"First Aid","issuer":"Kettle Library","issuedOn":"2026-08-01T15:00:00Z",
-          "expiresOn":null,"revoked":true,"verify":"https://kettle.test/api/v1/public/badges/def","credential":"eyJ","page":"https://kettle.test/badges/def"}]
+          "expiresOn":null,"revoked":true,"verify":"https://kettle.test/api/v1/public/badges/def","credential":"eyJ","page":"https://kettle.test/badges/def",
+          "revokedAt":"2026-09-15T15:00:00Z","revocationReason":"Awarded for the wrong course."}]
         """;
 
     private static FakeApi SignedIn(string kind = "youth") => new FakeApi()
@@ -68,7 +69,8 @@ public sealed class PortfolioScreenTests
         shown.ShouldContain("River Surveyor");
         shown.ShouldContain("From Kettle Rowing Club");
         shown.ShouldContain("Expires ");
-        shown.ShouldContain("Revoked: the organisation took this badge back.");
+        shown.ShouldContain("Revoked on Sep 15, 2026: the organisation took this badge back.");
+        shown.ShouldContain("Their reason: <span dir=\"auto\">Awarded for the wrong course.</span>", Case.Sensitive, "the reason, in its own direction (D88)");
         shown.ShouldNotContain("eyJ", Case.Sensitive, "the credential is for other software, not the screen");
         shown.ShouldNotContain("app.portfolio");
         shown.ShouldNotContain("portfolio.page");

@@ -196,6 +196,24 @@ create table badge_class (
   constraint ck_badge_alignment check (jsonb_typeof(alignment) = 'array')
 );
 
+-- A badge's own image (D87), chosen while it's a draft. Until media storage is decided it's held
+-- here, small and cleaned of metadata; without one the badge has the generated image. Public once
+-- the badge is: it's the organisation's, not a young person's.
+create table badge_image (
+  badge_class_id uuid primary key references badge_class(id) on delete cascade,
+  tenant_id     uuid not null references platform.tenant(id) on delete cascade,
+  content_type  text not null,
+  bytes         bytea not null,
+  sha256        bytea not null,
+  width         int not null,
+  height        int not null,
+  uploaded_by   uuid references identity.app_user(id) on delete set null,
+  uploaded_at   timestamptz not null default now(),
+  constraint ck_badge_image_type check (content_type in ('image/png','image/jpeg')),
+  constraint ck_badge_image_size check (octet_length(bytes) between 1 and 524288),
+  constraint ck_badge_image_dims check (width between 64 and 2048 and height between 64 and 2048)
+);
+
 create table badge_assertion (
   id                uuid primary key,
   tenant_id         uuid not null references platform.tenant(id) on delete restrict,

@@ -1,0 +1,132 @@
+@page "/provider/orgs/{OrgId:guid}/playlists"
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Playlists
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    The organisation's playlists (D86, over D67): each with where it stands and how many started and
+    finished it, and a new one begun as a draft. A playlist's own page writes its steps and publishes
+    it. Counts only, so audits nothing.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.playlists.denied"]</h1>
+    <p>@T["provider.playlists.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T["provider.playlists.title"] · @_name · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="playlists" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.playlists.title"]</h2>
+    <p class="hint">@T["provider.playlists.intro"]</p>
+    @if (_playlists.Count == 0)
+    {
+        <p>@T["provider.playlists.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list">
+            @foreach (PlaylistView p in _playlists)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/playlists/@p.Id" dir="auto">@p.Title</a>
+                    <span class="note">@Facts(p)</span>
+                </li>
+            }
+        </ul>
+    }
+
+    <section aria-labelledby="new-playlist">
+        <h2 id="new-playlist">@T["provider.playlists.new"]</h2>
+        @if (_problem is not null)
+        {
+            <p class="notice error" role="alert">@_problem</p>
+        }
+        <form method="post" @formname="create" @onsubmit="CreateAsync" class="editor">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="playlist-title">@T["provider.playlists.field.title"]</label>
+                <input id="playlist-title" name="title" type="text" maxlength="200" required value="@_title" dir="auto" />
+            </div>
+            <div class="field">
+                <label for="playlist-description">@T["provider.playlists.field.description"]</label>
+                <textarea id="playlist-description" name="description" rows="3" maxlength="4000" dir="auto">@_description</textarea>
+            </div>
+            <div class="actions">
+                <button type="submit">@T["provider.playlists.create"]</button>
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<PlaylistView> _playlists = [];
+    private string? _problem;
+    private string? _title;
+    private string? _description;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Playlists.Author))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _playlists = await Get<Playlists>().ListAsync(Org);
+    }
+
+    /// <summary>Where it stands, its steps, and once it's open, how many started and finished it.</summary>
+    private string Facts(PlaylistView p) =>
+        string.Join(" · ", new[]
+        {
+            T["provider.playlists.status." + p.Status],
+            T.Format("provider.playlists.step_count", ("count", p.Steps.Count)),
+            p.Status == Playlists.Draft ? null : T.Format("provider.playlists.started", ("count", p.Started)),
+            p.Status == Playlists.Draft ? null : T.Format("provider.playlists.finished", ("count", p.Completed)),
+        }.OfType<string>());
+
+    private async Task CreateAsync()
+    {
+        _title = FormValue("title");
+        _description = FormValue("description");
+        Result<PlaylistView> made = await Get<Playlists>().CreateAsync(Org, Actor,
+            new PlaylistInput(_title, _description.Trim().Length > 0 ? _description : null, true, null, null, null, null, null, null));
+        if (!made.IsSuccess)
+        {
+            _problem = T.Error(made.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/playlists/{made.Value.Id}?done=created");
+    }
+}

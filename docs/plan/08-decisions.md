@@ -2818,6 +2818,168 @@ replaced (or the compose volume rebuilt); the change is in `db/schema/96-notify.
 **Not yet:** endorsing a skill from the console, and the console's screens for writing playlists
 and badges. Self-checked steps the young person marks done tell them nothing, since they did it.
 
+### D84 — Endorsing young people's skills, in the provider console (**proposed 2026-11-06**)
+
+The staff side of D69's endorsements, which until now went only through the API. An activity's
+roster links to **Endorse skills** (`/provider/orgs/{id}/listings/{listing}/skills`) for staff and
+above with `skills.endorse`.
+- **Everyone enrolled** in the activity, named as the roster names them (the family's share, D44).
+  Someone without an account of their own can't hold a skill, and the page says so.
+- **For each young person with an account:** the skills the organisation endorsed through that
+  enrolment, at their level, each with **Withdraw**; and a skill from the county's list to
+  **Endorse**, at a level or none. Endorsing a skill again changes its level, as before.
+- **Withdrawing** is new, in the module and the API (`POST /org/{id}/skills/withdraw`, with the
+  enrolment and the skill). It takes back only what the organisation endorsed through its own
+  enrolment; the young person's own listing of the same skill stays. It's audited as an
+  endorsement, `what: withdrawn`.
+- **The young person is told** (D83): "{org} endorsed your {skill} skill", opening their skills.
+  It's under the `work_reviewed` kind, whose label is now *Your projects, steps and skills*.
+  Withdrawing tells nobody: the skill is simply no longer endorsed.
+- **Reading** the endorsements is audited (`learning.skill.endorsements_read`), with the young
+  people's accounts as subjects.
+
+`SkillsPageTests` runs it end to end: endorsed at one level and then another (one endorsement),
+the notice, withdrawn, and someone without their own account given no form.
+
+**Found in the browser.** On the compose stack every roster with a name on it failed (500): each
+host ran Development without `Security:Keys`, so each made up its own data key, and the web
+console couldn't decrypt names the API had encrypted. The data-protection key ring was lost on
+every restart the same way. `deploy/compose.yml` now gives the api, web and jobs the same two
+local-only keys (`development-data-key-1`, `data-protection`). A volume made before holds data
+under keys nobody has any more: rebuild it (`down -v`).
+
+**Not yet:** the console's screens for writing playlists and badges.
+
+### D85 — The organisation's badges, in the provider console (**proposed 2026-11-07**)
+
+The staff side of D66, which until now went only through the API. A **Badges** tab
+(`/provider/orgs/{id}/badges`) shows to anyone in the organisation who can define, award or
+revoke badges: owners and admins hold all three (D66), staff can award.
+- **The list:** each badge with where it stands (draft, published, retired) and how many young
+  people hold it now, and for owners and admins a form for **a new badge**: name, what it is, what
+  someone does to earn it (more than 20 characters, as D66 checks), and how many months it lasts,
+  if it expires. It's saved as a draft.
+- **A badge's page** (`/provider/orgs/{id}/badges/{badge}`):
+  - A **draft** can be changed, then **published**. Published, it shows as read-only text: it
+    never changes, because what was awarded is what it says.
+  - **Award it** (published only): to someone enrolled in one of the organisation's published
+    activities who has their own account, chosen from a list grouped by activity and named as the
+    roster names them, with an optional note that goes into the badge. Someone who holds it now is
+    refused, as D66 refuses.
+  - **Who holds it:** every award, named by the family's share, when it was awarded and when it
+    expires, and revoked ones with the date and reason. Each standing award has **Revoke**, with a
+    reason, for owners and admins. Reading the awards is audited (`learning.badge.read`).
+  - **Retire it** stops new awards; those who hold it keep it.
+- **The young person is told** (D83's `badge_awarded` kind) when it's awarded, as before, and now
+  when it's revoked: "{org} revoked your {badge} badge", without the reason, which a locked phone
+  would show. The public verification page already says it no longer stands.
+
+No server change beyond the revocation notice: the pages use D66's own methods.
+`BadgePagesTests` runs it end to end, and the console's route matrix now covers both pages.
+`YouthEnrolment` (tests) enrols a young person with their own account for D84's and D85's tests.
+
+**Not yet:** the console's screens for writing playlists; a badge's image (the generated one
+stays); and the app showing a revoked badge's reason on the portfolio.
+
+### D86 — Writing playlists, in the provider console (**proposed 2026-11-07**)
+
+The staff side of D67's playlists, which until now were written only through the API. A
+**Playlists** tab (`/provider/orgs/{id}/playlists`) shows to staff and above with
+`playlists.author`.
+- **The list:** each playlist with where it stands (draft, published, archived), its steps, and
+  once it's open how many started and finished it; and **a new playlist** from a title and what it
+  is, saved as a draft.
+- **A draft's page** (`/provider/orgs/{id}/playlists/{playlist}`):
+  - **About it:** title, what it is, whether the steps go in order, an age range, about how many
+    hours, the badge at the end (one of the organisation's published badges), a badge someone
+    must hold first (any published or retired badge in the county, from a new `Badges.CountyAsync`),
+    and how many steps finish it (empty: every required step). A word for a number is refused
+    before the module sees it, and what was typed stays.
+  - **Steps:** listed with their kind, what they point at, minutes, and whether they're optional
+    or checked by staff; each can be **changed**, **moved** up or down, or **removed**. **Add a
+    step** takes its kind, title, what to do, the activity to attend (one of the organisation's
+    published activities) or the link, minutes, whether it's required, and whether staff check
+    it (a check-in always is). Each change saves the whole list through `SetStepsAsync`, as the
+    module keeps it, so a refused change leaves the steps as they were and says which step.
+  - **Publish it**, after which it shows read-only: it never changes, because everyone's progress
+    refers to its steps.
+- **A published playlist** links to *Young people's work* for its steps waiting, and can be
+  **archived**: nobody new starts it, those on it carry on.
+
+Counts only, no young person's progress, so the pages audit nothing. `PlaylistPagesTests` runs it
+end to end; the console's route matrix covers both pages.
+
+**Found in the browser:** a console form's checkbox sat on its own line above its label. The
+`field checkbox` pattern, used by the forms and waiver pages too, had no style; it does now.
+
+### D87 — A badge's own image (**proposed 2026-11-07**)
+
+A badge had only the generated picture (its initials on a ring, D66). An organisation can now give
+a draft its own, which stays when it's published; without one, the generated picture stays.
+- **What's taken:** a PNG or JPEG, up to 512 KB, 64 to 2,048 pixels on each side. It's read by
+  hand, with no imaging package: the size comes from the PNG header or the JPEG frame header,
+  and everything that isn't the picture is dropped (PNG text, time, EXIF and animation chunks;
+  JPEG EXIF, XMP, ICC and other application segments, and comments), so nothing a camera or editor
+  wrote, such as where a photo was taken, reaches the badge. Anything else is refused.
+- **Where it's kept:** media storage is still open (no bucket, no virus scanning), so the image
+  isn't a `media_object`. It's a row of its own, `learning.badge_image` (bytes, type, size,
+  hash, who and when), capped by the schema. When media storage is decided it can move there;
+  `badge_class.image_media_id` is waiting for it.
+- **When it changes:** only while the badge is a draft, like the rest of it.
+- **Where it's served:** `GET /public/badges/classes/{id}/image`, the badge's own picture or the
+  generated one, with its type and `nosniff`; credentials and badge documents name it from now on.
+  `…/image.svg` still answers with the generated picture, for credentials issued before.
+- **API:** `PUT /org/{id}/badge-classes/{badge}/image` (the file as the body; longer than 512 KB
+  is refused unread) and `DELETE` to go back to the generated picture, for owners and admins.
+- **Console:** a draft badge's page shows its picture (as a `data:` URI, since a draft's isn't
+  public) and has **Its image**: choose a file, or **use the plain image** again.
+
+**Not checked:** the picture itself is copied as it came. This isn't a decoder, so a file that
+claims to be a PNG but holds nonsense is stored, and shows as nothing. With no scanning, the type
+and `nosniff` are what keep it from being read as anything else.
+
+### D88 — A revoked badge's date and reason, in the app (**proposed 2026-11-07**)
+
+The app's portfolio said only that a badge was revoked. `/me/badges` now carries `revokedAt` and
+`revocationReason`, the same reason anyone checking the badge already reads, and the portfolio
+shows "Revoked on {date}: the organisation took this badge back." and "Their reason:" with it. The
+revocation notice (D85) goes back to "Your portfolio says why", which is true now; it still never
+carries the reason, which a locked phone would show.
+
+### D89 — Badge and playlist rules, on the console's eligibility page (**proposed 2026-11-21**)
+
+D67 made "holds a badge" and "has finished a playlist" eligibility rules, and D63's console page
+listed them, but only the API could add them. The page's **Add a rule** now offers both kinds:
+- **The badge** comes from any published or retired badge in the county (`Badges.CountyAsync`,
+  D86), named with its organisation; **the playlist** from any published playlist in the county.
+  A rule can ask for another organisation's badge, as the API already allowed.
+- A rule of either kind without its badge or playlist is refused as before ("Rule n: …"), and
+  each can be a rule that must be met or advice only.
+- **Try the rules** gains *Holds the badges and has finished the playlists these rules ask for*,
+  shown only when a rule asks for one: ticked, the made-up applicant holds every badge and
+  playlist the rules name; left, none. Nobody real is read.
+
+No server change. `EligibilityWaiverPagesTests` adds a test that asks for both, tries an
+applicant without and with them, and removes its rules.
+
+### D90 — System.Formats.Cbor pinned to 10.0.15 (**accepted 2026-11-21**)
+
+GHSA-vmv3-wvjp-wqpj (CVE-2026-118747, published 2026-11-10): CBOR maps with colliding keys
+hash-flood `System.Formats.Cbor`'s uniqueness checks, a denial of service. Fido2 4.2.0, under
+`Fido2.AspNet` (passkeys, D38), depends on 9.0.0, and passkey sign-up and sign-in read
+authenticator CBOR from anyone. With NuGet audit and warnings as errors, every fresh restore
+failed (NU1902): the compose images, CI, a clean clone.
+- `Directory.Packages.props` lists `System.Formats.Cbor` 10.0.15, the fix on the 10.0 line, and
+  turns on `CentralPackageTransitivePinningEnabled`, so the version holds where the package only
+  arrives through Fido2. A direct reference in Identity isn't possible: that project builds on the
+  ASP.NET Core shared framework, which provides the package itself (NU1510).
+- Every project's resolved packages were compared before and after: the only change is this
+  package, 9.0.0 to 10.0.15, in the nine projects that had it (Jobs, Seed and the test projects).
+- Remove the pin once Fido2 depends on a fixed version. Transitive pinning stays: it's how the
+  next transitive fix lands in one line.
+
+Approved by Sam in the session ("Pin System.Formats.Cbor to 10.0.15").
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

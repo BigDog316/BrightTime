@@ -1,6 +1,10 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using BrightTime.Modules.Learning.Badges;
+using BrightTime.Modules.Learning.Playlists;
 using BrightTime.Seed;
+using BrightTime.SharedKernel.Ids;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BrightTime.Web.Tests;
 
@@ -117,6 +121,73 @@ public sealed partial class EligibilityWaiverPagesTests(ConsoleFixture db)
         (await other.GetAsync(waivers)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await other.GetAsync(editor)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         other.Html.ShouldNotContain("Photo release");
+    }
+
+    [Fact]
+    public async Task Admins_ask_for_a_badge_or_a_finished_playlist_and_try_it()
+    {
+        RequireDatabase();
+        // The other test's activity: it may hold that test's age rule (9 to 12) or none, so the
+        // made-up applicant is eleven, and only this test's own rules are removed at the end.
+        (SeedOrganisation provider, Guid listing, _) = Arrange();
+        string page = $"/provider/orgs/{provider.Id}/listings/{listing}/eligibility";
+        Guid admin = SeedIds.For("user/" + AdminOf(provider));
+        OrganisationId org = new(provider.Id);
+        string suffix = Guid.NewGuid().ToString("N")[..6];
+        Guid badge, playlist;
+        await using (AsyncServiceScope scope = YouthEnrolment.As(db, admin))
+        {
+            Badges badges = scope.ServiceProvider.GetRequiredService<Badges>();
+            badge = (await badges.CreateAsync(org, new Uri("https://kettle.localhost/"),
+                new BadgeClassInput("Water Safety " + suffix, "Safe by the water.", "Passed the water safety check at the pool.", null), TestContext.Current.CancellationToken)).Value.Id;
+            (await badges.PublishAsync(org, badge, TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+            Playlists playlists = scope.ServiceProvider.GetRequiredService<Playlists>();
+            playlist = (await playlists.CreateAsync(org, new UserId(admin), new PlaylistInput("Pool Ready " + suffix, null, true, null, null, null, null, null, null), TestContext.Current.CancellationToken)).Value.Id;
+            (await playlists.SetStepsAsync(org, playlist, [new StepInput("reflection", "Why water safety matters", null, null, null, null, true, false)], TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+            (await playlists.PublishAsync(org, playlist, TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+        }
+
+        using Browser browser = db.NewBrowser();
+        await browser.SignInAsync(AdminOf(provider));
+        (await browser.GetAsync(page)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        string html = WebUtility.HtmlDecode(browser.Html).Replace("\u2068", "", StringComparison.Ordinal).Replace("\u2069", "", StringComparison.Ordinal);
+        html.ShouldContain($"value=\"{badge}\"");
+        html.ShouldContain($"Water Safety {suffix}, from {provider.DisplayName}");
+        html.ShouldContain($"Pool Ready {suffix}, from {provider.DisplayName}");
+        html.ShouldNotContain("try-achieved", Case.Sensitive, "nothing to hold yet");
+        html.ShouldNotContain("provider.eligibility.");
+
+        // A badge rule needs its badge; with one it must be met. A playlist rule is advice only.
+        (await browser.PostAsync(page, "add", ("kind", "badge_required"), ("badge", ""), ("playlist", ""), ("min", ""), ("max", ""), ("on", ""), ("hard", "true"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        browser.Html.ShouldContain("Rule ");
+        await browser.GetAsync(page);
+        (await browser.PostAsync(page, "add", ("kind", "badge_required"), ("badge", badge.ToString()), ("playlist", ""), ("min", ""), ("max", ""), ("on", ""), ("hard", "true")))
+            .StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        await browser.GetAsync(page);
+        (await browser.PostAsync(page, "add", ("kind", "playlist_completed"), ("badge", ""), ("playlist", playlist.ToString()), ("min", ""), ("max", ""), ("on", "")))
+            .StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        await browser.GetAsync(page);
+        html = WebUtility.HtmlDecode(browser.Html);
+        html.ShouldContain($"Holds a badge: Water Safety {suffix} (must be met)");
+        html.ShouldContain($"Completed a playlist: Pool Ready {suffix} (advice only)");
+
+        // Tried: without them the applicant isn't eligible; holding them, they are.
+        (await browser.PostAsync(page, "try", ("dob", "2016-01-01"), ("grade", ""), ("neighbourhood", ""))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        browser.Html.ShouldContain("Eligible: No");
+        (await browser.PostAsync(page, "try", ("dob", "2016-01-01"), ("grade", ""), ("neighbourhood", ""), ("achieved", "true"))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        browser.Html.ShouldContain("Eligible: Yes");
+
+        // Both removed, so the activity is left as the other test expects. Saving the rules gives
+        // each a new id, so each removal reads the next one afresh.
+        const string Ours = "listing_id = @l and rule_kind in ('badge_required', 'playlist_completed')";
+        for (int i = 0; i < 2; i++)
+        {
+            Guid rule = await db.ScalarAsync<Guid>($"select id from enrollment.eligibility_rule where {Ours} limit 1", ("l", listing));
+            await browser.GetAsync(page);
+            (await browser.PostAsync(page, $"remove-{rule:N}", ("rule", rule.ToString()))).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        }
+
+        (await db.ScalarAsync<long>($"select count(*) from enrollment.eligibility_rule where {Ours}", ("l", listing))).ShouldBe(0);
     }
 
     [GeneratedRegex("name=\"neighbourhood\" value=\"([0-9a-f-]{36})\"")]

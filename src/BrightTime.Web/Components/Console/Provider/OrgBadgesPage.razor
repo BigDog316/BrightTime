@@ -1,0 +1,133 @@
+@page "/provider/orgs/{OrgId:guid}/badges"
+@using System.Globalization
+@using BrightTime.Hosting.Tenancy
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Badges
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    The organisation's badges (D85, over D66): each with where it stands and how many hold it, and a
+    new one written as a draft. A badge's own page publishes, awards and revokes it. Lists no award,
+    so audits nothing.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.badges.denied"]</h1>
+    <p>@T["provider.badges.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T["provider.badges.title"] · @_name · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="badges" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.badges.title"]</h2>
+    <p class="hint">@T["provider.badges.intro"]</p>
+    @if (_badges.Count == 0)
+    {
+        <p>@T["provider.badges.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list">
+            @foreach (BadgeClassView b in _badges)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/badges/@b.Id" dir="auto">@b.Name</a>
+                    <span class="note">@T["provider.badges.status." + b.Status]@(b.Status == Badges.Draft ? "" : " · " + T.Format("provider.badges.held_by", ("count", b.Awarded)))</span>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_canDefine)
+    {
+        <section aria-labelledby="new-badge">
+            <h2 id="new-badge">@T["provider.badges.new"]</h2>
+            @if (_problem is not null)
+            {
+                <p class="notice error" role="alert">@_problem</p>
+            }
+            <form method="post" @formname="create" @onsubmit="CreateAsync" class="editor">
+                <AntiforgeryToken />
+                <BadgeFields Name="@_posted?.Name" Description="@_posted?.Description" Criteria="@_posted?.Criteria" ExpiresAfterMonths="@_months" />
+                <div class="actions">
+                    <button type="submit">@T["provider.badges.create"]</button>
+                </div>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<BadgeClassView> _badges = [];
+    private bool _canDefine;
+    private string? _problem;
+    private BadgeClassInput? _posted;
+    private string? _months;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _canDefine = await CanActForAsync(Org, Permissions.Badges.Define);
+        if (!_canDefine && !await CanActForAsync(Org, Permissions.Badges.Issue) && !await CanActForAsync(Org, Permissions.Badges.Revoke))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _badges = await Get<Badges>().ListAsync(Org);
+    }
+
+    private async Task CreateAsync()
+    {
+        if (!_canDefine)
+        {
+            return;
+        }
+
+        _months = FormValue("expires");
+        _posted = new BadgeClassInput(FormValue("name"), FormValue("description"), FormValue("criteria"), null);
+        if (BadgeFields.Read(FormValue) is not { } input)
+        {
+            _problem = T["provider.badges.expires_invalid"];
+            return;
+        }
+
+        Uri site = Get<SiteContext>().BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
+        Result<BadgeClassView> made = await Get<Badges>().CreateAsync(Org, site, input);
+        if (!made.IsSuccess)
+        {
+            _problem = T.Error(made.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/badges/{made.Value.Id}?done=created");
+    }
+}

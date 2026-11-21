@@ -58,9 +58,13 @@ Each person has one role in each organisation.
 | Set an activity's places | ● | |
 | Set fees, waive a fee, mark a payment received | ● | |
 | Approve or send back young people's projects and playlist steps | ● | ● |
+| Endorse young people's skills | ● | ● |
+| Award badges | ● | ● |
+| Make, publish and retire badges, revoke an award | ● | |
+| Write and publish playlists | ● | ● |
 
 An organisation can also give someone the **mentor** or **viewer** role. Neither can use the
-applications, attendance, messages, payments, young people's work or reports pages.
+applications, attendance, messages, payments, playlists, badges, young people's work or reports pages.
 
 ## Your organisation: profile, sites and staff
 
@@ -281,48 +285,58 @@ safe: some name young people.
 ## Badges
 
 Your organisation can award **digital badges** to the young people in your programs, in the Open
-Badges standard, so they can show them anywhere that reads badges. The badges are built, and
-their console screens are next. When they arrive:
+Badges standard, so they can show them anywhere that reads badges. They're on the **Badges** tab.
 
-- Owners and admins **define** a badge: its name, a description, the **criteria** (what someone
+- Owners and admins make **a new badge**: its name, what it is, the **criteria** (what someone
   did to earn it), and optionally how many months it lasts. It's a draft until it's
-  **published**; after that it never changes. **Retire** stops it being awarded; badges already
-  awarded stand.
-- Staff **award** a published badge to a young person enrolled with you, with an optional note
-  about what they did. Each young person holds a badge once.
+  **published**; after that it never changes, so check the wording first. **Retire** stops it
+  being awarded; badges already awarded stand.
+- Staff **award** a published badge on its page: choose a young person enrolled in one of your
+  activities who has their own account, and add a note about what they did if you like. The note
+  goes into the badge, so keep it to what you'd say in public. Each young person holds a badge
+  once, and they're told.
 - Owners and admins can **revoke** an award, saying why. Anyone checking the badge sees at once
-  that it was revoked, and the reason.
+  that it was revoked, and the reason. The young person is told it was revoked, and sees the
+  reason on their portfolio.
+- A draft badge can have **its own image**: a PNG or JPEG of up to 512 KB, square looks best.
+  Anything else in the file, such as where a photo was taken, is removed. Without one, the badge
+  has a plain image made from its name.
 - Your organisation is the badge's issuer, under its own digital identity, so a badge says who
   vouched for it.
 
 ## Playlists
 
 A **playlist** is a set of steps young people work through at their own pace, with one of your
-badges at the end. Playlists are built behind the scenes too, and their console screens are next.
-When they arrive:
+badges at the end. They're on the **Playlists** tab.
 
-- Staff write a playlist as a draft: a title, a description, whether the steps go in order, an
-  age range and estimated hours, the badge it awards, and optionally a badge someone must already
-  hold to start it.
-- Each step is one of: **attend a listing** (done once their attendance is recorded), **an activity
-  elsewhere** (a link), **a reflection** they write, or **a check-in with staff**. Any step can be
-  marked for review, and a check-in always is. Steps are required unless you say otherwise.
+- Staff start **a new playlist** as a draft, then fill in **About it**: whether the steps go in
+  order, an age range and about how many hours, the badge it awards, and optionally a badge
+  someone must already hold to start it.
+- **Add a step**: each is one of **attend an activity** (one of yours, done once their attendance
+  is recorded), **an activity elsewhere** (a link), **a reflection** they write, or **a check-in
+  with staff**. Any step can be checked by staff, and a check-in always is. Steps are required
+  unless you say otherwise. **Change**, **Move up**, **Move down** and **Remove** rearrange them.
 - **Publish** it, and from then on it never changes, because everyone's progress refers to its
   steps. **Archive** stops anyone new starting; those already on it carry on.
 - Staff **review** submitted steps on the **Young people's work** tab (below).
 - When someone finishes every required step, they're given the playlist's badge, signed by your
   organisation.
 
-**Skills.** When the screen arrives:
-- **Skills.** Staff can **endorse a skill** for a young person enrolled with you, such as
-  *Teamwork* or *Field research*, at a level from beginning to advanced. It appears on their
-  portfolio as endorsed. The skills come from the county's list, which network organisers keep in
-  Taxonomy.
+**Skills.** On an activity's roster, **Endorse skills** lists everyone enrolled. For a young
+person with their own account, you can **endorse a skill** they showed, such as *Teamwork* or
+*Field research*, at a level from beginning to advanced, or with no level.
+- It appears on their portfolio as endorsed by your organisation, and they're told.
+- To change the level, endorse the same skill again. **Withdraw** takes it back.
+- Someone without their own account yet can't have skills. Their family links their account
+  first.
+- The skills come from the county's list, which network organisers keep in Taxonomy. They can
+  still remove a skill from their portfolio.
 
-**Gating a program on a badge.** An activity's eligibility can now require a badge, or a
-completed playlist, as a rule that must be met. A young person who doesn't hold it can't submit an
-application. For now these two rules are set through the API; the console's eligibility page shows
-them but doesn't add them yet.
+**Gating a program on a badge.** An activity's eligibility can require a badge, or a completed
+playlist, as a rule that must be met or as advice. On the activity's **Eligibility** page, **Add a
+rule** and choose *Holds a badge* or *Completed a playlist*, then the badge or playlist: any in
+the county, not only your own. A young person who doesn't meet a rule that must be met can't
+submit an application. **Try the rules** can say the made-up applicant holds them.
 
 ## Young people's work
 

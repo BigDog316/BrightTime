@@ -20,7 +20,13 @@ namespace BrightTime.Modules.Learning.Badges;
 
 public sealed record BadgeClassInput(string? Name, string? Description, string? Criteria, short? ExpiresAfterMonths);
 
-public sealed record BadgeClassView(Guid Id, string Slug, string Name, string Description, string Criteria, short? ExpiresAfterMonths, string Status, int Awarded);
+public sealed record BadgeClassView(Guid Id, string Slug, string Name, string Description, string Criteria, short? ExpiresAfterMonths, string Status, int Awarded, bool HasImage = false);
+
+/// <summary>A badge's picture as it's served: its own (D87), or the generated one.</summary>
+public sealed record BadgePicture(byte[] Bytes, string ContentType);
+
+/// <summary>A published or retired badge of any organisation in the county, for a playlist to ask for (D86).</summary>
+public sealed record CountyBadge(Guid Id, string Name, string Issuer);
 
 /// <summary>A badge as the organisation that awarded it sees it: who (as their share names them), when, and whether it stands.</summary>
 [YouthData]
@@ -29,9 +35,12 @@ public sealed record AwardView(Guid Id, string? RecipientName, string VerifySlug
 /// <summary>
 /// A badge as the young person who holds it sees it, with the credential to take anywhere:
 /// <paramref name="Verify"/> is the credential itself, <paramref name="Page"/> the web page a person reads to check it (D77).
+/// A revoked one says when and why (D88), as anyone checking it reads.
 /// </summary>
 [YouthData]
-public sealed record HeldBadge(Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Verify, string Credential, Uri Page);
+public sealed record HeldBadge(
+    Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Verify, string Credential, Uri Page,
+    DateTimeOffset? RevokedAt = null, string? RevocationReason = null);
 
 /// <summary>What the public verification page says about a credential. Never who holds it.</summary>
 public sealed record Verification(string Status, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, DateTimeOffset? RevokedAt, string? RevocationReason, JsonElement Credential, string Jwt);
@@ -90,8 +99,21 @@ public sealed partial class Badges(
             Guid[] ids = [.. classes.Select(c => c.Id)];
             Dictionary<Guid, int> awarded = await db.BadgeAssertions.AsNoTracking().Where(a => ids.Contains(a.BadgeClassId) && a.RevokedAt == null)
                 .GroupBy(a => a.BadgeClassId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count, ct).ConfigureAwait(false);
-            return [.. classes.Select(c => View(c, awarded.GetValueOrDefault(c.Id)))];
+            HashSet<Guid> pictured = [.. await db.BadgeImages.AsNoTracking().Where(i => ids.Contains(i.BadgeClassId)).Select(i => i.BadgeClassId).ToListAsync(ct).ConfigureAwait(false)];
+            return [.. classes.Select(c => View(c, awarded.GetValueOrDefault(c.Id)) with { HasImage = pictured.Contains(c.Id) })];
         }, cancellationToken);
+
+    /// <summary>
+    /// The county's badges that have been awarded or can be, by name: those a playlist can ask someone
+    /// to hold before they start (D86). A retired one counts: those who hold it keep it.
+    /// </summary>
+    public Task<IReadOnlyList<CountyBadge>> CountyAsync(CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<CountyBadge>>(async ct =>
+            await (from c in db.BadgeClasses.AsNoTracking()
+                   join i in db.Issuers on c.IssuerId equals i.Id
+                   where c.Status != Draft
+                   orderby c.Name, i.Name
+                   select new CountyBadge(c.Id, c.Name, i.Name)).Take(500).ToListAsync(ct).ConfigureAwait(false), cancellationToken);
 
     /// <summary>A new badge, as a draft. The organisation becomes an issuer the first time.</summary>
     public Task<Result<BadgeClassView>> CreateAsync(OrganisationId org, Uri site, BadgeClassInput input, CancellationToken cancellationToken = default) =>
@@ -252,6 +274,12 @@ public sealed partial class Badges(
             award.RevocationReason = why;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Revoked, org, [award.Id], ct, why, award.RecipientUserId).ConfigureAwait(false);
+
+            // Told by the organisation's name and the badge's (D85), never the reason, which a locked phone would show; the portfolio has it (D88).
+            BadgeClassRecord badge = await db.BadgeClasses.AsNoTracking().FirstAsync(c => c.Id == award.BadgeClassId, ct).ConfigureAwait(false);
+            string issuer = await db.Issuers.AsNoTracking().Where(i => i.Id == badge.IssuerId).Select(i => i.Name).FirstAsync(ct).ConfigureAwait(false);
+            await WorkNotices.TellAsync(db, tenant, award.RecipientUserId, WorkNotices.BadgeAwardedKind, WorkNotices.BadgeRevoked,
+                WorkNotices.Args(("org", issuer), ("badge", badge.Name)), "/portfolio", "badge-revoked:" + award.Id.ToString("N"), ct).ConfigureAwait(false);
             return Result<AwardView>.Success(new AwardView(award.Id, null, award.VerifySlug, award.IssuedOn, award.ExpiresOn, award.RevokedAt, award.RevocationReason));
         }, cancellationToken);
 
@@ -285,7 +313,8 @@ public sealed partial class Badges(
                               select new { a, c.Name, Issuer = i.Name }).ToListAsync(ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = "badge_assertion", SubjectIds = [.. held.Select(h => h.a.Id)] }, ct).ConfigureAwait(false);
             return [.. held.Select(h => new HeldBadge(h.a.Id, h.Name, h.Issuer, h.a.IssuedOn, h.a.ExpiresOn, h.a.RevokedAt is not null,
-                BadgeDocuments.Credential(site, h.a.VerifySlug), h.a.CredentialJwt ?? string.Empty, BadgeDocuments.Page(site, h.a.VerifySlug)))];
+                BadgeDocuments.Credential(site, h.a.VerifySlug), h.a.CredentialJwt ?? string.Empty, BadgeDocuments.Page(site, h.a.VerifySlug),
+                h.a.RevokedAt, h.a.RevocationReason))];
         }, cancellationToken);
 
     // ---- anyone, without signing in -------------------------------------------------------------
@@ -359,6 +388,7 @@ public sealed partial class Badges(
             return achievement;
         }, cancellationToken);
 
+    /// <summary>The generated picture of a published or retired badge: what credentials issued before D87 name.</summary>
     public Task<string?> ImageAsync(Guid id, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<string?>(async ct =>
         {
@@ -368,6 +398,91 @@ public sealed partial class Badges(
                                select new { c.Name, Issuer = i.Name }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
             return found is null ? null : BadgeDocuments.ImageSvg(found.Name, found.Issuer);
         }, cancellationToken);
+
+    /// <summary>A published or retired badge's picture, anyone's to see: its own if it has one (D87), else the generated one.</summary>
+    public Task<BadgePicture?> PictureAsync(Guid id, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<BadgePicture?>(async ct =>
+        {
+            var found = await (from c in db.BadgeClasses.AsNoTracking()
+                               join i in db.Issuers on c.IssuerId equals i.Id
+                               where c.Id == id && c.Status != Draft
+                               select new { c.Id, c.Name, Issuer = i.Name }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            return found is null ? null : await PictureOfAsync(found.Id, found.Name, found.Issuer, ct).ConfigureAwait(false);
+        }, cancellationToken);
+
+    /// <summary>One of the organisation's badges' pictures, draft or not, for its own staff to see.</summary>
+    public Task<BadgePicture?> OwnPictureAsync(OrganisationId org, Guid id, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<BadgePicture?>(async ct =>
+        {
+            var found = await (from c in db.BadgeClasses.AsNoTracking()
+                               join i in db.Issuers on c.IssuerId equals i.Id
+                               where c.Id == id && i.OrgId == org.Value
+                               select new { c.Id, c.Name, Issuer = i.Name }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            return found is null ? null : await PictureOfAsync(found.Id, found.Name, found.Issuer, ct).ConfigureAwait(false);
+        }, cancellationToken);
+
+    /// <summary>Gives a draft its own picture (D87), checked and cleaned. A published badge never changes, its picture included.</summary>
+    public Task<Result<BadgeClassView>> SetImageAsync(OrganisationId org, UserId staff, Guid id, ReadOnlyMemory<byte> file, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await OwnAsync(org, id, ct).ConfigureAwait(false) is not { } badge)
+            {
+                return Result<BadgeClassView>.Failure(NotFound());
+            }
+
+            if (badge.Status != Draft)
+            {
+                return Result<BadgeClassView>.Failure(Error.Conflict("badges.not_draft", NotDraft));
+            }
+
+            Result<CleanImage> clean = BadgeImageFile.Clean(file.Span);
+            if (!clean.IsSuccess)
+            {
+                return Result<BadgeClassView>.Failure(clean.Error);
+            }
+
+            BadgeImageRecord? image = await db.BadgeImages.FirstOrDefaultAsync(i => i.BadgeClassId == id, ct).ConfigureAwait(false);
+            if (image is null)
+            {
+                image = new BadgeImageRecord { BadgeClassId = id, TenantId = tenant.TenantId.Value, ContentType = "", Bytes = [], Sha256 = [] };
+                db.BadgeImages.Add(image);
+            }
+
+            image.ContentType = clean.Value.ContentType;
+            image.Bytes = clean.Value.Bytes;
+            image.Sha256 = SHA256.HashData(clean.Value.Bytes);
+            image.Width = clean.Value.Width;
+            image.Height = clean.Value.Height;
+            image.UploadedBy = staff.Value;
+            image.UploadedAt = clock.StoredNow();
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Defined, org, [id], ct, "image").ConfigureAwait(false);
+            return Result<BadgeClassView>.Success(View(badge, 0) with { HasImage = true });
+        }, cancellationToken);
+
+    /// <summary>Takes a draft's own picture away, so it has the generated one again.</summary>
+    public Task<Result<BadgeClassView>> RemoveImageAsync(OrganisationId org, Guid id, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await OwnAsync(org, id, ct).ConfigureAwait(false) is not { } badge)
+            {
+                return Result<BadgeClassView>.Failure(NotFound());
+            }
+
+            if (badge.Status != Draft)
+            {
+                return Result<BadgeClassView>.Failure(Error.Conflict("badges.not_draft", NotDraft));
+            }
+
+            await db.BadgeImages.Where(i => i.BadgeClassId == id).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Defined, org, [id], ct, "image_removed").ConfigureAwait(false);
+            return Result<BadgeClassView>.Success(View(badge, 0));
+        }, cancellationToken);
+
+    private async Task<BadgePicture> PictureOfAsync(Guid id, string name, string issuer, CancellationToken ct) =>
+        await db.BadgeImages.AsNoTracking().Where(i => i.BadgeClassId == id).Select(i => new BadgePicture(i.Bytes, i.ContentType))
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false)
+        ?? new BadgePicture(Encoding.UTF8.GetBytes(BadgeDocuments.ImageSvg(name, issuer)), "image/svg+xml");
 
     /// <summary>The issuer's DID document, every key it has signed with and not withdrawn as compromised.</summary>
     public Task<JsonObject?> DidDocumentAsync(Guid orgId, CancellationToken cancellationToken = default) =>

@@ -27,6 +27,10 @@ else if (_listing is not null && _roster is null)
     <p class="eyebrow"><a href="/provider/orgs/@OrgId/attendance">@T["provider.roster.back"]</a></p>
     <h1 dir="auto">@_listing</h1>
     <OrgNav OrgId="@OrgId" Current="attendance" Role="@(RoleIn(Org) ?? "")" />
+    @if (_canEndorse)
+    {
+        <p><a href="/provider/orgs/@OrgId/listings/@ListingId/skills">@T["provider.skills.link"]</a></p>
+    }
     <p>@T["provider.roster.no_meeting"]</p>
 }
 else if (_roster is { } roster)
@@ -37,6 +41,10 @@ else if (_roster is { } roster)
     <h1 dir="auto">@_listing</h1>
     <p>@T.DayLong(roster.OccurrenceStartsAt) · @T.Range(T.Time(roster.OccurrenceStartsAt), T.Time(roster.OccurrenceEndsAt))</p>
     <OrgNav OrgId="@OrgId" Current="attendance" Role="@(RoleIn(Org) ?? "")" />
+    @if (_canEndorse)
+    {
+        <p><a href="/provider/orgs/@OrgId/listings/@ListingId/skills">@T["provider.skills.link"]</a></p>
+    }
 
     @if (Done is "saved")
     {
@@ -155,6 +163,7 @@ else if (_roster is { } roster)
     private string? _listing;
     private bool _canRecord;
     private bool _canMessage;
+    private bool _canEndorse;
     private string? _problem;
     private Dictionary<Guid, string> _rowErrors = [];
     private Dictionary<Guid, AttendanceView> _current = [];
@@ -193,6 +202,7 @@ else if (_roster is { } roster)
         _listing = listing.Title;
         _canRecord = await CanActForAsync(Org, Permissions.Attendance.Record);
         _canMessage = await CanActForAsync(Org, Permissions.Messages.SendToFamily);
+        _canEndorse = await CanActForAsync(Org, Permissions.Skills.Endorse);
 
         // No meeting named: the latest one that has started (or starts within the hour) this past week, else the next.
         _at = Occurrence;

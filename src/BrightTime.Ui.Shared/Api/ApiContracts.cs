@@ -158,9 +158,11 @@ public sealed record PortfolioDraft(string DisplayName, string? Headline, string
 
 /// <summary>
 /// A badge the young person holds (D66, D77). <c>Page</c> is the web page anyone can check it on;
-/// the credential itself isn't read by the app.
+/// the credential itself isn't read by the app. A revoked one says when and why (D88).
 /// </summary>
-public sealed record HeldBadge(Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Page);
+public sealed record HeldBadge(
+    Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Page,
+    DateTimeOffset? RevokedAt = null, string? RevocationReason = null);
 
 /// <summary>A skill or interest from the county's lists (D78), by the id the goal and skill routes take.</summary>
 public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);

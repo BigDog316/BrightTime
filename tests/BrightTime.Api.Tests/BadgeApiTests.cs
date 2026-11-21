@@ -116,8 +116,28 @@ public sealed class BadgeApiTests(ApiFixture api)
             (await JsonAsync(await admin.PutAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}",
                 new { name = "River Surveyor", description = "Mapped a stretch of the Kettle and the life in it.", criteria = "Surveyed the river on three visits and logged what lives there.", expiresAfterMonths = 24 }, Ct)))
                 .GetProperty("description").GetString()!.ShouldContain("Kettle");
+
+            // Its own image, while it's a draft (D87): not a PNG or JPEG is refused; one with a text chunk keeps only the picture.
+            using (ByteArrayContent svg = new("<svg/>"u8.ToArray()))
+            {
+                await ProblemAsync(await admin.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), svg, Ct), HttpStatusCode.BadRequest, "badges.image");
+            }
+
+            using (ByteArrayContent png = new(BadgeImageFileTests.Png(128, "Drawn at 4 Mill Lane")))
+            {
+                await ProblemAsync(await outsider.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), png, Ct), HttpStatusCode.Forbidden, "badges.forbidden");
+                (await JsonAsync(await admin.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), png, Ct))).GetProperty("hasImage").GetBoolean().ShouldBeTrue();
+            }
+
+            (await api.ScalarAsync<int>("select width from learning.badge_image where badge_class_id = @c", ("c", classId))).ShouldBe(128);
+            (await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}/image"), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound, "a draft's picture isn't public");
             (await JsonAsync(await admin.PostAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/publish"), null, Ct))).GetProperty("status").GetString().ShouldBe("published");
             await ProblemAsync(await admin.PutAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}", badge, Ct), HttpStatusCode.Conflict, "badges.not_draft");
+            await ProblemAsync(await admin.DeleteAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), Ct), HttpStatusCode.Conflict, "badges.not_draft");
+            HttpResponseMessage picture = await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}/image"), Ct);
+            picture.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
+            byte[] served = await picture.Content.ReadAsByteArrayAsync(Ct);
+            served.ShouldBe(BadgeImageFileTests.Png(128), "the picture without its text chunk");
 
             // Awarded once, to someone enrolled with the organisation; another organisation can't award it.
             await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}/awards", new { enrollmentId = Guid.NewGuid() }, Ct), HttpStatusCode.BadRequest, "badges.recipient");
@@ -185,8 +205,9 @@ public sealed class BadgeApiTests(ApiFixture api)
             // The documents it points at resolve, for anyone.
             (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}"), Ct))).GetProperty("type").EnumerateArray().Single().GetString().ShouldBe("Achievement");
             HttpResponseMessage image = await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}/image.svg"), Ct);
-            image.Content.Headers.ContentType!.MediaType.ShouldBe("image/svg+xml");
+            image.Content.Headers.ContentType!.MediaType.ShouldBe("image/svg+xml", "what credentials before D87 name still answers");
             (await image.Content.ReadAsStringAsync(Ct)).ShouldStartWith("<svg");
+            credential.GetRawText().ShouldContain($"/api/v1/public/badges/classes/{classId:N}/image\"", Case.Sensitive, "new credentials name the picture, its own or generated (D87)");
 
             // And as OB 2.0, hosted: assertion, badge class and issuer.
             JsonElement assertion2 = await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/badges/{slug}/ob2"), Ct));
@@ -218,7 +239,9 @@ public sealed class BadgeApiTests(ApiFixture api)
             (gone.GetProperty("revoked").GetBoolean(), gone.GetProperty("revocationReason").GetString()).ShouldBe((true, "Awarded to the wrong young person."));
             JsonElement revocations = await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/issuers/{org:N}/revocations"), Ct));
             revocations.GetProperty("revokedCredentials").EnumerateArray().Single().GetProperty("id").GetString().ShouldBe(credential.GetProperty("id").GetString());
-            (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/badges"), Ct))).EnumerateArray().Single().GetProperty("revoked").GetBoolean().ShouldBeTrue();
+            JsonElement revoked = (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/badges"), Ct))).EnumerateArray().Single();
+            (revoked.GetProperty("revoked").GetBoolean(), revoked.GetProperty("revocationReason").GetString()).ShouldBe((true, "Awarded to the wrong young person."));
+            revoked.GetProperty("revokedAt").ValueKind.ShouldBe(JsonValueKind.String, "when, as the young person reads it (D88)");
 
             // Revoked, it can be awarded again; retired, it can't.
             await JsonAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}/awards", new { enrollmentId = enrolment }, Ct), HttpStatusCode.Created);

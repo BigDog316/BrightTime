@@ -181,6 +181,23 @@ main {
     width: 1.25rem;
 }
 
+/* A checkbox field: the box beside its label, any hint under the label (D86). */
+.field.checkbox {
+    align-items: center;
+    column-gap: 0.5rem;
+    grid-template-columns: auto 1fr;
+}
+
+.field.checkbox input {
+    height: 1.25rem;
+    margin: 0;
+    width: 1.25rem;
+}
+
+.field.checkbox .hint {
+    grid-column: 2;
+}
+
 .field-error {
     color: var(--bt-error);
     font-size: 0.95rem;
@@ -609,7 +626,9 @@ button.secondary-button {
 .editor input[type="number"],
 .editor select,
 .editor textarea,
-.reason-form textarea {
+.reason-form textarea,
+.review-form textarea,
+.review-form input[type="text"] {
     border: 1px solid var(--bt-muted);
     border-radius: 0.375rem;
     box-sizing: border-box;
@@ -827,6 +846,48 @@ button.secondary-button {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+}
+
+/* A badge's picture, its own or the generated one (D87). */
+.badge-picture {
+    border-radius: 50%;
+    display: block;
+    height: 6rem;
+    margin: 0.5rem 0 1rem;
+    object-fit: cover;
+    width: 6rem;
+}
+
+/* A badge's description and criteria, kept as they were written (D85). */
+.facts .body {
+    white-space: pre-line;
+}
+
+/* ---- Endorsing skills (D84) ---------------------------------------------- */
+
+.endorsements {
+    list-style: none;
+    margin: 0 0 0.75rem;
+    padding: 0;
+}
+
+/* Inside a card, so not a card itself. */
+.card-list .endorsements li {
+    align-items: center;
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+    padding: 0;
+}
+
+.endorse-form {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1rem;
 }
 
 /* ---- Organiser review ---------------------------------------------------- */

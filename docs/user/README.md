@@ -61,8 +61,9 @@ nothing in these guides promises a screen that doesn't exist yet.
 | A young person's playlists | Coming | Yes | |
 | Downloading a portfolio | Coming | Yes | |
 | **Organisations:** reviewing young people's projects and playlist steps | Yes | | |
-| **Organisations:** writing playlists | Coming | | |
-| **Organisations:** badges | Coming | | |
+| **Organisations:** endorsing young people's skills | Yes | | |
+| **Organisations:** writing playlists | Yes | | |
+| **Organisations:** badges | Yes | | |
 
 Where a listing says *"Registration through BrightTime opens soon"*, contact the organisation
 named on it to save a place for now.

@@ -13,10 +13,10 @@ namespace BrightTime.Modules.Learning.Records;
 /// </summary>
 internal static class WorkNotices
 {
-    /// <summary>A project or playlist step approved or sent back (<c>ck_notification_kind</c>).</summary>
+    /// <summary>A project or playlist step approved or sent back, or a skill endorsed (<c>ck_notification_kind</c>).</summary>
     public const string WorkReviewedKind = "work_reviewed";
 
-    /// <summary>A badge awarded, by staff or for finishing a playlist (<c>ck_notification_kind</c>).</summary>
+    /// <summary>A badge awarded, by staff or for finishing a playlist, or revoked (<c>ck_notification_kind</c>).</summary>
     public const string BadgeAwardedKind = "badge_awarded";
 
     public const string ProjectApproved = "notify.project.approved";
@@ -25,6 +25,8 @@ internal static class WorkNotices
     public const string StepSentBack = "notify.step.sent_back";
     public const string PlaylistCompleted = "notify.playlist.completed";
     public const string BadgeAwarded = "notify.badge.awarded";
+    public const string SkillEndorsed = "notify.skill.endorsed";
+    public const string BadgeRevoked = "notify.badge.revoked";
 
     /// <summary>Queues the notice with the change, so it goes only if the change is kept.</summary>
     public static Task TellAsync(

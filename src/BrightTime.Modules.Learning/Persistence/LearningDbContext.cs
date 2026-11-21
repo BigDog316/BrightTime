@@ -126,6 +126,28 @@ public sealed class IssuerKeyRecord
     public DateTimeOffset? RetiredAt { get; set; }
 }
 
+/// <summary>A badge's own image (D87): a small PNG or JPEG, cleaned of metadata.</summary>
+public sealed class BadgeImageRecord
+{
+    public Guid BadgeClassId { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public required string ContentType { get; set; }
+
+    public required byte[] Bytes { get; set; }
+
+    public required byte[] Sha256 { get; set; }
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public Guid? UploadedBy { get; set; }
+
+    public DateTimeOffset UploadedAt { get; set; }
+}
+
 /// <summary>An achievement an organisation awards (the OB 2.0 BadgeClass, the OB 3.0 Achievement).</summary>
 public sealed class BadgeClassRecord
 {
@@ -443,6 +465,8 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
 
     public DbSet<BadgeClassRecord> BadgeClasses => Set<BadgeClassRecord>();
 
+    public DbSet<BadgeImageRecord> BadgeImages => Set<BadgeImageRecord>();
+
     public DbSet<BadgeAssertionRecord> BadgeAssertions => Set<BadgeAssertionRecord>();
 
     public DbSet<PlaylistRecord> Playlists => Set<PlaylistRecord>();
@@ -505,6 +529,13 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
             b.Property(x => x.PublicJwk).HasColumnType("jsonb");
             b.HasIndex(x => new { x.IssuerId, x.KeyId }).IsUnique();
             b.HasIndex(x => x.IssuerId).IsUnique().HasFilter("status = 'active'");
+        });
+
+        modelBuilder.Entity<BadgeImageRecord>(b =>
+        {
+            b.ToTable("badge_image");
+            b.HasKey(x => x.BadgeClassId);
+            b.Property(x => x.BadgeClassId).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<BadgeClassRecord>(b =>

@@ -135,6 +135,14 @@ public sealed class LearnerRecordApiTests(ApiFixture api)
             (await JsonAsync(await learner.PostAsJsonAsync("api/v1/me/skills", new { termId = teamwork, level = 2 }, Ct))).GetProperty("level").GetInt32().ShouldBe(2);
             await ProblemAsync(await outsider.PostAsJsonAsync($"api/v1/org/{org}/skills/endorse", new { enrollmentId = enrolment, termId = fieldwork, level = 3 }, Ct),
                 HttpStatusCode.Forbidden, "skills.forbidden");
+            (await admin.PostAsJsonAsync($"api/v1/org/{org}/skills/endorse", new { enrollmentId = enrolment, termId = teamwork, level = 1 }, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+            // An endorsement the organisation takes back (D84): only its own, and the young person's own listing stays.
+            await ProblemAsync(await outsider.PostAsJsonAsync($"api/v1/org/{org}/skills/withdraw", new { enrollmentId = enrolment, termId = teamwork }, Ct),
+                HttpStatusCode.Forbidden, "skills.forbidden");
+            (await admin.PostAsJsonAsync($"api/v1/org/{org}/skills/withdraw", new { enrollmentId = enrolment, termId = teamwork }, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/skills/withdraw", new { enrollmentId = enrolment, termId = teamwork }, Ct),
+                HttpStatusCode.NotFound, "skills.not_endorsed");
             (await admin.PostAsJsonAsync($"api/v1/org/{org}/skills/endorse", new { enrollmentId = enrolment, termId = fieldwork, level = 3 }, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
             JsonElement[] skills = [.. (await JsonAsync(await learner.GetAsync(Relative("api/v1/me/skills"), Ct))).EnumerateArray()];
             skills.Select(s => (s.GetProperty("name").GetString(), s.GetProperty("endorsed").GetBoolean())).ShouldBe([("Field research", true), ("Teamwork", false)]);

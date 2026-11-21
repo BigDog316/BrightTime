@@ -255,10 +255,14 @@ public sealed partial class Browser(HttpClient client) : IDisposable
     }
 
     /// <summary>Posts a form with a file, as a browser does for <c>enctype="multipart/form-data"</c>.</summary>
+    public Task<HttpResponseMessage> PostFileAsync(string path, string handler, (string Name, string FileName, string Content) file, params (string Name, string Value)[] fields) =>
+        PostFileAsync(path, handler, (file.Name, file.FileName, System.Text.Encoding.UTF8.GetBytes(file.Content), "text/csv"), fields);
+
+    /// <summary>Posts a file of any type, as a form with <c>enctype="multipart/form-data"</c> does (D87's badge image).</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "Each part is owned, and disposed, by the multipart content it is added to.")]
-    public async Task<HttpResponseMessage> PostFileAsync(string path, string handler, (string Name, string FileName, string Content) file, params (string Name, string Value)[] fields)
+    public async Task<HttpResponseMessage> PostFileAsync(string path, string handler, (string Name, string FileName, byte[] Bytes, string ContentType) file, params (string Name, string Value)[] fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
         using var content = new MultipartFormDataContent();
@@ -269,8 +273,8 @@ public sealed partial class Browser(HttpClient client) : IDisposable
 
         content.Add(new StringContent(Token()), "__RequestVerificationToken");
         content.Add(new StringContent(handler), "_handler");
-        var bytes = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(file.Content));
-        bytes.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/csv");
+        var bytes = new ByteArrayContent(file.Bytes);
+        bytes.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
         content.Add(bytes, file.Name, file.FileName);
 
         HttpResponseMessage response = await client.PostAsync(new Uri(path, UriKind.Relative), content, TestContext.Current.CancellationToken);

@@ -16,6 +16,10 @@ namespace BrightTime.Modules.Learning.Records;
 [YouthData]
 public sealed record SkillView(Guid Id, Guid TermId, string Name, short? Level, bool Endorsed, string? EndorsedBy, DateTimeOffset AssertedAt);
 
+/// <summary>A skill an organisation endorsed through one enrolment, as its staff see it (D84).</summary>
+[YouthData]
+public sealed record EndorsementView(Guid EnrollmentId, Guid TermId, string Name, short? Level, DateTimeOffset EndorsedAt);
+
 /// <summary>
 /// A young person's skills (M4, D69), from the county's <c>skill</c> vocabulary: those they list
 /// themselves, at a level they choose, and those an organisation they're enrolled with endorses.
@@ -33,6 +37,7 @@ public sealed class Skills(
     public const string Read = "learning.skill.read";
     public const string Changed = "learning.skill.changed";
     public const string Endorsed = "learning.skill.endorsed";
+    public const string EndorsementsRead = "learning.skill.endorsements_read";
 
     private const string SelfAssessment = "self_assessment";
     private const string Participation = "participation";
@@ -127,8 +132,70 @@ public sealed class Skills(
             endorsement.AssertedAt = clock.StoredNow();
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Endorsed, endorsement.Id, org, ct, youth: youth).ConfigureAwait(false);
+
+            // Told by the organisation's name and the skill's, as the county lists it (D84).
+            string name = await directory.GetOrganisationNameAsync(org, ct).ConfigureAwait(false) ?? "";
+            string skill = (await taxonomy.GetTermsAsync([termId], tenant.Locale.Code, ct).ConfigureAwait(false)) is [{ } term, ..] ? term.Name ?? term.Code : "";
+            await WorkNotices.TellAsync(db, tenant, youth, WorkNotices.WorkReviewedKind, WorkNotices.SkillEndorsed,
+                WorkNotices.Args(("org", name), ("skill", skill)), "/portfolio/skills", WorkNotices.Key("skill-endorsed", endorsement.Id, endorsement.AssertedAt), ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
+
+    /// <summary>Takes back a skill the organisation endorsed through an enrolment of its own (D84). The young person's own listing of it stays.</summary>
+    public Task<Result> WithdrawAsync(OrganisationId org, Guid enrollmentId, Guid termId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (!(await enrolments.GetAsync([enrollmentId], ct).ConfigureAwait(false)).Any(e => e.OrgId == org.Value))
+            {
+                return Result.Failure(NotEndorsed());
+            }
+
+            LearnerSkillRecord? endorsement = await db.Skills.FirstOrDefaultAsync(
+                s => s.TermId == termId && s.EvidenceKind == Participation && s.EvidenceRefId == enrollmentId, ct).ConfigureAwait(false);
+            if (endorsement is null)
+            {
+                return Result.Failure(NotEndorsed());
+            }
+
+            db.Skills.Remove(endorsement);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Endorsed, endorsement.Id, org, ct, "withdrawn", endorsement.UserId).ConfigureAwait(false);
+            return Result.Success();
+        }, cancellationToken);
+
+    /// <summary>The skills the organisation endorsed through some of its own enrolments, by enrolment (D84). Others' enrolments are left out.</summary>
+    public Task<IReadOnlyList<EndorsementView>> EndorsedAsync(OrganisationId org, IReadOnlyCollection<Guid> enrollmentIds, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<EndorsementView>>(async ct =>
+        {
+            Guid[] own = [.. (await enrolments.GetAsync(enrollmentIds, ct).ConfigureAwait(false)).Where(e => e.OrgId == org.Value).Select(e => e.Id)];
+            List<LearnerSkillRecord> found = own.Length == 0 ? [] : await db.Skills.AsNoTracking()
+                .Where(s => s.EvidenceKind == Participation && s.EvidenceRefId != null && own.Contains(s.EvidenceRefId.Value))
+                .ToListAsync(ct).ConfigureAwait(false);
+            if (found.Count == 0)
+            {
+                return [];
+            }
+
+            Dictionary<Guid, string> names = (await taxonomy.GetTermsAsync([.. found.Select(s => s.TermId).Distinct()], tenant.Locale.Code, ct).ConfigureAwait(false))
+                .ToDictionary(t => t.Id, t => t.Name ?? t.Code);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = EndorsementsRead,
+                SubjectKind = "learner_skill",
+                SubjectIds = [.. found.Select(s => s.UserId).Distinct()],
+                ActorOrgId = org,
+            }, ct).ConfigureAwait(false);
+            return [.. found
+                .Select(s => new EndorsementView(s.EvidenceRefId!.Value, s.TermId, names.GetValueOrDefault(s.TermId) ?? string.Empty, s.Level, s.AssertedAt))
+                .OrderBy(e => e.Name, StringComparer.CurrentCulture)];
+        }, cancellationToken);
+
+    /// <summary>The county's skills, in the request's language, for staff to choose from.</summary>
+    public async Task<IReadOnlyList<VocabularyTerm>> ListAsync(CancellationToken cancellationToken = default) =>
+        [.. (await taxonomy.GetVocabularyAsync("skill", tenant.Locale.Code, cancellationToken).ConfigureAwait(false))
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name, StringComparer.CurrentCulture)];
+
+    private static Error NotEndorsed() => Error.NotFound("skills.not_endorsed", "Your organisation hasn't endorsed that skill there.");
 
     /// <summary>A young person's skills, named in the request's language, with the organisation behind each endorsement.</summary>
     internal async Task<IReadOnlyList<SkillView>> OfAsync(Guid userId, CancellationToken ct)

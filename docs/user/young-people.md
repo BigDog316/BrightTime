@@ -104,7 +104,8 @@ did, like *River Surveyor*. They're listed under your records, with who gave eac
   it.
 - **Check it** opens the badge's page, where anyone can check it's real. **Share** sends that
   page to someone. If an organisation takes a badge back (for example, it was given by mistake),
-  the page says so, with the reason, and your list marks it as **revoked**.
+  the page says so, with the reason, and your list marks it as **revoked**, with the date and the
+  reason.
 
 ## Your skills, projects and goals (app)
 
@@ -114,7 +115,7 @@ Find them under **Your portfolio**, in *More of your portfolio*.
 - **Add a skill** and say how far along you are, from beginning to advanced. You can change the
   level any time.
 - An organisation you're enrolled with can also **endorse** a skill, vouching that you showed it.
-  It says *Endorsed by* and the organisation's name.
+  It says *Endorsed by* and the organisation's name, and you're told in your inbox.
 - You can **Remove** any skill, endorsed or not. If you remove an endorsed one, only the
   organisation can add it back.
 - When your portfolio is shown, your skills are on it, each marked if an organisation endorsed it.

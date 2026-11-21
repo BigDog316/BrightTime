@@ -1,0 +1,385 @@
+@page "/provider/orgs/{OrgId:guid}/badges/{BadgeId:guid}"
+@using System.Globalization
+@using BrightTime.Hosting.Tenancy
+@using BrightTime.Modules.Enrollment.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Badges
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Badges.Read)]
+@inherits ConsoleComponent
+
+@*
+    One of the organisation's badges (D85, over D66). A draft can be changed, then published, after
+    which it never changes: what was awarded is what it says. A published badge is awarded to a young
+    person enrolled in one of the organisation's activities who has their own account, with an
+    optional note, and can be retired so nobody new gets it. Its awards are listed, each named as the
+    family's share names them, and can be revoked with a reason.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.badges.denied"]</h1>
+    <p>@T["provider.badges.forbidden"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_badge is { } badge)
+{
+    <PageTitle>@badge.Name · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/badges">@T["provider.badges.back"]</a></p>
+    <h1 dir="auto">@badge.Name</h1>
+    <OrgNav OrgId="@OrgId" Current="badges" Role="@(RoleIn(Org) ?? "")" />
+    <p class="note">@T["provider.badges.status." + badge.Status]@(badge.Status == Badges.Draft ? "" : " · " + T.Format("provider.badges.held_by", ("count", badge.Awarded)))</p>
+
+    @if (_picture is { } picture)
+    {
+        <img class="badge-picture" src="@($"data:{picture.ContentType};base64,{Convert.ToBase64String(picture.Bytes)}")" alt="@T.Format("provider.badges.image_alt", ("badge", badge.Name))" width="96" height="96" />
+    }
+
+    @if (Done is "created" or "saved" or "published" or "retired" or "awarded" or "revoked" or "image" or "image_removed")
+    {
+        <p class="notice success" role="status">@T["provider.badges.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (badge.Status == Badges.Draft && _canDefine)
+    {
+        <form method="post" @formname="save" @onsubmit="SaveAsync" class="editor">
+            <AntiforgeryToken />
+            <BadgeFields Name="@(_posted?.Name ?? badge.Name)" Description="@(_posted?.Description ?? badge.Description)"
+                         Criteria="@(_posted?.Criteria ?? badge.Criteria)" ExpiresAfterMonths="@(_months ?? badge.ExpiresAfterMonths?.ToString(CultureInfo.InvariantCulture))" />
+            <div class="actions">
+                <button type="submit">@T["provider.badges.save"]</button>
+            </div>
+        </form>
+
+        <section aria-labelledby="image-heading">
+            <h2 id="image-heading">@T["provider.badges.image_heading"]</h2>
+            <p class="hint" id="image-hint">@T[badge.HasImage ? "provider.badges.image_own" : "provider.badges.image_generated"] @T["provider.badges.image_hint"]</p>
+            <form method="post" enctype="multipart/form-data" @formname="image" @onsubmit="SetImageAsync" class="editor">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="badge-image">@T["provider.badges.image_file"]</label>
+                    <input id="badge-image" name="image" type="file" accept="image/png,image/jpeg" required aria-describedby="image-hint" />
+                </div>
+                <div class="actions">
+                    <button type="submit">@T["provider.badges.image_upload"]</button>
+                </div>
+            </form>
+            @if (badge.HasImage)
+            {
+                <form method="post" @formname="image-remove" @onsubmit="RemoveImageAsync">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary-button">@T["provider.badges.image_remove"]</button>
+                </form>
+            }
+        </section>
+
+        <section aria-labelledby="publish-heading">
+            <h2 id="publish-heading">@T["provider.badges.publish_heading"]</h2>
+            <p class="hint">@T["provider.badges.publish_hint"]</p>
+            <form method="post" @formname="publish" @onsubmit="PublishAsync">
+                <AntiforgeryToken />
+                <button type="submit">@T["provider.badges.publish"]</button>
+            </form>
+        </section>
+    }
+    else
+    {
+        <dl class="facts">
+            <dt>@T["provider.badges.description"]</dt>
+            <dd class="body" dir="auto">@badge.Description</dd>
+            <dt>@T["provider.badges.criteria"]</dt>
+            <dd class="body" dir="auto">@badge.Criteria</dd>
+            <dt>@T["provider.badges.expires"]</dt>
+            <dd>@(badge.ExpiresAfterMonths is { } m ? T.Format("provider.badges.expires_after", ("months", (int)m)) : T["provider.badges.never_expires"])</dd>
+        </dl>
+    }
+
+    @if (badge.Status == Badges.Published && _canIssue)
+    {
+        <section aria-labelledby="award-heading">
+            <h2 id="award-heading">@T["provider.badges.award_heading"]</h2>
+            @if (_candidates.Count == 0)
+            {
+                <p>@T["provider.badges.no_candidates"]</p>
+            }
+            else
+            {
+                <p class="hint">@T["provider.badges.award_hint"]</p>
+                <form method="post" @formname="award" @onsubmit="AwardAsync" class="editor">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="award-to">@T["provider.badges.award_to"]</label>
+                        <select id="award-to" name="enrollment" required>
+                            <option value="">@T["provider.badges.choose"]</option>
+                            @foreach (IGrouping<string, Candidate> listing in _candidates.GroupBy(c => c.Listing))
+                            {
+                                <optgroup label="@listing.Key">
+                                    @foreach (Candidate c in listing)
+                                    {
+                                        <option value="@c.EnrollmentId">@(c.Name ?? T["provider.applications.not_shared"])</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="award-note">@T["provider.badges.narrative"]</label>
+                        <p class="hint" id="award-note-hint">@T["provider.badges.narrative_hint"]</p>
+                        <textarea id="award-note" name="narrative" rows="3" maxlength="2000" dir="auto" aria-describedby="award-note-hint"></textarea>
+                    </div>
+                    <div class="actions">
+                        <button type="submit">@T["provider.badges.award"]</button>
+                    </div>
+                </form>
+            }
+        </section>
+    }
+
+    @if (_awards is { } awards)
+    {
+        <section aria-labelledby="awards-heading">
+            <h2 id="awards-heading">@T["provider.badges.awards"]</h2>
+            @if (awards.Count == 0)
+            {
+                <p>@T["provider.badges.no_awards"]</p>
+            }
+            else
+            {
+                <ul class="card-list">
+                    @foreach (AwardView a in awards)
+                    {
+                        string id = a.Id.ToString("N");
+                        <li>
+                            <span dir="auto">@(a.RecipientName ?? T["provider.applications.not_shared"])</span>
+                            <span class="note">
+                                @T.Format("provider.badges.awarded_on", ("date", T.DateShort(a.IssuedOn)))
+                                @if (a.ExpiresOn is { } until)
+                                {
+                                    @(" · " + T.Format("provider.badges.expires_on", ("date", T.DateShort(until))))
+                                }
+                            </span>
+                            @if (a.RevokedAt is { } revoked)
+                            {
+                                <p class="note">@T.Format("provider.badges.revoked_on", ("date", T.DateShort(revoked))) <span dir="auto">@a.RevocationReason</span></p>
+                            }
+                            else if (_canRevoke)
+                            {
+                                <form method="post" @formname="@("revoke-" + id)" @onsubmit="RevokeAsync" class="review-form">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="award" value="@a.Id" />
+                                    <div class="field">
+                                        <label for="reason-@id">@T["provider.badges.reason"]</label>
+                                        <input id="reason-@id" name="reason" type="text" maxlength="500" dir="auto" />
+                                    </div>
+                                    <button type="submit" class="secondary-button">@T["provider.badges.revoke"]</button>
+                                </form>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    }
+
+    @if (badge.Status == Badges.Published && _canDefine)
+    {
+        <section aria-labelledby="retire-heading">
+            <h2 id="retire-heading">@T["provider.badges.retire_heading"]</h2>
+            <p class="hint">@T["provider.badges.retire_hint"]</p>
+            <form method="post" @formname="retire" @onsubmit="RetireAsync">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">@T["provider.badges.retire"]</button>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid BadgeId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    /// <summary>Someone a badge can go to: an enrolment with the young person's own account, by activity.</summary>
+    private sealed record Candidate(Guid EnrollmentId, string Listing, string? Name);
+
+    private BadgeClassView? _badge;
+    private BadgePicture? _picture;
+    private IReadOnlyList<AwardView>? _awards;
+    private List<Candidate> _candidates = [];
+    private bool _canDefine;
+    private bool _canIssue;
+    private bool _canRevoke;
+    private string? _problem;
+    private BadgeClassInput? _posted;
+    private string? _months;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _canDefine = await CanActForAsync(Org, Permissions.Badges.Define);
+        _canIssue = await CanActForAsync(Org, Permissions.Badges.Issue);
+        _canRevoke = await CanActForAsync(Org, Permissions.Badges.Revoke);
+        if (!_canDefine && !_canIssue && !_canRevoke)
+        {
+            Forbid();
+            return;
+        }
+
+        Badges badges = Get<Badges>();
+        _badge = (await badges.ListAsync(Org)).FirstOrDefault(b => b.Id == BadgeId);
+        if (_badge is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _picture = await badges.OwnPictureAsync(Org, BadgeId);
+        if (_canIssue || _canRevoke)
+        {
+            Result<IReadOnlyList<AwardView>> awards = await badges.AwardsAsync(Org, BadgeId);
+            _awards = awards.IsSuccess ? awards.Value : [];
+        }
+
+        if (_badge.Status == Badges.Published && _canIssue)
+        {
+            await CandidatesAsync();
+        }
+    }
+
+    /// <summary>Everyone enrolled in the organisation's live activities who has their own account. Someone already holding the badge is refused on awarding.</summary>
+    private async Task CandidatesAsync()
+    {
+        IEnrolmentQueries enrolments = Get<IEnrolmentQueries>();
+        foreach (ListingRow listing in (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+            .Where(r => r.Status == ListingStatus.Published).OrderBy(r => r.Title, StringComparer.CurrentCulture))
+        {
+            IReadOnlyList<RosterEntry> roster = await enrolments.RosterAsync(listing.Id);
+            if (roster.Count == 0)
+            {
+                continue;
+            }
+
+            HashSet<Guid> accounts = [.. (await enrolments.FactsAsync([.. roster.Select(r => r.EnrollmentId)], DateOnly.FromDateTime(DateTime.UtcNow)))
+                .Where(f => f.YouthUserId is not null).Select(f => f.EnrollmentId)];
+            _candidates.AddRange(roster.Where(r => accounts.Contains(r.EnrollmentId)).Select(r => new Candidate(r.EnrollmentId, listing.Title, r.DisplayName)));
+        }
+    }
+
+    private Uri Site => Get<SiteContext>().BaseUrl ?? throw new InvalidOperationException("A resolved tenant has an address.");
+
+    private async Task SaveAsync()
+    {
+        if (!_canDefine)
+        {
+            return;
+        }
+
+        _months = FormValue("expires");
+        _posted = new BadgeClassInput(FormValue("name"), FormValue("description"), FormValue("criteria"), null);
+        if (BadgeFields.Read(FormValue) is not { } input)
+        {
+            _problem = T["provider.badges.expires_invalid"];
+            return;
+        }
+
+        Answer(await Get<Badges>().UpdateAsync(Org, BadgeId, input), "saved");
+    }
+
+    private async Task SetImageAsync()
+    {
+        if (!_canDefine)
+        {
+            return;
+        }
+
+        IFormFile? file = HttpContext.Request.Form.Files["image"];
+        if (file is null || file.Length is 0 or > BadgeImageFile.MaxBytes)
+        {
+            _problem = T.Error(Error.Validation("badges.image", "Choose a PNG or JPEG of up to 512 KB, from 64 to 2,048 pixels on each side."));
+            return;
+        }
+
+        using MemoryStream bytes = new();
+        await file.CopyToAsync(bytes);
+        Answer(await Get<Badges>().SetImageAsync(Org, Actor, BadgeId, bytes.ToArray()), "image");
+    }
+
+    private async Task RemoveImageAsync()
+    {
+        if (_canDefine)
+        {
+            Answer(await Get<Badges>().RemoveImageAsync(Org, BadgeId), "image_removed");
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        if (_canDefine)
+        {
+            Answer(await Get<Badges>().PublishAsync(Org, BadgeId), "published");
+        }
+    }
+
+    private async Task RetireAsync()
+    {
+        if (_canDefine)
+        {
+            Answer(await Get<Badges>().RetireAsync(Org, BadgeId), "retired");
+        }
+    }
+
+    private async Task AwardAsync()
+    {
+        if (!_canIssue)
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(FormValue("enrollment"), out Guid enrollment))
+        {
+            _problem = T["provider.badges.choose_first"];
+            return;
+        }
+
+        Answer(await Get<Badges>().IssueAsync(Org, Actor, Site, BadgeId, enrollment, FormValue("narrative")), "awarded");
+    }
+
+    private async Task RevokeAsync()
+    {
+        if (_canRevoke && Guid.TryParse(FormValue("award"), out Guid award))
+        {
+            Answer(await Get<Badges>().RevokeAsync(Org, award, FormValue("reason")), "revoked");
+        }
+    }
+
+    private void Answer<TValue>(Result<TValue> done, string what)
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/badges/{BadgeId}?done={what}");
+    }
+}

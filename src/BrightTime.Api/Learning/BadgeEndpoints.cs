@@ -33,6 +33,8 @@ public static class BadgeEndpoints
         org.MapPut("/badge-classes/{id:guid}", UpdateAsync).Produces<BadgeClassView>();
         org.MapPost("/badge-classes/{id:guid}/publish", PublishAsync).Produces<BadgeClassView>();
         org.MapPost("/badge-classes/{id:guid}/retire", RetireAsync).Produces<BadgeClassView>();
+        org.MapPut("/badge-classes/{id:guid}/image", SetImageAsync).Accepts<byte[]>("image/png", "image/jpeg").Produces<BadgeClassView>();
+        org.MapDelete("/badge-classes/{id:guid}/image", RemoveImageAsync).Produces<BadgeClassView>();
         org.MapGet("/badge-classes/{id:guid}/awards", AwardsAsync).WithMetadata(new YouthRecordAttribute(Badges.Read)).Produces<IReadOnlyList<AwardView>>();
         org.MapPost("/badge-classes/{id:guid}/awards", IssueAsync).WithMetadata(new YouthRecordAttribute(Badges.Issued)).Produces<AwardView>(StatusCodes.Status201Created);
         org.MapPost("/badge-assertions/{id:guid}/revoke", RevokeAsync).WithMetadata(new YouthRecordAttribute(Badges.Revoked)).Produces<AwardView>();
@@ -47,6 +49,7 @@ public static class BadgeEndpoints
         open.MapGet("/badges/classes/{id:guid}", AchievementAsync);
         open.MapGet("/badges/classes/{id:guid}/ob2", BadgeClass2Async);
         open.MapGet("/badges/classes/{id:guid}/image.svg", ImageAsync);
+        open.MapGet("/badges/classes/{id:guid}/image", PictureAsync);
         open.MapGet("/badges/{slug}", VerifyAsync).Produces<Verification>();
         open.MapGet("/badges/{slug}/ob2", Assertion2Async);
         return api;
@@ -80,6 +83,34 @@ public static class BadgeEndpoints
     private static async Task<IResult> PublishAsync(Guid orgId, Guid id, ClaimsPrincipal user, IAuthorizationService authorization, Badges badges, CancellationToken ct) =>
         await RefusedAsync(user, orgId, authorization, Permissions.Badges.Define, OrganisationRoles.Admin)
             ?? Answer(await badges.PublishAsync(new OrganisationId(orgId), id, ct));
+
+    /// <summary>A draft's own picture (D87): the file as the body, up to 512 KB; anything longer is refused unread.</summary>
+    private static async Task<IResult> SetImageAsync(Guid orgId, Guid id, HttpRequest request, ClaimsPrincipal user, IAuthorizationService authorization, Badges badges, CancellationToken ct)
+    {
+        if (await RefusedAsync(user, orgId, authorization, Permissions.Badges.Define, OrganisationRoles.Admin) is { } refused)
+        {
+            return refused;
+        }
+
+        using MemoryStream file = new();
+        byte[] buffer = new byte[16 * 1024];
+        int read;
+        while ((read = await request.Body.ReadAsync(buffer, ct)) > 0)
+        {
+            if (file.Length + read > BadgeImageFile.MaxBytes)
+            {
+                return ApiProblems.From(Error.Validation("badges.image", "Choose a PNG or JPEG of up to 512 KB, from 64 to 2,048 pixels on each side."));
+            }
+
+            await file.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+
+        return Answer(await badges.SetImageAsync(new OrganisationId(orgId), Actor(user), id, file.ToArray(), ct));
+    }
+
+    private static async Task<IResult> RemoveImageAsync(Guid orgId, Guid id, ClaimsPrincipal user, IAuthorizationService authorization, Badges badges, CancellationToken ct) =>
+        await RefusedAsync(user, orgId, authorization, Permissions.Badges.Define, OrganisationRoles.Admin)
+            ?? Answer(await badges.RemoveImageAsync(new OrganisationId(orgId), id, ct));
 
     private static async Task<IResult> RetireAsync(Guid orgId, Guid id, ClaimsPrincipal user, IAuthorizationService authorization, Badges badges, CancellationToken ct) =>
         await RefusedAsync(user, orgId, authorization, Permissions.Badges.Define, OrganisationRoles.Admin)
@@ -150,6 +181,9 @@ public static class BadgeEndpoints
 
     private static async Task<IResult> ImageAsync(Guid id, Badges badges, CancellationToken ct) =>
         await badges.ImageAsync(id, ct) is { } svg ? Results.Text(svg, "image/svg+xml") : NotFound();
+
+    private static async Task<IResult> PictureAsync(Guid id, Badges badges, CancellationToken ct) =>
+        await badges.PictureAsync(id, ct) is { } picture ? Results.File(picture.Bytes, picture.ContentType) : NotFound();
 
     private static async Task<IResult> VerifyAsync(string slug, HttpResponse response, Badges badges, CancellationToken ct)
     {

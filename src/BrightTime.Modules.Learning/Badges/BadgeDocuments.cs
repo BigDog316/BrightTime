@@ -69,7 +69,8 @@ public static class BadgeDocuments
 
     public static Uri BadgeClass2(Uri site, Guid badgeClassId) => new(site, $"api/v1/public/badges/classes/{badgeClassId:N}/ob2");
 
-    public static Uri Image(Uri site, Guid badgeClassId) => new(site, $"api/v1/public/badges/classes/{badgeClassId:N}/image.svg");
+    /// <summary>A badge's picture: its own, or the generated one (D87). Credentials issued before D87 name <c>image.svg</c>, which still answers.</summary>
+    public static Uri Image(Uri site, Guid badgeClassId) => new(site, $"api/v1/public/badges/classes/{badgeClassId:N}/image");
 
     /// <summary>The credential's id, and the page that says whether it still stands.</summary>
     public static Uri Credential(Uri site, string verifySlug) => new(site, $"api/v1/public/badges/{verifySlug}");

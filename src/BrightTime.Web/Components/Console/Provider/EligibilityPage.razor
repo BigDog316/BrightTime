@@ -3,6 +3,8 @@
 @using BrightTime.Modules.Enrollment.Contracts
 @using BrightTime.Modules.Enrollment.Eligibility
 @using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Learning.Badges
+@using BrightTime.Modules.Learning.Playlists
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.Modules.Platform.Contracts
 @using BrightTime.SharedKernel.Ids
@@ -92,6 +94,26 @@ else if (_listing is not null)
                         <p class="hint" id="rule-on-hint">@T["provider.eligibility.on_hint"]</p>
                     </div>
                 </div>
+                <div class="field">
+                    <label for="rule-badge">@T["provider.eligibility.badge"]</label>
+                    <select id="rule-badge" name="badge">
+                        <option value="">@T["provider.eligibility.choose_badge"]</option>
+                        @foreach (CountyBadge b in _badges)
+                        {
+                            <option value="@b.Id">@T.Format("provider.eligibility.from", ("name", b.Name), ("organisation", b.Issuer))</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="rule-playlist">@T["provider.eligibility.playlist"]</label>
+                    <select id="rule-playlist" name="playlist">
+                        <option value="">@T["provider.eligibility.choose_playlist"]</option>
+                        @foreach (PublicPlaylist pl in _playlists)
+                        {
+                            <option value="@pl.Id">@(pl.Organisation is { } by ? T.Format("provider.eligibility.from", ("name", pl.Title), ("organisation", by)) : pl.Title)</option>
+                        }
+                    </select>
+                </div>
                 <fieldset class="checkboxes">
                     <legend>@T["provider.eligibility.neighbourhoods"]</legend>
                     @foreach (NeighbourhoodShape n in _neighbourhoods)
@@ -131,6 +153,13 @@ else if (_listing is not null)
                     }
                 </select>
             </div>
+            @if (_rules.Any(r => r.Kind is EligibilityRuleKinds.BadgeRequired or EligibilityRuleKinds.PlaylistCompleted))
+            {
+                <div class="field checkbox">
+                    <input id="try-achieved" name="achieved" type="checkbox" value="true" />
+                    <label for="try-achieved">@T["provider.eligibility.achieved"]</label>
+                </div>
+            }
             <button type="submit">@T["provider.eligibility.try_submit"]</button>
         </form>
         @if (_tried is { } result)
@@ -155,12 +184,15 @@ else if (_listing is not null)
 
     [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
 
-    private static readonly string[] Kinds = [EligibilityRuleKinds.AgeAtStart, EligibilityRuleKinds.GradeRange, EligibilityRuleKinds.NeighbourhoodIn];
+    private static readonly string[] Kinds =
+        [EligibilityRuleKinds.AgeAtStart, EligibilityRuleKinds.GradeRange, EligibilityRuleKinds.NeighbourhoodIn, EligibilityRuleKinds.BadgeRequired, EligibilityRuleKinds.PlaylistCompleted];
 
     private string? _listing;
     private IReadOnlyList<RuleView> _rules = [];
     private IReadOnlyList<NeighbourhoodShape> _neighbourhoods = [];
     private readonly Dictionary<Guid, string> _achievements = [];
+    private IReadOnlyList<CountyBadge> _badges = [];
+    private IReadOnlyList<PublicPlaylist> _playlists = [];
     private EligibilityResult? _tried;
     private string? _problem;
 
@@ -217,6 +249,9 @@ else if (_listing is not null)
         Result<IReadOnlyList<RuleView>> rules = await Get<EligibilityRules>().GetAsync(Org, ListingId);
         _rules = rules.IsSuccess ? rules.Value : [];
         _neighbourhoods = [.. (await Get<IGeographyQueries>().GetNeighbourhoodsAsync(Tenant.Locale.Code)).OrderBy(n => n.Name, StringComparer.CurrentCulture)];
+        // What a badge or playlist rule can ask for: any of the county's, not only this organisation's (D89).
+        _badges = await Get<Badges>().CountyAsync();
+        _playlists = await Get<Playlists>().PublishedAsync();
         foreach (RuleView rule in _rules)
         {
             if ((rule.Config.BadgeClassId ?? rule.Config.PlaylistId) is { } id && await Get<IAchievementQueries>().NameAsync(rule.Kind, id) is { } name)
@@ -243,10 +278,15 @@ else if (_listing is not null)
     private async Task AddAsync()
     {
         string kind = FormValue("kind");
-        RuleConfig config = kind == EligibilityRuleKinds.NeighbourhoodIn
-            ? new RuleConfig(NeighbourhoodIds: [.. HttpContext.Request.Form["neighbourhood"].Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => g != Guid.Empty)])
-            : new RuleConfig(Int(FormValue("min")), Int(FormValue("max")),
-                kind == EligibilityRuleKinds.AgeAtStart && DateOnly.TryParseExact(FormValue("on"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly on) ? on : null);
+        RuleConfig config = kind switch
+        {
+            EligibilityRuleKinds.NeighbourhoodIn =>
+                new RuleConfig(NeighbourhoodIds: [.. HttpContext.Request.Form["neighbourhood"].Select(v => Guid.TryParse(v, out Guid g) ? g : Guid.Empty).Where(g => g != Guid.Empty)]),
+            EligibilityRuleKinds.BadgeRequired => new RuleConfig(BadgeClassId: Guid.TryParse(FormValue("badge"), out Guid badge) ? badge : null),
+            EligibilityRuleKinds.PlaylistCompleted => new RuleConfig(PlaylistId: Guid.TryParse(FormValue("playlist"), out Guid playlist) ? playlist : null),
+            _ => new RuleConfig(Int(FormValue("min")), Int(FormValue("max")),
+                kind == EligibilityRuleKinds.AgeAtStart && DateOnly.TryParseExact(FormValue("on"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly on) ? on : null),
+        };
         await SaveAsync([.. _rules.Select(Input), new RuleInput(kind, config, FormValue("hard") == "true")]);
     }
 
@@ -264,7 +304,14 @@ else if (_listing is not null)
         DateOnly? dob = DateOnly.TryParseExact(FormValue("dob"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly d) ? d : null;
         short? grade = short.TryParse(FormValue("grade"), NumberStyles.Integer, CultureInfo.InvariantCulture, out short g) ? g : null;
         Guid? lives = Guid.TryParse(FormValue("neighbourhood"), out Guid n) ? n : null;
-        Result<EligibilityResult> tried = await Get<EligibilityRules>().PreviewAsync(Org, ListingId, null, new Applicant(dob, grade, lives));
+
+        // Holding them means every badge and playlist the rules ask for (D89); not holding them, none.
+        Achievements held = FormValue("achieved") == "true"
+            ? new Achievements(
+                new HashSet<Guid>(_rules.Select(r => r.Config.BadgeClassId).OfType<Guid>()),
+                new HashSet<Guid>(_rules.Select(r => r.Config.PlaylistId).OfType<Guid>()))
+            : Achievements.None;
+        Result<EligibilityResult> tried = await Get<EligibilityRules>().PreviewAsync(Org, ListingId, null, new Applicant(dob, grade, lives, held));
         if (tried.IsSuccess)
         {
             _tried = tried.Value;

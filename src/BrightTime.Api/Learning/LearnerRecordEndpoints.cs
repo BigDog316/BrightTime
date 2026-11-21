@@ -14,6 +14,9 @@ public sealed record SkillRequest(Guid TermId, short? Level);
 
 public sealed record EndorseRequest(Guid EnrollmentId, Guid TermId, short? Level);
 
+/// <summary>A skill the organisation endorsed through an enrolment, to take back (D84).</summary>
+public sealed record WithdrawEndorsementRequest(Guid EnrollmentId, Guid TermId);
+
 public sealed record ProjectVisibilityRequest(string? Visibility);
 
 public sealed record ProjectReviewRequest(bool Approve, string? Note);
@@ -53,6 +56,7 @@ public static class LearnerRecordEndpoints
         org.MapGet("/projects", SubmittedAsync).WithMetadata(new YouthRecordAttribute(Projects.Read)).Produces<IReadOnlyList<ProjectSubmission>>();
         org.MapPost("/projects/{id:guid}/review", ReviewAsync).WithMetadata(new YouthRecordAttribute(Projects.Reviewed));
         org.MapPost("/skills/endorse", EndorseAsync).WithMetadata(new YouthRecordAttribute(Skills.Endorsed));
+        org.MapPost("/skills/withdraw", WithdrawAsync).WithMetadata(new YouthRecordAttribute(Skills.Endorsed));
         return api;
     }
 
@@ -110,6 +114,13 @@ public static class LearnerRecordEndpoints
         ArgumentNullException.ThrowIfNull(body);
         return await RefusedAsync(user, orgId, authorization, Permissions.Skills.Endorse, "skills.forbidden")
             ?? Done(await skills.EndorseAsync(new OrganisationId(orgId), Actor(user), body.EnrollmentId, body.TermId, body.Level, ct));
+    }
+
+    private static async Task<IResult> WithdrawAsync(Guid orgId, WithdrawEndorsementRequest body, ClaimsPrincipal user, IAuthorizationService authorization, Skills skills, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return await RefusedAsync(user, orgId, authorization, Permissions.Skills.Endorse, "skills.forbidden")
+            ?? Done(await skills.WithdrawAsync(new OrganisationId(orgId), body.EnrollmentId, body.TermId, ct));
     }
 
     // ---- projects --------------------------------------------------------------------------------

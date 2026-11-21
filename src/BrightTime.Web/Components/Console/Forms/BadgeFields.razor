@@ -1,0 +1,50 @@
+@* A badge's fields (D85): its name, what it is, what someone did to earn it, and how long it lasts. *@
+@using System.Globalization
+@using BrightTime.Modules.Learning.Badges
+<div class="field">
+    <label for="badge-name">@T["provider.badges.name"]</label>
+    <input id="badge-name" name="name" type="text" maxlength="@Badges.MaxName" required value="@Name" dir="auto" />
+</div>
+<div class="field">
+    <label for="badge-description">@T["provider.badges.description"]</label>
+    <textarea id="badge-description" name="description" rows="3" maxlength="@Badges.MaxDescription" required dir="auto">@Description</textarea>
+</div>
+<div class="field">
+    <label for="badge-criteria">@T["provider.badges.criteria"]</label>
+    <p class="hint" id="badge-criteria-hint">@T["provider.badges.criteria_hint"]</p>
+    <textarea id="badge-criteria" name="criteria" rows="4" maxlength="@Badges.MaxCriteria" required dir="auto" aria-describedby="badge-criteria-hint">@Criteria</textarea>
+</div>
+<div class="field">
+    <label for="badge-expires">@T["provider.badges.expires"]</label>
+    <p class="hint" id="badge-expires-hint">@T["provider.badges.expires_hint"]</p>
+    <input id="badge-expires" name="expires" type="number" min="1" max="120" inputmode="numeric" value="@ExpiresAfterMonths" aria-describedby="badge-expires-hint" />
+</div>
+
+@code {
+    [Parameter] public string? Name { get; set; }
+
+    [Parameter] public string? Description { get; set; }
+
+    [Parameter] public string? Criteria { get; set; }
+
+    [Parameter] public string? ExpiresAfterMonths { get; set; }
+
+    /// <summary>The badge as posted, or null when the months aren't a whole number from 1 to 120.</summary>
+    public static BadgeClassInput? Read(Func<string, string> form)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        string months = form("expires").Trim();
+        short? expires = null;
+        if (months.Length > 0)
+        {
+            if (!short.TryParse(months, NumberStyles.None, CultureInfo.InvariantCulture, out short m) || m is < 1 or > 120)
+            {
+                return null;
+            }
+
+            expires = m;
+        }
+
+        return new BadgeClassInput(form("name"), form("description"), form("criteria"), expires);
+    }
+}

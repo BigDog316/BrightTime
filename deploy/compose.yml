@@ -15,6 +15,13 @@
 # Kerberos library to try it with.
 name: brighttime
 
+# The keys the three hosts share. Without them, Development makes up its own in each process, so
+# the web console can't read names the API encrypted, and a restart loses the data-protection key
+# ring (sign-ins and form tokens). Local only, like the passwords.
+x-shared-keys: &shared-keys
+  Security__Keys__development-data-key-1: bG9jYWwtb25seS1ub3QtYS1zZWNyZXQtZGF0YS1rZXk=
+  Security__Keys__data-protection: bG9jYWwtb25seS1ub3QtYS1zZWNyZXQtcHJvdGVjdCE=
+
 services:
   postgres:
     image: postgis/postgis:18-3.6
@@ -106,6 +113,7 @@ services:
       context: ..
       dockerfile: deploy/api.Dockerfile
     environment:
+      <<: *shared-keys
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__App: >-
@@ -129,6 +137,7 @@ services:
       context: ..
       dockerfile: deploy/jobs.Dockerfile
     environment:
+      <<: *shared-keys
       DOTNET_ENVIRONMENT: Development
       ConnectionStrings__Jobs: >-
         Host=postgres;Database=brighttime;Username=bt_jobs_login;Password=local-only-not-a-secret;GSS Encryption Mode=Disable
@@ -143,6 +152,7 @@ services:
       context: ..
       dockerfile: deploy/web.Dockerfile
     environment:
+      <<: *shared-keys
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
       Finder__Mode: Sql

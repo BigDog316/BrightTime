@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- A version here also holds for a package that only arrives transitively, so a security fix
+         (System.Formats.Cbor below) reaches the projects that don't reference it directly. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup Label="Data">
@@ -21,6 +24,9 @@
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageVersion Include="Asp.Versioning.Http" Version="10.2.3" />
     <PackageVersion Include="Fido2.AspNet" Version="4.2.0" />
+    <!-- Fido2 4.2.0 brings 9.0.0, open to CBOR map hash-flooding (CVE-2026-118747, GHSA-vmv3-wvjp-wqpj);
+         passkey sign-up and sign-in read authenticator CBOR. Pinned to the fix until Fido2 depends on it. -->
+    <PackageVersion Include="System.Formats.Cbor" Version="10.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
     <!-- Check-in badges drawn as QR codes in the app (D76). Pure managed, MIT. -->
     <PackageVersion Include="QRCoder" Version="1.6.0" />

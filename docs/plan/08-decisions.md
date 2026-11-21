@@ -2787,7 +2787,7 @@ it. A new tab, **Young people's work** (`/provider/orgs/{id}/work`), shows to st
 console's screens for writing playlists and badges, and telling a young person in their inbox
 when their work is reviewed.
 
-### D83 — Telling a young person when their work is checked, and when they earn a badge (**proposed 2026-11-06**)
+### D83 — Telling a young person when their work is checked, and when they earn a badge (**accepted 2026-11-06**)
 
 D82's last gap. A project or playlist step sent to staff waited in silence: the young person
 learned it was approved, or sent back with a note, only by opening the app to look. Now Learning

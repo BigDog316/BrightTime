@@ -2818,7 +2818,7 @@ replaced (or the compose volume rebuilt); the change is in `db/schema/96-notify.
 **Not yet:** endorsing a skill from the console, and the console's screens for writing playlists
 and badges. Self-checked steps the young person marks done tell them nothing, since they did it.
 
-### D84 — Endorsing young people's skills, in the provider console (**proposed 2026-11-06**)
+### D84 — Endorsing young people's skills, in the provider console (**accepted 2026-11-21**)
 
 The staff side of D69's endorsements, which until now went only through the API. An activity's
 roster links to **Endorse skills** (`/provider/orgs/{id}/listings/{listing}/skills`) for staff and
@@ -2850,7 +2850,7 @@ under keys nobody has any more: rebuild it (`down -v`).
 
 **Not yet:** the console's screens for writing playlists and badges.
 
-### D85 — The organisation's badges, in the provider console (**proposed 2026-11-07**)
+### D85 — The organisation's badges, in the provider console (**accepted 2026-11-21**)
 
 The staff side of D66, which until now went only through the API. A **Badges** tab
 (`/provider/orgs/{id}/badges`) shows to anyone in the organisation who can define, award or
@@ -2881,7 +2881,7 @@ No server change beyond the revocation notice: the pages use D66's own methods.
 **Not yet:** the console's screens for writing playlists; a badge's image (the generated one
 stays); and the app showing a revoked badge's reason on the portfolio.
 
-### D86 — Writing playlists, in the provider console (**proposed 2026-11-07**)
+### D86 — Writing playlists, in the provider console (**accepted 2026-11-21**)
 
 The staff side of D67's playlists, which until now were written only through the API. A
 **Playlists** tab (`/provider/orgs/{id}/playlists`) shows to staff and above with
@@ -2912,7 +2912,7 @@ end to end; the console's route matrix covers both pages.
 **Found in the browser:** a console form's checkbox sat on its own line above its label. The
 `field checkbox` pattern, used by the forms and waiver pages too, had no style; it does now.
 
-### D87 — A badge's own image (**proposed 2026-11-07**)
+### D87 — A badge's own image (**accepted 2026-11-21**)
 
 A badge had only the generated picture (its initials on a ring, D66). An organisation can now give
 a draft its own, which stays when it's published; without one, the generated picture stays.
@@ -2938,7 +2938,7 @@ a draft its own, which stays when it's published; without one, the generated pic
 claims to be a PNG but holds nonsense is stored, and shows as nothing. With no scanning, the type
 and `nosniff` are what keep it from being read as anything else.
 
-### D88 — A revoked badge's date and reason, in the app (**proposed 2026-11-07**)
+### D88 — A revoked badge's date and reason, in the app (**accepted 2026-11-21**)
 
 The app's portfolio said only that a badge was revoked. `/me/badges` now carries `revokedAt` and
 `revocationReason`, the same reason anyone checking the badge already reads, and the portfolio
@@ -2946,7 +2946,7 @@ shows "Revoked on {date}: the organisation took this badge back." and "Their rea
 revocation notice (D85) goes back to "Your portfolio says why", which is true now; it still never
 carries the reason, which a locked phone would show.
 
-### D89 — Badge and playlist rules, on the console's eligibility page (**proposed 2026-11-21**)
+### D89 — Badge and playlist rules, on the console's eligibility page (**accepted 2026-11-21**)
 
 D67 made "holds a badge" and "has finished a playlist" eligibility rules, and D63's console page
 listed them, but only the API could add them. The page's **Add a rule** now offers both kinds:

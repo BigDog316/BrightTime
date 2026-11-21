@@ -2980,6 +2980,36 @@ failed (NU1902): the compose images, CI, a clean clone.
 
 Approved by Sam in the session ("Pin System.Formats.Cbor to 10.0.15").
 
+### D91 — Attendance counts towards playlists (**proposed 2026-11-21**)
+
+D67 left it: a step to attend an activity said it was "done once your attendance is recorded",
+but it was only done when the young person came back and tapped **Mark it done**. Now the worker
+does it, so M4's acceptance path (attend, finish the playlist, get the badge, open a gated
+listing) runs without anyone pressing anything.
+- **When:** `AttendanceChanged` and `EnrolmentAccountChanged` already rebuild the enrolment's
+  participation record (D65). After that, in a transaction of its own, `CountAttendanceAsync`
+  looks at the young person's open playlists: every step to attend an activity they have
+  attended (a participation record with a session) is done, as **Mark it done** would do it. A
+  step staff check goes to them for review instead. Attendance from before the account was
+  linked counts once it is.
+- **Order:** steps are taken in order, so an ordered playlist moves on only past steps already
+  completed. A step waiting behind another is done the moment that one is: the same check runs
+  after **Mark it done** and after staff approve a step.
+- **Left alone:** a step done, waiting for review, or sent back (the young person sends it again
+  themselves). Attendance corrected away never undoes a step; only a reviewer reopens one.
+  A redelivered message finds everything done and changes nothing.
+- **Finishing:** a playlist finished this way completes and awards its badge on the worker, as
+  approving a step does in a request; the young person is told of the badge (D83).
+- **The site's address on the worker:** a badge names the site. `ISiteAddress` (Infrastructure)
+  gives the current tenant's address, built by `TenantSiteAddress` (Hosting) exactly as the
+  request hosts build it: the primary domain with `Tenancy:PublicScheme` and `:PublicPort`, or
+  `Auth:PublicBaseUrl`. The jobs host now reads those settings (https outside Development, or it
+  doesn't start), and needs `Security:SigningKeys` like the API and web.
+
+`AttendedStepApiTests` runs the worker's handler: an any-order playlist finished and its badge
+awarded once (delivered twice), and an ordered one whose attended step waits for the reflection
+before it, then is done with it.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

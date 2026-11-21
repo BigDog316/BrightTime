@@ -36,9 +36,9 @@ library to try it with.
 |---|:-:|:-:|:-:|---|---|
 | `Tenancy:Mode` | ● | ● | | `Host` | `Host` (by host name) or `Fixed` |
 | `Tenancy:TenantId` | ● | ● | | | The tenant when `Mode=Fixed` |
-| `Tenancy:PublicScheme` | ● | ● | | `https` | The scheme of tenants' own addresses. Outside Development anything but `https` stops start-up |
-| `Tenancy:PublicPort` | ● | ● | | | A port for tenants' addresses, development only (`8000` for compose) |
-| `Auth:PublicBaseUrl` | ● | ● | | | A fixed public address, overriding the tenant's domain, for a single-site install |
+| `Tenancy:PublicScheme` | ● | ● | ● | `https` | The scheme of tenants' own addresses. Outside Development anything but `https` stops start-up. The worker builds addresses too, for badges it awards (D91) |
+| `Tenancy:PublicPort` | ● | ● | ● | | A port for tenants' addresses, development only (`8000` for compose) |
+| `Auth:PublicBaseUrl` | ● | ● | ● | | A fixed public address, overriding the tenant's domain, for a single-site install |
 | `Network:TrustedProxies` | ● | ● | | | Proxy addresses whose `X-Forwarded-For` and `-Proto` are believed. List the reverse proxy here in production |
 | `Network:TrustedNetworks` | ● | ● | | | CIDR networks believed the same way, for proxies without a fixed address (containers) |
 | `Network:ForwardLimit` | ● | ● | | `1` | How many forwarded hops to read |
@@ -50,7 +50,7 @@ library to try it with.
 | `Security:Keys:<ref>` | ● | ● | ● | Base64 symmetric keys, 32 bytes or more, by vault reference |
 | `Security:Keys:data-protection` | ● | ● | | **Required.** Encrypts the shared data-protection key ring. Must be the same in both hosts. `DataProtection:KeyRef` names a different reference |
 | `Security:DataKeys:<n>:Version`, `:KeyRef` | ● | ● | ● | **Required.** The master key versions tenant data keys are derived from, each naming a `Security:Keys` reference. The highest version encrypts. Must match across all three hosts |
-| `Security:SigningKeys:<ref>`, `Security:SigningKeys:default` | | ● | | **Required to award badges.** RSA private keys as PEM, 2048 bits or more. `default` serves every reference without its own; per organisation, the reference is `badge-issuer-{orgId:N}` (D66); the site's, which signs CLRs, is `clr-issuer-{tenantId:N}` (D68) |
+| `Security:SigningKeys:<ref>`, `Security:SigningKeys:default` | ● | ● | ● | **Required to award badges**, in every host: the console awards them (D85), and the worker when attendance finishes a playlist (D91). The same keys in all three. RSA private keys as PEM, 2048 bits or more. `default` serves every reference without its own; per organisation, the reference is `badge-issuer-{orgId:N}` (D66); the site's, which signs CLRs, is `clr-issuer-{tenantId:N}` (D68) |
 | `Auth:Tokens:SigningKeys:<n>:Id`, `:Key` | | ● | | **Required.** Access-token keys: an id and a base64 key of 32 bytes or more. The first signs; all verify |
 | `Audit:ClientHashKey` | ● | ● | | **Required.** Base64, 32 bytes or more. Client addresses and user agents are kept only as hashes under it |
 

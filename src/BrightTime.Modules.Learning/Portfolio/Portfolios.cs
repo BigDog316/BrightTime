@@ -296,10 +296,17 @@ public static class LearningModule
         return services;
     }
 
-    /// <summary>The worker's side: participation kept in step with attendance and with the account an enrolment belongs to, and a shown portfolio checked again when a family name arrives (D80).</summary>
+    /// <summary>
+    /// The worker's side: participation kept in step with attendance and with the account an
+    /// enrolment belongs to, counted towards playlists (D91), and a shown portfolio checked again
+    /// when a family name arrives (D80). Finishing a playlist awards its badge, so the host also
+    /// provides an <see cref="Infrastructure.Tenancy.ISiteAddress"/>, the key vault, and identity and directory queries.
+    /// </summary>
     public static IServiceCollection AddLearningJobs(this IServiceCollection services)
     {
         services.AddScoped<ParticipationProjector>();
+        services.AddScoped<Badges.Badges>();
+        services.AddScoped<Playlists.Playlists>();
         services.AddMessageHandler<Attendance.Contracts.AttendanceChanged, AttendanceChangedHandler>();
         services.AddMessageHandler<EnrolmentAccountChanged, EnrolmentAccountChangedHandler>();
         services.AddScoped<PortfolioNameCheck>();

@@ -117,22 +117,27 @@ public sealed class ParticipationProjector(
     private DateOnly Day(DateTimeOffset at) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, tenant.TimeZone).DateTime);
 }
 
-/// <summary>An enrolment's attendance changed: its participation follows.</summary>
-public sealed class AttendanceChangedHandler(ParticipationProjector projector) : IModuleMessageHandler<AttendanceChanged>
+/// <summary>An enrolment's attendance changed: its participation follows, and counts towards the young person's playlists (D91).</summary>
+public sealed class AttendanceChangedHandler(ParticipationProjector projector, Playlists.Playlists playlists, ISiteAddress site) : IModuleMessageHandler<AttendanceChanged>
 {
-    public Task HandleAsync(AttendanceChanged message, CancellationToken cancellationToken)
+    public async Task HandleAsync(AttendanceChanged message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message);
-        return projector.ProjectAsync(message.EnrollmentId, cancellationToken);
+        await projector.ProjectAsync(message.EnrollmentId, cancellationToken).ConfigureAwait(false);
+        await playlists.CountAttendanceAsync(message.EnrollmentId, await site.BaseUrlAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
     }
 }
 
-/// <summary>An enrolment was linked to a young person's account, or unlinked: its participation follows the account.</summary>
-public sealed class EnrolmentAccountChangedHandler(ParticipationProjector projector) : IModuleMessageHandler<EnrolmentAccountChanged>
+/// <summary>
+/// An enrolment was linked to a young person's account, or unlinked: its participation follows the
+/// account, and attendance from before the link counts towards their playlists (D91).
+/// </summary>
+public sealed class EnrolmentAccountChangedHandler(ParticipationProjector projector, Playlists.Playlists playlists, ISiteAddress site) : IModuleMessageHandler<EnrolmentAccountChanged>
 {
-    public Task HandleAsync(EnrolmentAccountChanged message, CancellationToken cancellationToken)
+    public async Task HandleAsync(EnrolmentAccountChanged message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message);
-        return projector.ProjectAsync(message.EnrollmentId, cancellationToken);
+        await projector.ProjectAsync(message.EnrollmentId, cancellationToken).ConfigureAwait(false);
+        await playlists.CountAttendanceAsync(message.EnrollmentId, await site.BaseUrlAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
     }
 }

@@ -146,8 +146,9 @@ far along you are, then others to try.
   **Start this playlist** to begin. Starting one on your own isn't open to anyone under 13.
 - Some playlists open only to people who hold a certain badge. The playlist says which.
 - Each step says what to do:
-  - **Go to an activity**: it links to the activity. The step is done once your attendance there
-    is recorded.
+  - **Go to an activity**: it links to the activity. The step is done by itself once your
+    attendance there is recorded, and if it's the last step, you finish the playlist. In a
+    playlist done in order, it waits until the steps before it are done.
   - **Something to do elsewhere**: **Open the activity** opens it in your browser.
   - **Write about it**: write at least 20 characters about what you think.
   - **Check in with staff**: talk to a member of staff, and add a note if you like.

@@ -366,6 +366,7 @@ public sealed partial class Playlists(
             bool open = enrollment.CompletedAt is null;
             if (approve)
             {
+                await AttendedStepsAsync(playlist, enrollment, ct).ConfigureAwait(false);
                 await CompleteIfDoneAsync(playlist, enrollment, site, ct).ConfigureAwait(false);
             }
 
@@ -376,6 +377,45 @@ public sealed partial class Playlists(
                 WorkNotices.Args(("org", name), ("playlist", playlist.Title)), "/playlists/" + playlist.Slug,
                 WorkNotices.Key("step-reviewed:" + enrollmentId.ToString("N"), stepId, now), ct).ConfigureAwait(false);
             return Result.Success();
+        }, cancellationToken);
+
+    // ---- attendance (D91) --------------------------------------------------------------------------
+
+    /// <summary>
+    /// Counts an enrolment's attendance towards the young person's playlists (D91): every open step
+    /// to attend an activity they've now attended is done, as "Mark it done" would do it, in order,
+    /// so an ordered playlist moves on one step at a time. A step staff check goes to them for
+    /// review instead. A playlist finished this way completes and awards its badge.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the worker, after the participation projection; a redelivered message finds the
+    /// steps done and changes nothing. Attendance taken away (a correction) never undoes a step:
+    /// only a reviewer reopens one.
+    /// </remarks>
+    public Task CountAttendanceAsync(Guid enrollmentId, Uri site, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            ArgumentNullException.ThrowIfNull(site);
+            Guid? who = await db.Participation.AsNoTracking().Where(p => p.EnrollmentId == enrollmentId && p.SessionsAttended > 0)
+                .Select(p => (Guid?)p.UserId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            if (who is not { } user)
+            {
+                return false;
+            }
+
+            var open = await (from e in db.PlaylistEnrollments
+                              join p in db.Playlists on e.PlaylistId equals p.Id
+                              where e.UserId == user && e.CompletedAt == null
+                              select new { e, p }).ToListAsync(ct).ConfigureAwait(false);
+            foreach (var mine in open)
+            {
+                if (await AttendedStepsAsync(mine.p, mine.e, ct).ConfigureAwait(false))
+                {
+                    await CompleteIfDoneAsync(mine.p, mine.e, site, ct).ConfigureAwait(false);
+                }
+            }
+
+            return true;
         }, cancellationToken);
 
     // ---- anyone's ----------------------------------------------------------------------------------
@@ -541,6 +581,7 @@ public sealed partial class Playlists(
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Progressed, SubjectKind = "playlist_enrollment", SubjectIds = [found.e.Id], Detail = What(mine.State) }, ct).ConfigureAwait(false);
             if (mine.State == "completed")
             {
+                await AttendedStepsAsync(found.p, found.e, ct).ConfigureAwait(false);
                 await CompleteIfDoneAsync(found.p, found.e, site, ct).ConfigureAwait(false);
             }
 
@@ -587,6 +628,70 @@ public sealed partial class Playlists(
     }
 
     /// <summary>In an ordered playlist, a step opens once every required step before it is completed.</summary>
+    /// <summary>
+    /// Every open, available step to attend an activity the young person has attended, done: in
+    /// order, so one done can free the next. Steps sent back, or waiting for review, are left as
+    /// they are. True when one was completed (not only sent for review).
+    /// </summary>
+    private async Task<bool> AttendedStepsAsync(PlaylistRecord playlist, PlaylistEnrollmentRecord enrollment, CancellationToken ct)
+    {
+        List<PlaylistStepRecord> steps = await db.PlaylistSteps.AsNoTracking().Where(s => s.PlaylistId == playlist.Id).OrderBy(s => s.SortOrder).ToListAsync(ct).ConfigureAwait(false);
+        Guid[] wanted = [.. steps.Where(s => s.StepKind == "attend_listing").Select(s => s.ListingId).OfType<Guid>().Distinct()];
+        if (wanted.Length == 0)
+        {
+            return false;
+        }
+
+        HashSet<Guid> attended = [.. await db.Participation.AsNoTracking()
+            .Where(p => p.UserId == enrollment.UserId && p.SessionsAttended > 0 && p.ListingId != null && wanted.Contains(p.ListingId.Value))
+            .Select(p => p.ListingId!.Value).ToListAsync(ct).ConfigureAwait(false)];
+        if (attended.Count == 0)
+        {
+            return false;
+        }
+
+        Dictionary<Guid, PlaylistStepProgressRecord> progress = await db.PlaylistProgress.Where(pr => pr.PlaylistEnrollmentId == enrollment.Id)
+            .ToDictionaryAsync(pr => pr.StepId, ct).ConfigureAwait(false);
+        DateTimeOffset now = clock.StoredNow();
+        List<string> moved = [];
+        foreach (PlaylistStepRecord step in steps)
+        {
+            PlaylistStepProgressRecord? done = progress.GetValueOrDefault(step.Id);
+            if (step.StepKind != "attend_listing" || step.ListingId is not { } listing || !attended.Contains(listing)
+                || done?.State is "completed" or "submitted" or "needs_rework" || !Available(playlist, steps, progress, step))
+            {
+                continue;
+            }
+
+            if (done is null)
+            {
+                done = new PlaylistStepProgressRecord { PlaylistEnrollmentId = enrollment.Id, StepId = step.Id, State = "not_started" };
+                db.PlaylistProgress.Add(done);
+                progress[step.Id] = done;
+            }
+
+            done.State = step.RequiresReview ? "submitted" : "completed";
+            done.CompletedAt = step.RequiresReview ? null : now;
+            moved.Add(done.State);
+        }
+
+        if (moved.Count == 0)
+        {
+            return false;
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await audit.RecordInTransactionAsync(db, new AuditAccess
+        {
+            Action = Progressed,
+            SubjectKind = "playlist_enrollment",
+            SubjectIds = [enrollment.Id, enrollment.UserId],
+            ActorOrgId = playlist.OrgId is { } org ? new OrganisationId(org) : null,
+            Detail = What("attended"),
+        }, ct).ConfigureAwait(false);
+        return moved.Contains("completed");
+    }
+
     private static bool Available(PlaylistRecord playlist, IReadOnlyList<PlaylistStepRecord> steps, IReadOnlyDictionary<Guid, PlaylistStepProgressRecord> progress, PlaylistStepRecord step) =>
         !playlist.IsOrdered || steps.Where(s => s.SortOrder < step.SortOrder && s.IsRequired).All(s => progress.GetValueOrDefault(s.Id)?.State == "completed");
 

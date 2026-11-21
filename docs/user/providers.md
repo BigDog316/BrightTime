@@ -312,9 +312,9 @@ badges at the end. They're on the **Playlists** tab.
 - Staff start **a new playlist** as a draft, then fill in **About it**: whether the steps go in
   order, an age range and about how many hours, the badge it awards, and optionally a badge
   someone must already hold to start it.
-- **Add a step**: each is one of **attend an activity** (one of yours, done once their attendance
-  is recorded), **an activity elsewhere** (a link), **a reflection** they write, or **a check-in
-  with staff**. Any step can be checked by staff, and a check-in always is. Steps are required
+- **Add a step**: each is one of **attend an activity** (one of yours, done by itself once their
+  attendance is recorded), **an activity elsewhere** (a link), **a reflection** they write, or **a
+  check-in with staff**. Any step can be checked by staff, and a check-in always is. Steps are required
   unless you say otherwise. **Change**, **Move up**, **Move down** and **Remove** rearrange them.
 - **Publish** it, and from then on it never changes, because everyone's progress refers to its
   steps. **Archive** stops anyone new starting; those already on it carry on.

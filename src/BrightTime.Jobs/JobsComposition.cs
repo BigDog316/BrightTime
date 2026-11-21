@@ -1,4 +1,5 @@
 using BrightTime.Hosting.Localisation;
+using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Jobs;
 using BrightTime.Infrastructure.Outbox;
@@ -121,6 +122,8 @@ public static class JobsComposition
         services.AddScoped<IEnrolmentQueries, EnrolmentQueries>();
         services.AddScoped<IListingOccurrences, ListingOccurrences>();
         services.AddScoped<IListingDetails, SqlListingDetails>();
+        // Attendance that finishes a playlist awards its badge here (D91): signed in the vault, under the site's address.
+        services.AddSiteAddress(configuration, environment.IsDevelopment());
         services.AddLearningJobs();
 
         return services;

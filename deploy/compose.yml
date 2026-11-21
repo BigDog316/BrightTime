@@ -143,6 +143,9 @@ services:
         Host=postgres;Database=brighttime;Username=bt_jobs_login;Password=local-only-not-a-secret;GSS Encryption Mode=Disable
       Email__Host: mailpit
       Email__Port: 1025
+      # Badges the worker awards (D91) name the site, as the other hosts build its address.
+      Tenancy__PublicScheme: http
+      Tenancy__PublicPort: 8000
     depends_on:
       seed:
         condition: service_completed_successfully

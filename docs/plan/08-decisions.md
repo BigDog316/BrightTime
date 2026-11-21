@@ -3038,7 +3038,7 @@ serves a playlist: a check that someone read or understood something, marked at 
 `QuizStepApiTests` covers writing (bad quizzes refused), the answers hidden, a short try and a pass
 finishing the playlist, and nothing chosen kept; the app's and the console's tests cover the screens.
 
-### D93 — A guardian's view of a child's portfolio (**proposed 2026-11-21**)
+### D93 — A guardian's view of a child's portfolio (**accepted 2026-11-21**)
 
 D65 left a guardian's view for later, and D68 and D81 left a guardian's download. Until now nobody
 could see a child profile's portfolio: a child profile has no sign-in of its own, so the hours,

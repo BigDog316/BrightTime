@@ -38,6 +38,9 @@ public static class ConsoleServices
 
     public const string NeighbourhoodPagesPolicy = "console.neighbourhood_pages";
 
+    /// <summary>The county's clearance rules (D99): a tenant setting.</summary>
+    public const string ClearanceRulesPolicy = "console.clearance_rules";
+
     private const string AuthDataSourceKey = "auth";
 
     /// <summary>How long a cookie's claims are trusted before they are rebuilt from the database.</summary>
@@ -86,6 +89,7 @@ public static class ConsoleServices
             .AddPolicy(CollectionsPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Collections.Manage)))
             .AddPolicy(NeighbourhoodPagesPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.NeighbourhoodPages.Manage)))
             .AddPolicy(WordingPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
+            .AddPolicy(ClearanceRulesPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
             .AddPolicy(AuditPolicy, p => p.RequireAuthenticatedUser()
                 .RequireRole(BrightTimeRoles.TenantWideAudit)
                 .AddRequirements(new PermissionRequirement(Permissions.Audit.Read)))
@@ -95,6 +99,7 @@ public static class ConsoleServices
         services.AddSingleton<IAuthorizationHandler, RecentAuthenticationHandler>();
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, StepUpResultHandler>();
         services.AddSingleton<IAuthorizationHandler, OrganisationScopeHandler>();
+        services.AddSingleton<IAuthorizationHandler, BrightTime.Hosting.Auth.ClearanceGateHandler>();
 
         if (canSignIn)
         {
@@ -209,6 +214,9 @@ public static class ConsoleServices
             services.AddScoped<SiteEditor>();
             services.AddScoped<StaffDirectory>();
             services.AddScoped<BrightTime.Modules.Directory.Clearances.StaffClearances>();
+            services.AddScoped<BrightTime.Modules.Directory.Clearances.ClearanceRules>();
+            services.AddScoped<BrightTime.Modules.Directory.Contracts.IClearanceGate>(sp => sp.GetRequiredService<BrightTime.Modules.Directory.Clearances.ClearanceRules>());
+            services.AddScoped<BrightTime.Modules.Platform.Tenancy.FeatureFlagSettings>();
             services.AddScoped<BrightTime.Modules.Platform.Taxonomy.TaxonomyEditor>();
             services.AddScoped<BrightTime.Modules.Opportunities.Curation.CollectionEditor>();
             services.AddScoped<BrightTime.Modules.Opportunities.Curation.NeighbourhoodPageEditor>();

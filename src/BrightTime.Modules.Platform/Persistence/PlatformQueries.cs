@@ -10,6 +10,12 @@ public sealed class PlatformQueries(PlatformDbContext db) : ITaxonomyQueries, IG
     public Task<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(ct => db.FeatureFlags.AsNoTracking().AnyAsync(f => f.Key == key && f.IsEnabled, ct), cancellationToken);
 
+    public Task<IReadOnlySet<string>> EnabledAsync(string prefix, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlySet<string>>(async ct => (await db.FeatureFlags.AsNoTracking()
+            .Where(f => f.IsEnabled && f.Key.StartsWith(prefix))
+            .Select(f => f.Key)
+            .ToListAsync(ct).ConfigureAwait(false)).ToHashSet(StringComparer.Ordinal), cancellationToken);
+
     private const string FallbackLocale = "en";
 
     public Task<IReadOnlyList<TermSummary>> GetTermsAsync(

@@ -96,6 +96,11 @@ public static class ApiComposition
         services.AddScoped<PlatformQueries>();
         services.AddScoped<ITaxonomyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
+        services.AddScoped<IFeatureFlags>(sp => sp.GetRequiredService<PlatformQueries>());
+
+        // The county's clearance rules (D99), which the gate on organisation-scoped checks asks.
+        services.AddScoped<BrightTime.Modules.Directory.Clearances.ClearanceRules>();
+        services.AddScoped<IClearanceGate>(sp => sp.GetRequiredService<BrightTime.Modules.Directory.Clearances.ClearanceRules>());
         services.AddSingleton<IListingFinder>(sp => new SqlListingFinder(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<IClock>()));
         services.AddScoped<IListingDetails, SqlListingDetails>();
         services.AddScoped<IListingOccurrences, ListingOccurrences>();
@@ -253,5 +258,6 @@ public static class ApiComposition
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RecentAuthenticationHandler>();
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PermissionHandler>();
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, OrganisationScopeHandler>();
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, BrightTime.Hosting.Auth.ClearanceGateHandler>();
     }
 }

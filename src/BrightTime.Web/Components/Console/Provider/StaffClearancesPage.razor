@@ -54,7 +54,8 @@ else if (_member is { } m)
     }
 
     <p><ClearanceSummary Readiness="@m.Readiness" /></p>
-    <p class="hint">@T.Format("clearances.required", ("kinds", string.Join(", ", StaffClearances.Required.Select(k => T["clearance.kind." + k]))))</p>
+    <p class="hint">@T.Format("clearances.required", ("kinds", string.Join(", ", _rules.Required.Select(k => T["clearance.kind." + k]))))
+        @T[_rules.Enforced ? "clearances.enforced" : "clearances.not_enforced"]</p>
     <p class="hint">@T["provider.staff.clearance_note"]</p>
 
     @if (m.Held.Count == 0)
@@ -165,6 +166,7 @@ else if (_member is { } m)
     private string _completed = "";
     private string _expires = "";
     private bool _countyWide;
+    private ClearanceRuleSet _rules = new(false, StaffClearances.Required);
 
     private OrganisationId Org => new(OrgId);
 
@@ -185,7 +187,8 @@ else if (_member is { } m)
         }
 
         _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
-        _member = _name is null ? null : await Get<StaffClearances>().GetAsync(OrgId, MembershipId);
+        _rules = await Get<ClearanceRules>().GetAsync();
+        _member = _name is null ? null : await Get<StaffClearances>().GetAsync(OrgId, MembershipId, _rules.Required);
         if (_member is null)
         {
             Navigation.NotFound();

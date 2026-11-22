@@ -1,0 +1,95 @@
+@page "/organiser/settings/clearances"
+@using BrightTime.Modules.Directory.Clearances
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Platform.Tenancy
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.ClearanceRulesPolicy)]
+@inherits ConsoleComponent
+@* The county's clearance rules (D99): whether acting on a named young person's record needs
+   current clearances, and which kinds beyond the platform's minimum. Off until an organiser turns
+   it on; how many people it would refuse is shown first. *@
+
+<PageTitle>@T["clearance_rules.title"] · BrightTime</PageTitle>
+
+<h1>@T["clearance_rules.title"]</h1>
+<p class="hint">@T["clearance_rules.intro"]</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["wording.no_database"]</p>
+}
+else if (_rules is { } r)
+{
+    @if (Done == "saved")
+    {
+        <p class="notice success" role="status">@T["clearance_rules.saved"]</p>
+    }
+
+    <p><strong>@T[r.Enforced ? "clearance_rules.on" : "clearance_rules.off"]</strong></p>
+    <p>@T.Format(r.Enforced ? "clearance_rules.refused_now" : "clearance_rules.would_refuse", ("count", _uncleared))</p>
+
+    <form method="post" class="editor" @formname="rules" @onsubmit="SaveAsync">
+        <AntiforgeryToken />
+        <label class="check">
+            <input type="checkbox" name="Enforced" value="true" checked="@r.Enforced" />
+            <strong>@T["clearance_rules.enforce"]</strong>
+        </label>
+        <p class="hint">@T["clearance_rules.enforce_hint"]</p>
+        <fieldset>
+            <legend>@T["clearance_rules.kinds"]</legend>
+            @foreach (string kind in StaffClearances.Kinds)
+            {
+                bool minimum = StaffClearances.Required.Contains(kind);
+                <label class="check">
+                    <input type="checkbox" name="Also" value="@kind" checked="@r.Required.Contains(kind)" disabled="@minimum" />
+                    @T["clearance.kind." + kind]
+                    @if (minimum)
+                    {
+                        <span class="note"> · @T["clearance_rules.always"]</span>
+                    }
+                </label>
+            }
+        </fieldset>
+        <div class="actions">
+            <button type="submit">@T["clearance_rules.save"]</button>
+        </div>
+    </form>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private ClearanceRuleSet? _rules;
+    private int _uncleared;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            return;
+        }
+
+        ClearanceRules rules = Get<ClearanceRules>();
+        _rules = await rules.GetAsync();
+        _uncleared = await rules.UnclearedAsync(_rules.Required);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_rules is null)
+        {
+            return;
+        }
+
+        HashSet<string> also = [.. HttpContext.Request.Form["Also"].Select(v => v ?? "")];
+        Dictionary<string, bool> flags = new(StringComparer.Ordinal) { [ClearanceRuleKeys.Enforced] = FormValue("Enforced") == "true" };
+        foreach (string kind in StaffClearances.Kinds.Where(k => !StaffClearances.Required.Contains(k)))
+        {
+            flags[ClearanceRuleKeys.Extra(kind)] = also.Contains(kind);
+        }
+
+        await Get<FeatureFlagSettings>().SetAsync(flags, Actor);
+        Navigation.NavigateTo("/organiser/settings/clearances?done=saved");
+    }
+}

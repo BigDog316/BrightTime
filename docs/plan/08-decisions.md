@@ -3273,12 +3273,51 @@ records by organisers; notices before and at a lapse.
   (`ClearanceMailHandler`), which now sends mail through `Email:*` as the web does.
 - **Not yet:** enforcement (`ClearanceCurrentRequirement`) behind a county setting, which kinds a
   county requires beyond the minimum, a staff member seeing their own, and approval of an
-  organisation needing its staff cleared.
+  organisation needing its staff cleared. *Enforcement and the county's kinds are D99.*
 
 Schema: `directory.staff_clearance.expiry_notice_for date` (applied by hand to `brighttime_main`;
 the compose volume needs it too). `ClearancePagesTests` covers the owner's and the organiser's
 recording, the refusals and the staff page; `ClearanceSweepTests` the sweep, the notices, the
 emails and the booking; `StaffClearancesTests` the rules and the sweep's hour.
+
+### D99 — Clearance rules: enforcing clearances (**proposed 2026-11-22**)
+
+D98 recorded clearances and showed readiness; this is the enforcement it left for later
+(docs/plan/04 `ClearanceCurrentRequirement`). Sam chose on 2026-11-22: everyone at an
+organisation, owners included; anything on a named young person's record; an organiser settings
+page; off until turned on.
+- **The setting:** *Clearance rules* in the organiser console (`/organiser/settings/clearances`,
+  `tenant.settings`): one switch, and any kinds the county requires beyond the platform's minimum
+  (background check, mandated reporter training), which are always required. Kept as feature
+  flags (`clearances.required`, `clearances.also.<kind>`), so no schema change; each change is
+  audited (`platform.feature_flag.changed`, `FeatureFlagSettings`). Before turning it on, the page
+  says how many people at approved organisations would be refused.
+- **The gate:** `ClearanceGateHandler`, a second handler on every organisation-scoped permission
+  check in the console and the API, so no endpoint can forget it. It only ever fails a check.
+  When the rules are on, a gated permission is refused to anyone at the organisation, whatever
+  their role, without a current clearance of each required kind (theirs at that organisation or a
+  county-wide one). Gated: reading a young person's record and support needs, viewing and deciding
+  applications, rosters, recording attendance and offline sync, messages to families, waiving
+  fees, issuing and revoking badges, endorsing skills, reviewing projects and playlist steps. A
+  report that names people needs the roster permission, so it's gated too; aggregate reports,
+  listings, the profile, sites, staff and recording clearances aren't, so nobody is locked out of
+  putting it right. `ClearanceRules` reads the rules and each answer once per request.
+- **Telling people:** each refusal is audited once per organisation and request
+  (`directory.clearance.refused`, with the permission and what was missing). The organisation's
+  tabs in the console say *You aren't cleared to work with young people here*, what's missing or
+  expired, and that an owner or admin can record it. Readiness on the Staff page, the clearances
+  page and the organiser's review is judged against the county's kinds, and says whether they're
+  enforced.
+- **No one records their own:** with enforcement, recording one's own clearance would open one's
+  own access, so it's refused (`clearances.own`): another owner or admin records it, or an
+  organiser (who may also record for an organisation's only owner).
+- **Not yet:** the app shows an uncleared staff member the API's usual refusal for each screen,
+  not the reason; approval of an organisation doesn't yet need its staff cleared; mentors' gig
+  assignments (M6) will use the same gate.
+
+No schema change. `ClearanceRulesTests` covers the organiser's page, refusals for staff and owner,
+the notice, the audit, the owner unable to record their own, and recovery; `ClearanceGateApiTests`
+the API; the route matrix covers the new page.
 
 ## Open questions
 

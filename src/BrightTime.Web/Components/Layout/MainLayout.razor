@@ -36,6 +36,7 @@
             @if (user.HasPermission(Permissions.Tenant.Settings))
             {
                 <a href="/organiser/wording">@T["site.nav.wording"]</a>
+                <a href="/organiser/settings/clearances">@T["site.nav.clearance_rules"]</a>
             }
             <a href="/account/security" class="signed-in-as" aria-label="@T.Format("site.nav.security_for", ("name", user.Identity!.Name ?? ""))">@user.Identity!.Name</a>
             <form method="post" action="/sign-out" class="inline-form">

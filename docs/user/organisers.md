@@ -136,6 +136,22 @@ language, not just some sections.
 on there. Publishing it again brings them back. If a collection you chose leaves the site, the page
 leaves that section out, and its page here marks it.
 
+## Clearance rules
+
+**Clearance rules** decides whether people at organisations need current clearances before they
+act on a young person's record: rosters, attendance, applications, messages to families, badges,
+fee waivers and reviewing young people's work. It's off until you turn it on.
+
+- **Require current clearances** turns it on for everyone at every organisation, owners and admins
+  too. The page says how many people at approved organisations would be refused, so you can give
+  organisations time to record their staff's clearances first.
+- **Required clearances**: a background check and mandated reporter training are always required.
+  Tick any others the county needs.
+
+Someone refused sees why on their organisation's pages, and can still record clearances, edit
+listings and run reports that name no one. Nobody can record their own clearances: for an
+organisation's only owner, record theirs from the organisation's review.
+
 ## Wording
 
 **Wording** lets you change any sentence on the site, in any of its languages, for your county

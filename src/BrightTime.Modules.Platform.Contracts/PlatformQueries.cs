@@ -73,6 +73,9 @@ public sealed class NoGeography : IGeographyQueries
 public interface IFeatureFlags
 {
     Task<bool> IsEnabledAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>The keys switched on that start with <paramref name="prefix"/>: a family of flags in one read (D99).</summary>
+    Task<IReadOnlySet<string>> EnabledAsync(string prefix, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The flags the code reads. Keys are stable: tenants set them by name.</summary>

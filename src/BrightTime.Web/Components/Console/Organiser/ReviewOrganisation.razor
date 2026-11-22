@@ -167,7 +167,7 @@
                             <tr>
                                 <td><a href="/provider/orgs/@OrgId/staff/@m.MembershipId/clearances" dir="auto">@(_emails.TryGetValue(m.UserId, out string? address) ? address : T["provider.staff.no_address"])</a></td>
                                 <td>@T["organisation.role." + m.Role]</td>
-                                <td><ClearanceSummary Readiness="@StaffClearances.Assess(m.Clearances.Select(c => (c.Kind, c.Status, c.ExpiresOn)), _today)" /></td>
+                                <td><ClearanceSummary Readiness="@StaffClearances.Assess(m.Clearances.Select(c => (c.Kind, c.Status, c.ExpiresOn)), _today, _required)" /></td>
                             </tr>
                         }
                     </tbody>
@@ -207,6 +207,7 @@
     private IReadOnlyList<MemberRow> _staff = [];
     private IReadOnlyDictionary<Guid, string> _emails = new Dictionary<Guid, string>();
     private DateOnly _today;
+    private IReadOnlyList<string> _required = StaffClearances.Required;
     private readonly Dictionary<string, string> _reasonErrors = [];
 
     protected override async Task OnInitializedAsync()
@@ -226,6 +227,7 @@
 
         _staff = await Get<StaffDirectory>().ListAsync(OrgId);
         _today = Get<StaffClearances>().Today;
+        _required = (await Get<ClearanceRules>().GetAsync()).Required;
         if (Services.GetService<AccountProvisioning>() is { } accounts)
         {
             _emails = await accounts.EmailsAsync(Tenant.TenantId, [.. _staff.Select(m => m.UserId)]);

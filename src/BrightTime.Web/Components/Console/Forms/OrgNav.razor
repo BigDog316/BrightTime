@@ -1,5 +1,7 @@
 @* The tabs across an organisation's console pages. Each tab shows only to those who can use it. *@
+@using BrightTime.Modules.Directory.Contracts
 @using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
 <nav class="org-nav" aria-label="@T["provider.nav.label"]">
     <ul>
         @foreach (var (key, path, show) in Tabs)
@@ -11,6 +13,22 @@
         }
     </ul>
 </nav>
+@if (_refusal is { } r)
+{
+    @* The county's clearance rules (D99): why the young people's pages are closed to this person here. *@
+    <p class="notice warning" role="status">
+        @T["clearances.gate.closed"]
+        @if (r.Missing.Count > 0)
+        {
+            @(" ")@T.Format("clearances.missing", ("kinds", Kinds(r.Missing)))@(".")
+        }
+        @if (r.Expired.Count > 0)
+        {
+            @(" ")@T.Format("clearances.expired", ("kinds", Kinds(r.Expired)))@(".")
+        }
+        @(" ")@T["clearances.gate.ask"]
+    </p>
+}
 
 @code {
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
@@ -24,6 +42,18 @@
     [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
 
     private bool IsAdmin => Role is OrganisationRoles.Owner or OrganisationRoles.Admin;
+
+    private ClearanceRefusal? _refusal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContext.RequestServices.GetService<IClearanceGate>() is { } gate && HttpContext.User.GetUserId() is { } user)
+        {
+            _refusal = await gate.CheckAsync(new UserId(user), new OrganisationId(OrgId), HttpContext.RequestAborted);
+        }
+    }
+
+    private string Kinds(IEnumerable<string> kinds) => string.Join(", ", kinds.Select(k => T["clearance.kind." + k]));
 
     private IEnumerable<(string Key, string Path, bool Show)> Tabs =>
     [

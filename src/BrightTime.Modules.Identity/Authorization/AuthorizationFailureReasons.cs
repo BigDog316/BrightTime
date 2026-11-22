@@ -25,6 +25,9 @@ public static class AuthorizationFailureReasons
     public const string YouthAccessGrantExpired = "youth_record.grant_expired";
     public const string FieldNotCoveredByGrant = "youth_record.field_not_granted";
     public const string GuardianLinkUnverified = "guardian.unverified";
+
+    /// <summary>The county requires current clearances to act on young people's records, and this person lacks one (D99).</summary>
+    public const string ClearanceNotCurrent = "clearance.not_current";
     public const string GuardianLinkRevoked = "guardian.revoked";
     public const string NotGuardian = "guardian.not_linked";
     public const string CapabilityWithheld = "capability.withheld";

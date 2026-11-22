@@ -105,6 +105,12 @@ expired, or expiring within 45 days. A clearance the county recorded itself show
 and tells owners and admins by email and in the app 45 days before one expires and on the day it
 lapses.
 
+When the county **requires clearances**, everyone at your organisation, owners and admins too,
+needs current ones before they can see rosters, take attendance, see or decide applications,
+message families, give badges or review young people's work. Your organisation's pages say if
+you're not cleared, and what's missing. You can't record your own clearances: another owner or
+admin records them, or the county's organisers.
+
 ## Listings
 
 The **Listings** tab groups your listings by state: **drafts**, **waiting for review**, **changes

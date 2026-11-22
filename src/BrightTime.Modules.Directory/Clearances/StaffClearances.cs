@@ -57,8 +57,11 @@ public sealed class StaffClearances(DirectoryDbContext db, ITenantContext tenant
     /// <summary>Today in the county's zone: expiry dates are local days.</summary>
     public DateOnly Today => clock.TodayIn(tenant.TimeZone);
 
-    /// <summary>Readiness from what's on file, judged on <paramref name="today"/>.</summary>
-    public static ClearanceReadiness Assess(IEnumerable<(string Kind, string Status, DateOnly? ExpiresOn)> held, DateOnly today)
+    /// <summary>
+    /// Readiness from what's on file, judged on <paramref name="today"/> against
+    /// <paramref name="required"/>: the county's kinds (D99), or the platform's minimum.
+    /// </summary>
+    public static ClearanceReadiness Assess(IEnumerable<(string Kind, string Status, DateOnly? ExpiresOn)> held, DateOnly today, IEnumerable<string>? required = null)
     {
         ArgumentNullException.ThrowIfNull(held);
         List<ClearanceState> states = [];
@@ -70,13 +73,16 @@ public sealed class StaffClearances(DirectoryDbContext db, ITenantContext tenant
             }
         }
 
-        ClearanceCurrency.Assessment a = ClearanceCurrency.Assess(states, ClearanceExtensions.YouthFacingMinimum, today);
+        List<ClearanceKind> kinds = required is null
+            ? [.. ClearanceExtensions.YouthFacingMinimum]
+            : [.. required.Select(r => ClearanceExtensions.TryKindFromDbValue(r, out ClearanceKind k) ? (ClearanceKind?)k : null).OfType<ClearanceKind>().Distinct()];
+        ClearanceCurrency.Assessment a = ClearanceCurrency.Assess(states, kinds, today);
         return new ClearanceReadiness(a.IsCleared, [.. a.Missing.Select(k => k.ToDbValue())], [.. a.Expired.Select(k => k.ToDbValue())],
             [.. a.ExpiringSoon.Select(e => (e.Kind.ToDbValue(), e.ExpiresOn))]);
     }
 
-    /// <summary>A live member's clearances at the organisation, or null for anyone else.</summary>
-    public Task<MemberClearances?> GetAsync(Guid organisation, Guid membershipId, CancellationToken cancellationToken = default) =>
+    /// <summary>A live member's clearances at the organisation, judged against <paramref name="required"/> (the county's, D99), or null for anyone else.</summary>
+    public Task<MemberClearances?> GetAsync(Guid organisation, Guid membershipId, IReadOnlyList<string>? required = null, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             OrgMembership? m = await db.Memberships.AsNoTracking()
@@ -93,7 +99,7 @@ public sealed class StaffClearances(DirectoryDbContext db, ITenantContext tenant
                 .OrderBy(c => Kinds.ToList().IndexOf(c.ClearanceKind)).ThenBy(c => c.OrgId is null)
                 .Select(c => new ClearanceEntry(c.ClearanceKind, c.Status, c.CompletedOn, c.ExpiresOn, c.OrgId is null, c.RecordedAt))];
             return new MemberClearances(m.Id, m.UserId, m.OrgRole, m.Status, m.Title, held,
-                Assess(rows.Select(c => (c.ClearanceKind, c.Status, c.ExpiresOn)), Today));
+                Assess(rows.Select(c => (c.ClearanceKind, c.Status, c.ExpiresOn)), Today, required));
         }, cancellationToken);
 
     /// <summary>
@@ -116,6 +122,13 @@ public sealed class StaffClearances(DirectoryDbContext db, ITenantContext tenant
             if (m is null)
             {
                 return Result.Failure(Error.NotFound("clearances.member_not_found", "That person doesn't work for this organisation."));
+            }
+
+            // Once a county enforces clearances (D99), recording one's own would open one's own
+            // access: someone else records it, an organiser for an owner.
+            if (m.UserId == actor.Value && !asOrganiser)
+            {
+                return Result.Failure(Error.Forbidden("clearances.own", "Someone else records your own clearances: another owner or admin, or the site's organisers."));
             }
 
             Guid? scope = input.CountyWide ? null : organisation;

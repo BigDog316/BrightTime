@@ -3103,7 +3103,7 @@ No schema change. The new console words are machine drafts outside English, flag
 `@@drafts` (`curation.`, `error.collections.`). `CurationPagesTests` covers the flow, the public
 page and the home page; the route matrix covers who gets in.
 
-### D95 — Neighbourhood pages in the organiser console (**proposed 2026-11-22**)
+### D95 — Neighbourhood pages in the organiser console (**accepted 2026-11-22**)
 
 Every neighbourhood has had a public page since M1 (`/neighbourhoods/{code}`: the map, what's on
 there by kind, and what's coming up), and above that the sections of the neighbourhood's

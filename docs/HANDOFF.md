@@ -299,7 +299,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   begins them; a collection's page writes it, words it in other languages, orders its published
   activities with notes, features it on the home page, and publishes or archives it. The link name
   is fixed once published. No schema change.
-- **Neighbourhood pages in the organiser console** (D95, proposed): `/organiser/neighbourhoods`
+- **Neighbourhood pages in the organiser console** (D95): `/organiser/neighbourhoods`
   lists every neighbourhood and its page; a neighbourhood's page begins one, writes its sections
   (text, getting around, questions, people to ask, activities here, a collection) one language at
   a time, orders them, and publishes or archives the page. A language is a whole version of the
@@ -329,8 +329,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D94 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 on 2026-11-22).
-D95 (neighbourhood pages in the organiser console) is proposed.
+Every decision through D95 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 and D95 on 2026-11-22).
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

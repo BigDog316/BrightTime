@@ -3148,7 +3148,7 @@ same way. The new console words are machine drafts outside English, flagged in `
 (`hoodpages.`, `error.hood_pages.`). `HoodPagesTests` covers the flow, refusals, both languages on
 the public page and archiving; the route matrix covers who gets in.
 
-### D96 — Who has seen my record (**proposed 2026-11-22**)
+### D96 — Who has seen my record (**accepted 2026-11-22**)
 
 docs/plan/06 lists *Who has seen my record* among the youth screens ("every read, by whom, with
 what basis and when"), and docs/plan/04 gives `audit.read` for one's own record and one's

@@ -3280,7 +3280,7 @@ the compose volume needs it too). `ClearancePagesTests` covers the owner's and t
 recording, the refusals and the staff page; `ClearanceSweepTests` the sweep, the notices, the
 emails and the booking; `StaffClearancesTests` the rules and the sweep's hour.
 
-### D99 — Clearance rules: enforcing clearances (**proposed 2026-11-22**)
+### D99 — Clearance rules: enforcing clearances (**accepted 2026-11-22**)
 
 D98 recorded clearances and showed readiness; this is the enforcement it left for later
 (docs/plan/04 `ClearanceCurrentRequirement`). Sam chose on 2026-11-22: everyone at an

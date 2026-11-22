@@ -311,7 +311,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   notices expiries within 45 days, telling owners and admins in the inbox and by email.
   Schema: `staff_clearance.expiry_notice_for` (add it to the compose volume:
   `alter table directory.staff_clearance add column expiry_notice_for date`).
-- **Clearance rules** (D99, proposed): an organiser turns on enforcement at
+- **Clearance rules** (D99): an organiser turns on enforcement at
   `/organiser/settings/clearances` and may add kinds; then everyone at an organisation, owners
   included, needs current clearances for anything on a named young person's record, refused by
   `ClearanceGateHandler` on every organisation-scoped check (console and API) and audited. Off
@@ -350,8 +350,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 
 ## Waiting on Sam
 
-Every decision through D98 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D98 on 2026-11-22).
-D99 (clearance rules) is proposed. Owners are refused too when it's on, and nobody records their own clearances, so a sole owner needs an organiser to record theirs.
+Every decision through D99 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D99 on 2026-11-22).
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

@@ -1,0 +1,64 @@
+@page "/organiser/neighbourhoods"
+@using BrightTime.Modules.Opportunities.Curation
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.NeighbourhoodPagesPolicy)]
+@inherits ConsoleComponent
+
+@*
+    The organiser's neighbourhood pages (D95): every neighbourhood, with its page's state and the
+    languages it's written in. Every neighbourhood has a public page showing what's on there; the
+    organiser's page adds sections above that.
+*@
+<PageTitle>@T["hoodpages.title"] · BrightTime</PageTitle>
+
+<h1>@T["hoodpages.title"]</h1>
+<p class="hint">@T["hoodpages.intro"]</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["organiser.no_database"]</p>
+}
+else if (_rows.Count == 0)
+{
+    <p>@T["hoodpages.none"]</p>
+}
+else
+{
+    <div class="table-scroll">
+        <table class="queue">
+            <thead>
+                <tr>
+                    <th scope="col">@T["hoodpages.col.name"]</th>
+                    <th scope="col">@T["hoodpages.col.state"]</th>
+                    <th scope="col">@T["hoodpages.col.languages"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (HoodPageRow h in _rows)
+                {
+                    <tr class="@(h.Status == NeighbourhoodPageEditor.Archived ? "retired" : "")">
+                        <td><a href="/organiser/neighbourhoods/@h.Code" dir="auto">@h.Name</a></td>
+                        <td>@T["hoodpages.status." + (h.Status ?? "none")]</td>
+                        <td>@Languages(h.Languages)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<HoodPageRow> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.IsAvailable)
+        {
+            _rows = await Get<NeighbourhoodPageEditor>().ListAsync(T.Locale.Code);
+        }
+    }
+
+    private string Languages(IReadOnlyList<string> codes) =>
+        codes.Count == 0 ? "—" : string.Join(", ", codes.Select(c => T["language." + c]));
+}

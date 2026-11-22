@@ -2,13 +2,14 @@
 
 This guide is for the county's network organisers: the people who decide which organisations and
 listings appear on BrightTime, and who run the site itself. Sign in, then use the links at the top
-of the console: **Review queue**, **Taxonomy**, **Collections**, **Wording** and **Audit log**.
+of the console: **Review queue**, **Taxonomy**, **Collections**, **Neighbourhood pages**, **Wording** and **Audit log**.
 
 - [The review queue](#the-review-queue)
 - [Reviewing an organisation](#reviewing-an-organisation)
 - [Reviewing a listing](#reviewing-a-listing)
 - [Taxonomy](#taxonomy)
 - [Collections](#collections)
+- [Neighbourhood pages](#neighbourhood-pages)
 - [Wording](#wording)
 - [The audit log](#the-audit-log)
 - [Consent by signed form](#consent-by-signed-form)
@@ -102,6 +103,35 @@ The link name can't change once a collection has been published, because people 
 it. **Archive** takes a collection off the site; publishing it again brings it back. If an
 activity in it stops being published, the collection's page leaves it out, and its page here marks
 it.
+
+## Neighbourhood pages
+
+Every neighbourhood has a page on the site showing what's on there and what's coming up. You can
+add your own sections above that: a welcome, people to ask, questions people ask, getting around,
+activities and collections.
+
+1. Under **Neighbourhood pages**, choose a neighbourhood and **Begin a page**. It starts as a
+   draft, which only organisers see.
+2. Under **Add a section**, choose a kind:
+   - **Text** and **Getting around**: a heading and some text. Leave a blank line between
+     paragraphs; `**bold**`, `*italic*`, a line beginning with `-` for a list, and
+     `[words](https://example.org)` for a link.
+   - **Questions**: a question and its answer in each pair of boxes. Save to get more boxes.
+   - **People to ask**: a name, and if you like a role, phone, email and web address.
+   - **Activities here**: the soonest activities in the neighbourhood, of one kind or any.
+   - **A collection**: one of the collections on the site.
+3. **Move up**, **Move down** and **Remove** put the sections in order. Each can be rewritten and
+   saved.
+4. **Publish** the page. It needs at least one section in English.
+
+**Other languages.** The links at the top switch between the versions of the page, one for each
+of the site's languages. People reading in a language see that version if it has any section, and
+the English version if it has none. The two are never mixed, so write the whole page in that
+language, not just some sections.
+
+**Archive** takes your sections off the neighbourhood's page; it goes back to showing only what's
+on there. Publishing it again brings them back. If a collection you chose leaves the site, the page
+leaves that section out, and its page here marks it.
 
 ## Wording
 

@@ -3103,6 +3103,51 @@ No schema change. The new console words are machine drafts outside English, flag
 `@@drafts` (`curation.`, `error.collections.`). `CurationPagesTests` covers the flow, the public
 page and the home page; the route matrix covers who gets in.
 
+### D95 — Neighbourhood pages in the organiser console (**proposed 2026-11-22**)
+
+Every neighbourhood has had a public page since M1 (`/neighbourhoods/{code}`: the map, what's on
+there by kind, and what's coming up), and above that the sections of the neighbourhood's
+organiser page, if it has a published one. Nothing wrote those pages: the seed's three were the only
+ones. docs/plan/06 lists neighbourhood pages among the organiser's curation screens, and
+docs/plan/04 gives `neighbourhood_pages.manage` to network organisers alone. This builds it, in the
+Opportunities module (`NeighbourhoodPageEditor`) and two console pages, with no schema change. The
+plan's "block editor" is server-rendered forms, one per section, as D16 settled for the consoles.
+- **The list:** `/organiser/neighbourhoods`, every neighbourhood with its page's state (none,
+  draft, published or archived) and the languages it's written in.
+- **A neighbourhood:** `/organiser/neighbourhoods/{code}`. A page is begun as a draft, then its
+  sections are written one language at a time (`?in=es`), up to 20 in each:
+  - **Text** and **Getting around**: a heading and text, in the same small Markdown the public
+    page already reads (paragraphs, bold, italic, lists, links);
+  - **Questions**: up to 20, each needing an answer;
+  - **People to ask**: up to 12, each a name, and if wanted a role, phone, email and web address
+    (http or https only);
+  - **Activities here**: the soonest published activities in the neighbourhood, of one kind or
+    any, 1 to 24 of them (the finder's, so never a draft);
+  - **A collection**: one that's published. If it later leaves the site, the public page already
+    leaves the section out, and the editor marks it.
+
+  Sections are moved up or down, rewritten and removed. Their kind stays; a kind the site doesn't
+  draw (`map`, in the schema) can only be moved or removed, and none is offered.
+- **Languages:** the public page has always shown a page in the reader's language if it has *any*
+  section in it, and in English otherwise, never mixed. So a language here is a whole version of
+  the page, and the editor says so. A translation of single sections would need the public page to
+  change; nothing asked for it.
+- **Publish** needs a section in English, which every reader can fall back to. **Archive** takes
+  the sections off; the neighbourhood's page still shows what's on there. An archived page is
+  published again; nothing returns a page to draft (as D94).
+- **The neighbourhood must be the tenant's.** The page is begun from the tenant's neighbourhoods
+  (`IGeographyQueries`), since a foreign key check doesn't see row security.
+- **Audit:** `curation.neighbourhood_page_created`, `_changed`, `_published` and `_archived`, the
+  organiser as actor, with the language and the kind added or removed. The page records the last
+  organiser to change it (`organiser_user_id`).
+- **Not yet:** a hero image (media storage), and starting a language's version from a copy of the
+  English.
+
+The payloads are written in the shape the public page already reads, so the seed's pages edit the
+same way. The new console words are machine drafts outside English, flagged in `@@drafts`
+(`hoodpages.`, `error.hood_pages.`). `HoodPagesTests` covers the flow, refusals, both languages on
+the public page and archiving; the route matrix covers who gets in.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

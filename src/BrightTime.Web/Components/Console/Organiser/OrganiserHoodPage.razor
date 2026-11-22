@@ -1,0 +1,437 @@
+@page "/organiser/neighbourhoods/{Code}"
+@using System.Globalization
+@using BrightTime.Modules.Opportunities.Curation
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.Modules.Platform.Taxonomy
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.NeighbourhoodPagesPolicy)]
+@inherits ConsoleComponent
+
+@*
+    One neighbourhood's page (D95): its sections in one language at a time, each written, moved or
+    removed; a new section of any kind the site draws; and publishing or archiving the page. A
+    language other than English is a whole version of the page: readers in it see that version if
+    it has any section, and the English otherwise, never a mix.
+*@
+@if (_hood is { } hood)
+{
+    Locale writing = Locale.TryFromCode(_in, out Locale w) ? w : Locale.English;
+    <PageTitle>@hood.Name · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/organiser/neighbourhoods">@T["hoodpages.title"]</a></p>
+    <h1 dir="auto">@hood.Name</h1>
+    <p class="note">
+        @T["hoodpages.status." + (_page?.Status ?? "none")]
+        @(" · ")<a href="/neighbourhoods/@hood.Code">@T["hoodpages.view"]</a>
+    </p>
+
+    @if (Done is "created" or "saved" or "added" or "removed" or "published" or "archived")
+    {
+        <p class="notice success" role="status">@T["hoodpages.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_page is not { } page)
+    {
+        <p>@T["hoodpages.no_page"]</p>
+        <form method="post" @formname="create" @onsubmit="CreateAsync">
+            <AntiforgeryToken />
+            <button type="submit">@T["hoodpages.create"]</button>
+        </form>
+    }
+    else
+    {
+        @if (_locales.Count > 1)
+        {
+            <nav aria-label="@T["hoodpages.languages"]" class="inline-actions">
+                @foreach (string lang in _locales)
+                {
+                    int count = page.Languages.GetValueOrDefault(lang);
+                    string label = T.Format("hoodpages.language_count", ("language", T["language." + lang]), ("count", count));
+                    @if (lang == writing.Code)
+                    {
+                        <strong aria-current="page">@label</strong>
+                    }
+                    else
+                    {
+                        <a href="@Here(lang)">@label</a>
+                    }
+                }
+            </nav>
+        }
+        <p class="hint">
+            @(writing.Code == NeighbourhoodPageEditor.SourceLanguage
+                ? T["hoodpages.english_hint"]
+                : T.Format("hoodpages.language_hint", ("language", T["language." + writing.Code])))
+        </p>
+
+        <section aria-labelledby="sections-heading" lang="@writing.Code" dir="@writing.Direction">
+            <h2 id="sections-heading">@T.Format("hoodpages.sections", ("language", T["language." + writing.Code]))</h2>
+            @if (page.Blocks.Count == 0)
+            {
+                <p>@T["hoodpages.sections_none"]</p>
+            }
+            else
+            {
+                <ol class="steps">
+                    @for (int n = 0; n < page.Blocks.Count; n++)
+                    {
+                        int i = n;
+                        EditedBlock b = page.Blocks[i];
+                        string name = KindName(b.Content.Kind);
+                        string form = $"block-{i}";
+                        <li @key="b.Id">
+                            <h3>@name@(b.Content.Heading is { Length: > 0 } h ? ": " + h : "")</h3>
+                            @if (!b.Editable)
+                            {
+                                <p class="notice warning">@T["hoodpages.not_drawn"]</p>
+                            }
+                            else
+                            {
+                                @if (!b.Shown)
+                                {
+                                    <p class="notice warning">@T["hoodpages.collection_gone"]</p>
+                                }
+                                <form method="post" @formname="@form" @onsubmit="() => SaveAsync(b.Id, b.Content.Kind)" class="editor">
+                                    <AntiforgeryToken />
+                                    @Fields(form, $"b{i}", b.Content)
+                                    <div class="actions">
+                                        <button type="submit" class="secondary-button">@T["hoodpages.save_section"]</button>
+                                    </div>
+                                </form>
+                            }
+                            <div class="inline-actions">
+                                @if (i > 0)
+                                {
+                                    <form method="post" @formname="@($"up-{i}")" @onsubmit="() => MoveAsync(b.Id, -1)" class="inline-form">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary-button" aria-label="@T.Format("hoodpages.move_up_named", ("n", i + 1))">@T["curation.move_up"]</button>
+                                    </form>
+                                }
+                                @if (i < page.Blocks.Count - 1)
+                                {
+                                    <form method="post" @formname="@($"down-{i}")" @onsubmit="() => MoveAsync(b.Id, 1)" class="inline-form">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary-button" aria-label="@T.Format("hoodpages.move_down_named", ("n", i + 1))">@T["curation.move_down"]</button>
+                                    </form>
+                                }
+                                <form method="post" @formname="@($"remove-{i}")" @onsubmit="() => RemoveAsync(b.Id)" class="inline-form">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary-button" aria-label="@T.Format("hoodpages.remove_named", ("n", i + 1))">@T["curation.remove"]</button>
+                                </form>
+                            </div>
+                        </li>
+                    }
+                </ol>
+            }
+
+            <h3 id="add-heading">@T["hoodpages.add"]</h3>
+            @if (page.Blocks.Count >= NeighbourhoodPageEditor.MaxBlocks)
+            {
+                <p>@T["hoodpages.add_full"]</p>
+            }
+            else
+            {
+                <ul class="inline-actions" aria-labelledby="add-heading">
+                    @foreach (string kind in NeighbourhoodPageEditor.Kinds)
+                    {
+                        <li><a href="@(Here(writing.Code) + "&add=" + kind + "#new-section")">@KindName(kind)</a></li>
+                    }
+                </ul>
+                @if (Adding is { } adding)
+                {
+                    <form method="post" @formname="new" @onsubmit="() => AddAsync(writing.Code, adding)" class="editor" id="new-section">
+                        <AntiforgeryToken />
+                        <fieldset>
+                            <legend>@T.Format("hoodpages.new_section", ("kind", KindName(adding)))</legend>
+                            @Fields("new", "new", new PageBlockInput(adding, null))
+                            <div class="actions">
+                                <button type="submit">@T["hoodpages.add_button"]</button>
+                            </div>
+                        </fieldset>
+                    </form>
+                }
+            }
+        </section>
+
+        <section aria-labelledby="show-heading">
+            <h2 id="show-heading">@T["hoodpages.show"]</h2>
+            @if (page.Status == NeighbourhoodPageEditor.Published)
+            {
+                <p>@T["hoodpages.show_published"]</p>
+                <form method="post" @formname="archive" @onsubmit="ArchiveAsync">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary-button">@T["curation.archive"]</button>
+                </form>
+            }
+            else
+            {
+                <p>@T[page.Status == NeighbourhoodPageEditor.Archived ? "hoodpages.show_archived" : "hoodpages.show_draft"]</p>
+                <form method="post" @formname="publish" @onsubmit="PublishAsync">
+                    <AntiforgeryToken />
+                    <button type="submit">@T["curation.publish"]</button>
+                </form>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    /// <summary>The language whose version is being written; English if none.</summary>
+    [SupplyParameterFromQuery(Name = "in")] public string? In { get; set; }
+
+    /// <summary>The kind of a new section to write, when the organiser has chosen one.</summary>
+    [SupplyParameterFromQuery(Name = "add")] public string? Add { get; set; }
+
+    private NeighbourhoodShape? _hood;
+    private HoodPageDetail? _page;
+    private IReadOnlyList<string> _locales = [];
+    private IReadOnlyList<CollectionChoice> _collections = [];
+    private string _in = NeighbourhoodPageEditor.SourceLanguage;
+    private string? _problem;
+
+    /// <summary>The form whose post was refused, and what was in it, so nothing typed is lost.</summary>
+    private string? _postedForm;
+
+    private string? Adding => Add is { } kind && NeighbourhoodPageEditor.Kinds.Contains(kind) ? kind : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _hood = (await Get<IGeographyQueries>().GetNeighbourhoodsAsync(T.Locale.Code))
+            .FirstOrDefault(h => string.Equals(h.Code, Code, StringComparison.OrdinalIgnoreCase));
+        if (_hood is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        IReadOnlyList<string> locales = await Get<TaxonomyEditor>().LocalesAsync();
+        _locales = [NeighbourhoodPageEditor.SourceLanguage, .. locales.Where(l => l != NeighbourhoodPageEditor.SourceLanguage)];
+        if (In is { Length: > 0 } wanted && _locales.FirstOrDefault(l => string.Equals(l, wanted, StringComparison.OrdinalIgnoreCase)) is { } known)
+        {
+            _in = known;
+        }
+
+        NeighbourhoodPageEditor editor = Get<NeighbourhoodPageEditor>();
+        _page = await editor.GetAsync(_hood.Id, _in);
+        _collections = await editor.CollectionsAsync();
+    }
+
+    private string Here(string lang) => $"/organiser/neighbourhoods/{Uri.EscapeDataString(_hood!.Code)}?in={lang}";
+
+    private string KindName(string kind) => T["hoodpages.kind." + (NeighbourhoodPageEditor.Kinds.Contains(kind) ? kind : "other")];
+
+    /// <summary>What's shown in a field: what was posted if this form was refused, otherwise what's stored.</summary>
+    private string? Value(string form, string name, string? stored) => _postedForm == form ? FormValue(name) : stored;
+
+    /// <summary>The fields for a section of the content's kind. <paramref name="id"/> keeps element ids apart across the page's forms.</summary>
+    private RenderFragment Fields(string form, string id, PageBlockInput content) => __builder =>
+    {
+        bool usual = content.Kind is not (NeighbourhoodPageEditor.RichText or NeighbourhoodPageEditor.Transit);
+        <div class="field">
+            <label for="@id-heading">@T["hoodpages.field.heading"]</label>
+            @if (usual)
+            {
+                <p class="hint" id="@id-heading-hint">@T["hoodpages.field.heading_usual"]</p>
+            }
+            <input id="@id-heading" name="heading" type="text" maxlength="@NeighbourhoodPageEditor.MaxHeading" value="@Value(form, "heading", content.Heading)" dir="auto"
+                   aria-describedby="@(usual ? id + "-heading-hint" : null)" />
+        </div>
+        switch (content.Kind)
+        {
+            case NeighbourhoodPageEditor.RichText or NeighbourhoodPageEditor.Transit:
+                <div class="field">
+                    <label for="@id-body">@T["hoodpages.field.body"]</label>
+                    <p class="hint" id="@id-body-hint">@T["hoodpages.field.body_hint"]</p>
+                    <textarea id="@id-body" name="body" rows="8" maxlength="@NeighbourhoodPageEditor.MaxBody" required dir="auto" aria-describedby="@id-body-hint">@Value(form, "body", content.Body)</textarea>
+                </div>
+                break;
+
+            case NeighbourhoodPageEditor.Faq:
+                IReadOnlyList<PageQuestion> questions = content.Questions ?? [];
+                int rows = Math.Min(NeighbourhoodPageEditor.MaxQuestions, Math.Max(questions.Count, _postedForm == form ? PostedRows("question") : 0) + 2);
+                <p class="hint">@T["hoodpages.field.rows_hint"]</p>
+                for (int k = 0; k < rows; k++)
+                {
+                    PageQuestion? q = k < questions.Count ? questions[k] : null;
+                    <fieldset>
+                        <legend>@T.Format("hoodpages.field.question_n", ("n", k + 1))</legend>
+                        <div class="field">
+                            <label for="@id-q-@k">@T["hoodpages.field.question"]</label>
+                            <input id="@id-q-@k" name="question-@k" type="text" maxlength="@NeighbourhoodPageEditor.MaxQuestion" value="@Value(form, $"question-{k}", q?.Question)" dir="auto" />
+                        </div>
+                        <div class="field">
+                            <label for="@id-a-@k">@T["hoodpages.field.answer"]</label>
+                            <textarea id="@id-a-@k" name="answer-@k" rows="3" maxlength="@NeighbourhoodPageEditor.MaxAnswer" dir="auto">@Value(form, $"answer-{k}", q?.Answer)</textarea>
+                        </div>
+                    </fieldset>
+                }
+                break;
+
+            case NeighbourhoodPageEditor.ContactList:
+                IReadOnlyList<PageContact> contacts = content.Contacts ?? [];
+                int people = Math.Min(NeighbourhoodPageEditor.MaxContacts, Math.Max(contacts.Count, _postedForm == form ? PostedRows("name") : 0) + 1);
+                <p class="hint">@T["hoodpages.field.contacts_hint"]</p>
+                for (int k = 0; k < people; k++)
+                {
+                    PageContact? c = k < contacts.Count ? contacts[k] : null;
+                    <fieldset>
+                        <legend>@T.Format("hoodpages.field.contact_n", ("n", k + 1))</legend>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="@id-name-@k">@T["hoodpages.field.name"]</label>
+                                <input id="@id-name-@k" name="name-@k" type="text" maxlength="@NeighbourhoodPageEditor.MaxContactText" value="@Value(form, $"name-{k}", c?.Name)" dir="auto" />
+                            </div>
+                            <div class="field">
+                                <label for="@id-role-@k">@T["hoodpages.field.role"]</label>
+                                <input id="@id-role-@k" name="role-@k" type="text" maxlength="@NeighbourhoodPageEditor.MaxContactText" value="@Value(form, $"role-{k}", c?.Role)" dir="auto" />
+                            </div>
+                        </div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="@id-phone-@k">@T["hoodpages.field.phone"]</label>
+                                <input id="@id-phone-@k" name="phone-@k" type="tel" maxlength="@NeighbourhoodPageEditor.MaxPhone" value="@Value(form, $"phone-{k}", c?.Phone)" dir="ltr" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="@id-email-@k">@T["hoodpages.field.email"]</label>
+                                <input id="@id-email-@k" name="email-@k" type="email" maxlength="@NeighbourhoodPageEditor.MaxEmail" value="@Value(form, $"email-{k}", c?.Email)" dir="ltr" autocomplete="off" />
+                            </div>
+                            <div class="field">
+                                <label for="@id-url-@k">@T["hoodpages.field.url"]</label>
+                                <input id="@id-url-@k" name="url-@k" type="url" maxlength="@NeighbourhoodPageEditor.MaxUrl" value="@Value(form, $"url-{k}", c?.Url)" dir="ltr" autocomplete="off" />
+                            </div>
+                        </div>
+                    </fieldset>
+                }
+                break;
+
+            case NeighbourhoodPageEditor.ListingList:
+                string chosenKind = Value(form, "listingKind", content.ListingKind) ?? "";
+                <div class="field-row">
+                    <div class="field">
+                        <label for="@id-kind">@T["hoodpages.field.listing_kind"]</label>
+                        <select id="@id-kind" name="listingKind">
+                            <option value="" selected="@(chosenKind.Length == 0)">@T["hoodpages.field.any_kind"]</option>
+                            @foreach (string kind in NeighbourhoodPageEditor.ListingKinds)
+                            {
+                                <option value="@kind" selected="@(chosenKind == kind)">@T["hoodpages.listing_kind." + kind]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="@id-limit">@T["hoodpages.field.limit"]</label>
+                        <input id="@id-limit" name="limit" type="number" min="1" max="@NeighbourhoodPageEditor.MaxLimit" inputmode="numeric" required
+                               value="@Value(form, "limit", content.Limit.ToString(CultureInfo.InvariantCulture))" />
+                    </div>
+                </div>
+                <p class="hint">@T["hoodpages.field.listings_hint"]</p>
+                break;
+
+            case NeighbourhoodPageEditor.CollectionBlock:
+                string chosen = Value(form, "collection", content.Collection) ?? "";
+                if (_collections.Count == 0 && chosen.Length == 0)
+                {
+                    <p>@T["hoodpages.field.no_collections"]</p>
+                }
+                else
+                {
+                    <div class="field">
+                        <label for="@id-collection">@T["hoodpages.field.collection"]</label>
+                        <select id="@id-collection" name="collection" required>
+                            @if (chosen.Length > 0 && _collections.All(x => !string.Equals(x.Slug, chosen, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                <option value="@chosen" selected>@T.Format("hoodpages.field.collection_gone", ("slug", chosen))</option>
+                            }
+                            @foreach (CollectionChoice choice in _collections)
+                            {
+                                <option value="@choice.Slug" selected="@(string.Equals(choice.Slug, chosen, StringComparison.OrdinalIgnoreCase))" dir="auto">@choice.Title</option>
+                            }
+                        </select>
+                    </div>
+                }
+                break;
+        }
+    };
+
+    /// <summary>How many numbered rows of a field the refused post carried, so the form shows them all again.</summary>
+    private int PostedRows(string field)
+    {
+        int last = -1;
+        for (int k = 0; k < NeighbourhoodPageEditor.MaxQuestions + 2; k++)
+        {
+            if (HttpContext.Request.Form.ContainsKey($"{field}-{k}"))
+            {
+                last = k;
+            }
+        }
+
+        return last + 1;
+    }
+
+    /// <summary>The section as posted. Numbered rows are read a little past the limit, so a form with too many is refused rather than cut short.</summary>
+    private PageBlockInput Posted(string kind)
+    {
+        int limit = int.TryParse(FormValue("limit").Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : 0;
+        List<PageQuestion> questions = [];
+        for (int k = 0; k < NeighbourhoodPageEditor.MaxQuestions + 2; k++)
+        {
+            questions.Add(new PageQuestion(FormValue($"question-{k}"), FormValue($"answer-{k}")));
+        }
+
+        List<PageContact> contacts = [];
+        for (int k = 0; k < NeighbourhoodPageEditor.MaxContacts + 2; k++)
+        {
+            contacts.Add(new PageContact(FormValue($"name-{k}"), FormValue($"role-{k}"), FormValue($"phone-{k}"), FormValue($"email-{k}"), FormValue($"url-{k}")));
+        }
+
+        string listingKind = FormValue("listingKind").Trim();
+        return new PageBlockInput(kind, FormValue("heading"), FormValue("body"), questions, contacts, listingKind.Length == 0 ? null : listingKind, limit, FormValue("collection"));
+    }
+
+    private async Task CreateAsync() => Answer(await Get<NeighbourhoodPageEditor>().CreateAsync(_hood!.Id, Actor), "created", null);
+
+    private async Task SaveAsync(Guid block, string kind)
+    {
+        int i = _page!.Blocks.ToList().FindIndex(b => b.Id == block);
+        Answer(await Get<NeighbourhoodPageEditor>().UpdateAsync(_hood!.Id, block, Posted(kind), Actor), "saved", $"block-{i}");
+    }
+
+    private async Task AddAsync(string locale, string kind) =>
+        Answer(await Get<NeighbourhoodPageEditor>().AddAsync(_hood!.Id, locale, Posted(kind), Actor), "added", "new");
+
+    private async Task MoveAsync(Guid block, int by) => Answer(await Get<NeighbourhoodPageEditor>().MoveAsync(_hood!.Id, block, by, Actor), "saved", null);
+
+    private async Task RemoveAsync(Guid block) => Answer(await Get<NeighbourhoodPageEditor>().RemoveAsync(_hood!.Id, block, Actor), "removed", null);
+
+    private async Task PublishAsync() => Answer(await Get<NeighbourhoodPageEditor>().PublishAsync(_hood!.Id, Actor), "published", null);
+
+    private async Task ArchiveAsync() => Answer(await Get<NeighbourhoodPageEditor>().ArchiveAsync(_hood!.Id, Actor), "archived", null);
+
+    private void Answer(Result done, string what, string? form)
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error!);
+            _postedForm = form;
+            return;
+        }
+
+        Navigation.NavigateTo($"{Here(_in)}&done={what}");
+    }
+}

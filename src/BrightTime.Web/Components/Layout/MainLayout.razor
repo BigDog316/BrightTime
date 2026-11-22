@@ -29,6 +29,10 @@
             {
                 <a href="/organiser/collections">@T["site.nav.collections"]</a>
             }
+            @if (user.HasPermission(Permissions.NeighbourhoodPages.Manage))
+            {
+                <a href="/organiser/neighbourhoods">@T["site.nav.neighbourhood_pages"]</a>
+            }
             @if (user.HasPermission(Permissions.Tenant.Settings))
             {
                 <a href="/organiser/wording">@T["site.nav.wording"]</a>

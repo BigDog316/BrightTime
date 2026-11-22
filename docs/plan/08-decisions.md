@@ -3319,7 +3319,7 @@ No schema change. `ClearanceRulesTests` covers the organiser's page, refusals fo
 the notice, the audit, the owner unable to record their own, and recovery; `ClearanceGateApiTests`
 the API; the route matrix covers the new page.
 
-### D100 — Clearance rules: saying why, and approval (**proposed 2026-11-22**)
+### D100 — Clearance rules: saying why, and approval (**accepted 2026-11-22**)
 
 D99 left two gaps: the app showed an uncleared staff member each screen's usual refusal (or, on the
 attendance screen, nothing at all), and an organisation could be approved with nobody cleared.

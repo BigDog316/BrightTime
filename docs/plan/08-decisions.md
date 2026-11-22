@@ -953,7 +953,8 @@ M2's app, as docs/plan/01 lays it out.
   - **Push:** `IPushRegistrar` returns nothing until Firebase and APNs are set up, so the inbox
     works and the phone gets no pushes.
   - **Map:** waits on the tile proxy (Q7).
-  - **My schedule and local notifications:** wait on enrolments (M3).
+  - **My schedule and local notifications:** wait on enrolments (M3). *The schedule is D97;
+    local notifications are still to do.*
   - **Passkeys** in the app.
   - **The release:** real app identifiers and signing (the entitlements name `kettle.localhost`)
     and store compliance (M8).
@@ -3193,6 +3194,45 @@ badge and endorsement by organisation, role and title, the organiser's verificat
 organisation turned away, none of the guardian's own), nobody else, the link without activity,
 and the claimed young person's own log with their guardian's actions in it.
 `RecordLogScreenTests` covers the screens.
+
+### D97 — My schedule (**proposed 2026-11-22**)
+
+docs/plan/06 lists *My schedule* among the youth screens ("enrollments, upcoming sessions,
+deadlines; .ics subscribe") and the app's screens, and M2 named it; D36 left it waiting on
+enrolments, which M3 built. Sam chose the scope on 2026-11-22: the person's own and their
+household's, meetings and deadlines, a one-off calendar file, and no phone notifications yet.
+- **Whose:** every current enrolment on the family profiles the person owns, as check-in has it,
+  and also the young person's own when someone else owns the profile: the member linked to their
+  account, or an enrolment naming it (D65). Check-in still lists only the owner's
+  (`IEnrolmentQueries.ForPersonAsync` is new; `ForOwnerAsync` is unchanged).
+- **What:** the next four weeks. Each meeting of each enrolled activity (cancelled ones left out,
+  one still under way included) with its time, the first place its page names, and whom it's
+  for; the deadlines due in that time of what the person saved or began applying for (a draft's
+  named by whom it's for, with a way to finish it); and offers from a waitlist waiting for an
+  answer. Deadlines count only for published, live activities
+  (`IListingOccurrences.DeadlinesAsync`). Offers have no expiry date in the system, so they're
+  listed without one.
+- **The calendar file:** `GET /me/schedule/calendar` makes an .ics of the same meetings and
+  deadlines, with an alarm an hour before each meeting and a day before each deadline, worded in
+  the request's language (`ReminderCalendar`, which the web's saved-list calendar uses). Each
+  activity's meetings are in it once however many in the household go, and **no one's name is
+  in it**: a phone's calendar may be synced anywhere. It is made on request and never kept, and
+  there is no subscription address: *deviation from docs/plan/06's ".ics subscribe"*, since a
+  standing link that leaked would show a stranger where and when a child will be. Adding it again
+  brings it up to date (each event's UID is stable).
+- **Audit:** both routes are audited as `enrollment.schedule.read` against the enrolments read,
+  so a guardian's look shows in the young person's log once it's theirs (D96, `schedule_read`).
+- **In the app:** *My schedule* first in the Account menu, for everyone signed in. Meetings are
+  grouped by day; whom each is for is shown only when more than one person goes. *Add to your
+  calendar* hands the file to the share sheet, as portfolio downloads do (D81).
+- **Not yet:** reminders on the phone itself (local notifications) need a MAUI package and Sam's
+  approval; the server's reminders (`/me/reminders`) already push once push is set up.
+
+No schema change. `ScheduleApiTests` covers a household of four (two enrolled, one a young
+person with their own sign-in, a draft, an offer): their meetings, a saved deadline and then the
+draft's, the deadline past four weeks left out, the offer, the audit, the calendar (the shared
+meeting once, no names, not stored), the young person's own schedule, and a stranger's empty one.
+`ScheduleScreenTests` covers the screen.
 
 ## Open questions
 

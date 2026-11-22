@@ -57,6 +57,12 @@ guardian. A program can also confirm your account.
 To sign up for programs yourself, you need to **agree to the terms of use**. Read them under
 **Terms** in the app or on the website, and tap **I agree**.
 
+## Your schedule (app)
+
+Under **Account**, choose **My schedule** to see your meetings for the next four weeks, with the
+time and the place. If you saved an activity, its deadlines show too. **Add to your calendar**
+puts them in your phone's calendar with reminders. The file has no names in it.
+
 ## Messages
 
 When a program writes to you, it shows under **Messages**, in **Account** or at the top of your

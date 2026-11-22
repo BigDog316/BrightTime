@@ -187,6 +187,20 @@ looked at or changed your child's record: which organisation, their role and job
 why they could, and when. Attempts that were turned away are marked. It stays yours to see until
 your child has their own sign-in; then it's theirs, and it shows what you did too.
 
+## Your schedule (app)
+
+Under **Account**, choose **My schedule**. It shows the next four weeks:
+
+- **Meetings** of every activity someone in your household is signed up for, day by day, with
+  the time and the place. When more than one of you goes, it says who each one is for.
+- **Dates to remember**: deadlines for activities you saved or started to apply for. If you
+  started an application and haven't sent it, **Finish the application** takes you to it.
+- **Waiting for your answer**: places offered from a waitlist.
+
+**Add to your calendar** puts these meetings and deadlines in your phone's calendar, with a
+reminder an hour before each meeting and a day before each deadline. The file has no names in
+it. It doesn't update by itself, so add it again if things change.
+
 ## Your household (app)
 
 Under **Account**, choose **Your household**. You enter your household once, and every program you

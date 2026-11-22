@@ -126,6 +126,8 @@ All anonymous and rate-limited.
 | `GET`, `POST /me/reminders`, `DELETE /me/reminders/{id}` | Reminders before a session or a deadline, booked as jobs |
 | `GET /me/notifications`, `POST /me/notifications/{id}/read` | The inbox |
 | `GET`, `PUT /me/notification-preferences` | Channels per kind, and quiet hours |
+| `GET /me/schedule` | My schedule (D97): `from`, `until` (four weeks on), `meetings` (each enrolled activity's meetings for the household the person owns and their own enrolments: `who` (first name), `listingSlug`, `listingTitle`, `place`, `startsAt`, `endsAt`), `deadlines` (of saved activities, and of ones with a draft application, then with `applicationId` and `who`) and `offers` waiting for an answer. Audited, `no-store` |
+| `GET /me/schedule/calendar` | The same meetings and deadlines as an .ics, with alarms, in the request's language and with no names; made on request, never kept (D97) |
 | `GET /me/record-log` | Who has seen my record (D96): every time someone else read or changed the person's records, newest first, 50 a page (`?older=` the page's `older` cursor). Each entry: `at`, `what` (a short code), `refused`, `who` (`staff`, `guardian`, `organiser`, `public`, `system`, `person`), `organisation`, `role` and `title` for staff, `basis` when access was checked |
 
 ## Children and consent

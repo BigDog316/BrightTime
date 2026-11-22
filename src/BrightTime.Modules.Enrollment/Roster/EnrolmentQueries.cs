@@ -144,4 +144,25 @@ public sealed class EnrolmentQueries(EnrollmentDbContext db, IFieldCipher cipher
 
             return list;
         }, cancellationToken);
+
+    public Task<IReadOnlyList<FamilyEnrolment>> ForPersonAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<FamilyEnrolment>>(async ct =>
+        {
+            // A household they own, or the young person themselves: the member linked to their
+            // account, or an enrolment that names it (D65), when someone else owns the household.
+            var mine = await (from e in db.Enrollments.AsNoTracking()
+                              join m in db.FamilyMembers on e.FamilyMemberId equals m.Id
+                              join p in db.FamilyProfiles on m.FamilyProfileId equals p.Id
+                              where e.SeatKind == EnrollmentKinds.Enrolled
+                                    && (p.OwnerUserId == userId || m.UserId == userId || e.YouthUserId == userId)
+                              orderby e.EnrolledAt descending
+                              select new { e, m }).Take(200).ToListAsync(ct).ConfigureAwait(false);
+            List<FamilyEnrolment> list = [];
+            foreach (var x in mine)
+            {
+                list.Add(new FamilyEnrolment(x.e.Id, x.m.Id, await cipher.DecryptAsync(tenant.TenantId, x.m.FirstNameEnc, ct).ConfigureAwait(false) ?? "", x.e.ListingId, x.e.Status));
+            }
+
+            return list;
+        }, cancellationToken);
 }

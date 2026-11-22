@@ -181,6 +181,18 @@ public sealed record RecordLogEntry(DateTimeOffset At, string What, bool Refused
 /// <summary>A page of the log, newest first; <c>Older</c> fetches the next.</summary>
 public sealed record RecordLogPage(IReadOnlyList<RecordLogEntry> Entries, string? Older);
 
+/// <summary>One meeting of an activity someone on the schedule is enrolled in (D97). <c>Who</c> is their first name.</summary>
+public sealed record ScheduleMeeting(Guid EnrollmentId, string Who, Guid ListingId, string ListingSlug, string ListingTitle, string? Place, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
+
+/// <summary>A deadline of a saved activity, or of one with a draft application (then with <c>ApplicationId</c> and <c>Who</c>).</summary>
+public sealed record ScheduleDeadline(Guid ListingId, string ListingSlug, string ListingTitle, string Kind, string? Label, DateTimeOffset DueAt, Guid? ApplicationId, string? Who);
+
+/// <summary>A place offered from a waitlist, waiting for an answer.</summary>
+public sealed record ScheduleOffer(Guid ApplicationId, string Who, Guid ListingId, string ListingTitle);
+
+/// <summary>The next four weeks: meetings and deadlines earliest first, and offers waiting.</summary>
+public sealed record ScheduleView(DateTimeOffset From, DateTimeOffset Until, IReadOnlyList<ScheduleMeeting> Meetings, IReadOnlyList<ScheduleDeadline> Deadlines, IReadOnlyList<ScheduleOffer> Offers);
+
 /// <summary>A skill or interest from the county's lists (D78), by the id the goal and skill routes take.</summary>
 public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);
 

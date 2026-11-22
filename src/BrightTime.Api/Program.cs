@@ -80,6 +80,7 @@ v1.MapBadgeEndpoints();
 v1.MapPlaylistEndpoints();
 v1.MapLearnerRecordEndpoints();
 v1.MapRecordLogEndpoints();
+v1.MapScheduleEndpoints();
 
 await app.RunAsync().ConfigureAwait(false);
 

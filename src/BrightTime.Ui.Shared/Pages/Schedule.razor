@@ -1,0 +1,157 @@
+@page "/schedule"
+@* My schedule (D97): the next four weeks of meetings for everyone the signed-in person may see,
+   the deadlines of what they saved or began applying for, and offers waiting for an answer.
+   "Add to your calendar" makes a calendar file of it with no names in it, and the phone's share
+   sheet puts it in a calendar; nothing is left at a standing address. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject IFileShare Files
+
+<h1>@T["app.schedule.title"]</h1>
+<p class="visually-hidden" role="status">@_said</p>
+
+@if (Session.Me is null)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p class="hint">@T["app.schedule.intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_schedule is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_schedule is { } s)
+    {
+        @if (s.Offers.Count > 0)
+        {
+            <section aria-labelledby="offers">
+                <h2 id="offers">@T["app.schedule.offers"]</h2>
+                <ul class="cards">
+                    @foreach (ScheduleOffer o in s.Offers)
+                    {
+                        <li class="card" @key="o.ApplicationId">
+                            <p dir="auto">@T.Format("app.schedule.offer", ("who", Text.Name(o.Who)), ("title", Text.Name(o.ListingTitle)))</p>
+                            <a href="applications/@o.ApplicationId.ToString("D")">@T["app.schedule.answer"]</a>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        <section aria-labelledby="meetings">
+            <h2 id="meetings">@T["app.schedule.meetings"]</h2>
+            @if (s.Meetings.Count == 0)
+            {
+                <p>@T["app.schedule.no_meetings"]</p>
+            }
+            else
+            {
+                bool named = s.Meetings.Select(m => m.Who).Distinct(StringComparer.Ordinal).Count() > 1;
+                foreach (IGrouping<string, ScheduleMeeting> day in s.Meetings.GroupBy(m => T.FileDay(m.StartsAt)))
+                {
+                    <h3>@T.DayLong(day.First().StartsAt)</h3>
+                    <ul class="cards">
+                        @foreach (ScheduleMeeting m in day)
+                        {
+                            <li class="card" @key="(m.EnrollmentId, m.StartsAt)">
+                                <a href="listings/@Uri.EscapeDataString(m.ListingSlug)" dir="auto">@m.ListingTitle</a>
+                                <p>@T.Range(T.Time(m.StartsAt), T.Time(m.EndsAt))</p>
+                                @if (m.Place is { Length: > 0 } place)
+                                {
+                                    <p class="hint" dir="auto">@place</p>
+                                }
+                                @if (named)
+                                {
+                                    <p class="hint" dir="auto">@T.Format("app.schedule.for", ("who", Text.Name(m.Who)))</p>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </section>
+
+        <section aria-labelledby="deadlines">
+            <h2 id="deadlines">@T["listing.deadlines"]</h2>
+            @if (s.Deadlines.Count == 0)
+            {
+                <p>@T["app.schedule.no_deadlines"]</p>
+            }
+            else
+            {
+                <ul class="cards">
+                    @foreach (ScheduleDeadline d in s.Deadlines)
+                    {
+                        <li class="card" @key="(d.ListingId, d.Kind, d.DueAt, d.ApplicationId)">
+                            <p><strong dir="auto">@(d.Label ?? Deadline(d.Kind))</strong></p>
+                            <a href="listings/@Uri.EscapeDataString(d.ListingSlug)" dir="auto">@d.ListingTitle</a>
+                            <p>@T.DayTime(d.DueAt)</p>
+                            @if (d.ApplicationId is { } application)
+                            {
+                                <p class="hint">
+                                    <span dir="auto">@T.Format("app.schedule.draft", ("who", Text.Name(d.Who ?? string.Empty)))</span>
+                                    <a href="applications/@application.ToString("D")">@T["app.schedule.finish"]</a>
+                                </p>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        @if (s.Meetings.Count > 0 || s.Deadlines.Count > 0)
+        {
+            <section aria-labelledby="calendar">
+                <h2 id="calendar">@T["app.schedule.calendar"]</h2>
+                <p class="hint">@T["app.schedule.calendar_hint"]</p>
+                <ProblemNotice Problem="_calendarProblem" />
+                <div class="actions">
+                    <button type="button" disabled="@_making" @onclick="CalendarAsync">@T["app.schedule.calendar"]</button>
+                </div>
+            </section>
+        }
+    }
+
+    <a href="account">@T["app.schedule.back"]</a>
+}
+
+@code {
+    private ScheduleView? _schedule;
+    private ApiProblem? _problem;
+    private ApiProblem? _calendarProblem;
+    private bool _making;
+    private string _said = "";
+
+    protected override Task OnParametersSetAsync() => Session.Me is null ? Task.CompletedTask : LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<ScheduleView> schedule = await Api.ScheduleAsync();
+        _schedule = schedule.Value ?? _schedule;
+        _problem = schedule.Problem;
+    }
+
+    private string Deadline(string kind) =>
+        T.Has("listing.deadline." + kind) ? T["listing.deadline." + kind] : T["listing.deadline.other"];
+
+    private async Task CalendarAsync()
+    {
+        _making = true;
+        _said = "";
+        _calendarProblem = null;
+        ApiResult<DownloadedFile> made = await Api.ScheduleCalendarAsync();
+        _making = false;
+        if (made.Value is { } file)
+        {
+            _said = T["app.schedule.calendar_ready"];
+            await Files.ShareAsync(T["app.schedule.calendar"], file);
+        }
+        else
+        {
+            _calendarProblem = made.Problem;
+        }
+    }
+}

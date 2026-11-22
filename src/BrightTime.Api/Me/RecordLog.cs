@@ -173,6 +173,7 @@ public sealed class RecordLog(
         "enrollment.family.read" or "enrollment.family_share.read" => "family_read",
         "enrollment.family.changed" => "family_changed",
         "enrollment.waiver.signed" => "waiver_signed",
+        "enrollment.schedule.read" => "schedule_read",
         "learning.badge.read" => "badges_read",
         "learning.badge.issued" => "badge_awarded",
         "learning.badge.revoked" => "badge_revoked",

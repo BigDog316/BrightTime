@@ -60,6 +60,12 @@ public interface IEnrolmentQueries
     /// <summary>The enrolments of everyone on <paramref name="ownerUserId"/>'s family profile.</summary>
     Task<IReadOnlyList<FamilyEnrolment>> ForOwnerAsync(Guid ownerUserId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The enrolments a person's schedule shows (D97): everyone's on the family profiles they own,
+    /// and their own, as a young person with their own sign-in, on a profile someone else owns.
+    /// </summary>
+    Task<IReadOnlyList<FamilyEnrolment>> ForPersonAsync(Guid userId, CancellationToken cancellationToken = default);
+
     /// <summary>The family behind an enrolment, or behind a submitted (never a draft) application; null when there is none.</summary>
     Task<FamilyContact?> FamilyOfAsync(Guid? enrollmentId, Guid? applicationId, CancellationToken cancellationToken = default);
 

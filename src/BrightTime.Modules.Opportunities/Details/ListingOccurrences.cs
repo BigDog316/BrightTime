@@ -23,4 +23,24 @@ public sealed class ListingOccurrences(OpportunitiesDbContext db) : IListingOccu
                        orderby o.StartsAt, l.Title
                        select new OrganisationMeeting(l.Id, l.Title, o.StartsAt, o.EndsAt))
                 .Take(200).ToListAsync(ct).ConfigureAwait(false)], cancellationToken);
+
+    public Task<IReadOnlyList<ListingDeadlineDue>> DeadlinesAsync(IReadOnlyCollection<Guid> listingIds, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(listingIds);
+        if (listingIds.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<ListingDeadlineDue>>([]);
+        }
+
+        Guid[] ids = [.. listingIds];
+        return db.InTransactionAsync<IReadOnlyList<ListingDeadlineDue>>(async ct =>
+            [.. await (from d in db.ListingDeadlines.AsNoTracking()
+                       join l in db.Listings.AsNoTracking() on d.ListingId equals l.Id
+                       where ids.Contains(l.Id) && l.Status == "published"
+                             && (l.PublishAt == null || l.PublishAt <= @from) && (l.ExpiresAt == null || l.ExpiresAt > @from)
+                             && d.DueAt >= @from && d.DueAt < to
+                       orderby d.DueAt
+                       select new ListingDeadlineDue(d.ListingId, d.DeadlineKind, d.DueAt, d.Label))
+                .Take(200).ToListAsync(ct).ConfigureAwait(false)], cancellationToken);
+    }
 }

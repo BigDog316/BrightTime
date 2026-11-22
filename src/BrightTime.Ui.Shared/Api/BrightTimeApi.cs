@@ -424,6 +424,16 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<RecordLogPage>> ChildRecordLogAsync(Guid child, string? older = null, CancellationToken ct = default) =>
         GetAsync<RecordLogPage>($"children/{child:D}/record-log" + Older(older), signedIn: true, ct);
 
+    // ---- my schedule (D97) ---------------------------------------------------------------------
+
+    /// <summary>The next four weeks for everyone the signed-in person may see: meetings, deadlines and offers.</summary>
+    public Task<ApiResult<ScheduleView>> ScheduleAsync(CancellationToken ct = default) =>
+        GetAsync<ScheduleView>("me/schedule", signedIn: true, ct);
+
+    /// <summary>The same as a calendar file (.ics), made when asked, with no one's name in it.</summary>
+    public Task<ApiResult<DownloadedFile>> ScheduleCalendarAsync(CancellationToken ct = default) =>
+        GetAsync<DownloadedFile>("me/schedule/calendar", signedIn: true, ct);
+
     private static string Older(string? cursor) => cursor is { Length: > 0 } c ? "?older=" + Uri.EscapeDataString(c) : string.Empty;
 
     // ---- playlists (D67, D79) -----------------------------------------------------------------

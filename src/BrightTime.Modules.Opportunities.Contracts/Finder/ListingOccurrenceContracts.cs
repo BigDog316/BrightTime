@@ -14,4 +14,13 @@ public interface IListingOccurrences
 
     /// <summary>The meetings of an organisation's published listings starting in the window, earliest first: a staff member's day.</summary>
     Task<IReadOnlyList<OrganisationMeeting>> ForOrganisationAsync(Guid orgId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The deadlines due in [<paramref name="from"/>, <paramref name="to"/>) of those of these
+    /// listings that are published and live at <paramref name="from"/>, earliest first (D97).
+    /// </summary>
+    Task<IReadOnlyList<ListingDeadlineDue>> DeadlinesAsync(IReadOnlyCollection<Guid> listingIds, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
 }
+
+/// <summary>One deadline of one listing.</summary>
+public sealed record ListingDeadlineDue(Guid ListingId, string Kind, DateTimeOffset DueAt, string? Label);

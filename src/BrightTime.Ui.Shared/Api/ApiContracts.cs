@@ -171,6 +171,16 @@ public sealed record HeldBadge(
 public sealed record ChildPortfolioView(
     decimal TotalHours, IReadOnlyList<ParticipationView> Participation, IReadOnlyList<HeldBadge> Badges, IReadOnlyList<SkillView> Skills);
 
+/// <summary>
+/// One time someone else looked at or changed the record (D96). <c>What</c> and <c>Who</c> are
+/// codes the app words; <c>Organisation</c>, <c>Role</c> and <c>Title</c> name staff; <c>Basis</c> is why an
+/// organisation had access, when one was checked.
+/// </summary>
+public sealed record RecordLogEntry(DateTimeOffset At, string What, bool Refused, string Who, string? Organisation, string? Role, string? Title, string? Basis);
+
+/// <summary>A page of the log, newest first; <c>Older</c> fetches the next.</summary>
+public sealed record RecordLogPage(IReadOnlyList<RecordLogEntry> Entries, string? Older);
+
 /// <summary>A skill or interest from the county's lists (D78), by the id the goal and skill routes take.</summary>
 public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);
 

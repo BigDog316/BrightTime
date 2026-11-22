@@ -602,6 +602,7 @@ public static class EnrollmentModule
         services.TryAddScoped<IAchievementQueries, NoAchievements>();
         services.AddScoped<FamilyProfiles>();
         services.AddScoped<ProfileShares>();
+        services.AddScoped<Infrastructure.Auditing.IAuditSubjects, EnrollmentAuditSubjects>();
         services.AddScoped<Forms.FormDefinitions>();
         services.AddScoped<Eligibility.EligibilityRules>();
         services.AddScoped<Applications.Applications>();

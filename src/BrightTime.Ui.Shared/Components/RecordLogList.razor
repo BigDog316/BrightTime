@@ -1,0 +1,63 @@
+@* The entries of a record log (D96), newest first, for a young person's own record or a child's:
+   who it was, what they did, why they had access, and when; refused attempts marked. Wording is
+   free of "you", so it reads the same for the young person and their guardian. *@
+
+@if (Entries.Count == 0)
+{
+    <p>@Empty</p>
+}
+else
+{
+    <ol class="cards record-log">
+        @foreach (RecordLogEntry e in Entries)
+        {
+            <li class="card">
+                <h3 dir="auto">@Who(e)</h3>
+                <p>
+                    @if (e.Refused)
+                    {
+                        <strong>@T["app.record_log.refused"]</strong>
+                        @(" ")
+                    }
+                    @T["app.record_log.what." + e.What]
+                </p>
+                @if (e.Basis is { Length: > 0 } basis)
+                {
+                    <p class="hint">@T["app.record_log.basis." + basis]</p>
+                }
+                <p class="hint"><time datetime="@e.At.ToString("O", System.Globalization.CultureInfo.InvariantCulture)">@T.DateTime(e.At)</time></p>
+            </li>
+        }
+    </ol>
+}
+
+@if (Older is { Length: > 0 })
+{
+    <div class="actions">
+        <button type="button" disabled="@Loading" @onclick="ShowOlder">@T["app.record_log.older"]</button>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<RecordLogEntry> Entries { get; set; } = [];
+
+    [Parameter] public string? Older { get; set; }
+
+    [Parameter] public bool Loading { get; set; }
+
+    [Parameter, EditorRequired] public string Empty { get; set; } = "";
+
+    [Parameter] public EventCallback ShowOlder { get; set; }
+
+    private string Who(RecordLogEntry e) => e.Who switch
+    {
+        "staff" when e.Organisation is { Length: > 0 } org && e.Role is { Length: > 0 } role && e.Title is { Length: > 0 } title =>
+            T.Format("app.record_log.who.staff_titled", ("title", Text.Name(title)), ("org", Text.Name(org)), ("role", T["app.record_log.role." + role])),
+        "staff" when e.Organisation is { Length: > 0 } org && e.Role is { Length: > 0 } role =>
+            T.Format("app.record_log.who.staff", ("org", Text.Name(org)), ("role", T["app.record_log.role." + role])),
+        "staff" when e.Organisation is { Length: > 0 } org => T.Format("app.record_log.who.staff_left", ("org", Text.Name(org))),
+        "staff" => T["app.record_log.who.organisation"],
+        "guardian" or "organiser" or "public" or "system" => T["app.record_log.who." + e.Who],
+        _ => T["app.record_log.who.person"],
+    };
+}

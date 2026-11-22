@@ -64,6 +64,12 @@ public interface IDirectoryQueries
         UserId userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The job title an active member was given when invited, if any: how D96 names staff without their address.</summary>
+    Task<string?> GetMemberTitleAsync(
+        OrganisationId organisationId,
+        UserId userId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>The sites named, active or not. Callers decide what an inactive site means for them.</summary>
     Task<IReadOnlyList<SiteSummary>> GetSitesAsync(
         IReadOnlyCollection<Guid> siteIds,

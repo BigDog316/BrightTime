@@ -135,6 +135,7 @@ public static class ApiComposition
         // Learning (M4): the young person's portfolio, built from their attendance (D65).
         services.AddBrightTimeDbContext<LearningDbContext>(app, LearningDbContext.SchemaName, LearningDbContext.MigrationsHistoryTable);
         services.AddLearning();
+        services.AddScoped<Me.RecordLog>();
 
         // Messaging (M3b): conversations with families, never a pair with a minor (D53, T1).
         services.AddBrightTimeDbContext<CommunityDbContext>(app, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);

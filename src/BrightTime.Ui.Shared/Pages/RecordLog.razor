@@ -1,0 +1,64 @@
+@page "/account/record-log"
+@* Who has seen my record (D96): every time someone else looked at or changed the signed-in
+   person's records, newest first, with who it was, what they did, why they had access, and
+   refused attempts marked. Their own actions aren't listed. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.record_log.title"]</h1>
+
+@if (Session.Me is null)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p class="hint">@T["app.record_log.intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_entries is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_entries is not null)
+    {
+        <RecordLogList Entries="_entries" Older="@_older" Loading="_loading" Empty="@T["app.record_log.none"]" ShowOlder="OlderAsync" />
+    }
+
+    <a href="account">@T["app.record_log.back"]</a>
+}
+
+@code {
+    private List<RecordLogEntry>? _entries;
+    private string? _older;
+    private bool _loading;
+    private ApiProblem? _problem;
+
+    protected override Task OnParametersSetAsync() => Session.Me is null ? Task.CompletedTask : LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<RecordLogPage> page = await Api.RecordLogAsync();
+        if (page.Value is { } p)
+        {
+            _entries = [.. p.Entries];
+            _older = p.Older;
+        }
+
+        _problem = page.Problem;
+    }
+
+    private async Task OlderAsync()
+    {
+        _loading = true;
+        ApiResult<RecordLogPage> page = await Api.RecordLogAsync(_older);
+        _loading = false;
+        if (page.Value is { } p)
+        {
+            _entries!.AddRange(p.Entries);
+            _older = p.Older;
+        }
+
+        _problem = page.Problem;
+    }
+}

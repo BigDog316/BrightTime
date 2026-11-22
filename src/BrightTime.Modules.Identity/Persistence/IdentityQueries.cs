@@ -39,6 +39,11 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
     public Task<bool> IsMinorAsync(UserId userId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(ct => IsMinorCoreAsync(userId, ct), cancellationToken);
 
+    public Task<IReadOnlyList<string>> GetRoleNamesAsync(UserId userId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<string>>(async ct => await db.Database.SqlQuery<string>(
+                $"select r.name::text as \"Value\" from identity.app_user_role ur join identity.app_role r on r.id = ur.role_id where ur.user_id = {userId.Value} order by 1")
+            .ToListAsync(ct).ConfigureAwait(false), cancellationToken);
+
     private async Task<YouthCapabilities> GetCapabilitiesCoreAsync(
         UserId userId,
         CancellationToken cancellationToken = default)

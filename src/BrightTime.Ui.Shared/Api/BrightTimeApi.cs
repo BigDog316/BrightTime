@@ -414,6 +414,18 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<DownloadedFile>> ExportChildPortfolioAsync(Guid child, string format, CancellationToken ct = default) =>
         SendAsync<DownloadedFile>(HttpMethod.Post, $"children/{child:D}/portfolio/export", new { format }, signedIn: true, ct);
 
+    // ---- who has seen the record (D96) --------------------------------------------------------
+
+    /// <summary>The signed-in person's own log, newest first; <paramref name="older"/> is a page's cursor.</summary>
+    public Task<ApiResult<RecordLogPage>> RecordLogAsync(string? older = null, CancellationToken ct = default) =>
+        GetAsync<RecordLogPage>("me/record-log" + Older(older), signedIn: true, ct);
+
+    /// <summary>A child profile's log, for their verified guardian.</summary>
+    public Task<ApiResult<RecordLogPage>> ChildRecordLogAsync(Guid child, string? older = null, CancellationToken ct = default) =>
+        GetAsync<RecordLogPage>($"children/{child:D}/record-log" + Older(older), signedIn: true, ct);
+
+    private static string Older(string? cursor) => cursor is { Length: > 0 } c ? "?older=" + Uri.EscapeDataString(c) : string.Empty;
+
     // ---- playlists (D67, D79) -----------------------------------------------------------------
 
     /// <summary>The county's published playlists.</summary>

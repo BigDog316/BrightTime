@@ -73,6 +73,10 @@ program can only message you once your consent allows it.
   nearest neighbourhood once and forgets your position.
 - **Sign out on all devices**, under **Account**, if you lose your phone or think someone else
   has used your account.
+- **Who has seen your record**, under **Account** in the app, lists every time someone else
+  looked at or changed your record: which organisation, their role and job title there, or a guardian, what
+  they did, why they could, and when. Times someone was turned away are marked too. If something
+  there looks wrong, tell someone you trust or the organisers.
 
 ## Your portfolio and badges (app)
 

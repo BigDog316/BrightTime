@@ -182,6 +182,11 @@ be changed here.
 The button shows once your consent is confirmed. When your child gets their own sign-in at 13,
 the portfolio becomes theirs, and you can't see it any more.
 
+**Who has seen their record** is on the same page. It lists every time someone other than you
+looked at or changed your child's record: which organisation, their role and job title there, what they did,
+why they could, and when. Attempts that were turned away are marked. It stays yours to see until
+your child has their own sign-in; then it's theirs, and it shows what you did too.
+
 ## Your household (app)
 
 Under **Account**, choose **Your household**. You enter your household once, and every program you

@@ -126,6 +126,7 @@ All anonymous and rate-limited.
 | `GET`, `POST /me/reminders`, `DELETE /me/reminders/{id}` | Reminders before a session or a deadline, booked as jobs |
 | `GET /me/notifications`, `POST /me/notifications/{id}/read` | The inbox |
 | `GET`, `PUT /me/notification-preferences` | Channels per kind, and quiet hours |
+| `GET /me/record-log` | Who has seen my record (D96): every time someone else read or changed the person's records, newest first, 50 a page (`?older=` the page's `older` cursor). Each entry: `at`, `what` (a short code), `refused`, `who` (`staff`, `guardian`, `organiser`, `public`, `system`, `person`), `organisation`, `role` and `title` for staff, `basis` when access was checked |
 
 ## Children and consent
 
@@ -194,6 +195,7 @@ The owner alone reads or changes a family profile.
 | `POST /me/portfolio/export` | `{ format }`: `pdf` (a printable portfolio in the person's language), `json_ob3` (their badges' OB 3.0 credentials and JWTs) or `clr2` (a CLR 2.0 VC-JWT signed by the site, `application/jwt`; needs at least one badge). Returned at once, never stored (D68) |
 | `GET /children/{id}/portfolio` | A child profile's portfolio, for its verified guardian (D93): `totalHours`, `participation`, `badges` (as `/me/badges`) and `skills`. Refused once the child claims the account (`portfolio.child_claimed`), or when the link doesn't allow seeing their activity (`portfolio.guardian_view`); 404 for anyone else |
 | `POST /children/{id}/portfolio/export` | The child's files, as `/me/portfolio/export` makes them, for the same guardian |
+| `GET /children/{id}/record-log` | A child profile's log, as `/me/record-log`, for the same guardian (D96), without their own actions; refused as the portfolio is (`record_log.child_claimed`, `record_log.guardian_view`, 404 `record_log.child_not_found`) |
 | `GET /me/badges` | Badges held, revoked ones marked, each with its credential JWT, `verify` (the credential's address, which is its id) and `page` (the website's check page, `/badges/{slug}`, D77) |
 | `POST /playlists/{id}/enroll` | Start a published playlist: needs the account's sign-up capability and any badge the playlist asks for. Starting one already started returns it |
 | `GET /me/playlists` | Playlists started, each step with its state (`not_started`, `submitted`, `completed`, `needs_rework`), whether it's open yet, and any reviewer's note; with the playlist's `description` and `completionBadge` (D79) |

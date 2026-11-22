@@ -54,6 +54,9 @@ public interface IIdentityQueries
     Task<bool> IsContactRestrictedAsync(UserId first, UserId second, CancellationToken cancellationToken = default);
 
     Task<bool> IsMinorAsync(UserId userId, CancellationToken cancellationToken = default);
+
+    /// <summary>The account's roles (<c>youth</c>, <c>network_organiser</c> and so on), to say what someone was acting as.</summary>
+    Task<IReadOnlyList<string>> GetRoleNamesAsync(UserId userId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

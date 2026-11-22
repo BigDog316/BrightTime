@@ -1,0 +1,70 @@
+@page "/family/{Id:guid}/record-log"
+@* Who has seen a child's record, for their guardian (D96): every time someone other than this
+   guardian looked at or changed the child profile's records. Once the child claims their account
+   (D35), the log is theirs and the server says so. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+@if (Session.Me is null)
+{
+    <h1>@T["app.record_log.title"]</h1>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    string name = Text.Name(_child?.GivenName ?? string.Empty);
+    <h1>@T.Format("app.child_record_log.title", ("child", name))</h1>
+    <p class="hint">@T.Format("app.child_record_log.intro", ("child", name))</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_entries is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_entries is not null)
+    {
+        <RecordLogList Entries="_entries" Older="@_older" Loading="_loading" Empty="@T["app.child_record_log.none"]" ShowOlder="OlderAsync" />
+    }
+
+    <a href="family/@Id.ToString("D")">@T.Format("app.child_portfolio.back", ("child", name))</a>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Child? _child;
+    private List<RecordLogEntry>? _entries;
+    private string? _older;
+    private bool _loading;
+    private ApiProblem? _problem;
+
+    protected override Task OnParametersSetAsync() => Session.Me is null ? Task.CompletedTask : LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<Child> child = await Api.ChildAsync(Id);
+        ApiResult<RecordLogPage> page = await Api.ChildRecordLogAsync(Id);
+        _child = child.Value ?? _child;
+        if (page.Value is { } p)
+        {
+            _entries = [.. p.Entries];
+            _older = p.Older;
+        }
+
+        _problem = page.Problem ?? child.Problem;
+    }
+
+    private async Task OlderAsync()
+    {
+        _loading = true;
+        ApiResult<RecordLogPage> page = await Api.ChildRecordLogAsync(Id, _older);
+        _loading = false;
+        if (page.Value is { } p)
+        {
+            _entries!.AddRange(p.Entries);
+            _older = p.Older;
+        }
+
+        _problem = page.Problem;
+    }
+}

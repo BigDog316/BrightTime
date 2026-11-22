@@ -41,6 +41,7 @@ else if (_child is { } child)
         @if (child.Link.Status == "verified" && !child.IsClaimed)
         {
             <a class="button" href="family/@child.Id.ToString("D")/portfolio">@T["app.child_portfolio.open"]</a>
+            <a class="button" href="family/@child.Id.ToString("D")/record-log">@T["app.child_record_log.open"]</a>
         }
 
         <section aria-labelledby="consents">

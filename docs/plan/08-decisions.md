@@ -3148,6 +3148,52 @@ same way. The new console words are machine drafts outside English, flagged in `
 (`hoodpages.`, `error.hood_pages.`). `HoodPagesTests` covers the flow, refusals, both languages on
 the public page and archiving; the route matrix covers who gets in.
 
+### D96 — Who has seen my record (**proposed 2026-11-22**)
+
+docs/plan/06 lists *Who has seen my record* among the youth screens ("every read, by whom, with
+what basis and when"), and docs/plan/04 gives `audit.read` for one's own record and one's
+children's: "a feature, not a side effect of having an audit log". The audit trail has recorded
+every youth-record read and change since M1, and `YouthRecordHandler` records refusals so that
+this screen can show them. Nothing showed them to the person. Sam chose the scope on 2026-11-22:
+reads and changes, refusals shown, child profiles only for guardians, and naming who did it.
+- **What's listed:** every time someone *else* read or changed the person's records, newest first,
+  50 at a time. Their own actions aren't, and in a guardian's view neither are the guardian's.
+  Each entry says what was done (one of about 40 short codes the app words, such as `record_read`,
+  `attendance_recorded`, `application_decided`, `badge_awarded`; `other` for anything unnamed),
+  whether it was **turned away**, the **basis** an organisation's access had when one was checked
+  (an application, an enrolment, a guardian's share, ...), and when.
+- **Who:** staff are named by **their organisation, their role there, and the job title they were
+  invited with** if they have one ("Youth Coordinator at Kettle Parks (staff)"), or "no longer
+  there" once they've left. *Deviation from Sam's choice of a name:* the system keeps no names for
+  staff, only their email addresses, and showing a young person a staff member's address would be
+  a way to reach them off the platform, which the messaging rules (D53) are built to prevent.
+  Sam agreed to this on 2026-11-22. Otherwise: a guardian, the site's organisers (by role), someone viewing the public portfolio,
+  BrightTime itself (the worker), or someone else with an account.
+- **Finding a person's records:** the trail names records by whatever each module audits with,
+  often a record's id rather than the person's. So each module that keeps records about people says
+  which ids are theirs (`IAuditSubjects`): Learning (participation, goals, skills, projects,
+  badges, playlists) and Enrollment (the household profiles they own or are in, their applications
+  and enrolments, which attendance is recorded against). The log reads any row naming one of those
+  or the person (`subject_ids &&`, served by each audit partition's GIN index). Fee payments are
+  the payer's and aren't listed; conversations aren't either: the people in them see each other.
+- **Routes:** `GET /me/record-log` for the signed-in person, and `GET /children/{id}/record-log`
+  for a verified guardian of a child profile, as D93 has it (`record_log.child_not_found` 404,
+  `record_log.guardian_view` 403, `record_log.child_claimed` 403). `older` is the next page's
+  cursor. Reading either is itself audited (`identity.record_log.read`), refusals too, so a
+  guardian's look shows in the young person's log once it's theirs.
+- **Who may:** the check is whose record it is, not a role. A family's adult holds no role until
+  they work for an organisation (as D93's guardian routes assume), so `audit.read` as a
+  permission would have shut guardians out. Anyone signed in sees their own.
+- **In the app:** *Who has seen your record* in the Account menu, and *Who has seen their record*
+  on a verified child's page, next to their portfolio. Wording avoids "you", so an entry reads the
+  same to the young person and their guardian.
+
+No schema change. `RecordLogApiTests` covers the guardian's view (an organisation's decision,
+badge and endorsement by organisation, role and title, the organiser's verification, another
+organisation turned away, none of the guardian's own), nobody else, the link without activity,
+and the claimed young person's own log with their guardian's actions in it.
+`RecordLogScreenTests` covers the screens.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

@@ -66,6 +66,21 @@ public sealed class DirectoryQueries(DirectoryDbContext db, IClock clock) : IDir
                 .FirstOrDefaultAsync(ct),
             cancellationToken);
 
+    public Task<string?> GetMemberTitleAsync(
+        OrganisationId organisationId,
+        UserId userId,
+        CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct =>
+            db.Memberships
+                .AsNoTracking()
+                .Where(m => m.OrgId == organisationId.Value
+                            && m.UserId == userId.Value
+                            && m.Status == MembershipStatus.Active
+                            && m.EndedAt == null)
+                .Select(m => m.Title)
+                .FirstOrDefaultAsync(ct),
+            cancellationToken);
+
     public Task<IReadOnlyList<SiteSummary>> GetSitesAsync(
         IReadOnlyCollection<Guid> siteIds,
         CancellationToken cancellationToken = default)

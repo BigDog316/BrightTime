@@ -17,6 +17,12 @@ public sealed record AuditFilter
 
     public Guid? SubjectId { get; init; }
 
+    /// <summary>Rows naming any of these subjects (D96: everything about one person).</summary>
+    public IReadOnlyCollection<Guid>? AnySubject { get; init; }
+
+    /// <summary>Rows whose actor is none of these; rows with no actor stay.</summary>
+    public IReadOnlyCollection<Guid>? NotActors { get; init; }
+
     public string? Outcome { get; init; }
 
     public DateTimeOffset? From { get; init; }
@@ -81,6 +87,16 @@ public sealed class AuditLog(NpgsqlDataSource dataSource)
         {
             where.Add("subject_ids @> array[@subject]::uuid[]");
             parameters.Add(new NpgsqlParameter("subject", subject));
+        }
+
+        if (filter.AnySubject is { } any)
+        {
+            Add("subject_ids && @any_subject", "any_subject", any.Distinct().ToArray());
+        }
+
+        if (filter.NotActors is { Count: > 0 } others)
+        {
+            Add("(actor_id is null or actor_id <> all(@not_actors))", "not_actors", others.Distinct().ToArray());
         }
 
         if (filter.Outcome is { Length: > 0 } outcome)

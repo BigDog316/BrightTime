@@ -1,0 +1,332 @@
+@page "/organiser/collections/{CollectionId:guid}"
+@using System.Globalization
+@using BrightTime.Modules.Opportunities.Curation
+@using BrightTime.Modules.Platform.Taxonomy
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.CollectionsPolicy)]
+@inherits ConsoleComponent
+
+@*
+    One collection (D94): what it says, in English and the site's other languages; when it shows,
+    whether the home page features it, and its place; its listings in order, each with a note on
+    why it's there; listings found by title and added; and publishing or archiving it. The link
+    name changes only until it's first published. A listing that has left the site since it was
+    added is marked: the public page already leaves it out.
+*@
+@if (_collection is { } c)
+{
+    bool fixedSlug = c.EverPublished;
+    <PageTitle>@c.Title · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/organiser/collections">@T["curation.title"]</a></p>
+    <h1 dir="auto">@c.Title</h1>
+    <p class="note">
+        @T["curation.status." + c.Status]
+        @if (c.Status == CollectionEditor.Published)
+        {
+            @(" · ")<a href="/collections/@c.Slug">@T["curation.view"]</a>
+        }
+    </p>
+
+    @if (Done is "created" or "saved" or "worded" or "listings" or "published" or "archived")
+    {
+        <p class="notice success" role="status">@T["curation.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <section aria-labelledby="about-heading">
+        <h2 id="about-heading">@T["curation.about"]</h2>
+        <form method="post" @formname="details" @onsubmit="SaveAsync" class="editor">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="collection-title">@T["curation.field.title"]</label>
+                <input id="collection-title" name="title" type="text" maxlength="@CollectionEditor.MaxTitle" required value="@Posted("title", c.Title)" dir="auto" />
+            </div>
+            <div class="field">
+                <label for="collection-description">@T["curation.field.description"]</label>
+                <textarea id="collection-description" name="description" rows="3" maxlength="@CollectionEditor.MaxDescription" dir="auto">@Posted("description", c.Description)</textarea>
+            </div>
+            @if (fixedSlug)
+            {
+                <p><strong>@T["curation.field.slug"]</strong> <code>@c.Slug</code></p>
+                <p class="hint">@T["curation.field.slug_fixed"]</p>
+                <input type="hidden" name="slug" value="@c.Slug" />
+            }
+            else
+            {
+                <div class="field">
+                    <label for="collection-slug">@T["curation.field.slug"]</label>
+                    <p class="hint" id="collection-slug-hint">@T["curation.field.slug_hint"]</p>
+                    <input id="collection-slug" name="slug" type="text" maxlength="60" required value="@Posted("slug", c.Slug)" dir="ltr" aria-describedby="collection-slug-hint" />
+                </div>
+            }
+            <div class="field-row">
+                <div class="field">
+                    <label for="collection-starts">@T["curation.field.starts"]</label>
+                    <input id="collection-starts" name="starts" type="date" value="@Posted("starts", Day(c.StartsOn))" aria-describedby="collection-when-hint" />
+                </div>
+                <div class="field">
+                    <label for="collection-ends">@T["curation.field.ends"]</label>
+                    <input id="collection-ends" name="ends" type="date" value="@Posted("ends", Day(c.EndsOn))" aria-describedby="collection-when-hint" />
+                </div>
+                <div class="field">
+                    <label for="collection-order">@T["curation.field.order"]</label>
+                    <input id="collection-order" name="order" type="number" min="0" max="@CollectionEditor.MaxSortOrder" inputmode="numeric"
+                           value="@Posted("order", c.SortOrder.ToString(CultureInfo.InvariantCulture))" aria-describedby="collection-when-hint" />
+                </div>
+            </div>
+            <p class="hint" id="collection-when-hint">@T["curation.field.dates_hint"]</p>
+            <div class="field checkbox">
+                <input id="collection-featured" name="featured" type="checkbox" value="true" checked="@(_posted is null ? c.IsFeatured : _posted.ContainsKey("featured"))" />
+                <label for="collection-featured">@T["curation.field.featured"]</label>
+            </div>
+            <div class="actions">
+                <button type="submit">@T["editor.save_changes"]</button>
+            </div>
+        </form>
+    </section>
+
+    @if (_locales.Count > 0)
+    {
+        <section aria-labelledby="languages-heading">
+            <h2 id="languages-heading">@T["curation.languages"]</h2>
+            <p class="hint">@T["curation.languages_hint"]</p>
+            @foreach (string lang in _locales)
+            {
+                Locale locale = Locale.TryFromCode(lang, out Locale l) ? l : Locale.English;
+                CollectionWording? w = c.Wordings.FirstOrDefault(x => x.Locale == lang);
+                <form method="post" @formname="@("wording-" + lang)" @onsubmit="() => WordAsync(lang)" class="editor" lang="@locale.Code" dir="@locale.Direction">
+                    <AntiforgeryToken />
+                    <fieldset>
+                        <legend>@locale.NativeName (@T["language." + locale.Code])</legend>
+                        <div class="field">
+                            <label for="title-@lang">@T["curation.field.title"]</label>
+                            <input id="title-@lang" name="wordingTitle" type="text" maxlength="@CollectionEditor.MaxTitle" value="@w?.Title" />
+                        </div>
+                        <div class="field">
+                            <label for="description-@lang">@T["curation.field.description"]</label>
+                            <textarea id="description-@lang" name="wordingDescription" rows="2" maxlength="@CollectionEditor.MaxDescription">@w?.Description</textarea>
+                        </div>
+                        <div class="actions">
+                            <button type="submit">@T["curation.save_language"]</button>
+                        </div>
+                    </fieldset>
+                </form>
+            }
+        </section>
+    }
+
+    <section aria-labelledby="listings-heading">
+        <h2 id="listings-heading">@T["curation.listings"]</h2>
+        @if (c.Entries.Count == 0)
+        {
+            <p>@T["curation.listings_none"]</p>
+        }
+        else
+        {
+            <ol class="steps">
+                @for (int n = 0; n < c.Entries.Count; n++)
+                {
+                    int i = n;
+                    CuratedEntry e = c.Entries[i];
+                    <li @key="e.ListingId">
+                        <h3 dir="auto"><a href="/listings/@e.ListingSlug">@e.Title</a></h3>
+                        @if (!e.Published)
+                        {
+                            <p class="notice warning">@T["curation.listing_gone"]</p>
+                        }
+                        <form method="post" @formname="@($"note-{i}")" @onsubmit="() => NoteAsync(e.ListingId)" class="editor">
+                            <AntiforgeryToken />
+                            <div class="field">
+                                <label for="note-@i">@T["curation.field.note"]</label>
+                                <textarea id="note-@i" name="note" rows="2" maxlength="@CollectionEditor.MaxNote" dir="auto">@e.Note</textarea>
+                            </div>
+                            <button type="submit" class="secondary-button">@T["curation.save_note"]</button>
+                        </form>
+                        <div class="inline-actions">
+                            @if (i > 0)
+                            {
+                                <form method="post" @formname="@($"up-{i}")" @onsubmit="() => MoveAsync(e.ListingId, -1)" class="inline-form">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary-button" aria-label="@T.Format("curation.move_up_named", ("title", e.Title))">@T["curation.move_up"]</button>
+                                </form>
+                            }
+                            @if (i < c.Entries.Count - 1)
+                            {
+                                <form method="post" @formname="@($"down-{i}")" @onsubmit="() => MoveAsync(e.ListingId, 1)" class="inline-form">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary-button" aria-label="@T.Format("curation.move_down_named", ("title", e.Title))">@T["curation.move_down"]</button>
+                                </form>
+                            }
+                            <form method="post" @formname="@($"remove-{i}")" @onsubmit="() => RemoveAsync(e.ListingId)" class="inline-form">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary-button" aria-label="@T.Format("curation.remove_named", ("title", e.Title))">@T["curation.remove"]</button>
+                            </form>
+                        </div>
+                    </li>
+                }
+            </ol>
+        }
+
+        <h3 id="add-heading">@T["curation.add"]</h3>
+        <form method="get" action="/organiser/collections/@c.Id" class="editor" aria-labelledby="add-heading">
+            <div class="field">
+                <label for="find">@T["curation.find"]</label>
+                <input id="find" name="find" type="search" value="@Find" />
+            </div>
+            <button type="submit" class="secondary-button">@T["curation.find_button"]</button>
+        </form>
+        @if (Find is { Length: > 0 })
+        {
+            @if (_choices.Count == 0)
+            {
+                <p>@T["curation.found_none"]</p>
+            }
+            else
+            {
+                <ul class="cards">
+                    @foreach (ListingChoice l in _choices)
+                    {
+                        <li @key="l.Id">
+                            <form method="post" @formname="@("add-" + l.Id.ToString("N"))" @onsubmit="() => AddAsync(l.Id)" class="inline-form">
+                                <AntiforgeryToken />
+                                <span dir="auto">@l.Title</span>
+                                <button type="submit" class="secondary-button" aria-label="@T.Format("curation.add_named", ("title", l.Title))">@T["curation.add_button"]</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </section>
+
+    <section aria-labelledby="show-heading">
+        <h2 id="show-heading">@T["curation.show"]</h2>
+        @if (c.Status == CollectionEditor.Published)
+        {
+            <p>@T["curation.show_published"]</p>
+            <form method="post" @formname="archive" @onsubmit="ArchiveAsync">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">@T["curation.archive"]</button>
+            </form>
+        }
+        else
+        {
+            <p>@T[c.Status == CollectionEditor.Archived ? "curation.show_archived" : "curation.show_draft"]</p>
+            <form method="post" @formname="publish" @onsubmit="PublishAsync">
+                <AntiforgeryToken />
+                <button type="submit">@T["curation.publish"]</button>
+            </form>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid CollectionId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    /// <summary>Words to find listings to add by title.</summary>
+    [SupplyParameterFromQuery(Name = "find")] public string? Find { get; set; }
+
+    private CollectionDetail? _collection;
+    private IReadOnlyList<string> _locales = [];
+    private IReadOnlyList<ListingChoice> _choices = [];
+    private string? _problem;
+
+    /// <summary>What was posted, kept when it's refused so nothing typed is lost.</summary>
+    private Dictionary<string, string>? _posted;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        CollectionEditor editor = Get<CollectionEditor>();
+        _collection = await editor.GetAsync(CollectionId);
+        if (_collection is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _locales = [.. (await Get<TaxonomyEditor>().LocalesAsync()).Where(l => l != CollectionEditor.SourceLanguage)];
+        if (Find is { Length: > 0 } words)
+        {
+            _choices = await editor.FindListingsAsync(CollectionId, words);
+        }
+    }
+
+    private string? Posted(string name, string? stored) => _posted is null ? stored : _posted.GetValueOrDefault(name);
+
+    private static string? Day(DateOnly? day) => day?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static bool TryDay(string raw, out DateOnly? day)
+    {
+        day = null;
+        if (raw.Trim().Length == 0)
+        {
+            return true;
+        }
+
+        if (DateOnly.TryParseExact(raw.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly d))
+        {
+            day = d;
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task SaveAsync()
+    {
+        string[] names = ["title", "description", "slug", "starts", "ends", "order", "featured"];
+        _posted = names.Select(n => (n, v: FormValue(n))).Where(x => x.v.Length > 0).ToDictionary(x => x.n, x => x.v, StringComparer.Ordinal);
+        string order = FormValue("order").Trim();
+        short place = 0;
+        if (!TryDay(FormValue("starts"), out DateOnly? starts) || !TryDay(FormValue("ends"), out DateOnly? ends)
+            || (order.Length > 0 && !short.TryParse(order, NumberStyles.None, CultureInfo.InvariantCulture, out place)))
+        {
+            _problem = T["curation.invalid_numbers"];
+            return;
+        }
+
+        CollectionInput input = new(FormValue("title"), FormValue("description"), FormValue("slug"), starts, ends, FormValue("featured") == "true", place);
+        Answer(await Get<CollectionEditor>().UpdateAsync(CollectionId, input, Actor), "saved");
+    }
+
+    private async Task WordAsync(string locale) =>
+        Answer(await Get<CollectionEditor>().WordAsync(CollectionId, new CollectionWording(locale, FormValue("wordingTitle"), FormValue("wordingDescription")), Actor), "worded");
+
+    private async Task NoteAsync(Guid listing) => Answer(await Get<CollectionEditor>().NoteAsync(CollectionId, listing, FormValue("note"), Actor), "listings");
+
+    private async Task MoveAsync(Guid listing, int by) => Answer(await Get<CollectionEditor>().MoveAsync(CollectionId, listing, by, Actor), "listings");
+
+    private async Task RemoveAsync(Guid listing) => Answer(await Get<CollectionEditor>().RemoveAsync(CollectionId, listing, Actor), "listings");
+
+    private async Task AddAsync(Guid listing) => Answer(await Get<CollectionEditor>().AddAsync(CollectionId, listing, null, Actor), "listings");
+
+    private async Task PublishAsync() => Answer(await Get<CollectionEditor>().PublishAsync(CollectionId, Actor), "published");
+
+    private async Task ArchiveAsync() => Answer(await Get<CollectionEditor>().ArchiveAsync(CollectionId, Actor), "archived");
+
+    private void Answer(Result done, string what)
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/collections/{CollectionId}?done={what}");
+    }
+}

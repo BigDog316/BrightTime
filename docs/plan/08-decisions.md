@@ -3071,6 +3071,38 @@ and the module decides who. `ChildPortfolioApiTests` covers the flow end to end 
 verified, the three files, a stranger, the activity flag, a claim); `ChildPortfolioScreenTests`
 covers the screens.
 
+### D94 — Collections in the organiser console (**proposed 2026-11-21**)
+
+The schema, the seed and the public pages have had collections since M1 (`/collections`, a
+collection's page, and the featured ones on the home page), but nothing wrote them: the seed's
+were the only ones. docs/plan/06 lists *Collections & featured* in the organiser console, and
+docs/plan/04 gives `collections.manage` to network organisers alone. This builds it, in the
+Opportunities module (`CollectionEditor`) and two console pages.
+- **The list:** `/organiser/collections`, every collection with its state, when it shows, how
+  many activities and its place; a new one begins as a draft from a title and a link name.
+- **A collection:** `/organiser/collections/{id}`:
+  - its title, description, first and last day shown (both optional), place in the list
+    (0 to 999, lower first) and whether the home page features it;
+  - its wording in each of the site's other languages, one form each; an empty title takes a
+    language away, and the public pages then show the English;
+  - its activities in order, each with an optional note on why it's there (up to 300
+    characters), moved up or down, or removed; up to 60;
+  - activities found by title and added. Only published ones are offered and taken. One that
+    leaves the site afterwards is marked here, and the public page already leaves it out, as the
+    finder shows only published listings;
+  - **Publish** (it needs an activity) and **Archive**. An archived collection can be published
+    again; nothing takes one back to draft, so a draft has never been published.
+- **The link name** is 3 to 60 lower-case letters, digits and hyphens, unique in the tenant, and
+  changes only while the collection is a draft. Once published it stays, because people share it
+  (`collections.slug_fixed`).
+- **Audit:** `curation.collection_created`, `_changed`, `_published` and `_archived`, the
+  organiser as actor. Nothing in a collection is about a person.
+- **Not yet:** a hero image (media storage), and scheduling beyond the first and last day.
+
+No schema change. The new console words are machine drafts outside English, flagged in
+`@@drafts` (`curation.`, `error.collections.`). `CurationPagesTests` covers the flow, the public
+page and the home page; the route matrix covers who gets in.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

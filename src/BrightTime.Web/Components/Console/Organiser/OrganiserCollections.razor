@@ -1,0 +1,118 @@
+@page "/organiser/collections"
+@using BrightTime.Modules.Opportunities.Curation
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.CollectionsPolicy)]
+@inherits ConsoleComponent
+
+@*
+    The organiser's collections (D94): every one, drafts and archived ones too, in the order the
+    site shows them, and a new one begun as a draft. Collections hold only published listings and
+    say nothing about anyone, so nothing here is a youth record.
+*@
+<PageTitle>@T["curation.title"] · BrightTime</PageTitle>
+
+<h1>@T["curation.title"]</h1>
+<p class="hint">@T["curation.intro"]</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["organiser.no_database"]</p>
+}
+else
+{
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_rows.Count == 0)
+    {
+        <p>@T["curation.none"]</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="queue">
+                <thead>
+                    <tr>
+                        <th scope="col">@T["curation.col.title"]</th>
+                        <th scope="col">@T["curation.col.state"]</th>
+                        <th scope="col">@T["curation.col.when"]</th>
+                        <th scope="col">@T["curation.col.listings"]</th>
+                        <th scope="col">@T["curation.col.order"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (CuratedRow c in _rows)
+                    {
+                        <tr class="@(c.Status == CollectionEditor.Archived ? "retired" : "")">
+                            <td><a href="/organiser/collections/@c.Id" dir="auto">@c.Title</a></td>
+                            <td>@T["curation.status." + c.Status]@(c.IsFeatured ? " · " + T["curation.featured"] : "")</td>
+                            <td>@When(c.StartsOn, c.EndsOn)</td>
+                            <td>@T.Number(c.Listings)</td>
+                            <td>@T.Number(c.SortOrder)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <section aria-labelledby="new-heading">
+        <h2 id="new-heading">@T["curation.new"]</h2>
+        <form method="post" @formname="create" @onsubmit="CreateAsync" class="editor">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="collection-title">@T["curation.field.title"]</label>
+                <input id="collection-title" name="title" type="text" maxlength="@CollectionEditor.MaxTitle" required value="@_title" dir="auto" />
+            </div>
+            <div class="field">
+                <label for="collection-slug">@T["curation.field.slug"]</label>
+                <p class="hint" id="collection-slug-hint">@T["curation.field.slug_hint"]</p>
+                <input id="collection-slug" name="slug" type="text" maxlength="60" required value="@_slug" dir="ltr" aria-describedby="collection-slug-hint" />
+            </div>
+            <div class="actions">
+                <button type="submit">@T["curation.create"]</button>
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<CuratedRow> _rows = [];
+    private string? _problem;
+    private string? _title;
+    private string? _slug;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.IsAvailable)
+        {
+            _rows = await Get<CollectionEditor>().ListAsync();
+        }
+    }
+
+    private string When(DateOnly? starts, DateOnly? ends) => (starts, ends) switch
+    {
+        ({ } s, { } e) => T.Range(T.DateShort(s), T.DateShort(e)),
+        ({ } s, null) => T.Format("curation.from", ("date", T.DateShort(s))),
+        (null, { } e) => T.Format("curation.until", ("date", T.DateShort(e))),
+        _ => T["curation.always"],
+    };
+
+    private async Task CreateAsync()
+    {
+        _title = FormValue("title");
+        _slug = FormValue("slug");
+        Result<Guid> made = await Get<CollectionEditor>().CreateAsync(new CollectionInput(_title, null, _slug, null, null, false, 0), Actor);
+        if (!made.IsSuccess)
+        {
+            _problem = T.Error(made.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/collections/{made.Value}?done=created");
+    }
+}

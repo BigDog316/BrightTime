@@ -25,6 +25,10 @@
             {
                 <a href="/organiser/taxonomy">@T["site.nav.taxonomy"]</a>
             }
+            @if (user.HasPermission(Permissions.Collections.Manage))
+            {
+                <a href="/organiser/collections">@T["site.nav.collections"]</a>
+            }
             @if (user.HasPermission(Permissions.Tenant.Settings))
             {
                 <a href="/organiser/wording">@T["site.nav.wording"]</a>

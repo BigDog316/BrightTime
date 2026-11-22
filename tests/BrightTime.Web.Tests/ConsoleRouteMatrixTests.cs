@@ -124,6 +124,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
             "ApplicationId" or "FormId" or "WaiverId" or "ConversationId" or "BadgeId" or "PlaylistId" => Guid.Empty.ToString(),
             "Vocabulary" => "category",
             "TermId" => KettleTaxonomy.TermId("category", "stem").ToString(),
+            "CollectionId" => db.Data.Collections![0].Id.ToString(),
             string other => throw new InvalidOperationException($"{route}: the matrix cannot fill {{{other}}}; add a value for it."),
         });
     }

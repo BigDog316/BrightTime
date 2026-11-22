@@ -2,12 +2,13 @@
 
 This guide is for the county's network organisers: the people who decide which organisations and
 listings appear on BrightTime, and who run the site itself. Sign in, then use the links at the top
-of the console: **Review queue**, **Taxonomy**, **Wording** and **Audit log**.
+of the console: **Review queue**, **Taxonomy**, **Collections**, **Wording** and **Audit log**.
 
 - [The review queue](#the-review-queue)
 - [Reviewing an organisation](#reviewing-an-organisation)
 - [Reviewing a listing](#reviewing-a-listing)
 - [Taxonomy](#taxonomy)
+- [Collections](#collections)
 - [Wording](#wording)
 - [The audit log](#the-audit-log)
 - [Consent by signed form](#consent-by-signed-form)
@@ -81,6 +82,26 @@ organisations endorse. It starts empty: add the skills your county wants to reco
 Saving a term updates the listings tagged with it in search shortly afterwards. **Retire** stops
 editors and filters offering a term; listings already tagged keep it until they're re-tagged.
 **Restore** brings it back.
+
+## Collections
+
+A collection gathers published activities around a theme, like summer camps or free weekend
+programs. Families find them under **Collections** on the site, and featured ones on the home page.
+
+1. Under **Collections**, give a new one a **title** and a **link name**, its address on the site,
+   like `summer-camps`. It starts as a draft, which only organisers see.
+2. On its page, write a **description**, and if you like a **first and last day** to show it, a
+   **place** in the list (lower numbers first), and **Feature it on the home page**.
+3. Under **Other languages**, give it a title and description in each of the site's languages.
+   Without them, people reading in that language see the English.
+4. Under **Add activities**, find published activities by title and **Add** them. Each can have a
+   note on why it's there. **Move up**, **Move down** and **Remove** put them in order.
+5. **Publish** it. It needs at least one activity.
+
+The link name can't change once a collection has been published, because people may have shared
+it. **Archive** takes a collection off the site; publishing it again brings it back. If an
+activity in it stops being published, the collection's page leaves it out, and its page here marks
+it.
 
 ## Wording
 

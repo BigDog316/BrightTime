@@ -34,6 +34,8 @@ public static class ConsoleServices
 
     public const string TaxonomyPolicy = "console.taxonomy";
 
+    public const string CollectionsPolicy = "console.collections";
+
     private const string AuthDataSourceKey = "auth";
 
     /// <summary>How long a cookie's claims are trusted before they are rebuilt from the database.</summary>
@@ -79,6 +81,7 @@ public static class ConsoleServices
             .AddPolicy(ReviewPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Listings.Review)))
             .AddPolicy(VetPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Organisations.Vet)))
             .AddPolicy(TaxonomyPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Taxonomy.Manage)))
+            .AddPolicy(CollectionsPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Collections.Manage)))
             .AddPolicy(WordingPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
             .AddPolicy(AuditPolicy, p => p.RequireAuthenticatedUser()
                 .RequireRole(BrightTimeRoles.TenantWideAudit)
@@ -203,6 +206,7 @@ public static class ConsoleServices
             services.AddScoped<SiteEditor>();
             services.AddScoped<StaffDirectory>();
             services.AddScoped<BrightTime.Modules.Platform.Taxonomy.TaxonomyEditor>();
+            services.AddScoped<BrightTime.Modules.Opportunities.Curation.CollectionEditor>();
         }
 
         return services;

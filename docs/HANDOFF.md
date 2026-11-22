@@ -320,7 +320,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   the young person why.
 - **The M4 report** ([m4-report.md](m4-report.md)), not yet signed off: two of three acceptance
   criteria are met; the third needs a validator check on a public host. Evidence uploads (media
-  storage) and quizzes remain of M4's scope.
+  storage) remain of M4's scope; quizzes are built (D92).
 - **M3 was signed off on 2026-10-22** ([m3-report.md](m3-report.md)). Every acceptance criterion is
   met. The funder packet (Q10) and SMS (Q9) carry forward, waiting on answers. Rebuild the compose volume: the schema and the role permissions
   changed.

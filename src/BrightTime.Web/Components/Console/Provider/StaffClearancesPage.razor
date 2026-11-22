@@ -1,0 +1,229 @@
+@page "/provider/orgs/{OrgId:guid}/staff/{MembershipId:guid}/clearances"
+@using System.Globalization
+@using BrightTime.Modules.Directory.Clearances
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+@* A staff member's clearances (D98): status and dates only. The organisation's owners and admins
+   record their own staff's; the site's organisers record anyone's, and may record one for the
+   whole county. What working with young people needs is shown, not enforced. *@
+
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["clearances.denied"]</h1>
+    <p>@T["clearances.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_member is { } m)
+{
+    <PageTitle>@T.Format("clearances.title", ("person", _person)) · BrightTime</PageTitle>
+
+    @if (_asAdmin)
+    {
+        <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+        <h1>@_name</h1>
+        <OrgNav OrgId="@OrgId" Current="staff" Role="@_role" />
+    }
+    else
+    {
+        <p class="eyebrow"><a href="/organiser/review/organisations/@OrgId">@_name</a></p>
+    }
+
+    <h2 dir="auto">@T.Format("clearances.title", ("person", _person))</h2>
+    <p>
+        @T["organisation.role." + m.Role]
+        @if (m.Title is { Length: > 0 } title)
+        {
+            <span dir="auto"> · @title</span>
+        }
+    </p>
+
+    @if (Done == "recorded")
+    {
+        <p class="notice success" role="status">@T["clearances.done"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p><ClearanceSummary Readiness="@m.Readiness" /></p>
+    <p class="hint">@T.Format("clearances.required", ("kinds", string.Join(", ", StaffClearances.Required.Select(k => T["clearance.kind." + k]))))</p>
+    <p class="hint">@T["provider.staff.clearance_note"]</p>
+
+    @if (m.Held.Count == 0)
+    {
+        <p>@T["provider.staff.clearance.none"]</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">@T["clearances.col.kind"]</th>
+                        <th scope="col">@T["clearances.col.status"]</th>
+                        <th scope="col">@T["clearances.col.completed"]</th>
+                        <th scope="col">@T["clearances.col.expires"]</th>
+                        <th scope="col">@T["clearances.col.counts_at"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (ClearanceEntry c in m.Held)
+                    {
+                        <tr>
+                            <td>@T["clearance.kind." + c.Kind]</td>
+                            <td><span class="clearance clearance-@c.Status">@T["clearance.status." + c.Status]</span></td>
+                            <td>@(c.CompletedOn is { } done ? T.DateShort(done) : "")</td>
+                            <td>@(c.ExpiresOn is { } on ? T.DateShort(on) : T["clearances.no_expiry"])</td>
+                            <td>@(c.CountyWide ? T["clearances.county_wide"] : _name)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <section aria-labelledby="record-heading">
+        <h3 id="record-heading">@T["clearances.record"]</h3>
+        <p class="hint">@T["clearances.record_hint"]</p>
+        <form method="post" class="editor" @formname="record" @onsubmit="RecordAsync">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="Kind">@T["clearances.col.kind"]</label>
+                <select id="Kind" name="Kind">
+                    @foreach (string kind in StaffClearances.Kinds)
+                    {
+                        <option value="@kind" selected="@(kind == _kind)">@T["clearance.kind." + kind]</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="Status">@T["clearances.col.status"]</label>
+                <select id="Status" name="Status">
+                    @foreach (string status in StaffClearances.Recordable)
+                    {
+                        <option value="@status" selected="@(status == _status)">@T["clearance.status." + status]</option>
+                    }
+                </select>
+            </div>
+            <div class="field field-short">
+                <label for="CompletedOn">@T["clearances.col.completed"]</label>
+                <p class="hint" id="hint-CompletedOn">@T["clearances.completed_hint"]</p>
+                <input id="CompletedOn" name="CompletedOn" type="date" aria-describedby="hint-CompletedOn" value="@_completed" />
+            </div>
+            <div class="field field-short">
+                <label for="ExpiresOn">@T["clearances.col.expires"]</label>
+                <p class="hint" id="hint-ExpiresOn">@T["clearances.expires_hint"]</p>
+                <input id="ExpiresOn" name="ExpiresOn" type="date" aria-describedby="hint-ExpiresOn" value="@_expires" />
+            </div>
+            @if (_asOrganiser)
+            {
+                <label class="check">
+                    <input type="checkbox" name="CountyWide" value="true" checked="@_countyWide" />
+                    @T["clearances.county_wide_choice"]
+                </label>
+            }
+            <div class="actions">
+                <button type="submit">@T["clearances.save"]</button>
+            </div>
+        </form>
+    </section>
+
+    @if (_asAdmin)
+    {
+        <a href="/provider/orgs/@OrgId/staff">@T["clearances.back"]</a>
+    }
+    else
+    {
+        <a href="/organiser/review/organisations/@OrgId">@T.Format("clearances.back_to", ("organisation", _name ?? ""))</a>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid MembershipId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private string? _name;
+    private string _role = "";
+    private bool _asAdmin;
+    private bool _asOrganiser;
+    private MemberClearances? _member;
+    private string _person = "";
+    private string? _problem;
+    private string _kind = StaffClearances.Kinds[0];
+    private string _status = "cleared";
+    private string _completed = "";
+    private string _expires = "";
+    private bool _countyWide;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _asAdmin = await CanActForAsync(Org, Permissions.Clearances.Record, OrganisationRoles.Admin);
+        _asOrganiser = User.HasPermission(Permissions.Clearances.Record) && User.HasPermission(Permissions.Organisations.Vet);
+        if (!_asAdmin && !_asOrganiser)
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        _member = _name is null ? null : await Get<StaffClearances>().GetAsync(OrgId, MembershipId);
+        if (_member is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _role = RoleIn(Org) ?? "";
+        _person = T["provider.staff.no_address"];
+        if (Services.GetService<AccountProvisioning>() is { } accounts
+            && (await accounts.EmailsAsync(Tenant.TenantId, [_member.UserId])).TryGetValue(_member.UserId, out string? email))
+        {
+            _person = email;
+        }
+    }
+
+    private async Task RecordAsync()
+    {
+        if (_member is null)
+        {
+            return;
+        }
+
+        _kind = FormValue("Kind");
+        _status = FormValue("Status");
+        _completed = FormValue("CompletedOn");
+        _expires = FormValue("ExpiresOn");
+        _countyWide = _asOrganiser && FormValue("CountyWide") == "true";
+        ClearanceInput input = new(_kind, _status, Day(_completed), Day(_expires), _countyWide);
+        Result result = await Get<StaffClearances>().RecordAsync(OrgId, MembershipId, input, Actor, asOrganiser: !_asAdmin || _countyWide);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/staff/{MembershipId}/clearances?done=recorded");
+    }
+
+    private static DateOnly? Day(string value) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day) ? day : null;
+}

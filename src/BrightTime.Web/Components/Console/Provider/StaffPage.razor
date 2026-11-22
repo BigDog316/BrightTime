@@ -1,4 +1,5 @@
 @page "/provider/orgs/{OrgId:guid}/staff"
+@using BrightTime.Modules.Directory.Clearances
 @using BrightTime.Modules.Directory.Contracts
 @using BrightTime.Modules.Directory.Provider
 @using BrightTime.Modules.Identity.Authorization
@@ -67,6 +68,7 @@ else if (_name is not null)
                         <td>@T["organisation.role." + m.Role]</td>
                         <td>@string.Join(", ", m.SiteIds.Select(s => _siteNames.TryGetValue(s, out string? n) ? n : "").Where(n => n.Length > 0)) </td>
                         <td>
+                            <ClearanceSummary Readiness="@StaffClearances.Assess(m.Clearances.Select(c => (c.Kind, c.Status, c.ExpiresOn)), _today)" /><br />
                             @if (m.Clearances.Count == 0)
                             {
                                 <span class="note">@T["provider.staff.clearance.none"]</span>
@@ -74,6 +76,10 @@ else if (_name is not null)
                             @foreach (ClearanceView c in m.Clearances)
                             {
                                 <span class="clearance clearance-@c.Status">@T["clearance.kind." + c.Kind]: @T["clearance.status." + c.Status]@(c.ExpiresOn is { } on ? " · " + T.Format("provider.staff.clearance.expires", ("date", T.DateShort(on))) : "")</span><br />
+                            }
+                            @if (_canRecord)
+                            {
+                                <a href="/provider/orgs/@OrgId/staff/@m.MembershipId/clearances">@T["clearances.open"]</a>
                             }
                         </td>
                     </tr>
@@ -173,6 +179,8 @@ else if (_name is not null)
     private string? _name;
     private string _role = "";
     private bool _canManage;
+    private bool _canRecord;
+    private DateOnly _today;
     private IReadOnlyList<MemberRow> _members = [];
     private IReadOnlyDictionary<Guid, string> _emails = new Dictionary<Guid, string>();
     private IReadOnlyList<SiteSummary> _sites = [];
@@ -211,6 +219,8 @@ else if (_name is not null)
 
         _role = RoleIn(Org) ?? "";
         _canManage = await CanActForAsync(Org, Permissions.Staff.Invite, OrganisationRoles.Admin);
+        _canRecord = await CanActForAsync(Org, Permissions.Clearances.Record, OrganisationRoles.Admin);
+        _today = Get<StaffClearances>().Today;
         _members = await Get<StaffDirectory>().ListAsync(OrgId);
         if (Services.GetService<AccountProvisioning>() is { } accounts)
         {

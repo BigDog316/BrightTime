@@ -40,6 +40,9 @@ active owners, and its history of decisions.
    - The checklist also shows whether the organisation **has an open site** (it needs one to be
      approved), how many **active owners** it has, and how many staff and mentors have **no
      current background check** recorded.
+   - **Staff clearances** lists everyone who works there and whether they're cleared to work with
+     young people. Open a person to record a clearance for the organisation, or tick **Counts at
+     every organisation** for a check the county ran, which then counts wherever they work.
 3. Decide:
    - **Approve**. Its submitted listings can then be published.
    - **Request changes**, saying what it should change or send. The organisation sees your note

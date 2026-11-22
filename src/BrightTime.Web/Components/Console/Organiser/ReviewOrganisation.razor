@@ -1,5 +1,9 @@
 @page "/organiser/review/organisations/{OrgId:guid}"
+@using BrightTime.Modules.Directory.Clearances
 @using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Directory.Provider
+@using BrightTime.Modules.Identity.SignIn
+@using BrightTime.Web.Components.Console.Forms
 @using BrightTime.Modules.Directory.Review
 @using BrightTime.Modules.Identity.Authorization
 @using BrightTime.SharedKernel.Ids
@@ -142,6 +146,36 @@
         }
     </section>
 
+    @if (_staff.Count > 0)
+    {
+        @* Staff clearances (D98): each live member's readiness, and their page, where an organiser records. *@
+        <section aria-labelledby="clearances-heading">
+            <h2 id="clearances-heading">@T["clearances.heading"]</h2>
+            <p class="hint">@T["clearances.organiser_hint"]</p>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@T["provider.staff.person"]</th>
+                            <th scope="col">@T["provider.staff.role"]</th>
+                            <th scope="col">@T["provider.staff.clearances"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (MemberRow m in _staff)
+                        {
+                            <tr>
+                                <td><a href="/provider/orgs/@OrgId/staff/@m.MembershipId/clearances" dir="auto">@(_emails.TryGetValue(m.UserId, out string? address) ? address : T["provider.staff.no_address"])</a></td>
+                                <td>@T["organisation.role." + m.Role]</td>
+                                <td><ClearanceSummary Readiness="@StaffClearances.Assess(m.Clearances.Select(c => (c.Kind, c.Status, c.ExpiresOn)), _today)" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
     @if (o.History.Count > 0)
     {
         <section aria-labelledby="history-heading">
@@ -170,6 +204,9 @@
 
     private OrganisationForReview? _org;
     private string? _problem;
+    private IReadOnlyList<MemberRow> _staff = [];
+    private IReadOnlyDictionary<Guid, string> _emails = new Dictionary<Guid, string>();
+    private DateOnly _today;
     private readonly Dictionary<string, string> _reasonErrors = [];
 
     protected override async Task OnInitializedAsync()
@@ -184,6 +221,14 @@
         if (_org is null)
         {
             Navigation.NotFound();
+            return;
+        }
+
+        _staff = await Get<StaffDirectory>().ListAsync(OrgId);
+        _today = Get<StaffClearances>().Today;
+        if (Services.GetService<AccountProvisioning>() is { } accounts)
+        {
+            _emails = await accounts.EmailsAsync(Tenant.TenantId, [.. _staff.Select(m => m.UserId)]);
         }
     }
 

@@ -96,6 +96,15 @@ Each person's **clearances** (background check, child abuse registry, fingerprin
 first aid, safeguarding and mandated reporter training, and so on) show only their status and
 expiry date. Reports from those checks are never kept on BrightTime.
 
+Owners and admins choose **Clearances** next to a person to record one: the kind, its status,
+and for one that passed, the date it was completed and when it expires. Record the same kind
+again to replace it. The Staff page says whether each person is **cleared to work with young
+people** (a current background check and mandated reporter training), and what is missing,
+expired, or expiring within 45 days. A clearance the county recorded itself shows as counting at
+**the whole county**. Each morning, BrightTime marks clearances whose date has passed as expired,
+and tells owners and admins by email and in the app 45 days before one expires and on the day it
+lapses.
+
 ## Listings
 
 The **Listings** tab groups your listings by state: **drafts**, **waiting for review**, **changes

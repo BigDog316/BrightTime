@@ -44,6 +44,19 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
                 $"select r.name::text as \"Value\" from identity.app_user_role ur join identity.app_role r on r.id = ur.role_id where ur.user_id = {userId.Value} order by 1")
             .ToListAsync(ct).ConfigureAwait(false), cancellationToken);
 
+    public Task<IReadOnlyDictionary<Guid, string>> GetAdultEmailsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(userIds);
+        Guid[] ids = [.. userIds.Distinct()];
+        return ids.Length == 0
+            ? Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>())
+            : db.InTransactionAsync<IReadOnlyDictionary<Guid, string>>(async ct => (await db.Users.AsNoTracking()
+                    .Where(u => ids.Contains(u.Id) && u.AccountKind == "adult" && u.DeletedAt == null && u.Email != null)
+                    .Select(u => new { u.Id, u.Email })
+                    .ToListAsync(ct).ConfigureAwait(false))
+                .ToDictionary(u => u.Id, u => u.Email!), cancellationToken);
+    }
+
     private async Task<YouthCapabilities> GetCapabilitiesCoreAsync(
         UserId userId,
         CancellationToken cancellationToken = default)

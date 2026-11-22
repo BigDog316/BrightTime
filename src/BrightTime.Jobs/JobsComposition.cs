@@ -1,4 +1,5 @@
 using BrightTime.Hosting.Localisation;
+using BrightTime.Hosting.Mail;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Jobs;
@@ -9,6 +10,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Attendance.Contracts;
 using BrightTime.Modules.Attendance.Persistence;
 using BrightTime.Modules.Attendance.Records;
+using BrightTime.Modules.Directory.Clearances;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Persistence;
 using BrightTime.Modules.Enrollment.Contracts;
@@ -125,6 +127,12 @@ public static class JobsComposition
         // Attendance that finishes a playlist awards its badge here (D91): signed in the vault, under the site's address.
         services.AddSiteAddress(configuration, environment.IsDevelopment());
         services.AddLearningJobs();
+
+        // Staff clearances (D98): the nightly sweep marks lapses and notices expiries; owners and admins
+        // get an inbox notice and an email. Mail goes through Email:* as the web's does.
+        services.AddClearanceJobs();
+        services.AddBrightTimeEmail(configuration);
+        services.AddJobHandler<ClearanceMailHandler>();
 
         return services;
     }

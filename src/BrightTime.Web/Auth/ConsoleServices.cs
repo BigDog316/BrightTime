@@ -208,6 +208,7 @@ public static class ConsoleServices
             services.AddScoped<OrganisationSettings>();
             services.AddScoped<SiteEditor>();
             services.AddScoped<StaffDirectory>();
+            services.AddScoped<BrightTime.Modules.Directory.Clearances.StaffClearances>();
             services.AddScoped<BrightTime.Modules.Platform.Taxonomy.TaxonomyEditor>();
             services.AddScoped<BrightTime.Modules.Opportunities.Curation.CollectionEditor>();
             services.AddScoped<BrightTime.Modules.Opportunities.Curation.NeighbourhoodPageEditor>();

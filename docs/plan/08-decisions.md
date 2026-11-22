@@ -500,6 +500,7 @@ The screen inventory's "checklist, documents, decision with a reason".
   check, but doesn't block approval. Clearances can't yet be recorded in the console, and
   which kinds a tenant requires is a tenant setting that doesn't exist yet. Both come with
   roster access (M3), which is where clearances gate a person, not an organisation.
+  *Recorded in the console from D98; enforcement is still to come.*
 - **Documents:** not uploaded yet. `organisation_document` needs media storage with virus
   scanning, which isn't built. The organiser records what they saw instead.
 - **Suspension takes listings out of search:** a listing is live only while its
@@ -3233,6 +3234,51 @@ person with their own sign-in, a draft, an offer): their meetings, a saved deadl
 draft's, the deadline past four weeks left out, the offer, the audit, the calendar (the shared
 meeting once, no names, not stored), the young person's own schedule, and a stranger's empty one.
 `ScheduleScreenTests` covers the screen.
+
+### D98 — Staff clearances in the console (**proposed 2026-11-22**)
+
+docs/plan/04 gives `clearances.record` to an organisation's admins (their own staff) and the
+site's organisers, docs/plan/05 a status-and-expiry-only record, and docs/plan/06 the staff
+page "clearance status and expiry (status only)". The table, the kinds and the currency rule
+(`ClearanceCurrency`) existed from M1, but nothing recorded a clearance, so every staff member
+showed none and the organiser's checklist counted everyone as unchecked. Sam chose the scope on
+2026-11-22: record and warn now, enforcement later; owners and admins plus organisers; county-wide
+records by organisers; notices before and at a lapse.
+- **Recording:** a staff member's **Clearances** page (`/provider/orgs/{id}/staff/{membership}/clearances`),
+  linked from the Staff page for owners and admins and from the organiser's review of the
+  organisation. Each record is a kind, a status (not started, pending, cleared, conditional, not
+  cleared, withdrawn), and for one that passed, the date it was completed and any expiry. Never a
+  report, a finding or a reference: the schema has nowhere to put one. Recording the same kind
+  again replaces it. A cleared record needs its completion date, which can't be in the future;
+  an expiry must follow it and not have passed (`clearances.*` errors). `expired` is the sweep's
+  to set. Every record is audited (`directory.clearance.recorded`, with the kind, status and reach).
+- **Reach:** an organisation's record counts at that organisation only. An organiser may also
+  record one for **the whole county** (`org_id` null, as the schema allows), for a check the
+  county ran itself; it counts wherever the person works. Where both exist, a current one counts.
+- **Readiness, shown and not enforced:** against the platform's minimum
+  (`YouthFacingMinimum`: background check and mandated reporter training), each person is
+  *cleared to work with young people* or not, with what's missing or expired and what expires
+  within 45 days. It shows on the Staff page, the clearances page and, for organisers, a new
+  **Staff clearances** section on the organisation's review. Nobody loses access: refusing
+  rosters, attendance and decisions to uncleared staff waits for a county setting, so no one is
+  locked out without warning.
+- **The nightly sweep:** each tenant's sweep runs at 06:00 in the county's zone, booked by the
+  worker at start (a waiting one absorbs the booking) and rebooking itself after each run. A
+  passed clearance whose expiry has gone becomes `expired` (audited
+  `directory.clearance.lapsed`); one expiring within 45 days is noticed once per expiry date
+  (`staff_clearance.expiry_notice_for`). For each, the owners and admins of every organisation it
+  counts at get an inbox notice (`clearance_expiring`, already in `ck_notification_kind`; it names
+  the organisation, not the person, since a phone may show it locked) and an **email** naming the
+  staff member by address, with a link to their clearances page. The email is a job on the worker
+  (`ClearanceMailHandler`), which now sends mail through `Email:*` as the web does.
+- **Not yet:** enforcement (`ClearanceCurrentRequirement`) behind a county setting, which kinds a
+  county requires beyond the minimum, a staff member seeing their own, and approval of an
+  organisation needing its staff cleared.
+
+Schema: `directory.staff_clearance.expiry_notice_for date` (applied by hand to `brighttime_main`;
+the compose volume needs it too). `ClearancePagesTests` covers the owner's and the organiser's
+recording, the refusals and the staff page; `ClearanceSweepTests` the sweep, the notices, the
+emails and the booking; `StaffClearancesTests` the rules and the sweep's hour.
 
 ## Open questions
 

@@ -126,6 +126,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
             "TermId" => KettleTaxonomy.TermId("category", "stem").ToString(),
             "CollectionId" => db.Data.Collections![0].Id.ToString(),
             "Code" => KettleCuration.PagedNeighbourhoods[0],
+            "MembershipId" => db.Data.Users.Single(u => u.Email == Admin(Victim)).Memberships.Single().Id.ToString(),
             string other => throw new InvalidOperationException($"{route}: the matrix cannot fill {{{other}}}; add a value for it."),
         });
     }

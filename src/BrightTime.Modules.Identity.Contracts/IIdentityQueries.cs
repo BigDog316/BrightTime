@@ -57,6 +57,9 @@ public interface IIdentityQueries
 
     /// <summary>The account's roles (<c>youth</c>, <c>network_organiser</c> and so on), to say what someone was acting as.</summary>
     Task<IReadOnlyList<string>> GetRoleNamesAsync(UserId userId, CancellationToken cancellationToken = default);
+
+    /// <summary>The addresses of these adult accounts, for a notice by email (D98). Young people and children are left out.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetAdultEmailsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

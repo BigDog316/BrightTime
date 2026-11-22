@@ -40,7 +40,8 @@ public static class ClearanceCurrency
 
         foreach (ClearanceKind kind in required)
         {
-            ClearanceState? state = held.FirstOrDefault(h => h.Kind == kind);
+            // A county-wide record and the organisation's own may both exist (D98): a current one counts.
+            ClearanceState? state = held.Where(h => h.Kind == kind).OrderByDescending(h => h.IsCurrentOn(asOf)).FirstOrDefault();
 
             if (state is null || state.Status is ClearanceStatus.NotStarted or ClearanceStatus.Pending)
             {

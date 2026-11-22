@@ -64,7 +64,7 @@ public sealed record VettingChecklist
 /// <param name="InsuranceExpiresOn">The expiry on file, if any.</param>
 /// <param name="InsuranceCurrent">The certificate on file has not expired.</param>
 /// <param name="YouthFacingStaff">Active staff and mentors.</param>
-/// <param name="WithoutBackgroundCheck">Of those, how many have no current background check recorded. Shown, not enforced, until clearances are recorded in the console.</param>
+/// <param name="WithoutBackgroundCheck">Of those, how many have no current background check recorded. Shown, not enforced: clearances are recorded in the console (D98), and enforcing them is a later step.</param>
 public sealed record VettingState(
     VettingChecklist Checklist,
     DateTimeOffset? SavedAt,

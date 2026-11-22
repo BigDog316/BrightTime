@@ -44,6 +44,9 @@ public sealed class StaffClearance
 
     public DateTimeOffset RecordedAt { get; set; }
 
+    /// <summary>The expiry date the last "expiring soon" notice was sent for (D98), so each expiry is noticed once.</summary>
+    public DateOnly? ExpiryNoticeFor { get; set; }
+
     public bool IsCurrentOn(DateOnly asOf) =>
         Status is "cleared" or "conditional" && (ExpiresOn is null || ExpiresOn >= asOf);
 }

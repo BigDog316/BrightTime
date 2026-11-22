@@ -186,6 +186,8 @@ create table staff_clearance (
   expires_on    date,
   recorded_by   uuid references identity.app_user(id),
   recorded_at   timestamptz not null default now(),
+  -- The expiry the last "expiring soon" notice was sent for (D98): a new expiry is noticed again.
+  expiry_notice_for date,
   constraint ck_staff_clearance_kind check (clearance_kind in
     ('background_check','fingerprint','child_abuse_registry','sex_offender_registry',
      'mandated_reporter_training','safeguarding_training','cpr_first_aid','driving_record')),

@@ -226,8 +226,8 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
             VettingState vetting = await VettingStateAsync(o, hasSite, owners, ct).ConfigureAwait(false);
             VettingChecklist judged = checklist ?? vetting.Checklist;
 
-            // Insurance and clearance checks need tenant settings and clearance data that do
-            // not exist yet; until they do, the context says "not required" and "cleared".
+            // Clearances are recorded (D98) but not yet required for approval: that needs the
+            // county setting that will enforce them. Until then the context says "cleared".
             Result allowed = OrganisationVetting.CanTransition(from, to, OrganisationVetting.Mover.Organiser,
                 new OrganisationVetting.TransitionContext
                 {

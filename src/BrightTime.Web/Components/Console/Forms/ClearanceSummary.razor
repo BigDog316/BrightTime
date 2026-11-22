@@ -1,0 +1,31 @@
+@using BrightTime.Modules.Directory.Clearances
+@* Whether someone holds what working with young people needs (D98): ready or not, then the
+   required kinds missing or expired, and anything expiring within the warning window. Shown, not
+   enforced. *@
+
+@if (Readiness.Ready)
+{
+    <span class="clearance clearance-cleared">@T["clearances.ready"]</span>
+}
+else
+{
+    <span class="clearance clearance-not_cleared">@T["clearances.not_ready"]</span>
+}
+@if (Readiness.Missing.Count > 0)
+{
+    <br /><span class="note">@T.Format("clearances.missing", ("kinds", Kinds(Readiness.Missing)))</span>
+}
+@if (Readiness.Expired.Count > 0)
+{
+    <br /><span class="note">@T.Format("clearances.expired", ("kinds", Kinds(Readiness.Expired)))</span>
+}
+@foreach ((string kind, DateOnly on) in Readiness.ExpiringSoon)
+{
+    <br /><span class="note">@T.Format("clearances.expiring", ("kind", T["clearance.kind." + kind]), ("date", T.DateShort(on)))</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public ClearanceReadiness Readiness { get; set; } = default!;
+
+    private string Kinds(IEnumerable<string> kinds) => string.Join(", ", kinds.Select(k => T["clearance.kind." + k]));
+}

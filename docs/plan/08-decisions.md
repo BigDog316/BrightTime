@@ -3071,7 +3071,7 @@ and the module decides who. `ChildPortfolioApiTests` covers the flow end to end 
 verified, the three files, a stranger, the activity flag, a claim); `ChildPortfolioScreenTests`
 covers the screens.
 
-### D94 — Collections in the organiser console (**proposed 2026-11-21**)
+### D94 — Collections in the organiser console (**accepted 2026-11-22**)
 
 The schema, the seed and the public pages have had collections since M1 (`/collections`, a
 collection's page, and the featured ones on the home page), but nothing wrote them: the seed's

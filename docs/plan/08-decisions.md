@@ -3235,7 +3235,7 @@ draft's, the deadline past four weeks left out, the offer, the audit, the calend
 meeting once, no names, not stored), the young person's own schedule, and a stranger's empty one.
 `ScheduleScreenTests` covers the screen.
 
-### D98 — Staff clearances in the console (**proposed 2026-11-22**)
+### D98 — Staff clearances in the console (**accepted 2026-11-22**)
 
 docs/plan/04 gives `clearances.record` to an organisation's admins (their own staff) and the
 site's organisers, docs/plan/05 a status-and-expiry-only record, and docs/plan/06 the staff

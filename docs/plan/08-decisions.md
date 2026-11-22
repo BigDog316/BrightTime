@@ -3195,7 +3195,7 @@ organisation turned away, none of the guardian's own), nobody else, the link wit
 and the claimed young person's own log with their guardian's actions in it.
 `RecordLogScreenTests` covers the screens.
 
-### D97 — My schedule (**proposed 2026-11-22**)
+### D97 — My schedule (**accepted 2026-11-22**)
 
 docs/plan/06 lists *My schedule* among the youth screens ("enrollments, upcoming sessions,
 deadlines; .ics subscribe") and the app's screens, and M2 named it; D36 left it waiting on

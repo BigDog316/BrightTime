@@ -470,10 +470,21 @@ public sealed record TermsDocument(string Kind, string Version, string Text, str
 /// <summary>Where the signed-in person stands with the current terms.</summary>
 public sealed record MyTerms(string Version, string Hash, DateTimeOffset? AcceptedAt);
 
-/// <summary>An RFC 9457 problem from the API, or one the app makes for a request that never arrived.</summary>
-public sealed record ApiProblem(string Type, string? Title, int Status, IReadOnlyDictionary<string, string[]>? Errors = null)
+/// <summary>
+/// An RFC 9457 problem from the API, or one the app makes for a request that never arrived.
+/// <c>Arguments</c> are the problem's other members that are text or lists of text, such as the
+/// clearances missing (<c>missing</c>).
+/// </summary>
+public sealed record ApiProblem(string Type, string? Title, int Status, IReadOnlyDictionary<string, string[]>? Errors = null, IReadOnlyDictionary<string, string[]>? Arguments = null)
 {
+    /// <summary>The argument named <paramref name="name"/>, or none.</summary>
+    public IReadOnlyList<string> Argument(string name) =>
+        Arguments is not null && Arguments.TryGetValue(name, out string[]? values) ? values : [];
+
     public const string Prefix = "urn:brighttime:problem:";
+
+    /// <summary>The county's clearance rules refused this person here (D99), with the kinds <c>missing</c> and <c>expired</c>.</summary>
+    public const string UnclearedCode = "clearances.not_current";
 
     /// <summary>The app could not reach the server.</summary>
     public const string OfflineType = "urn:brighttime:app:offline";

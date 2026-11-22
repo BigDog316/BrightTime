@@ -110,6 +110,53 @@ public sealed class OrganiserReviewTests(ConsoleFixture db)
             .ShouldBe("directory.organisation.status_changed:Approved,directory.organisation.approved:,directory.organisation.status_changed:Suspended,directory.organisation.suspended:");
     }
 
+    [Fact]
+    public async Task Where_the_county_enforces_clearances_approval_waits_for_every_owner_to_be_cleared()
+    {
+        RequireDatabase();
+        SeedOrganisation org = Org("northgate-film-society");
+        Guid owner = await db.ScalarAsync<Guid>(
+            "select user_id from directory.org_membership where org_id = @o and org_role = 'owner' and status = 'active'", ("o", org.Id));
+        string path = $"/organiser/review/organisations/{org.Id}";
+        using Browser organiser = db.NewBrowser();
+        await organiser.SignInAsync(Organiser);
+
+        await db.ScalarAsync<int>(
+            "insert into platform.feature_flag (tenant_id, key, is_enabled) values (@t, 'clearances.required', true) on conflict (tenant_id, key) do update set is_enabled = true returning 1",
+            ("t", KettleSeed.TenantId));
+        try
+        {
+            await organiser.GetAsync(path);
+            organiser.Html.ShouldContain("1 owner isn&#x27;t cleared to work with young people yet");
+            HttpResponseMessage refused = await organiser.PostAsync(path, "checklist", ("action", "approve"), ("ContactVerified", "true"));
+            refused.StatusCode.ShouldBe(HttpStatusCode.OK);
+            organiser.Html.ShouldContain("every owner needs current ones before approval");
+            (await db.ScalarAsync<string>("select status from directory.organisation where id = @o", ("o", org.Id))).ShouldBe("applied");
+
+            // The owner can't record their own; the organiser records the county's checks for them.
+            await db.ScalarAsync<int>(
+                """
+                insert into directory.staff_clearance (id, tenant_id, user_id, org_id, clearance_kind, status, completed_on, expires_on)
+                values (gen_random_uuid(), @t, @u, null, 'background_check', 'cleared', current_date - 10, current_date + 300),
+                       (gen_random_uuid(), @t, @u, null, 'mandated_reporter_training', 'cleared', current_date - 10, null)
+                returning 1
+                """, ("t", KettleSeed.TenantId), ("u", owner));
+            await organiser.GetAsync(path);
+            organiser.Html.ShouldContain("Every owner is cleared to work with young people");
+            HttpResponseMessage approved = await organiser.PostAsync(path, "checklist", ("action", "approve"), ("ContactVerified", "true"));
+            Location(approved).ShouldBe("/organiser/review?done=approved");
+        }
+        finally
+        {
+            await db.ScalarAsync<int>(
+                """
+                with flags as (delete from platform.feature_flag where tenant_id = @t and key like 'clearances.%' returning 1),
+                     cleared as (delete from directory.staff_clearance where user_id = @u returning 1)
+                select (select count(*) from flags)::int + (select count(*) from cleared)::int
+                """, ("t", KettleSeed.TenantId), ("u", owner));
+        }
+    }
+
     // ---- listing diff ----------------------------------------------------------------------
 
     [Fact]

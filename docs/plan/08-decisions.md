@@ -3313,11 +3313,42 @@ page; off until turned on.
   organiser (who may also record for an organisation's only owner).
 - **Not yet:** the app shows an uncleared staff member the API's usual refusal for each screen,
   not the reason; approval of an organisation doesn't yet need its staff cleared; mentors' gig
-  assignments (M6) will use the same gate.
+  assignments (M6) will use the same gate. *The first two are D100.*
 
 No schema change. `ClearanceRulesTests` covers the organiser's page, refusals for staff and owner,
 the notice, the audit, the owner unable to record their own, and recovery; `ClearanceGateApiTests`
 the API; the route matrix covers the new page.
+
+### D100 — Clearance rules: saying why, and approval (**proposed 2026-11-22**)
+
+D99 left two gaps: the app showed an uncleared staff member each screen's usual refusal (or, on the
+attendance screen, nothing at all), and an organisation could be approved with nobody cleared.
+Sam chose on 2026-11-22 to close both.
+- **The gate acts only where it's the reason:** `ClearanceGateHandler` now refuses only where the
+  permission and role would otherwise pass. Someone refused for their role is told about their
+  role, and isn't audited as uncleared.
+- **The API says why:** an endpoint filter on `/api/v1` (`ClearanceProblems`) replaces a 403 that
+  the gate caused with `urn:brighttime:problem:clearances.not_current`, carrying `missing` and
+  `expired` as arrays of kind codes. It looks up the organisation in the route (or the only one the
+  request met), and only rewrites a 403, so a 404 that hides a record stays one. No endpoint
+  changes.
+- **The app shows it:** `ApiProblem` now keeps a problem's other text members as `Arguments`, and
+  `Words.Problem` words this problem as the console's notice does: not cleared here, the kinds not
+  on file and expired, and that an owner or admin can record them. A kind this build doesn't know
+  is left out. The attendance screen shows it for an organisation that refused, and still lists the
+  others' meetings, where before it showed *No meetings today*. A sync refused for this reason keeps
+  the marks on the phone and says why (`SyncSummary.Uncleared`); they go once the clearances are
+  recorded.
+- **Approval:** with the rules on, an organiser can't approve or reinstate an organisation until
+  every active owner holds a current clearance of each kind the county requires
+  (`organisation.owners_not_cleared`, replacing D98's unused `staff_not_cleared`). The vetting
+  checklist says how many owners aren't cleared. Owners, not everyone: staff are kept from young
+  people's records by the gate anyway, and an organisation needs someone accountable cleared to
+  run at all. The owner can't record their own (D99), so the organiser records it from the
+  review's staff list.
+
+No schema change. `ClearanceGateApiTests` covers the problem's kinds and a role refusal left
+alone; `OrganiserReviewTests` the approval; `UiTests` and `OfflineRosterTests` the app.
 
 ## Open questions
 

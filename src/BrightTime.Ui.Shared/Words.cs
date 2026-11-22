@@ -46,9 +46,35 @@ public static class Words
             { Type: ApiProblem.OfflineType } => t["app.error.offline"],
             { Status: 401 } => t["app.error.signed_out"],
             { Status: 429 } => t["app.error.too_many"],
+            { Code: ApiProblem.UnclearedCode } => Uncleared(t, problem),
             { Code: { } code } when t.Has("error." + code) => t["error." + code],
             _ => t["site.error.body"],
         };
+    }
+
+    /// <summary>
+    /// The county's clearance rules refused (D99): that this person isn't cleared here, the kinds
+    /// not on file and expired, and who can record them. The console's notice, in the same words.
+    /// </summary>
+    private static string Uncleared(Text t, ApiProblem problem)
+    {
+        List<string> sentences = [t["clearances.gate.closed"]];
+        if (Kinds(problem.Argument("missing")) is { Length: > 0 } missing)
+        {
+            sentences.Add(t.Format("clearances.missing", ("kinds", missing)) + ".");
+        }
+
+        if (Kinds(problem.Argument("expired")) is { Length: > 0 } expired)
+        {
+            sentences.Add(t.Format("clearances.expired", ("kinds", expired)) + ".");
+        }
+
+        sentences.Add(t["clearances.gate.ask"]);
+        return string.Join(' ', sentences);
+
+        // A kind this build doesn't know yet (the API is newer) is left out rather than shown as a code.
+        string Kinds(IReadOnlyList<string> kinds) =>
+            string.Join(", ", kinds.Where(k => t.Has("clearance.kind." + k)).Select(k => t["clearance.kind." + k]));
     }
 
     /// <summary>

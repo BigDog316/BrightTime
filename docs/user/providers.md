@@ -107,9 +107,11 @@ lapses.
 
 When the county **requires clearances**, everyone at your organisation, owners and admins too,
 needs current ones before they can see rosters, take attendance, see or decide applications,
-message families, give badges or review young people's work. Your organisation's pages say if
-you're not cleared, and what's missing. You can't record your own clearances: another owner or
-admin records them, or the county's organisers.
+message families, give badges or review young people's work. Your organisation's pages and the
+app say if you're not cleared, and what's missing or expired. Attendance marked on the phone waits
+there until your clearances are recorded, then sends. You can't record your own clearances: another
+owner or admin records them, or the county's organisers. A new organisation's owners need theirs
+before the county can approve it.
 
 ## Listings
 

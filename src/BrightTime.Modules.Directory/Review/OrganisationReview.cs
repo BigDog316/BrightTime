@@ -1,5 +1,6 @@
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Directory.Clearances;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Directory.Domain;
 using BrightTime.Modules.Directory.Persistence;
@@ -48,7 +49,7 @@ public sealed record OrganisationForReview(
 /// <c>organisation_vetting_event</c> in the same transaction as the status change, so the
 /// history and the state cannot disagree. The caller authorises the organiser.
 /// </remarks>
-public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit, IFeatureFlags flags)
+public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit, IFeatureFlags flags, ClearanceRules rules)
 {
     private static readonly string[] Waiting =
         [OrganisationStatus.Applied.ToDbValue(), OrganisationStatus.UnderReview.ToDbValue()];
@@ -174,6 +175,24 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
             .Select(c => c.UserId).Distinct()
             .CountAsync(ct).ConfigureAwait(false);
 
+        // With the county's clearance rules on (D99), every active owner needs the kinds it
+        // requires before approval: an organisation nobody accountable is cleared at can't run.
+        ClearanceRuleSet clearanceRules = await rules.GetAsync(ct).ConfigureAwait(false);
+        int unclearedOwners = 0;
+        if (clearanceRules.Enforced)
+        {
+            List<Guid> ownerIds = await db.Memberships.AsNoTracking()
+                .Where(m => m.OrgId == o.Id && m.OrgRole == MemberRoles.Owner && m.Status == MembershipStatus.Active && m.EndedAt == null)
+                .Select(m => m.UserId)
+                .ToListAsync(ct).ConfigureAwait(false);
+            var held = await db.Clearances.AsNoTracking()
+                .Where(c => ownerIds.Contains(c.UserId) && (c.OrgId == null || c.OrgId == o.Id))
+                .Select(c => new { c.UserId, c.ClearanceKind, c.Status, c.ExpiresOn })
+                .ToListAsync(ct).ConfigureAwait(false);
+            unclearedOwners = ownerIds.Count(owner => !StaffClearances.Assess(
+                held.Where(c => c.UserId == owner).Select(c => (c.ClearanceKind, c.Status, c.ExpiresOn)), today, clearanceRules.Required).Ready);
+        }
+
         return new VettingState(
             (saved is null ? null : VettingChecklist.FromJson(saved)) ?? new VettingChecklist(),
             savedAt,
@@ -183,7 +202,9 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
             o.InsuranceExpiresOn,
             o.InsuranceExpiresOn is { } expires && expires >= today,
             staff.Count,
-            staff.Count - checkedStaff);
+            staff.Count - checkedStaff,
+            clearanceRules.Enforced,
+            unclearedOwners);
     }
 
     /// <summary>An organiser's decision. Rejection, change requests and suspension need a reason.</summary>
@@ -226,8 +247,6 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
             VettingState vetting = await VettingStateAsync(o, hasSite, owners, ct).ConfigureAwait(false);
             VettingChecklist judged = checklist ?? vetting.Checklist;
 
-            // Clearances are recorded (D98) but not yet required for approval: that needs the
-            // county setting that will enforce them. Until then the context says "cleared".
             Result allowed = OrganisationVetting.CanTransition(from, to, OrganisationVetting.Mover.Organiser,
                 new OrganisationVetting.TransitionContext
                 {
@@ -237,6 +256,7 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
                     ContactVerified = judged.ContactVerified,
                     TenantRequiresInsurance = vetting.InsuranceRequired,
                     HasCurrentInsurance = o.InsuranceExpiresOn is { } expires && expires >= clock.TodayIn(tenant.TimeZone),
+                    OwnersCleared = vetting.UnclearedOwners == 0,
                 });
             if (!allowed.IsSuccess)
             {

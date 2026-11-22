@@ -27,8 +27,12 @@ public enum RosterGate
     Wiped,
 }
 
-/// <summary>What a sync did. <see cref="NeedsRegistration"/> names organisations this phone must register with first.</summary>
-public sealed record SyncSummary(int Accepted, int Problems, int Pending, bool Offline, bool Wiped, IReadOnlyList<Guid> NeedsRegistration);
+/// <summary>
+/// What a sync did. <see cref="NeedsRegistration"/> names organisations this phone must register
+/// with first. <see cref="Uncleared"/> is why the county's clearance rules refused this person's
+/// marks somewhere (D99); those marks stay on the phone and go once their clearances are recorded.
+/// </summary>
+public sealed record SyncSummary(int Accepted, int Problems, int Pending, bool Offline, bool Wiped, IReadOnlyList<Guid> NeedsRegistration, ApiProblem? Uncleared = null);
 
 /// <summary>
 /// The staff roster on the phone (M3b, D52): taken onto the device for a meeting, marked with or
@@ -158,6 +162,7 @@ public sealed class OfflineRoster(BrightTimeApi api, SealedStore store, ISecretS
         int accepted = 0;
         int problemCount = 0;
         bool offline = false;
+        ApiProblem? uncleared = null;
         List<Guid> unregistered = [];
 
         foreach (IGrouping<Guid, QueuedMark> org in queue.GroupBy(m => m.OrgId).ToList())
@@ -173,6 +178,9 @@ public sealed class OfflineRoster(BrightTimeApi api, SealedStore store, ISecretS
                         return new SyncSummary(accepted, problemCount, 0, Offline: false, Wiped: true, []);
                     case "device.unknown":
                         unregistered.Add(org.Key);
+                        break;
+                    case ApiProblem.UnclearedCode:
+                        uncleared ??= problem;
                         break;
                     default:
                         offline |= problem.Type == ApiProblem.OfflineType;
@@ -208,7 +216,7 @@ public sealed class OfflineRoster(BrightTimeApi api, SealedStore store, ISecretS
 
         await store.SaveAsync(QueueDocument, queue).ConfigureAwait(false);
         await store.SaveAsync(ProblemsDocument, problems).ConfigureAwait(false);
-        return new SyncSummary(accepted, problemCount, queue.Count, offline, Wiped: false, unregistered);
+        return new SyncSummary(accepted, problemCount, queue.Count, offline, Wiped: false, unregistered, uncleared);
     }
 
     /// <summary>Clears the problems once the person has looked at them.</summary>

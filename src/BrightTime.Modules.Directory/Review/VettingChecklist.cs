@@ -64,7 +64,9 @@ public sealed record VettingChecklist
 /// <param name="InsuranceExpiresOn">The expiry on file, if any.</param>
 /// <param name="InsuranceCurrent">The certificate on file has not expired.</param>
 /// <param name="YouthFacingStaff">Active staff and mentors.</param>
-/// <param name="WithoutBackgroundCheck">Of those, how many have no current background check recorded. Shown, not enforced: clearances are recorded in the console (D98), and enforcing them is a later step.</param>
+/// <param name="WithoutBackgroundCheck">Of those, how many have no current background check recorded. Shown, not required.</param>
+/// <param name="ClearancesEnforced">The county enforces clearances (D99), so approval needs every active owner cleared.</param>
+/// <param name="UnclearedOwners">Active owners without a current clearance of every kind the county requires.</param>
 public sealed record VettingState(
     VettingChecklist Checklist,
     DateTimeOffset? SavedAt,
@@ -74,4 +76,6 @@ public sealed record VettingState(
     DateOnly? InsuranceExpiresOn,
     bool InsuranceCurrent,
     int YouthFacingStaff,
-    int WithoutBackgroundCheck);
+    int WithoutBackgroundCheck,
+    bool ClearancesEnforced = false,
+    int UnclearedOwners = 0);

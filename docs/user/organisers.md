@@ -148,9 +148,12 @@ fee waivers and reviewing young people's work. It's off until you turn it on.
 - **Required clearances**: a background check and mandated reporter training are always required.
   Tick any others the county needs.
 
-Someone refused sees why on their organisation's pages, and can still record clearances, edit
-listings and run reports that name no one. Nobody can record their own clearances: for an
-organisation's only owner, record theirs from the organisation's review.
+Someone refused sees why on their organisation's pages and in the app, and can still record
+clearances, edit listings and run reports that name no one. Nobody can record their own
+clearances: for an organisation's only owner, record theirs from the organisation's review.
+
+While clearances are required, you can't approve or reinstate an organisation until every owner
+has current ones. The vetting checklist says how many owners aren't cleared yet.
 
 ## Wording
 

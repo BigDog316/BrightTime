@@ -75,6 +75,37 @@ public sealed class UiTests
     }
 
     [Fact]
+    public async Task A_clearance_refusal_says_what_is_missing_and_expired_and_who_can_record_it()
+    {
+        const string Org = "0a0a0000-0000-0000-0000-00000000000a";
+        using FakeApi api = new FakeApi()
+            .Json(HttpMethod.Get, "public/tenant", FakeApi.Tenant)
+            .Json(HttpMethod.Post, "auth/token", FakeApi.Tokens)
+            .Json(HttpMethod.Get, "me", FakeApi.Me("adult"))
+            .Json(HttpMethod.Get, "me/capabilities", FakeApi.Capabilities)
+            .Json(HttpMethod.Get, $"org/{Org}/attendance/meetings", """
+                {"type":"urn:brighttime:problem:clearances.not_current","title":"English title","status":403,
+                 "missing":["mandated_reporter_training","a_kind_from_a_newer_server"],"expired":["background_check"],"traceId":"00-abc"}
+                """, HttpStatusCode.Forbidden);
+        await using ServiceProvider app = api.Services();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        (await app.GetRequiredService<AppSession>().SignInAsync("staff@example.net", "pw", Ct)).ShouldBeNull();
+        Text t = app.GetRequiredService<Text>();
+
+        ApiProblem problem = (await app.GetRequiredService<BrightTimeApi>().MeetingsAsync(Guid.Parse(Org), Ct)).Problem.ShouldNotBeNull();
+        problem.Code.ShouldBe(ApiProblem.UnclearedCode);
+        problem.Argument("missing").ShouldBe(["mandated_reporter_training", "a_kind_from_a_newer_server"]);
+        problem.Argument("traceId").ShouldBeEmpty("the framework's own members aren't arguments");
+
+        string said = Words.Problem(t, problem);
+        said.ShouldBe("You aren't cleared to work with young people here, so their records are closed to you. "
+            + "Not on file: Mandated reporter training. Expired: Background check. "
+            + "An owner or admin can record your clearances on the Staff page.");
+        said.ShouldNotContain("English");
+        said.ShouldNotContain("a_kind_from_a_newer_server");
+    }
+
+    [Fact]
     public async Task Only_a_refused_password_reads_as_a_wrong_password()
     {
         using FakeApi api = new FakeApi().Json(HttpMethod.Get, "public/tenant", FakeApi.Tenant);
@@ -150,6 +181,35 @@ public sealed class UiTests
         html.ShouldContain("Robotics Club");
         html.ShouldContain("Take roster");
         html.ShouldNotContain("app.attendance");
+    }
+
+    [Fact]
+    public async Task An_uncleared_staff_member_is_told_why_and_still_sees_the_other_organisations_meetings()
+    {
+        const string Cleared = "0a0a0000-0000-0000-0000-00000000000a";
+        const string Uncleared = "0a0a0000-0000-0000-0000-00000000000c";
+        using FakeApi api = new FakeApi()
+            .Json(HttpMethod.Get, "public/tenant", FakeApi.Tenant)
+            .Json(HttpMethod.Post, "auth/token", FakeApi.Tokens)
+            .Json(HttpMethod.Get, "me", $$"""
+                {"id":"0b3c8f5e-0000-0000-0000-000000000002","userName":"staff@example.net","accountKind":"adult","locale":null,"roles":["program_staff"],
+                 "permissions":["attendance.view_roster","attendance.record","attendance.offline_sync"],
+                 "organisations":[{"organisationId":"{{Uncleared}}","role":"staff"},{"organisationId":"{{Cleared}}","role":"staff"}]}
+                """)
+            .Json(HttpMethod.Get, "me/capabilities", FakeApi.Capabilities)
+            .Json(HttpMethod.Post, "attendance/devices/contact", """{"registered":false,"wipe":false,"maxOfflineHours":72}""")
+            .Json(HttpMethod.Get, $"org/{Uncleared}/attendance/meetings", """
+                {"type":"urn:brighttime:problem:clearances.not_current","title":"English title","status":403,"missing":["background_check"],"expired":[]}
+                """, HttpStatusCode.Forbidden)
+            .Json(HttpMethod.Get, $"org/{Cleared}/attendance/meetings", """
+                [{"listingId":"1b1b0000-0000-0000-0000-00000000001b","title":"Robotics Club","startsAt":"2026-10-21T19:00:00Z","endsAt":"2026-10-21T20:00:00Z"}]
+                """);
+        string html = await RenderAsync<Pages.Attendance>(api, signIn: true);
+
+        html.ShouldContain("role=\"alert\"");
+        html.ShouldContain("Not on file: Background check.");
+        html.ShouldContain("Robotics Club");
+        html.ShouldNotContain("English title");
     }
 
     private static async Task<string> RenderAsync<TComponent>(FakeApi api, bool signIn = false)

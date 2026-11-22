@@ -107,8 +107,11 @@ public static class OrganisationVetting
 
         public bool TenantRequiresInsurance { get; init; }
 
-        /// <summary>Whether every person with a youth-facing role holds current clearances.</summary>
-        public bool YouthFacingStaffCleared { get; init; } = true;
+        /// <summary>
+        /// Whether every active owner holds the clearances the county requires. True where the
+        /// county doesn't enforce them (D99).
+        /// </summary>
+        public bool OwnersCleared { get; init; } = true;
     }
 
     public static Result CanTransition(
@@ -204,11 +207,11 @@ public static class OrganisationVetting
                 "A current certificate of insurance is required before approval.");
         }
 
-        if (!context.YouthFacingStaffCleared)
+        if (!context.OwnersCleared)
         {
             return Error.Precondition(
-                "organisation.staff_not_cleared",
-                "Everyone in a youth-facing role needs current clearances before approval.");
+                "organisation.owners_not_cleared",
+                "The county requires clearances, so every owner needs current ones before approval.");
         }
 
         return Result.Success();

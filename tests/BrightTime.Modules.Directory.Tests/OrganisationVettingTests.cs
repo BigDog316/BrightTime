@@ -14,7 +14,7 @@ public sealed class OrganisationVettingTests
         ContactVerified = true,
         HasCurrentInsurance = true,
         TenantRequiresInsurance = true,
-        YouthFacingStaffCleared = true,
+        OwnersCleared = true,
     };
 
     private static readonly TransitionContext WithReason = new() { Reason = "Missing insurance certificate." };
@@ -132,8 +132,8 @@ public sealed class OrganisationVettingTests
     public void Approval_needs_youth_facing_staff_cleared() =>
         CanTransition(
             OrganisationStatus.Applied, OrganisationStatus.Approved, Mover.Organiser,
-            Approvable with { YouthFacingStaffCleared = false })
-            .Error!.Code.ShouldBe("organisation.staff_not_cleared");
+            Approvable with { OwnersCleared = false })
+            .Error!.Code.ShouldBe("organisation.owners_not_cleared");
 
     // ---- a decision the provider can read ---------------------------------
 

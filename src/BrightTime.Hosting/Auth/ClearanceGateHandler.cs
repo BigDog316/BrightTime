@@ -47,10 +47,13 @@ public sealed class ClearanceGateHandler(IHttpContextAccessor http) : Authorizat
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(requirement);
         ArgumentNullException.ThrowIfNull(resource);
+        // Only where the permission check would otherwise pass: then the clearance is the reason,
+        // and that is what the refusal says. Anyone refused for their role is refused already.
         if (!Gated.Contains(requirement.Permission)
             || resource.OrganisationId is not { } organisation
             || context.User.GetUserId() is not { } user
-            || context.User.GetOrganisationRole(organisation.Value) is null
+            || !context.User.HasPermission(requirement.Permission)
+            || !OrganisationRoles.IsAtLeast(context.User.GetOrganisationRole(organisation.Value), requirement.MinimumRole)
             || http.HttpContext is not { } request
             || request.RequestServices.GetService<IClearanceGate>() is not { } gate)
         {

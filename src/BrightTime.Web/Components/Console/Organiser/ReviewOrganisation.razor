@@ -92,6 +92,13 @@
                             ? T.Format("organiser.checklist.insurance_on_file", ("date", T.DateShort(on)))
                             : T["organiser.checklist.insurance_missing"])
                     }
+                    @if (v.ClearancesEnforced)
+                    {
+                        @* The county's clearance rules (D99): approval needs every owner cleared. *@
+                        @Check(v.UnclearedOwners == 0, v.UnclearedOwners == 0
+                            ? T["organiser.checklist.owners_cleared"]
+                            : T.Format("organiser.checklist.owners_uncleared", ("count", v.UnclearedOwners)))
+                    }
                     <li class="check-info">
                         @T.Format("organiser.checklist.staff", ("count", v.YouthFacingStaff), ("unchecked", v.WithoutBackgroundCheck))
                     </li>

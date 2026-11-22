@@ -161,6 +161,11 @@ public sealed class OfflineRosterTests
                 unregistered.NeedsRegistration.ShouldBe([Org]);
                 unregistered.Pending.ShouldBe(3);
                 (await roster.RegisterAsync(Org, "Front desk phone", Ct)).IsSuccess.ShouldBeTrue();
+
+                // Not cleared under the county's rules (D99): kept, and the reason carried to the screen.
+                server.BatchProblem = "clearances.not_current";
+                SyncSummary uncleared = await roster.SyncAsync(Ct);
+                (uncleared.Uncleared?.Code, uncleared.Pending, uncleared.NeedsRegistration.Count).ShouldBe(("clearances.not_current", 3, 0));
                 server.BatchProblem = null;
 
                 // Sent: applied and duplicate are done; a conflict waits to be looked at.

@@ -52,7 +52,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi("/api/v1/openapi.json");
 }
 
-RouteGroupBuilder v1 = app.MapGroup("/api/v1");
+RouteGroupBuilder v1 = app.MapGroup("/api/v1").WithClearanceReasons();
 v1.MapTokenEndpoints();
 v1.MapPasskeyEndpoints();
 v1.MapExternalEndpoints();

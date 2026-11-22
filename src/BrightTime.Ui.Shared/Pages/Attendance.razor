@@ -108,6 +108,9 @@ else
     private string _label = "";
     private ApiProblem? _problem;
 
+    // The county's clearance rules (D99) refused this person somewhere: why, and that the marks wait.
+    private ApiProblem? _uncleared;
+
     /// <summary>The waiting marks, the send button, what the last send said, and anything it couldn't send.</summary>
     private RenderFragment Sending => @<section class="sending">
         @if (_message is not null)
@@ -127,6 +130,8 @@ else
             <label>@T["app.attendance.register_label"] <input @bind="_label" maxlength="80" /></label>
             <button type="button" @onclick="RegisterAsync">@T["app.attendance.register"]</button>
         }
+
+        <ProblemNotice Problem="_uncleared" />
 
         @if (_problems.Count > 0)
         {
@@ -174,6 +179,12 @@ else
                 return;
             }
 
+            // Not cleared at one organisation: say why, and still list the others' meetings.
+            if (meetings.Problem is { Code: ApiProblem.UnclearedCode } uncleared)
+            {
+                _problem ??= uncleared;
+            }
+
             found.AddRange((meetings.Value ?? []).Select(m => (org.OrganisationId, m)));
         }
 
@@ -213,10 +224,11 @@ else
         }
 
         _register = sent.NeedsRegistration.Count > 0 ? sent.NeedsRegistration[0] : null;
+        _uncleared = sent.Uncleared;
         // When nothing went because the phone isn't set up or every mark came back, the set-up prompt
         // or the problem list says so; "Sent 0 marks" would only confuse.
         _message = sent.Offline ? T["app.attendance.offline"]
-            : sent.Accepted > 0 || (_register is null && sent.Problems == 0) ? T.Format("app.attendance.synced", ("count", sent.Accepted)) : null;
+            : sent.Accepted > 0 || (_register is null && _uncleared is null && sent.Problems == 0) ? T.Format("app.attendance.synced", ("count", sent.Accepted)) : null;
         await RefreshAsync();
         if (_pack is { } open)
         {

@@ -594,7 +594,23 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
                         StringComparer.Ordinal);
                 }
 
-                return new ApiProblem(type, title, status, errors);
+                Dictionary<string, string[]>? arguments = null;
+                foreach (JsonProperty p in root.EnumerateObject().Where(p => !Standard.Contains(p.Name)))
+                {
+                    string[]? values = p.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => [p.Value.GetString()!],
+                        JsonValueKind.Array when p.Value.EnumerateArray().All(v => v.ValueKind == JsonValueKind.String) =>
+                            [.. p.Value.EnumerateArray().Select(v => v.GetString()!)],
+                        _ => null,
+                    };
+                    if (values is not null)
+                    {
+                        (arguments ??= new Dictionary<string, string[]>(StringComparer.Ordinal))[p.Name] = values;
+                    }
+                }
+
+                return new ApiProblem(type, title, status, errors, arguments);
             }
         }
         catch (JsonException)
@@ -604,6 +620,9 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
 
         return new ApiProblem(ByStatus(status), null, status);
     }
+
+    /// <summary>RFC 9457's own members, and the framework's trace id: not arguments.</summary>
+    private static readonly HashSet<string> Standard = new(StringComparer.Ordinal) { "type", "title", "status", "detail", "instance", "errors", "traceId" };
 
     private static string ByStatus(int status) => ApiProblem.Prefix + "http-" + status.ToString(CultureInfo.InvariantCulture);
 }

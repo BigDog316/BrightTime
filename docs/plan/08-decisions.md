@@ -3393,7 +3393,7 @@ the compose volume needs it too, from `db/schema/40-opportunity.sql` with its RL
 concurrency refusal against a pending edit; `ProviderManagementTests` a held import;
 `ListingRevisionsTests` the merge.
 
-### D102 — Telling providers what an organiser decided (**proposed 2026-11-23**)
+### D102 — Telling providers what an organiser decided (**accepted 2026-11-23**)
 
 Nothing told an organisation when a network organiser decided on one of its listings: the
 decision showed only in the console. The schema's `listing_approved` and

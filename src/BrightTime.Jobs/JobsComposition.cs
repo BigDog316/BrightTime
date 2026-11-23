@@ -26,6 +26,7 @@ using BrightTime.Modules.Notifications;
 using BrightTime.Modules.Notifications.Persistence;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
+using BrightTime.Modules.Opportunities.Editing;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Modules.Opportunities.Projection;
@@ -133,6 +134,11 @@ public static class JobsComposition
         services.AddClearanceJobs();
         services.AddBrightTimeEmail(configuration);
         services.AddJobHandler<ClearanceMailHandler>();
+
+        // An organiser's decision on a listing (D102), emailed to whoever sent it in and the
+        // organisation's owners and admins; the title and note are read when it's sent.
+        services.AddScoped<IListingDecisions, ListingDecisions>();
+        services.AddJobHandler<ListingDecisionMailHandler>();
 
         return services;
     }

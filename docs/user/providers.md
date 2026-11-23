@@ -143,6 +143,10 @@ else sees it.
 3. To change a listing that's waiting for review, **withdraw it from review** first.
 4. Your organisation must be approved before any listing can be published.
 
+Whenever an organiser decides on one of your listings (publishes it, asks for changes, rejects it,
+takes it down, or approves or sends back your changes), we email whoever sent it in and your
+organisation's owners and admins, with the organiser's note and a link to the listing.
+
 **Changing a published listing.** Changes to what it says (its title, descriptions, ages, topics,
 sites, cost, registration, access and contacts) wait for a network organiser; families see the
 approved version until the organiser approves them. Changes to when it meets, when it shows, its

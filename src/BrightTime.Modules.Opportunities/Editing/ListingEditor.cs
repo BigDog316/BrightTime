@@ -485,6 +485,8 @@ public sealed class ListingEditor(
             listing.ReviewedBy = actor.Value;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await RecordRevisionAsync(listing, ListingRevisions.Reviewed, actor, ct).ConfigureAwait(false);
+            await ListingDecisions.BookAsync(
+                db, directory, tenant, listing.OrgId, listing.Id, ListingDecisionNotice.EditApproved, pending.SavedBy, listing.ReviewedAt.Value, ct).ConfigureAwait(false);
             await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
@@ -518,6 +520,9 @@ public sealed class ListingEditor(
             pending.ReviewedAt = clock.UtcNow;
             pending.ReviewedBy = actor.Value;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            Guid orgId = await db.Listings.AsNoTracking().Where(l => l.Id == listingId).Select(l => l.OrgId).FirstAsync(ct).ConfigureAwait(false);
+            await ListingDecisions.BookAsync(
+                db, directory, tenant, orgId, listingId, ListingDecisionNotice.EditReturned, pending.SavedBy, pending.ReviewedAt.Value, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
                 Action = "listing.edit_returned",
@@ -853,10 +858,12 @@ public sealed class ListingEditor(
             // listing takes the edit's wording: nobody sees it, and it's reviewed before it's
             // published again. Archived, the edit goes with it.
             string? pendingEdit = null;
+            Guid? author = listing.SubmittedBy;
             if (snapshot.Status == ListingStatus.Published.ToDbValue()
                 && await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == listingId, ct).ConfigureAwait(false) is { } pending)
             {
                 pendingEdit = "dropped";
+                author = pending.SavedBy ?? author;
                 if (to == ListingStatus.Unpublished
                     && Proposed(pending, (await ReadFormAsync(listingId, ct).ConfigureAwait(false))!.Value.Form) is { } proposed
                     && ListingFormParser.Parse(proposed).Listing is { } parsed)
@@ -914,6 +921,14 @@ public sealed class ListingEditor(
             else if (mover == ListingLifecycle.Mover.Organiser && to is ListingStatus.Published or ListingStatus.ChangesRequested or ListingStatus.Rejected)
             {
                 await RecordRevisionAsync(listing, ListingRevisions.Reviewed, actor, ct).ConfigureAwait(false);
+            }
+
+            // D102: an organiser's decision is emailed to whoever sent the listing in (or saved
+            // the edit it carried) and to the organisation's owners and admins.
+            if (mover == ListingLifecycle.Mover.Organiser
+                && to is ListingStatus.Published or ListingStatus.ChangesRequested or ListingStatus.Rejected or ListingStatus.Unpublished)
+            {
+                await ListingDecisions.BookAsync(db, directory, tenant, listing.OrgId, listing.Id, listing.Status, author, now, ct).ConfigureAwait(false);
             }
 
             await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);

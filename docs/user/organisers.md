@@ -76,6 +76,9 @@ For a published listing that changed since review:
 - **Unpublish**, saying why it's coming down. The provider sees your reason. **Publish again**
   puts it back.
 
+Each of these decisions is emailed to whoever sent the listing in and the organisation's owners
+and admins, with your note or reason. Write it for them: it's quoted as you typed it.
+
 ## Taxonomy
 
 **Taxonomy** holds the words providers tag listings with and families filter by, in four

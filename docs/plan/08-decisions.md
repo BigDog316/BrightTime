@@ -3385,13 +3385,44 @@ always on, no setting.
 - **Audit:** `listing.edit_held`, `listing.edit_returned`, `listing.edit_approved`,
   `listing.edit_discarded`; a move off publication notes whether a pending edit was kept or dropped.
 - **Not yet:** the provider isn't notified when an edit is approved or sent back (it shows in the
-  console); translations aren't edited in the console, so they aren't held.
+  console; *D102 emails them*); translations aren't edited in the console, so they aren't held.
 
 Schema: `opportunity.listing_pending_edit` (applied by hand to `brighttime_main` and `brighttime`;
 the compose volume needs it too, from `db/schema/40-opportunity.sql` with its RLS policy and grants).
 `ConsoleTests` covers held, sent back, resaved, approved, discarded and taken down, and the
 concurrency refusal against a pending edit; `ProviderManagementTests` a held import;
 `ListingRevisionsTests` the merge.
+
+### D102 — Telling providers what an organiser decided (**proposed 2026-11-23**)
+
+Nothing told an organisation when a network organiser decided on one of its listings: the
+decision showed only in the console. The schema's `listing_approved` and
+`listing_changes_requested` notification kinds were never sent. Sam chose on 2026-11-23: every
+decision; whoever sent it in plus the owners and admins; email only, always; the organiser's note
+included.
+- **Which decisions:** an organiser publishing a listing (first review, or putting a taken-down
+  one back), asking for changes, rejecting it, taking it down, and approving or sending back a
+  pending edit (D101). A provider's own moves (submitting, withdrawing, taking it down) send
+  nothing.
+- **Who:** whoever submitted the listing, or saved the edit it concerns, while they're still an
+  active member, and every active owner and admin; each once (`ListingDecisions.Recipients`).
+- **How:** an email, booked as one job per person (`opportunity.listing_decision_email`,
+  `ListingDecisionNotice` in Opportunities.Contracts) in the decision's own transaction, so it goes
+  only if the decision is kept. The jobs host's `ListingDecisionMailHandler` words it in the
+  county's language, as the clearance emails do (D98), and links to the listing in the console.
+  No inbox notice: staff work in the web console, which has no inbox, and the app can't open a
+  console page. No setting turns it off.
+- **The note:** the reason for changes, a rejection or a take-down, or what to change in a
+  sent-back edit, quoted in the email in its own direction with its line breaks. The job carries
+  identifiers and codes only (the job table is read across tenants), so the title and the note
+  are read when it's sent (`IListingDecisions`); a note that no longer stands (the listing has
+  moved on, or the edit was saved again) is left out, and the email still says what was decided.
+- **Not yet:** a staff member's own language isn't kept, so every email is in the county's.
+
+No schema change. `ListingDecisionsTests` covers who's told; `ListingDecisionMailTests` the emails
+as the worker sends them (the note encoded, a stale note left out); `ConsoleTests` the jobs a
+published, sent-back, approved and returned listing books, and none for a refused decision or a
+provider's own take-down.
 
 ## Open questions
 

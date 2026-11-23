@@ -83,6 +83,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
         (await db.ScalarAsync<long>(
             "select count(*) from platform.job where unique_key = @k and state = 'ready'",
             ("k", $"opportunities.project_listing:{id:N}"))).ShouldBe(1, "the worker is told to project it");
+        (await DecisionEmailsAsync(id, "published")).ShouldBe(await LooksAfterAsync(org.Id), "the admin who submitted it, and every owner and admin, once each (D102)");
 
         // Each change is on the audit trail, written in the change's own transaction.
         Guid providerId = SeedIds.For("user/" + Admin(org));
@@ -146,8 +147,10 @@ public sealed class ConsoleTests(ConsoleFixture db)
         organiser.Html.ShouldContain("needs a reason the provider can read");
         (await StatusAsync(id)).ShouldBe("pending_review");
 
+        (await DecisionEmailsAsync(id, "changes_requested")).ShouldBe("", "a refused decision books nothing");
         await organiser.PostAsync($"/organiser/review/listings/{id}", "changes", ("reason", "Please add the studio's entrance."));
         (await StatusAsync(id)).ShouldBe("changes_requested");
+        (await DecisionEmailsAsync(id, "changes_requested")).ShouldBe(await LooksAfterAsync(org.Id));
 
         await provider.GetAsync($"/provider/orgs/{org.Id}/listings/{id}");
         provider.Html.ShouldContain("Please add the studio&#x27;s entrance.");
@@ -203,6 +206,8 @@ public sealed class ConsoleTests(ConsoleFixture db)
         organiser.Html.ShouldContain("Say what needs changing");
         await organiser.GetAsync(review);
         Location(await organiser.PostAsync(review, "return-edit", ("reason", "Say which days the matinee runs."))).ShouldEndWith("done=edit_returned");
+        string looksAfter = await LooksAfterAsync(org.Id);
+        (await DecisionEmailsAsync(seeded.Id, "edit_returned")).ShouldBe(looksAfter);
 
         await provider.GetAsync(path);
         provider.Html.ShouldContain("An organiser sent your changes back");
@@ -221,6 +226,7 @@ public sealed class ConsoleTests(ConsoleFixture db)
         (await db.ScalarAsync<string>("select summary from opportunity.listing where id = @id", ("id", seeded.Id))).ShouldBe("Now with a free Saturday matinee for families.");
         (await db.ScalarAsync<long>("select count(*) from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id))).ShouldBe(0);
         (await db.ScalarAsync<bool>("select reviewed_at >= updated_at from opportunity.listing where id = @id", ("id", seeded.Id))).ShouldBeTrue();
+        (await DecisionEmailsAsync(seeded.Id, "edit_approved")).ShouldBe(looksAfter);
         (await db.ScalarAsync<string>(
             "select string_agg(action, ',' order by occurred_at) from platform.audit_event where subject_ids = array[@id] and action like 'listing.edit_%'", ("id", seeded.Id)))
             .ShouldBe("listing.edit_held,listing.edit_returned,listing.edit_held,listing.edit_approved");
@@ -247,8 +253,25 @@ public sealed class ConsoleTests(ConsoleFixture db)
         await provider.PostAsync(path, "unpublish", ("reason", "Between seasons."));
         (await db.ScalarAsync<string>("select status || ':' || title from opportunity.listing where id = @id", ("id", seeded.Id)))
             .ShouldBe("unpublished:A title for the next season");
+        (await DecisionEmailsAsync(seeded.Id, "unpublished")).ShouldBe("", "the provider took it down themselves");
         (await db.ScalarAsync<long>("select count(*) from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id))).ShouldBe(0);
     }
+
+    /// <summary>Who the decision's emails are booked for (D102), in id order.</summary>
+    private Task<string> DecisionEmailsAsync(Guid listing, string decision) => db.ScalarAsync<string>(
+        """
+        select coalesce(string_agg(payload->>'recipientUserId', ',' order by payload->>'recipientUserId'), '')
+        from platform.job
+        where job_type = 'opportunity.listing_decision_email' and payload->>'listingId' = @l and payload->>'decision' = @d
+        """, ("l", listing.ToString()), ("d", decision));
+
+    /// <summary>The organisation's active owners and admins, in id order.</summary>
+    private Task<string> LooksAfterAsync(Guid org) => db.ScalarAsync<string>(
+        """
+        select string_agg(user_id::text, ',' order by user_id::text)
+        from directory.org_membership
+        where org_id = @o and status = 'active' and ended_at is null and org_role in ('owner', 'admin')
+        """, ("o", org));
 
     private static string Location(HttpResponseMessage response)
     {

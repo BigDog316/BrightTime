@@ -84,7 +84,7 @@ public sealed class ListingImporter(
         UserId actor,
         CancellationToken cancellationToken = default)
     {
-        (ImportReport report, List<(string, ParsedListing)> valid) = await CheckAsync(organisation, format, content, defaultCategory, cancellationToken).ConfigureAwait(false);
+        (ImportReport report, List<(string, ListingForm, ParsedListing)> valid) = await CheckAsync(organisation, format, content, defaultCategory, cancellationToken).ConfigureAwait(false);
         if (!report.CanApply)
         {
             return (report, null);
@@ -94,7 +94,7 @@ public sealed class ListingImporter(
         return (report, outcome);
     }
 
-    private async Task<(ImportReport Report, List<(string, ParsedListing)> Valid)> CheckAsync(
+    private async Task<(ImportReport Report, List<(string, ListingForm, ParsedListing)> Valid)> CheckAsync(
         OrganisationId organisation,
         ImportFormat format,
         string content,
@@ -142,7 +142,7 @@ public sealed class ListingImporter(
         }
 
         List<ImportRowReport> rows = [];
-        List<(string, ParsedListing)> valid = [];
+        List<(string, ListingForm, ParsedListing)> valid = [];
         HashSet<string> seen = new(StringComparer.Ordinal);
         foreach (ImportRecord record in records)
         {
@@ -185,7 +185,7 @@ public sealed class ListingImporter(
 
             if (action is ImportAction.Create or ImportAction.Update)
             {
-                valid.Add((record.ExternalId, parsed!));
+                valid.Add((record.ExternalId, record.Form, parsed!));
             }
 
             rows.Add(new ImportRowReport(record.Row, record.ExternalId, record.Form.Title.Trim(), action, problems));

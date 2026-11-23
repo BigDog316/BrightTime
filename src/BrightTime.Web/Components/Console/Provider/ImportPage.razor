@@ -34,6 +34,10 @@ else if (_name is not null)
     @if (Created is not null)
     {
         <p class="notice success" role="status">@T.Format("import.applied", ("created", Number(Created)), ("updated", Number(Updated)), ("skipped", Number(Skipped)))</p>
+        @if (Number(Held) > 0)
+        {
+            <p class="notice" role="status">@T.Format("import.held", ("count", Number(Held)))</p>
+        }
         <p><a href="/provider/orgs/@OrgId">@T["import.see_listings"]</a></p>
     }
     @if (_problem is not null)
@@ -154,6 +158,8 @@ else if (_name is not null)
 
     [SupplyParameterFromQuery(Name = "skipped")] public string? Skipped { get; set; }
 
+    [SupplyParameterFromQuery(Name = "held")] public string? Held { get; set; }
+
     private string? _name;
     private string _role = "";
     private IReadOnlyList<VocabularyTerm> _categories = [];
@@ -267,7 +273,8 @@ else if (_name is not null)
             return;
         }
 
-        Navigation.NavigateTo($"/provider/orgs/{OrgId}/import?created={outcome.Created}&updated={outcome.Updated}&skipped={outcome.Skipped.Count}");
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/import?created={outcome.Created}&updated={outcome.Updated}&skipped={outcome.Skipped.Count}"
+            + (outcome.Held > 0 ? $"&held={outcome.Held}" : ""));
     }
 
     private ITimeLimitedDataProtector Protector() =>

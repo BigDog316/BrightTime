@@ -482,6 +482,23 @@ public sealed partial class ProviderManagementTests(ConsoleFixture db)
         Location(again).ShouldBe($"{path}?created=0&updated=1&skipped=0");
         (await db.ScalarAsync<long>("select count(*) from opportunity.listing where source_record_id = @x", ("x", external))).ShouldBe(1);
         (await db.ScalarAsync<string>("select summary from opportunity.listing where id = @l", ("l", listing))).ShouldBe("Learn to code apps.");
+
+        // Once published, an import's new wording waits for an organiser as the editor's does
+        // (D101); its new time goes live.
+        await db.ScalarAsync<int>(
+            "update opportunity.listing set status = 'published', published_at = now(), reviewed_at = now() + interval '1 second' where id = @l returning 1", ("l", listing));
+        await owner.GetAsync(path);
+        await owner.PostFileAsync(path, "upload", ("File", "listings.csv", csv
+            .Replace("Learn to code games.", "Learn to code robots.", StringComparison.Ordinal)
+            .Replace($"MO;WE,{from},{to},15:00", $"MO;WE,{from},{to},14:30", StringComparison.Ordinal)), ("Format", "csv"));
+        HttpResponseMessage held = await owner.PostAsync(path, "apply", ("payload", Payload(owner.Html)));
+        Location(held).ShouldBe($"{path}?created=0&updated=1&skipped=0&held=1");
+        await owner.GetAsync(Location(held));
+        owner.Html.ShouldContain("1 update to a published listing waits for an organiser.");
+        (await db.ScalarAsync<string>("select summary from opportunity.listing where id = @l", ("l", listing))).ShouldBe("Learn to code apps.");
+        (await db.ScalarAsync<string>("select to_char(start_time, 'HH24:MI') from opportunity.listing_session where listing_id = @l", ("l", listing))).ShouldBe("14:30");
+        (await db.ScalarAsync<string>("select snapshot->'form'->>'summary' from opportunity.listing_pending_edit where listing_id = @l", ("l", listing)))
+            .ShouldBe("Learn to code robots.");
     }
 
     [Fact]

@@ -45,7 +45,7 @@ public sealed class ClearanceGateApiTests(ApiFixture api)
 
             await api.ExecuteAsync("""
                 insert into directory.staff_clearance (id, tenant_id, user_id, org_id, clearance_kind, status, completed_on, expires_on)
-                values (gen_random_uuid(), @t, @u, @o, 'background_check', 'cleared', current_date - 400, current_date - 1),
+                values (gen_random_uuid(), @t, @u, @o, 'background_check', 'cleared', current_date - 400, current_date - 3),
                        (gen_random_uuid(), @t, @u, null, 'mandated_reporter_training', 'cleared', current_date - 30, null)
                 """, ("t", api.Data.TenantId), ("u", staff.Id), ("o", org));
             (await RefusalAsync(await client.GetAsync(meetings, Ct))).ShouldBe(("urn:brighttime:problem:clearances.not_current", "", "background_check"));

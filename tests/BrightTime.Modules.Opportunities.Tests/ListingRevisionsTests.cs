@@ -87,4 +87,22 @@ public sealed class ListingRevisionsTests
         days.Before.ShouldBe(["TH", "TU"]);
         days.After.ShouldBe(["SA", "TU"]);
     }
+
+    [Fact]
+    public void A_merge_takes_the_schedule_from_one_form_and_everything_else_from_the_other()
+    {
+        ListingForm wording = new() { Title = "New title", Summary = "New summary", StartsOn = "2026-09-07", StartTime = "16:00", EndTime = "17:00", Capacity = "10" };
+        wording.Days.Add("MO");
+        wording.SiteIds.Add(Guid.NewGuid());
+        ListingForm schedule = new() { Title = "Old title", Summary = "Old summary", StartsOn = "2026-09-08", StartTime = "15:30", EndTime = "17:00", Capacity = "12", Version = "41" };
+        schedule.Days.Add("TU");
+
+        ListingForm merged = ListingRevisions.Merge(wording, schedule);
+
+        ListingRevisions.Compare(merged, wording).Select(c => c.Field).ShouldAllBe(f => ListingRevisions.LiveFields.Contains(f));
+        ListingRevisions.Compare(merged, schedule).Select(c => c.Field).ShouldAllBe(f => !ListingRevisions.LiveFields.Contains(f));
+        (merged.Title, merged.StartTime, merged.Capacity, merged.Version, merged.Days.Single()).ShouldBe(("New title", "15:30", "12", "41", "TU"));
+        wording.Days.Single().ShouldBe("MO", "neither form is changed");
+        ListingRevisions.CompareWording(schedule, wording).Select(c => c.Field).ShouldBe(["Title", "Summary", "SiteIds"]);
+    }
 }

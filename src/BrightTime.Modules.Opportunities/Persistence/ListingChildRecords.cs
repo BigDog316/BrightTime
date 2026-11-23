@@ -75,6 +75,40 @@ public sealed class ListingTranslationRecord
     public DateTimeOffset? ReviewedAt { get; set; }
 }
 
+/// <summary>
+/// A row of <c>opportunity.listing_pending_edit</c> (D101): an edit to what a published listing
+/// says, waiting for an organiser while the listing shows what was approved.
+/// </summary>
+public sealed class ListingPendingEditRecord
+{
+    public const string Waiting = "waiting";
+
+    public const string Returned = "returned";
+
+    public Guid ListingId { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    /// <summary>JSON: the whole form as the provider last saved it (see <c>ListingRevisions</c>).</summary>
+    public required string Snapshot { get; set; }
+
+    /// <summary>The edit carries its dates and times too: they couldn't go live with the approved wording.</summary>
+    public bool HoldsSchedule { get; set; }
+
+    /// <summary>waiting or returned.</summary>
+    public required string State { get; set; }
+
+    public DateTimeOffset SavedAt { get; set; }
+
+    public Guid? SavedBy { get; set; }
+
+    public string? ReviewNote { get; set; }
+
+    public DateTimeOffset? ReviewedAt { get; set; }
+
+    public Guid? ReviewedBy { get; set; }
+}
+
 /// <summary>A row of <c>opportunity.listing_revision</c>: the listing's form as it stood when submitted or reviewed.</summary>
 public sealed class ListingRevisionRecord
 {

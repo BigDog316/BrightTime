@@ -320,6 +320,11 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   back from the API as `clearances.not_current` with the kinds missing and expired, and the app
   says so (the attendance screen and offline sync too). With the rules on, approval needs every
   active owner cleared. The gate now acts only where the permission and role would otherwise pass.
+- **Pending edits to published listings** (D101, proposed): a change to what a published
+  listing says waits in `opportunity.listing_pending_edit` for an organiser (*Edits waiting for
+  approval*: approve, or send back with a note), while families see the approved version; its
+  schedule, places and deadline still go live at once. Imports are held the same way. Schema
+  change: apply the new table to the compose volume.
 - **Collections in the organiser console** (D94): `/organiser/collections` lists and
   begins them; a collection's page writes it, words it in other languages, orders its published
   activities with notes, features it on the home page, and publishes or archives it. The link name
@@ -355,6 +360,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D100 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D100 on 2026-11-22).
+D101 (pending edits to published listings) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
@@ -377,7 +383,6 @@ Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minut
 
 These have not been asked for yet:
 
-- D15 pending revisions (edits currently go live and are recorded as revisions);
 - curation: hero images for collections and neighbourhood pages (waits on media storage);
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see
   [plan/03](plan/03-indexing-and-query-plans.md));

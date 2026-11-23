@@ -17,12 +17,14 @@ of the console: **Review queue**, **Taxonomy**, **Collections**, **Neighbourhood
 
 ## The review queue
 
-The **Review queue** has three lists, oldest first:
+The **Review queue** has four lists:
 
 - **Organisations applying**: new applications and ones sent back after changes.
 - **Listings waiting for review**: drafts that providers have submitted.
-- **Published listings changed since review**: a provider's edit to a live listing goes live at
-  once. Look these over, and unpublish anything that shouldn't be there.
+- **Edits waiting for approval**: new wording for a published listing. Families see the approved
+  version until you approve it.
+- **Published listings changed since review**: a change to a live listing's schedule, places or
+  deadline goes live at once. Look these over, and unpublish anything that shouldn't be there.
 
 ## Reviewing an organisation
 
@@ -62,6 +64,12 @@ Decide:
   approved yet, you can't publish, but you can still send it back with a note.
 - **Request changes**, saying what the provider should change.
 - **Reject**, saying why. The provider will need to start a new listing.
+
+For a published listing with an edit waiting, the page shows each change against what families
+see now:
+- **Approve the changes** puts them live and marks the listing reviewed.
+- **Send the changes back**, saying what needs changing. The listing stays as it is, and the
+  provider sees your note.
 
 For a published listing that changed since review:
 - **The changes are fine** marks it reviewed.

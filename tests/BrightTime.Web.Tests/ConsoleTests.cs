@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Editing;
@@ -154,34 +155,105 @@ public sealed class ConsoleTests(ConsoleFixture db)
     }
 
     [Fact]
-    public async Task An_edit_to_a_published_listing_goes_live_and_waits_in_the_changed_lane()
+    public async Task An_edit_to_what_a_published_listing_says_waits_for_an_organiser_while_its_schedule_goes_live()
     {
         RequireDatabase();
         SeedOrganisation org = Org("kettle-county-theater-company");
         SeedListing seeded = db.Data.Listings.First(l => l.OrgId == org.Id && l.Status == "published");
+        string path = $"/provider/orgs/{org.Id}/listings/{seeded.Id}";
+        string review = $"/organiser/review/listings/{seeded.Id}";
+        string approvedSummary = await db.ScalarAsync<string>("select summary from opportunity.listing where id = @id", ("id", seeded.Id));
 
         ListingForm form = await LoadFormAsync(seeded.Id);
+        string earlier = TimeOnly.ParseExact(form.StartTime, "HH:mm", CultureInfo.InvariantCulture).AddMinutes(-15).ToString("HH:mm", CultureInfo.InvariantCulture);
         form.Summary = "Now with a free matinee for families.";
+        form.StartTime = earlier;
 
         using Browser provider = db.NewBrowser();
         await provider.SignInAsync(Admin(org));
-        await provider.GetAsync($"/provider/orgs/{org.Id}/listings/{seeded.Id}");
-        HttpResponseMessage saved = await provider.PostAsync($"/provider/orgs/{org.Id}/listings/{seeded.Id}", "listing", Fields(form, "save"));
+        await provider.GetAsync(path);
+        provider.Html.ShouldContain("wait for an organiser before families see them");
+        HttpResponseMessage saved = await provider.PostAsync(path, "listing", Fields(form, "save"));
 
-        saved.StatusCode.ShouldBe(HttpStatusCode.Redirect);
-        (await StatusAsync(seeded.Id)).ShouldBe("published", "a live listing stays live while it is edited (D15)");
-        (await db.ScalarAsync<string>("select summary from opportunity.listing where id = @id", ("id", seeded.Id)))
-            .ShouldBe("Now with a free matinee for families.");
+        // D101: the wording waits; the new time is live at once.
+        Location(saved).ShouldEndWith("?saved=held");
+        (await StatusAsync(seeded.Id)).ShouldBe("published");
+        (await db.ScalarAsync<string>("select summary from opportunity.listing where id = @id", ("id", seeded.Id))).ShouldBe(approvedSummary);
+        (await db.ScalarAsync<string>(
+            "select to_char(start_time, 'HH24:MI') from opportunity.listing_session where listing_id = @id and not is_cancelled order by starts_on limit 1",
+            ("id", seeded.Id))).ShouldBe(earlier);
+        (await db.ScalarAsync<string>("select state || ':' || (snapshot->'form'->>'summary') from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id)))
+            .ShouldBe("waiting:Now with a free matinee for families.");
+
+        await provider.GetAsync(path);
+        provider.Html.ShouldContain("Your changes are waiting for an organiser");
+        provider.Html.ShouldContain("Now with a free matinee for families.", Case.Sensitive, "the editor carries on from the waiting edit");
 
         using Browser organiser = db.NewBrowser();
         await organiser.SignInAsync(Organiser);
         await organiser.GetAsync("/organiser/review");
-        organiser.Html.ShouldContain($"/organiser/review/listings/{seeded.Id}");
+        organiser.Html.ShouldContain("Edits waiting for approval");
+        organiser.Html.ShouldContain(review);
 
-        await organiser.GetAsync($"/organiser/review/listings/{seeded.Id}");
-        await organiser.PostAsync($"/organiser/review/listings/{seeded.Id}", "reviewed");
+        // Sent back with a note: the listing is unchanged, and the provider sees why.
+        await organiser.GetAsync(review);
+        organiser.Html.ShouldContain("Changes waiting for approval");
+        organiser.Html.ShouldContain("Now with a free matinee for families.");
+        (await organiser.PostAsync(review, "return-edit", ("reason", " "))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        organiser.Html.ShouldContain("Say what needs changing");
+        await organiser.GetAsync(review);
+        Location(await organiser.PostAsync(review, "return-edit", ("reason", "Say which days the matinee runs."))).ShouldEndWith("done=edit_returned");
+
+        await provider.GetAsync(path);
+        provider.Html.ShouldContain("An organiser sent your changes back");
+        provider.Html.ShouldContain("Say which days the matinee runs.");
+        await provider.GetAsync($"/provider/orgs/{org.Id}");
+        provider.Html.ShouldContain("Changes sent back:");
+
+        // Saved again, it waits again; approved, it goes live and the listing counts as reviewed.
+        form = await LoadFormAsync(seeded.Id);
+        form.Summary = "Now with a free Saturday matinee for families.";
+        await provider.GetAsync(path);
+        Location(await provider.PostAsync(path, "listing", Fields(form, "save"))).ShouldEndWith("?saved=held");
+        await organiser.GetAsync(review);
+        Location(await organiser.PostAsync(review, "approve-edit")).ShouldEndWith("done=edit_approved");
+
+        (await db.ScalarAsync<string>("select summary from opportunity.listing where id = @id", ("id", seeded.Id))).ShouldBe("Now with a free Saturday matinee for families.");
+        (await db.ScalarAsync<long>("select count(*) from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id))).ShouldBe(0);
+        (await db.ScalarAsync<bool>("select reviewed_at >= updated_at from opportunity.listing where id = @id", ("id", seeded.Id))).ShouldBeTrue();
+        (await db.ScalarAsync<string>(
+            "select string_agg(action, ',' order by occurred_at) from platform.audit_event where subject_ids = array[@id] and action like 'listing.edit_%'", ("id", seeded.Id)))
+            .ShouldBe("listing.edit_held,listing.edit_returned,listing.edit_held,listing.edit_approved");
         await organiser.GetAsync("/organiser/review");
-        organiser.Html.ShouldNotContain($"/organiser/review/listings/{seeded.Id}");
+        organiser.Html.ShouldNotContain(review);
+
+        // A discarded edit leaves the approved version. One waiting when the listing is taken
+        // down becomes its wording, to be reviewed before it's published again.
+        form = await LoadFormAsync(seeded.Id);
+        form.Title = "A title nobody approved";
+        await provider.GetAsync(path);
+        await provider.PostAsync(path, "listing", Fields(form, "save"));
+        await provider.GetAsync(path);
+        Location(await provider.PostAsync(path, "discard-edit")).ShouldEndWith("?saved=discarded");
+        (await db.ScalarAsync<long>("select count(*) from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id))).ShouldBe(0);
+        await provider.GetAsync(path);
+        provider.Html.ShouldNotContain("A title nobody approved");
+
+        form = await LoadFormAsync(seeded.Id);
+        form.Title = "A title for the next season";
+        await provider.GetAsync(path);
+        await provider.PostAsync(path, "listing", Fields(form, "save"));
+        await provider.GetAsync(path);
+        await provider.PostAsync(path, "unpublish", ("reason", "Between seasons."));
+        (await db.ScalarAsync<string>("select status || ':' || title from opportunity.listing where id = @id", ("id", seeded.Id)))
+            .ShouldBe("unpublished:A title for the next season");
+        (await db.ScalarAsync<long>("select count(*) from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id))).ShouldBe(0);
+    }
+
+    private static string Location(HttpResponseMessage response)
+    {
+        Uri location = response.Headers.Location.ShouldNotBeNull("a redirect");
+        return location.IsAbsoluteUri ? location.PathAndQuery : location.ToString();
     }
 
     [Fact]
@@ -206,8 +278,8 @@ public sealed class ConsoleTests(ConsoleFixture db)
 
         second.StatusCode.ShouldBe(HttpStatusCode.OK);
         provider.Html.ShouldContain("Someone else saved this listing");
-        (await db.ScalarAsync<string>("select title from opportunity.listing where id = @id", ("id", seeded.Id)))
-            .ShouldBe("First editor's title");
+        (await db.ScalarAsync<string>("select snapshot->'form'->>'title' from opportunity.listing_pending_edit where listing_id = @id", ("id", seeded.Id)))
+            .ShouldBe("First editor's title", "a new title waits for an organiser (D101), and the second save is refused against it");
     }
 
     [Fact]

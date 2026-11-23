@@ -54,6 +54,15 @@ else if (_name is not null)
                         {
                             <p class="review-note"><strong>@T["provider.listings.organiser_note"]</strong> <span dir="auto">@note</span></p>
                         }
+                        @if (row.Status == ListingStatus.Published && row.Edit is { } edit)
+                        {
+                            <p class="review-note"><strong>@T[edit.Returned ? "provider.listings.edit_returned" : "provider.listings.edit_waiting"]</strong>
+                                @if (edit is { Returned: true, ReviewNote: { } returnedNote })
+                                {
+                                    <span dir="auto">@returnedNote</span>
+                                }
+                            </p>
+                        }
                     </li>
                 }
             </ul>

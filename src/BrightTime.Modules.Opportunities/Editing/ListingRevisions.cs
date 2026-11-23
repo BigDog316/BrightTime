@@ -81,6 +81,54 @@ public static class ListingRevisions
         (nameof(ListingForm.ContactPhone), false, f => [f.ContactPhone]),
     ];
 
+    /// <summary>
+    /// The fields an edit to a published listing puts live at once (D101): when it meets, when it
+    /// shows, how many places and the deadline, so a corrected time is never held up. Everything
+    /// else is what the listing says, and waits for an organiser.
+    /// </summary>
+    public static IReadOnlySet<string> LiveFields { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        nameof(ListingForm.Repeats), nameof(ListingForm.Days), nameof(ListingForm.Interval),
+        nameof(ListingForm.StartsOn), nameof(ListingForm.EndsOn), nameof(ListingForm.StartTime), nameof(ListingForm.EndTime),
+        nameof(ListingForm.SkipDates), nameof(ListingForm.ShowFrom), nameof(ListingForm.TakeDownAfter),
+        nameof(ListingForm.Capacity), nameof(ListingForm.DeadlineKind), nameof(ListingForm.DeadlineOn),
+    };
+
+    /// <summary>
+    /// A new form with what <paramref name="wording"/> says and <paramref name="schedule"/>'s
+    /// <see cref="LiveFields"/>. Neither is changed.
+    /// </summary>
+    public static ListingForm Merge(ListingForm wording, ListingForm schedule)
+    {
+        ArgumentNullException.ThrowIfNull(wording);
+        ArgumentNullException.ThrowIfNull(schedule);
+        ListingForm merged = Deserialise(Serialise(wording))!;
+        merged.Repeats = schedule.Repeats;
+        merged.Days.Clear();
+        foreach (string day in schedule.Days)
+        {
+            merged.Days.Add(day);
+        }
+
+        merged.Interval = schedule.Interval;
+        merged.StartsOn = schedule.StartsOn;
+        merged.EndsOn = schedule.EndsOn;
+        merged.StartTime = schedule.StartTime;
+        merged.EndTime = schedule.EndTime;
+        merged.SkipDates = schedule.SkipDates;
+        merged.ShowFrom = schedule.ShowFrom;
+        merged.TakeDownAfter = schedule.TakeDownAfter;
+        merged.Capacity = schedule.Capacity;
+        merged.DeadlineKind = schedule.DeadlineKind;
+        merged.DeadlineOn = schedule.DeadlineOn;
+        merged.Version = schedule.Version;
+        return merged;
+    }
+
+    /// <summary>The fields outside <see cref="LiveFields"/> that differ: what would wait for an organiser.</summary>
+    public static IReadOnlyList<FieldChange> CompareWording(ListingForm before, ListingForm after) =>
+        [.. Compare(before, after).Where(c => !LiveFields.Contains(c.Field))];
+
     /// <summary>The form as stored. The row version is left out: it is not content.</summary>
     public static string Serialise(ListingForm form)
     {

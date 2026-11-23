@@ -151,6 +151,26 @@ create index ix_listing_revision_listing on listing_revision (listing_id, create
 create trigger listing_revision_no_update before update on listing_revision
   for each statement execute function platform.deny_write();
 
+-- D101: an edit to what a published listing says waits here for an organiser, while families
+-- keep seeing what was approved. One per listing, the form as the provider last saved it.
+-- holds_schedule: the dates and times couldn't go live on their own (with the approved wording
+-- they didn't make a valid listing), so this edit carries them too.
+create table listing_pending_edit (
+  listing_id     uuid primary key references listing(id) on delete cascade,
+  tenant_id      uuid not null references platform.tenant(id) on delete cascade,
+  snapshot       jsonb not null,
+  holds_schedule boolean not null default false,
+  state          text not null default 'waiting',
+  saved_at       timestamptz not null default now(),
+  saved_by       uuid references identity.app_user(id),
+  review_note    text,
+  reviewed_at    timestamptz,
+  reviewed_by    uuid references identity.app_user(id),
+  constraint ck_listing_pending_edit_state check (state in ('waiting','returned')),
+  constraint ck_listing_pending_edit_returned check (state <> 'returned' or (review_note is not null and reviewed_at is not null))
+);
+create index ix_listing_pending_edit_waiting on listing_pending_edit (saved_at) where state = 'waiting';
+
 create table listing_translation (
   listing_id   uuid not null references listing(id) on delete cascade,
   locale       text not null,

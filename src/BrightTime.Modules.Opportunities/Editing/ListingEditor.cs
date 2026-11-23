@@ -16,7 +16,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightTime.Modules.Opportunities.Editing;
 
-/// <summary>A listing opened in the editor: its form, and the state around it.</summary>
+/// <summary>
+/// An edit to what a published listing says, waiting for an organiser (D101), or sent back by one
+/// with a note.
+/// </summary>
+public sealed record PendingEdit(bool Returned, DateTimeOffset SavedAt, string? ReviewNote, DateTimeOffset? ReviewedAt);
+
+/// <summary>A pending edit and what it would change, field by field, against the live listing.</summary>
+public sealed record PendingEditView(PendingEdit Edit, IReadOnlyList<FieldChange> Changes);
+
+/// <summary>
+/// A listing opened in the editor: its form, and the state around it. With a pending edit, the
+/// form is that edit's wording with the live schedule.
+/// </summary>
 public sealed record EditableListing(
     Guid Id,
     OrganisationId OrganisationId,
@@ -25,7 +37,8 @@ public sealed record EditableListing(
     string? ReviewNote,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? ReviewedAt,
-    ListingForm Form)
+    ListingForm Form,
+    PendingEdit? Pending = null)
 {
     /// <summary>Published and edited since an organiser last looked (D15).</summary>
     public bool ChangedSinceReview => Status == ListingStatus.Published && (ReviewedAt is null || UpdatedAt > ReviewedAt);
@@ -35,6 +48,9 @@ public sealed record EditableListing(
 public sealed record SaveOutcome(Guid? ListingId, IReadOnlyDictionary<string, Phrase[]> Errors, Phrase? Problem)
 {
     public bool Saved => ListingId is not null && Errors.Count == 0 && Problem is null;
+
+    /// <summary>The save changed what a published listing says, so that waits for an organiser (D101).</summary>
+    public bool Held { get; init; }
 
     internal static SaveOutcome Invalid(IReadOnlyDictionary<string, Phrase[]> errors) => new(null, errors, null);
 
@@ -52,10 +68,14 @@ public sealed record ListingRow(
     DateTimeOffset UpdatedAt,
     DateTimeOffset? SubmittedAt,
     DateTimeOffset? ReviewedAt,
-    string? ReviewNote);
+    string? ReviewNote,
+    PendingEdit? Edit = null);
+
+/// <summary>A published listing whose edit waits for an organiser, and when it was saved.</summary>
+public sealed record PendingEditRow(ListingRow Listing, DateTimeOffset SavedAt);
 
 /// <summary>The listings waiting for an organiser.</summary>
-public sealed record ListingsForReview(IReadOnlyList<ListingRow> AwaitingReview, IReadOnlyList<ListingRow> ChangedSinceReview);
+public sealed record ListingsForReview(IReadOnlyList<ListingRow> AwaitingReview, IReadOnlyList<ListingRow> ChangedSinceReview, IReadOnlyList<PendingEditRow> EditsWaiting);
 
 /// <summary>
 /// Creates and edits listings for their organisation's staff, and moves them through
@@ -69,8 +89,9 @@ public sealed record ListingsForReview(IReadOnlyList<ListingRow> AwaitingReview,
 /// when the worker runs, and never sees a change that rolled back.
 /// </para>
 /// <para>
-/// An edit to a published listing goes live and puts the listing in the organiser's
-/// "changed since review" lane (decision D15).
+/// An edit to a published listing's schedule goes live and puts the listing in the organiser's
+/// "changed since review" lane (D15). An edit to what it says waits for an organiser as a pending
+/// edit, while families see the approved version (D101).
 /// </para>
 /// </remarks>
 public sealed class ListingEditor(
@@ -99,8 +120,71 @@ public sealed class ListingEditor(
             }
 
             ListingRecord l = r.Listing;
-            return new EditableListing(l.Id, new OrganisationId(l.OrgId), ParseStatus(l.Status), l.Slug, l.ReviewNote, l.UpdatedAt, l.ReviewedAt, r.Form);
+            ListingStatus status = ParseStatus(l.Status);
+            ListingForm form = r.Form;
+            PendingEdit? pending = null;
+            if (status == ListingStatus.Published && await PendingAsync(l.Id, ct).ConfigureAwait(false) is { } edit
+                && Proposed(edit.Record, r.Form) is { } proposed)
+            {
+                form = proposed;
+                form.Version = VersionOf(r.Form.Version, edit.Version);
+                pending = View(edit.Record);
+            }
+
+            return new EditableListing(l.Id, new OrganisationId(l.OrgId), status, l.Slug, l.ReviewNote, l.UpdatedAt, l.ReviewedAt, form, pending);
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>A listing's pending edit and its row version, untracked. Runs inside the caller's transaction.</summary>
+    private async Task<(ListingPendingEditRecord Record, uint Version)?> PendingAsync(Guid listingId, CancellationToken ct)
+    {
+        var row = await db.ListingPendingEdits.AsNoTracking()
+            .Where(e => e.ListingId == listingId)
+            .Select(e => new { Edit = e, Version = EF.Property<uint>(e, "xmin") })
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        return row is null ? null : (row.Edit, row.Version);
+    }
+
+    /// <summary>
+    /// The listing as a pending edit would make it: the edit's wording with the live schedule, or
+    /// the whole edit where it holds its schedule too. Null if the snapshot can't be read.
+    /// </summary>
+    private static ListingForm? Proposed(ListingPendingEditRecord edit, ListingForm live) =>
+        ListingRevisions.Deserialise(edit.Snapshot) is { } saved
+            ? (edit.HoldsSchedule ? saved : ListingRevisions.Merge(saved, live))
+            : null;
+
+    private static PendingEdit View(ListingPendingEditRecord edit) =>
+        new(edit.State == ListingPendingEditRecord.Returned, edit.SavedAt, edit.ReviewNote, edit.ReviewedAt);
+
+    /// <summary>
+    /// The form's version: the listing's row version, and the pending edit's after a slash when
+    /// there is one, so a save is refused if either moved on since the editor opened.
+    /// </summary>
+    private static string VersionOf(string listing, uint? pending) =>
+        pending is { } p ? listing + "/" + p.ToString(CultureInfo.InvariantCulture) : listing;
+
+    private static bool TryParseVersion(string text, out uint listing, out uint? pending)
+    {
+        pending = null;
+        string[] parts = (text ?? string.Empty).Split('/');
+        if (parts.Length > 2 || !uint.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out listing))
+        {
+            listing = 0;
+            return false;
+        }
+
+        if (parts.Length == 2)
+        {
+            if (!uint.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out uint p))
+            {
+                return false;
+            }
+
+            pending = p;
+        }
+
+        return true;
     }
 
     /// <summary>The listing and its editor form, with the row version in the form. Runs inside the caller's transaction.</summary>
@@ -207,6 +291,7 @@ public sealed class ListingEditor(
             {
                 ListingRecord listing;
                 string? from = null;
+                bool held = false;
                 if (listingId is { } id)
                 {
                     ListingRecord? existing = await db.Listings.FirstOrDefaultAsync(l => l.Id == id, ct).ConfigureAwait(false);
@@ -223,15 +308,27 @@ public sealed class ListingEditor(
                             : Phrase.Of("editor.refused.not_editable", ("status", ListingLifecycle.StatusPhrase(status))));
                     }
 
-                    // Optimistic concurrency on xmin: the save fails if the row moved on.
-                    if (!uint.TryParse(form.Version, NumberStyles.None, CultureInfo.InvariantCulture, out uint version))
+                    // Optimistic concurrency on xmin: the save fails if the row moved on. Checked here
+                    // too, because a held edit may write nothing to the listing's own row.
+                    if (!TryParseVersion(form.Version, out uint version, out uint? pendingVersion))
                     {
                         return SaveOutcome.Refused(Phrase.Of("editor.refused.missing_version"));
+                    }
+
+                    ListingPendingEditRecord? pending = await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == id, ct).ConfigureAwait(false);
+                    uint? currentPending = pending is null ? null : db.Entry(pending).Property<uint>("xmin").CurrentValue;
+                    if (db.Entry(existing).Property<uint>("xmin").CurrentValue != version || currentPending != pendingVersion)
+                    {
+                        return SaveOutcome.Refused(Phrase.Of("editor.refused.concurrent_save"));
                     }
 
                     db.Entry(existing).Property<uint>("xmin").OriginalValue = version;
                     listing = existing;
                     from = existing.Status;
+                    if (status == ListingStatus.Published)
+                    {
+                        held = await SavePublishedAsync(existing, form, parsed, pending, actor, ct).ConfigureAwait(false);
+                    }
                 }
                 else
                 {
@@ -250,13 +347,17 @@ public sealed class ListingEditor(
                     db.Listings.Add(listing);
                 }
 
-                Apply(listing, parsed);
-                await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+                if (from != ListingStatus.Published.ToDbValue())
+                {
+                    Apply(listing, parsed);
+                    await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+                }
+
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
                 await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);
                 await audit.RecordInTransactionAsync(db, new AuditAccess
                 {
-                    Action = from is null ? "listing.created" : "listing.updated",
+                    Action = from is null ? "listing.created" : held ? EditHeld : "listing.updated",
                     ActorId = actor,
                     ActorOrgId = organisation,
                     SubjectKind = "listing",
@@ -264,7 +365,7 @@ public sealed class ListingEditor(
                     Detail = new Dictionary<string, string> { ["status"] = listing.Status },
                 }, ct).ConfigureAwait(false);
 
-                return new SaveOutcome(listing.Id, new Dictionary<string, Phrase[]>(), null);
+                return new SaveOutcome(listing.Id, new Dictionary<string, Phrase[]>(), null) { Held = held };
             }, cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
@@ -272,6 +373,191 @@ public sealed class ListingEditor(
             return SaveOutcome.Refused(Phrase.Of("editor.refused.concurrent_save"));
         }
     }
+
+    public const string EditHeld = "listing.edit_held";
+
+    /// <summary>
+    /// Saves an edit to a published listing, in the caller's transaction (D101). A change to what
+    /// it says waits as the listing's pending edit, and the schedule's own changes go live; with no
+    /// change to what it says, the whole edit goes live as before, and any pending edit is dropped,
+    /// since the provider has put the wording back.
+    /// </summary>
+    /// <returns>Whether anything waits for an organiser.</returns>
+    private async Task<bool> SavePublishedAsync(ListingRecord listing, ListingForm form, ParsedListing parsed, ListingPendingEditRecord? pending, UserId actor, CancellationToken ct)
+    {
+        ListingForm live = (await ReadFormAsync(listing.Id, ct).ConfigureAwait(false))!.Value.Form;
+        if (ListingRevisions.CompareWording(live, form).Count == 0)
+        {
+            if (pending is not null)
+            {
+                db.ListingPendingEdits.Remove(pending);
+            }
+
+            Apply(listing, parsed);
+            await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+            return false;
+        }
+
+        // The new schedule with the approved wording. If that isn't a valid listing (a new kind
+        // with a schedule only the new kind allows, say), the schedule waits with the wording.
+        ListingForm scheduleOnly = ListingRevisions.Merge(live, form);
+        (ParsedListing? schedule, _) = ListingFormParser.Parse(scheduleOnly);
+        if (schedule is not null && ListingRevisions.Compare(live, scheduleOnly).Count > 0)
+        {
+            Apply(listing, schedule);
+            await ReplaceChildrenAsync(listing, schedule, ct).ConfigureAwait(false);
+        }
+
+        if (pending is null)
+        {
+            pending = new ListingPendingEditRecord
+            {
+                ListingId = listing.Id,
+                TenantId = listing.TenantId,
+                Snapshot = string.Empty,
+                State = ListingPendingEditRecord.Waiting,
+            };
+            db.ListingPendingEdits.Add(pending);
+        }
+
+        pending.Snapshot = ListingRevisions.Serialise(form);
+        pending.HoldsSchedule = schedule is null;
+        pending.State = ListingPendingEditRecord.Waiting;
+        pending.SavedAt = clock.UtcNow;
+        pending.SavedBy = actor.Value;
+        return true;
+    }
+
+    /// <summary>
+    /// What a published listing's pending edit would change, against the live listing, with sites
+    /// and terms named in <paramref name="locale"/>. Null when nothing waits.
+    /// </summary>
+    public Task<PendingEditView?> PendingEditAsync(Guid listingId, string locale, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (await PendingAsync(listingId, ct).ConfigureAwait(false) is not { } edit
+                || await ReadFormAsync(listingId, ct).ConfigureAwait(false) is not { } live
+                || Proposed(edit.Record, live.Form) is not { } proposed)
+            {
+                return null;
+            }
+
+            IReadOnlyList<FieldChange> changes = ListingRevisions.Compare(live.Form, proposed);
+            return new PendingEditView(View(edit.Record), await NameIdsAsync(changes, locale, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>
+    /// An organiser approves a published listing's pending edit: it goes live, as if saved now,
+    /// and the listing counts as reviewed. Refused if the edit no longer makes a valid listing, or
+    /// names a site or term that's gone; the organiser sends it back instead.
+    /// </summary>
+    public Task<Result> ApproveEditAsync(Guid listingId, UserId actor, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            ListingRecord? listing = await db.Listings.FirstOrDefaultAsync(l => l.Id == listingId, ct).ConfigureAwait(false);
+            if (listing is null)
+            {
+                return Result.Failure(Error.NotFound("listing.not_found", "That listing does not exist."));
+            }
+
+            ListingPendingEditRecord? pending = await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == listingId, ct).ConfigureAwait(false);
+            if (listing.Status != ListingStatus.Published.ToDbValue() || pending is not { State: ListingPendingEditRecord.Waiting })
+            {
+                return Result.Failure(Error.Conflict("listing.no_pending_edit", "No changes to this listing are waiting for approval."));
+            }
+
+            ListingForm live = (await ReadFormAsync(listingId, ct).ConfigureAwait(false))!.Value.Form;
+            ParsedListing? parsed = Proposed(pending, live) is { } proposed ? ListingFormParser.Parse(proposed).Listing : null;
+            if (parsed is null)
+            {
+                return Result.Failure(Error.Precondition("listing.edit_invalid", "These changes no longer make a listing that can be saved. Send them back."));
+            }
+
+            if ((await CheckReferencesAsync(new OrganisationId(listing.OrgId), parsed, ct).ConfigureAwait(false)).Count > 0)
+            {
+                return Result.Failure(Error.Precondition("listing.edit_references", "A site or topic in these changes is no longer available. Send them back."));
+            }
+
+            Apply(listing, parsed);
+            await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+            db.ListingPendingEdits.Remove(pending);
+            listing.ReviewedAt = clock.UtcNow;
+            listing.ReviewedBy = actor.Value;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await RecordRevisionAsync(listing, ListingRevisions.Reviewed, actor, ct).ConfigureAwait(false);
+            await db.ScheduleProjectionAsync(tenant.TenantId, listing.Id, ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.edit_approved",
+                ActorId = actor,
+                SubjectKind = "listing",
+                SubjectIds = [listing.Id],
+            }, ct).ConfigureAwait(false);
+            return Result.Success();
+        }, cancellationToken);
+
+    /// <summary>An organiser sends a pending edit back with a note; the listing stays as approved, and the edit stays with the provider.</summary>
+    public Task<Result> ReturnEditAsync(Guid listingId, string? note, UserId actor, CancellationToken cancellationToken = default)
+    {
+        string? trimmed = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (trimmed is null)
+        {
+            return Task.FromResult(Result.Failure(Error.Validation("listing.edit_note_required", "Say what needs changing, so the provider can put it right.")));
+        }
+
+        return db.InTransactionAsync(async ct =>
+        {
+            ListingPendingEditRecord? pending = await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == listingId, ct).ConfigureAwait(false);
+            if (pending is not { State: ListingPendingEditRecord.Waiting })
+            {
+                return Result.Failure(Error.Conflict("listing.no_pending_edit", "No changes to this listing are waiting for approval."));
+            }
+
+            pending.State = ListingPendingEditRecord.Returned;
+            pending.ReviewNote = trimmed;
+            pending.ReviewedAt = clock.UtcNow;
+            pending.ReviewedBy = actor.Value;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.edit_returned",
+                ActorId = actor,
+                SubjectKind = "listing",
+                SubjectIds = [listingId],
+                Reason = trimmed,
+            }, ct).ConfigureAwait(false);
+            return Result.Success();
+        }, cancellationToken);
+    }
+
+    /// <summary>The provider throws their pending edit away; the editor then shows the approved version.</summary>
+    public Task<Result> DiscardEditAsync(OrganisationId organisation, Guid listingId, UserId actor, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            ListingRecord? listing = await db.Listings.AsNoTracking().FirstOrDefaultAsync(l => l.Id == listingId, ct).ConfigureAwait(false);
+            if (listing is null || listing.OrgId != organisation.Value)
+            {
+                return Result.Failure(Error.Forbidden("listing.not_yours", "That listing belongs to another organisation."));
+            }
+
+            ListingPendingEditRecord? pending = await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == listingId, ct).ConfigureAwait(false);
+            if (pending is null)
+            {
+                return Result.Failure(Error.Conflict("listing.no_pending_edit", "No changes to this listing are waiting for approval."));
+            }
+
+            db.ListingPendingEdits.Remove(pending);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await audit.RecordInTransactionAsync(db, new AuditAccess
+            {
+                Action = "listing.edit_discarded",
+                ActorId = actor,
+                ActorOrgId = organisation,
+                SubjectKind = "listing",
+                SubjectIds = [listingId],
+            }, ct).ConfigureAwait(false);
+            return Result.Success();
+        }, cancellationToken);
 
     /// <summary>
     /// Seasonal clone: a new draft with everything the original says, its schedule moved so the
@@ -409,7 +695,8 @@ public sealed class ListingEditor(
     /// <summary>
     /// Writes an import's valid rows as one operation: a row whose external id this organisation
     /// already imported updates that listing, any other row creates a draft. A listing waiting
-    /// for review, or past editing, is left alone and reported.
+    /// for review, or past editing, is left alone and reported. An update to what a published
+    /// listing says waits for an organiser, as the editor's does (D101).
     /// </summary>
     /// <remarks>
     /// The rows must already have passed <see cref="ListingFormParser"/>, and their sites and terms
@@ -419,7 +706,7 @@ public sealed class ListingEditor(
     public Task<ImportOutcome> ImportAsync(
         OrganisationId organisation,
         string source,
-        IReadOnlyList<(string ExternalId, ParsedListing Listing)> rows,
+        IReadOnlyList<(string ExternalId, ListingForm Form, ParsedListing Listing)> rows,
         UserId actor,
         CancellationToken cancellationToken = default)
     {
@@ -439,17 +726,26 @@ public sealed class ListingEditor(
             List<Guid> created = [];
             List<Guid> updated = [];
             List<string> skipped = [];
-            foreach ((string externalId, ParsedListing parsed) in rows)
+            int held = 0;
+            foreach ((string externalId, ListingForm form, ParsedListing parsed) in rows)
             {
                 if (existing.TryGetValue(externalId, out ListingRecord? listing))
                 {
-                    if (!IsEditable(ParseStatus(listing.Status)))
+                    ListingStatus status = ParseStatus(listing.Status);
+                    if (!IsEditable(status))
                     {
                         skipped.Add(externalId);
                         continue;
                     }
 
                     updated.Add(listing.Id);
+                    if (status == ListingStatus.Published)
+                    {
+                        ListingPendingEditRecord? pending = await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == listing.Id, ct).ConfigureAwait(false);
+                        held += await SavePublishedAsync(listing, form, parsed, pending, actor, ct).ConfigureAwait(false) ? 1 : 0;
+                        continue;
+                    }
+
                     Apply(listing, parsed);
                 }
                 else
@@ -499,10 +795,11 @@ public sealed class ListingEditor(
                     ["created"] = created.Count.ToString(CultureInfo.InvariantCulture),
                     ["updated"] = updated.Count.ToString(CultureInfo.InvariantCulture),
                     ["skipped"] = skipped.Count.ToString(CultureInfo.InvariantCulture),
+                    ["held"] = held.ToString(CultureInfo.InvariantCulture),
                 },
             }, ct).ConfigureAwait(false);
 
-            return new ImportOutcome(created.Count, updated.Count, skipped);
+            return new ImportOutcome(created.Count, updated.Count, skipped, held);
         }, cancellationToken);
     }
 
@@ -550,6 +847,26 @@ public sealed class ListingEditor(
             if (listing.Status != snapshot.Status)
             {
                 return Result.Failure(Error.Conflict("listing.moved", "The listing changed state while you were looking at it. Reload and try again."));
+            }
+
+            // A pending edit lives only while the listing is published (D101). Taken down, the
+            // listing takes the edit's wording: nobody sees it, and it's reviewed before it's
+            // published again. Archived, the edit goes with it.
+            string? pendingEdit = null;
+            if (snapshot.Status == ListingStatus.Published.ToDbValue()
+                && await db.ListingPendingEdits.FirstOrDefaultAsync(e => e.ListingId == listingId, ct).ConfigureAwait(false) is { } pending)
+            {
+                pendingEdit = "dropped";
+                if (to == ListingStatus.Unpublished
+                    && Proposed(pending, (await ReadFormAsync(listingId, ct).ConfigureAwait(false))!.Value.Form) is { } proposed
+                    && ListingFormParser.Parse(proposed).Listing is { } parsed)
+                {
+                    Apply(listing, parsed);
+                    await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+                    pendingEdit = "kept";
+                }
+
+                db.ListingPendingEdits.Remove(pending);
             }
 
             DateTimeOffset now = clock.UtcNow;
@@ -608,7 +925,9 @@ public sealed class ListingEditor(
                 SubjectKind = "listing",
                 SubjectIds = [listing.Id],
                 Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
-                Detail = new Dictionary<string, string> { ["from"] = snapshot.Status, ["to"] = listing.Status },
+                Detail = pendingEdit is null
+                    ? new Dictionary<string, string> { ["from"] = snapshot.Status, ["to"] = listing.Status }
+                    : new Dictionary<string, string> { ["from"] = snapshot.Status, ["to"] = listing.Status, ["pending_edit"] = pendingEdit },
             }, ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken).ConfigureAwait(false);
@@ -732,12 +1051,19 @@ public sealed class ListingEditor(
                 .Where(l => l.OrgId == organisation.Value)
                 .OrderBy(l => l.Title).ThenBy(l => l.Slug)
                 .ToListAsync(ct).ConfigureAwait(false);
-            return [.. rows.Select(ToRow)];
+            Guid[] ids = [.. rows.Select(l => l.Id)];
+            Dictionary<Guid, PendingEdit> edits = (await db.ListingPendingEdits.AsNoTracking()
+                    .Where(e => ids.Contains(e.ListingId))
+                    .ToListAsync(ct).ConfigureAwait(false))
+                .ToDictionary(e => e.ListingId, View);
+            return [.. rows.Select(l => ToRow(l) with { Edit = edits.GetValueOrDefault(l.Id) })];
         }, cancellationToken);
 
     /// <summary>
-    /// Listings submitted for review, oldest first, and published listings edited since an
-    /// organiser last looked (D15), most recently changed first.
+    /// Listings submitted for review, oldest first; published listings whose schedule changed
+    /// since an organiser last looked (D15), most recently changed first; and published listings
+    /// whose edit waits for approval (D101), oldest first. A listing with an edit waiting is in
+    /// that lane only: approving it marks the whole listing reviewed.
     /// </summary>
     public Task<ListingsForReview> ReviewQueueAsync(CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
@@ -750,13 +1076,26 @@ public sealed class ListingEditor(
                 .OrderBy(l => l.SubmittedAt).ThenBy(l => l.Id)
                 .ToListAsync(ct).ConfigureAwait(false);
 
+            string waiting = ListingPendingEditRecord.Waiting;
+            var edits = await (from e in db.ListingPendingEdits.AsNoTracking()
+                               join l in db.Listings.AsNoTracking() on e.ListingId equals l.Id
+                               where e.State == waiting && l.Status == published
+                               orderby e.SavedAt, l.Id
+                               select new { Listing = l, Edit = e })
+                .Take(200)
+                .ToListAsync(ct).ConfigureAwait(false);
+
             List<ListingRecord> changed = await db.Listings.AsNoTracking()
-                .Where(l => l.Status == published && (l.ReviewedAt == null || l.UpdatedAt > l.ReviewedAt))
+                .Where(l => l.Status == published && (l.ReviewedAt == null || l.UpdatedAt > l.ReviewedAt)
+                            && !db.ListingPendingEdits.Any(e => e.ListingId == l.Id && e.State == waiting))
                 .OrderByDescending(l => l.UpdatedAt)
                 .Take(200)
                 .ToListAsync(ct).ConfigureAwait(false);
 
-            return new ListingsForReview([.. awaiting.Select(ToRow)], [.. changed.Select(ToRow)]);
+            return new ListingsForReview(
+                [.. awaiting.Select(ToRow)],
+                [.. changed.Select(ToRow)],
+                [.. edits.Select(x => new PendingEditRow(ToRow(x.Listing) with { Edit = View(x.Edit) }, x.Edit.SavedAt))]);
         }, cancellationToken);
 
     /// <summary>The next sessions a form's schedule produces, or null when the schedule is not valid yet.</summary>
@@ -1032,5 +1371,9 @@ public sealed class ListingEditor(
     }
 }
 
-/// <summary>What an applied import did. Skipped rows are named by their external id.</summary>
-public sealed record ImportOutcome(int Created, int Updated, IReadOnlyList<string> Skipped);
+/// <summary>
+/// What an applied import did. Skipped rows are named by their external id. <c>Held</c> counts the
+/// updates to published listings whose wording waits for an organiser (D101); they are among the
+/// updated.
+/// </summary>
+public sealed record ImportOutcome(int Created, int Updated, IReadOnlyList<string> Skipped, int Held = 0);

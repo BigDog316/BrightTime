@@ -40,6 +40,8 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<ListingRevisionRecord> ListingRevisions => Set<ListingRevisionRecord>();
 
+    public DbSet<ListingPendingEditRecord> ListingPendingEdits => Set<ListingPendingEditRecord>();
+
     public DbSet<CollectionRecord> Collections => Set<CollectionRecord>();
 
     public DbSet<CollectionItemRecord> CollectionItems => Set<CollectionItemRecord>();
@@ -122,6 +124,15 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
             b.Property(r => r.Id).ValueGeneratedNever();
             b.Property(r => r.Snapshot).HasColumnType("jsonb");
             b.Property(r => r.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<ListingPendingEditRecord>(b =>
+        {
+            b.ToTable("listing_pending_edit");
+            b.HasKey(e => e.ListingId);
+            b.Property(e => e.ListingId).ValueGeneratedNever();
+            b.Property(e => e.Snapshot).HasColumnType("jsonb");
+            b.Property<uint>("xmin").IsRowVersion().HasColumnName("xmin");
         });
 
         modelBuilder.Entity<ListingSiteRecord>(b =>

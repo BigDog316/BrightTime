@@ -40,6 +40,20 @@
         <p class="notice">@T["organiser.review.org_not_approved"]</p>
     }
 
+    @if (_edit is { } edit)
+    {
+        @* D101: the provider's new wording, against what families see now. *@
+        <section class="listing-diff" aria-labelledby="edit-heading">
+            <h2 id="edit-heading">@T["organiser.review.edit_heading"]</h2>
+            <p>@T.Format("organiser.review.edit_saved", ("date", T.DateTime(edit.Edit.SavedAt)))</p>
+            @if (edit.Edit is { Returned: true, ReviewNote: { } returnedNote, ReviewedAt: { } returnedAt })
+            {
+                <p class="notice">@T.Format("organiser.review.edit_returned", ("date", T.DateTime(returnedAt))) <q dir="auto">@returnedNote</q></p>
+            }
+            <ListingChanges Changes="edit.Changes" />
+        </section>
+    }
+
     <ListingDiffView Diff="_diff" />
 
     <section class="review-actions" aria-labelledby="decide-heading">
@@ -57,7 +71,15 @@
                 break;
 
             case ListingStatus.Published:
-                @if (listing.ChangedSinceReview)
+                @if (_edit is { Edit.Returned: false })
+                {
+                    <form method="post" @formname="approve-edit" @onsubmit="ApproveEditAsync">
+                        <AntiforgeryToken />
+                        <button type="submit">@T["organiser.review.approve_edit"]</button>
+                    </form>
+                    @ReturnForm()
+                }
+                else if (listing.ChangedSinceReview)
                 {
                     <form method="post" @formname="reviewed" @onsubmit="MarkReviewedAsync">
                         <AntiforgeryToken />
@@ -94,6 +116,7 @@
     private EditableListing? _listing;
     private ListingDetail? _detail;
     private ReviewDiff? _diff;
+    private PendingEditView? _edit;
     private string? _orgName;
     private OrganisationStatus _orgStatus;
     private string? _problem;
@@ -116,6 +139,7 @@
         }
 
         _diff = await Get<ListingEditor>().DiffSinceReviewAsync(ListingId, Tenant.Locale.Code);
+        _edit = _listing.Status == ListingStatus.Published ? await Get<ListingEditor>().PendingEditAsync(ListingId, Tenant.Locale.Code) : null;
 
         IDirectoryQueries directory = Get<IDirectoryQueries>();
         _orgName = await directory.GetOrganisationNameAsync(_listing.OrganisationId);
@@ -157,6 +181,56 @@
 
         _problem = T.Error(result.Error!);
     }
+
+    private async Task ApproveEditAsync()
+    {
+        Result result = await Get<ListingEditor>().ApproveEditAsync(ListingId, Actor);
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo("/organiser/review?done=edit_approved");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+
+    private async Task ReturnEditAsync()
+    {
+        Result result = await Get<ListingEditor>().ReturnEditAsync(ListingId, FormValue("reason"), Actor);
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo("/organiser/review?done=edit_returned");
+            return;
+        }
+
+        if (result.Error!.Code == "listing.edit_note_required")
+        {
+            _reasonErrors["return-edit"] = T.Error(result.Error);
+        }
+        else
+        {
+            _problem = T.Error(result.Error);
+        }
+    }
+
+    /// <summary>Sends a pending edit back with a note; the listing stays as approved.</summary>
+    private RenderFragment ReturnForm() => __builder =>
+    {
+        const string id = "reason-return-edit";
+        bool invalid = _reasonErrors.ContainsKey("return-edit");
+        <form method="post" class="reason-form" @formname="return-edit" @onsubmit="ReturnEditAsync">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="@id">@T["organiser.review.return_reason"]</label>
+                <textarea id="@id" name="reason" rows="3" aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? id + "-error" : null)"></textarea>
+                @if (invalid)
+                {
+                    <p class="field-error" id="@id-error">@_reasonErrors["return-edit"]</p>
+                }
+            </div>
+            <button type="submit" class="secondary-button">@T["organiser.review.return_edit"]</button>
+        </form>
+    };
 
     private RenderFragment ReasonForm(string formName, string button, string label, ListingStatus to, string done) => __builder =>
     {

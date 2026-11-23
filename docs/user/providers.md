@@ -143,9 +143,14 @@ else sees it.
 3. To change a listing that's waiting for review, **withdraw it from review** first.
 4. Your organisation must be approved before any listing can be published.
 
-**Changing a published listing.** Your edits go live at once, and a network organiser looks at the
-change afterwards. **Take it off the site** (unpublish) asks you why; the organiser sees your
-reason.
+**Changing a published listing.** Changes to what it says (its title, descriptions, ages, topics,
+sites, cost, registration, access and contacts) wait for a network organiser; families see the
+approved version until the organiser approves them. Changes to when it meets, when it shows, its
+places and its deadline go live as soon as you save. While your changes wait, the listing says so,
+and you can keep editing them or **discard** them. If the organiser sends them back, their note
+says why: change them and save again. **Take it off the site** (unpublish) asks you why; the
+organiser sees your reason. Changes waiting when you take a listing down become its wording, and
+are reviewed when you submit it again.
 
 **Copy for a new season** makes a new draft with the same details. Choose the first session of the
 new season: everything else moves by the same number of days, and a weekly session moves to the
@@ -161,7 +166,8 @@ Owners and admins can bring in many listings at once from **Import**.
    each: a **new draft**, an **update**, **left alone** (waiting for review or no longer editable),
    or **not imported** with the error.
 3. **Apply the import.** Rows with errors are skipped. New listings are drafts you submit as
-   usual. Updates to published listings go live at once, and an organiser looks at them again.
+   usual. Updates to published listings are treated like the editor's: new wording waits for an
+   organiser, and new times go live.
 
 Importing the same file twice doesn't create duplicates: rows are matched by your own id for each
 listing. The column-by-column reference is in [docs/import.md](../import.md).

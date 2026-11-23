@@ -267,7 +267,7 @@ view.
   resubmission and for the "changed since review" lane.
 - Edits still go live (D15 as accepted). Keeping the published version live while an edit
   waits for review is the remaining step. It now needs only the editor to write an edited
-  revision instead of the listing.
+  revision instead of the listing. *That step is D101.*
 
 ### D16 — Consoles are server-rendered forms, not interactive components (**accepted 2026-10-17**)
 
@@ -3349,6 +3349,49 @@ Sam chose on 2026-11-22 to close both.
 
 No schema change. `ClearanceGateApiTests` covers the problem's kinds and a role refusal left
 alone; `OrganiserReviewTests` the approval; `UiTests` and `OfflineRosterTests` the app.
+
+### D101 — Pending edits to published listings (**proposed 2026-11-22**)
+
+D15 let an edit to a published listing go live and be reviewed after, with stored revisions as
+the long-term direction. This is that step. Sam chose on 2026-11-22: what the listing says waits
+and its schedule goes live; an organiser approves or sends back; imports are held the same way;
+always on, no setting.
+- **What waits:** everything but the schedule: the kind, title, summary and description, ages
+  and grades, topics, where (modality, sites, online link), cost, registration, access, languages
+  and contacts. **What goes live at once** (`ListingRevisions.LiveFields`): repeats, days,
+  interval, dates and times, skipped days, when it shows and is taken down, places and the
+  deadline, so a corrected time is never held up (D15's reason). Those still put the listing in
+  the *changed since review* lane.
+- **The pending edit:** `opportunity.listing_pending_edit`, one per listing, holding the whole form
+  as the provider last saved it (the revision snapshot's shape). A save to a published listing
+  that changes its wording applies only the new schedule, with the approved wording, to the
+  listing, and stores the form as the pending edit; families and search see the approved version.
+  If the new schedule doesn't make a valid listing with the approved wording (a new kind that
+  needs it, say), the schedule waits too (`holds_schedule`). A save that puts the wording back to
+  what's approved drops the pending edit. The editor opens on the pending edit's wording, with the
+  live schedule, and its version carries both row versions, so either moving on refuses the save.
+- **The organiser:** a new lane, *Edits waiting for approval*, oldest first. A listing with an
+  edit waiting is shown there and not in *changed since review*, because approving it marks the
+  whole listing reviewed. The review page shows the edit field by field against what families see
+  now (`ListingChanges`, split out of the D15 diff view) above the diff since the last review.
+  **Approve** applies it as a save would, after checking its sites and topics are still the
+  organisation's and the tenant's, and records a reviewed revision. **Send back** needs a note;
+  the edit stays with the provider, who changes and saves it again or **discards** it.
+- **Imports** of a published listing go through the same save, so a file can't bypass review; the
+  import says how many updates wait.
+- **Leaving publication:** a pending edit exists only while the listing is published. Taken
+  down, the listing takes the edit's wording (nobody sees it, and it's reviewed before it's
+  published again); archived, the edit goes with it.
+- **Audit:** `listing.edit_held`, `listing.edit_returned`, `listing.edit_approved`,
+  `listing.edit_discarded`; a move off publication notes whether a pending edit was kept or dropped.
+- **Not yet:** the provider isn't notified when an edit is approved or sent back (it shows in the
+  console); translations aren't edited in the console, so they aren't held.
+
+Schema: `opportunity.listing_pending_edit` (applied by hand to `brighttime_main` and `brighttime`;
+the compose volume needs it too, from `db/schema/40-opportunity.sql` with its RLS policy and grants).
+`ConsoleTests` covers held, sent back, resaved, approved, discarded and taken down, and the
+concurrency refusal against a pending edit; `ProviderManagementTests` a held import;
+`ListingRevisionsTests` the merge.
 
 ## Open questions
 

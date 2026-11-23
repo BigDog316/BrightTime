@@ -48,6 +48,14 @@ else if (_orgName is not null)
     {
         <p class="notice success" role="status">@T[_status == ListingStatus.Published ? "editor.saved_live" : "editor.saved"]</p>
     }
+    @if (Saved == "held")
+    {
+        <p class="notice success" role="status">@T["editor.saved_held"]</p>
+    }
+    @if (Saved == "discarded")
+    {
+        <p class="notice success" role="status">@T["editor.pending_edit.discarded"]</p>
+    }
     @if (Submitted == "1")
     {
         <p class="notice success" role="status">@T["editor.submitted"]</p>
@@ -63,6 +71,27 @@ else if (_orgName is not null)
             <h2 id="review-note-heading">@T["editor.organiser_note"]</h2>
             <p dir="auto">@note</p>
         </section>
+    }
+
+    @if (_status == ListingStatus.Published && _pending is { } edit)
+    {
+        @* D101: what the listing says waits for an organiser; families see the approved version. *@
+        <section class="review-note" aria-labelledby="pending-edit-heading">
+            <h2 id="pending-edit-heading">@T[edit.Returned ? "editor.pending_edit.returned_heading" : "editor.pending_edit.heading"]</h2>
+            @if (edit is { Returned: true, ReviewNote: { } returnedNote })
+            {
+                <p dir="auto">@returnedNote</p>
+            }
+            <p>@T.Format(edit.Returned ? "editor.pending_edit.returned" : "editor.pending_edit.waiting", ("date", T.DateTime(edit.SavedAt)))</p>
+            <form method="post" @formname="discard-edit" @onsubmit="DiscardEditAsync">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">@T["editor.pending_edit.discard"]</button>
+            </form>
+        </section>
+    }
+    else if (_status == ListingStatus.Published)
+    {
+        <p class="hint">@T["editor.pending_edit.rule"]</p>
     }
 
     @if (_status == ListingStatus.PendingReview)
@@ -388,6 +417,7 @@ else if (_orgName is not null)
     private string? _title;
     private string? _slug;
     private string? _reviewNote;
+    private PendingEdit? _pending;
 
     private IReadOnlyList<VocabularyTerm> _categories = [];
     private IReadOnlyList<VocabularyTerm> _interests = [];
@@ -449,6 +479,7 @@ else if (_orgName is not null)
         _title = listing.Form.Title;
         _slug = listing.Slug;
         _reviewNote = listing.ReviewNote;
+        _pending = listing.Pending;
         if (!keepPostedForm)
         {
             _form = listing.Form;
@@ -498,7 +529,19 @@ else if (_orgName is not null)
             return;
         }
 
-        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{id}?saved=1");
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{id}?saved={(outcome.Held ? "held" : "1")}");
+    }
+
+    private async Task DiscardEditAsync()
+    {
+        Result result = await Get<ListingEditor>().DiscardEditAsync(Org, ListingId!.Value, Actor);
+        if (!result.IsSuccess)
+        {
+            _problem = T.Error(result.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}?saved=discarded");
     }
 
     private async Task WithdrawAsync()

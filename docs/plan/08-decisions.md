@@ -3350,7 +3350,7 @@ Sam chose on 2026-11-22 to close both.
 No schema change. `ClearanceGateApiTests` covers the problem's kinds and a role refusal left
 alone; `OrganiserReviewTests` the approval; `UiTests` and `OfflineRosterTests` the app.
 
-### D101 — Pending edits to published listings (**proposed 2026-11-22**)
+### D101 — Pending edits to published listings (**accepted 2026-11-23**)
 
 D15 let an edit to a published listing go live and be reviewed after, with stored revisions as
 the long-term direction. This is that step. Sam chose on 2026-11-22: what the listing says waits

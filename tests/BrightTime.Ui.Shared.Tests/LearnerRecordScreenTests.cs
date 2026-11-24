@@ -279,13 +279,96 @@ public sealed class LearnerRecordScreenTests
         shown.RootElement.GetProperty("visibility").GetString().ShouldBe("public");
     }
 
+    private const string Sketch = "e0000000-0000-0000-0000-000000000003";
+    private const string Drawing = "ed000000-0000-0000-0000-000000000001";
+
+    private static readonly byte[] PictureBytes = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4];
+
+    /// <summary>The approved boat sketch, with one picture (D104).</summary>
+    private static readonly string Pictured = Project(Sketch, "Boat sketch", "approved")[..^1].TrimEnd()
+        + $$""","pictures":[{"mediaId":"{{Drawing}}","alt":"A boat drawn in pencil","caption":"From the dock"}]}""";
+
+    [Fact]
+    public async Task A_saved_project_shows_its_pictures_from_the_signed_in_api_and_offers_another()
+    {
+        using FakeApi api = SignedIn()
+            .Json(HttpMethod.Get, "me/portfolio", Portfolio())
+            .Json(HttpMethod.Get, "me/projects", "[" + Pictured + "]")
+            .On(HttpMethod.Get, $"me/projects/{Sketch}/pictures/{Drawing}", _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(PictureBytes) { Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png") } },
+            });
+        string shown = Shown(await RenderAsync<ProjectForm>(api, new Dictionary<string, object?> { ["Id"] = Guid.Parse(Sketch) }));
+
+        shown.ShouldContain($"<img src=\"data:image/png;base64,{Convert.ToBase64String(PictureBytes)}\" alt=\"A boat drawn in pencil\"");
+        shown.ShouldContain("From the dock");
+        shown.ShouldContain(">Remove this picture</button>");
+        shown.ShouldContain("Adding a picture makes it a draft again.", Case.Sensitive, "it's approved, so a picture sends it back");
+        shown.ShouldContain("Leave out other people's faces unless they say yes.");
+        shown.ShouldContain("accept=\"image/png,image/jpeg\"");
+        shown.ShouldContain(">Add the picture</button>");
+        shown.ShouldNotContain("app.projects.");
+
+        // A picture the server won't give is said in words; a project not yet saved takes none.
+        using FakeApi refused = SignedIn().Json(HttpMethod.Get, "me/portfolio", Portfolio()).Json(HttpMethod.Get, "me/projects", "[" + Pictured + "]");
+        string words = Shown(await RenderAsync<ProjectForm>(refused, new Dictionary<string, object?> { ["Id"] = Guid.Parse(Sketch) }));
+        words.ShouldContain("<p class=\"hint\" dir=\"auto\">A boat drawn in pencil</p>");
+        words.ShouldNotContain("data:image");
+        using FakeApi fresh = SignedIn().Json(HttpMethod.Get, "me/portfolio", Portfolio());
+        Shown(await RenderAsync<ProjectForm>(fresh)).ShouldContain("Save the project first. Then you can add pictures of it.");
+    }
+
+    [Fact]
+    public async Task Pictures_go_to_the_routes_the_server_has_and_a_file_goes_as_a_form()
+    {
+        // Read while it's there: a request disposes its content, and a form its parts, once sent.
+        List<(string Method, string Path, string? Body)> sent = [];
+        List<(string Name, string? Type, byte[] Bytes)> parts = [];
+        HttpResponseMessage Record(HttpRequestMessage r)
+        {
+            if (r.Content is MultipartFormDataContent form)
+            {
+                parts.AddRange(form.Select(p => (p.Headers.ContentDisposition!.Name!.Trim('"'), p.Headers.ContentType?.MediaType, p.ReadAsByteArrayAsync().GetAwaiter().GetResult())));
+            }
+
+            sent.Add((r.Method.Method, r.RequestUri!.AbsolutePath, r.Content is MultipartFormDataContent ? null : r.Content?.ReadAsStringAsync().GetAwaiter().GetResult()));
+            return FakeApi.Respond(HttpStatusCode.OK, Pictured);
+        }
+
+        Guid project = Guid.Parse(Sketch);
+        Guid media = Guid.Parse(Drawing);
+        using FakeApi api = SignedIn()
+            .On(HttpMethod.Post, $"me/projects/{Sketch}/pictures", Record)
+            .On(HttpMethod.Put, $"me/projects/{Sketch}/pictures/{Drawing}", Record)
+            .On(HttpMethod.Delete, $"me/projects/{Sketch}/pictures/{Drawing}", Record);
+        await using ServiceProvider app = api.Services();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        (await app.GetRequiredService<AppSession>().SignInAsync("kofi@example.net", "pw", Ct)).ShouldBeNull();
+        BrightTimeApi client = app.GetRequiredService<BrightTimeApi>();
+
+        ProjectView added = (await client.AddProjectPictureAsync(project, PictureBytes, "image/png", "A boat drawn in pencil", "From the dock", Ct)).Value!;
+        added.Shown.Single().Alt.ShouldBe("A boat drawn in pencil");
+        (await client.DescribeProjectPictureAsync(project, media, "A pencil boat", null, Ct)).Value.ShouldNotBeNull();
+        (await client.RemoveProjectPictureAsync(project, media, Ct)).Value.ShouldNotBeNull();
+
+        sent.Select(s => $"{s.Method} {s.Path}").ShouldBe([
+            $"POST /api/v1/me/projects/{project}/pictures", $"PUT /api/v1/me/projects/{project}/pictures/{media}", $"DELETE /api/v1/me/projects/{project}/pictures/{media}"]);
+        parts.Select(p => p.Name).ShouldBe(["file", "alt", "caption"]);
+        parts[0].Type.ShouldBe("image/png");
+        parts[0].Bytes.ShouldBe(PictureBytes);
+        System.Text.Encoding.UTF8.GetString(parts[1].Bytes).ShouldBe("A boat drawn in pencil");
+        using JsonDocument described = JsonDocument.Parse(sent[1].Body!);
+        (described.RootElement.GetProperty("alt").GetString(), described.RootElement.GetProperty("caption").ValueKind).ShouldBe(("A pencil boat", JsonValueKind.Null));
+    }
+
     /// <summary>The page's text as a reader sees it: entities decoded, and the isolates around names dropped.</summary>
     private static string Shown(string html) => WebUtility.HtmlDecode(html).Replace("⁨", "", StringComparison.Ordinal).Replace("⁩", "", StringComparison.Ordinal);
 
     private static async Task<string> RenderAsync<TComponent>(FakeApi api, IReadOnlyDictionary<string, object?>? parameters = null)
         where TComponent : IComponent
     {
-        await using ServiceProvider app = api.Services(s => s.AddSingleton<NavigationManager, TestNavigation>());
+        // InputFile asks for a JS runtime; a static render never calls it.
+        await using ServiceProvider app = api.Services(s => s.AddSingleton<NavigationManager, TestNavigation>().AddSingleton<Microsoft.JSInterop.IJSRuntime, NoScript>());
         await app.GetRequiredService<AppState>().StartAsync(Ct);
         (await app.GetRequiredService<AppSession>().SignInAsync("kofi@example.net", "pw", Ct)).ShouldBeNull();
         await using HtmlRenderer renderer = new(app, app.GetRequiredService<ILoggerFactory>());
@@ -296,6 +379,13 @@ public sealed class LearnerRecordScreenTests
             await root.QuiescenceTask;
             return root.ToHtmlString();
         });
+    }
+
+    private sealed class NoScript : Microsoft.JSInterop.IJSRuntime
+    {
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => throw new NotSupportedException("A static render runs no script.");
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => InvokeAsync<TValue>(identifier, args);
     }
 
     private sealed class TestNavigation : NavigationManager

@@ -37,6 +37,7 @@ using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Modules.Opportunities.Search;
 using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Media;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.Modules.Platform.Tenancy;
 using BrightTime.Reporting;
@@ -140,6 +141,8 @@ public static class ApiComposition
         // Learning (M4): the young person's portfolio, built from their attendance (D65).
         services.AddBrightTimeDbContext<LearningDbContext>(app, LearningDbContext.SchemaName, LearningDbContext.MigrationsHistoryTable);
         services.AddLearning();
+        // A young person's project pictures are kept in the media store (D104).
+        services.AddMediaLibrary();
         services.AddScoped<Me.RecordLog>();
         services.AddScoped<Me.Schedule>();
 

@@ -4,7 +4,8 @@
    asks for one, holding its badge. Once started: each step and where it stands, with what it takes
    to do it. A step to attend links to its activity, and is done once attendance is recorded; a
    reflection takes 20 to 2,000 characters; a step staff check goes to them, and may come back with
-   a note. Steps can't be undone. The last required step completes the playlist and gives its badge. *@
+   a note. An upload step (D104) sends one of their projects with a picture to staff. Steps can't be
+   undone. The last required step completes the playlist and gives its badge. *@
 @inject BrightTimeApi Api
 @inject AppSession Session
 @inject IExternalLauncher Launcher
@@ -84,6 +85,10 @@ else
                             <p><strong>@T.Format("app.playlists.state.needs_rework", ("note", Text.Name(s.ReviewNote ?? "")))</strong></p>
                             break;
                     }
+                    @if (s.EvidenceProjectId is { } sent && !s.IsOpen && _projects.FirstOrDefault(pj => pj.Id == sent) is { } evidence)
+                    {
+                        <p class="hint">@T.Format("app.playlists.upload.sent", ("project", Text.Name(evidence.Title)))</p>
+                    }
                     @if (s.Reflection is { Length: > 0 } wrote && !s.IsOpen)
                     {
                         <p class="hint">@T["app.playlists.you_wrote"]</p>
@@ -125,6 +130,23 @@ else
                             }
                             else if (s.Step.Kind != "attend_listing")
                             {
+                                @if (s.Step.Kind == "upload_artifact")
+                                {
+                                    IReadOnlyList<ProjectView> pictured = [.. _projects.Where(pj => pj.Shown.Count > 0)];
+                                    <div class="field">
+                                        <label for="evidence-@id">@T["app.playlists.upload.project"]</label>
+                                        <p class="hint" id="evidence-@id-hint">@T[pictured.Count == 0 ? "app.playlists.upload.none" : "app.playlists.upload.hint"]</p>
+                                        <select id="evidence-@id" required aria-describedby="evidence-@id-hint"
+                                                @onchange="e => _evidence[s.Step.Id] = Guid.TryParse(e.Value as string, out Guid chosen) ? chosen : Guid.Empty">
+                                            <option value="">@T["app.playlists.upload.choose"]</option>
+                                            @foreach (ProjectView pj in pictured)
+                                            {
+                                                <option value="@pj.Id.ToString("D")" selected="@(Evidence(s) == pj.Id)">@pj.Title</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <a href="portfolio/projects">@T["app.playlists.upload.projects"]</a>
+                                }
                                 bool needed = s.Step.Kind == "reflection";
                                 <div class="field">
                                     <label for="say-@id">@T[needed ? "app.playlists.reflection" : "app.playlists.note"]</label>
@@ -197,6 +219,8 @@ else
     private readonly Dictionary<Guid, string> _written = [];
     private readonly Dictionary<Guid, ApiProblem> _stepProblem = [];
     private readonly Dictionary<Guid, int[]> _answers = [];
+    private readonly Dictionary<Guid, Guid> _evidence = [];
+    private IReadOnlyList<ProjectView> _projects = [];
 
     protected override Task OnParametersSetAsync() => Session.Me is { } me && Portfolio.HasPortfolio(me) ? LoadAsync() : Task.CompletedTask;
 
@@ -209,8 +233,26 @@ else
         _playlist = playlist.Value ?? _playlist;
         // An archived playlist is gone from the public list, but those who started it carry on.
         _problem = mine.Problem ?? (playlist.Problem is { Status: 404 } ? null : playlist.Problem);
+        _problem ??= await ProjectsAsync();
         _loaded = true;
     }
+
+    /// <summary>An upload step's evidence is one of their projects with a picture (D104): those are read when there's one.</summary>
+    private async Task<ApiProblem?> ProjectsAsync()
+    {
+        if (_mine?.Steps.Any(s => s.Step.Kind == "upload_artifact") != true)
+        {
+            return null;
+        }
+
+        ApiResult<IReadOnlyList<ProjectView>> projects = await Api.ProjectsAsync();
+        _projects = projects.Value ?? _projects;
+        return projects.Problem;
+    }
+
+    /// <summary>The project chosen as an upload step's evidence, or the one sent before it came back.</summary>
+    private Guid? Evidence(MyStep s) =>
+        _evidence.TryGetValue(s.Step.Id, out Guid chosen) ? chosen == Guid.Empty ? null : chosen : s.State == "needs_rework" ? s.EvidenceProjectId : null;
 
     private string Written(MyStep s) => _written.GetValueOrDefault(s.Step.Id) ?? (s.State == "needs_rework" ? s.Reflection ?? "" : "");
 
@@ -223,6 +265,7 @@ else
         if (started.Value is { } mine)
         {
             _mine = mine;
+            _startProblem = await ProjectsAsync();
             _said = T["app.playlists.started"];
         }
 
@@ -256,12 +299,14 @@ else
         _stepProblem.Remove(step.Step.Id);
         string? written = step.Step.Kind == "quiz" ? null : Written(step).Trim() is { Length: > 0 } w ? w : null;
         IReadOnlyList<int>? answers = step.Step.Kind == "quiz" ? _answers.GetValueOrDefault(step.Step.Id) ?? [] : null;
-        ApiResult<MyPlaylist> done = await Api.DoStepAsync(_mine!.PlaylistId, step.Step.Id, written, answers);
+        Guid? project = step.Step.Kind == "upload_artifact" ? Evidence(step) : null;
+        ApiResult<MyPlaylist> done = await Api.DoStepAsync(_mine!.PlaylistId, step.Step.Id, written, answers, project);
         if (done.Value is { } mine)
         {
             _mine = mine;
             _written.Remove(step.Step.Id);
             _answers.Remove(step.Step.Id);
+            _evidence.Remove(step.Step.Id);
             MyStep? now = mine.Steps.FirstOrDefault(s => s.Step.Id == step.Step.Id);
             _said = now?.State == "in_progress" ? ""
                 : mine.CompletedAt is not null

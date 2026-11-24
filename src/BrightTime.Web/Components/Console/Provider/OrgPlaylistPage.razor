@@ -306,7 +306,7 @@ else if (_playlist is { } playlist)
     /// <summary>The step being changed, counted from 1; none adds a step.</summary>
     [SupplyParameterFromQuery(Name = "edit")] public int? Edit { get; set; }
 
-    private static readonly string[] Kinds = ["attend_listing", "external_activity", "reflection", "mentor_checkin", "quiz"];
+    private static readonly string[] Kinds = ["attend_listing", "external_activity", "reflection", "upload_artifact", "mentor_checkin", "quiz"];
 
     private PlaylistView? _playlist;
     private IReadOnlyList<BadgeClassView> _ownBadges = [];

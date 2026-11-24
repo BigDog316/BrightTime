@@ -1,5 +1,7 @@
 using System.Net;
+using System.Security.Cryptography;
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Tests;
 
 namespace BrightTime.Web.Tests;
 
@@ -90,6 +92,64 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
 
         (await db.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'learning.portfolio.public_read' and subject_ids @> array[@u]", ("u", user)))
             .ShouldBeGreaterThan(0, "a public read is audited like any other");
+    }
+
+    /// <summary>A project with one picture, written straight to the tables, as staff approved and its maker showed it, or as a draft.</summary>
+    private async Task<(Guid Project, Guid Media, byte[] Bytes)> PictureAsync(Guid user, string title, bool published)
+    {
+        Guid project = UuidV7.NewId();
+        Guid media = UuidV7.NewId();
+        byte[] bytes = TestImages.Png(640, 480);
+        string key = "images/" + media.ToString("N") + ".png";
+        await db.ScalarAsync<int>(
+            """
+            insert into learning.project (id, tenant_id, user_id, title, visibility, status, approved_at)
+            values (@p, @t, @u, @title, case when @shown then 'public' else 'private' end, case when @shown then 'published' else 'draft' end,
+                    case when @shown then now() else null end);
+            insert into platform.media_object (id, tenant_id, object_key, content_type, byte_size, sha256, width, height, scan_state, uploaded_by, visibility)
+            values (@m, @t, @k, 'image/png', @n, @h, 640, 480, 'clean', @u, 'private');
+            insert into platform.media_blob (tenant_id, object_key, content_type, bytes, sha256) values (@t, @k, 'image/png', @b, @h);
+            insert into learning.project_media (project_id, media_id, alt_text, caption) values (@p, @m, 'A clay boat on a table', 'Before the glaze');
+            select 1;
+            """,
+            ("p", project), ("t", db.Data.TenantId), ("u", user), ("title", title), ("shown", published), ("m", media), ("k", key),
+            ("n", (long)bytes.Length), ("h", SHA256.HashData(bytes)), ("b", bytes));
+        return (project, media, bytes);
+    }
+
+    [Fact]
+    public async Task A_published_projects_pictures_show_on_its_portfolio_and_nowhere_else()
+    {
+        RequireDatabase();
+        (Guid user, string slug) = await PortfolioAsync("link_only");
+        (Guid shown, Guid media, byte[] bytes) = await PictureAsync(user, "A clay boat", published: true);
+        (Guid draft, Guid unseen, _) = await PictureAsync(user, "Half a bowl", published: false);
+        string path = $"/portfolios/{slug}/projects/{shown}/pictures/{media}";
+
+        using Browser browser = db.NewBrowser();
+        (await browser.GetAsync($"/portfolios/{slug}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        string html = WebUtility.HtmlDecode(browser.Html);
+        html.ShouldContain($"<img src=\"{path}\" alt=\"A clay boat on a table\"");
+        html.ShouldContain("Before the glaze");
+        html.ShouldNotContain("Half a bowl");
+        html.ShouldNotContain(unseen.ToString());
+
+        HttpResponseMessage picture = await browser.GetAsync(path);
+        picture.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await picture.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).ShouldBe(bytes);
+        (picture.Content.Headers.ContentType!.MediaType, picture.Headers.CacheControl!.NoStore).ShouldBe(("image/png", true));
+        picture.Headers.GetValues("X-Robots-Tag").ShouldContain("noindex, nofollow");
+        picture.Headers.GetValues("X-Content-Type-Options").ShouldContain("nosniff");
+
+        // A draft's picture, the right picture under another portfolio or project, and the media address: all nothing.
+        (await browser.GetAsync($"/portfolios/{slug}/projects/{draft}/pictures/{unseen}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await browser.GetAsync($"/portfolios/{slug}/projects/{draft}/pictures/{media}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await browser.GetAsync($"/portfolios/nobody-has-this-name/projects/{shown}/pictures/{media}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await browser.GetAsync($"/media/{media}")).StatusCode.ShouldBe(HttpStatusCode.NotFound, "a young person's picture is never public media");
+
+        // Taken back, the portfolio's pictures go with it.
+        await db.ScalarAsync<int>("update learning.learner_profile set visibility = 'private' where user_id = @u; select 1;", ("u", user));
+        (await browser.GetAsync(path)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

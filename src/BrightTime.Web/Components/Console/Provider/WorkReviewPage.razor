@@ -7,6 +7,7 @@
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.SharedKernel.Privacy
 @using BrightTime.Web.Components.Console.Forms
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @attribute [YouthRecord(Projects.Read)]
@@ -64,6 +65,7 @@ else if (_loaded)
                             {
                                 <p class="body" dir="auto">@description</p>
                             }
+                            <ProjectPictureList Pictures="p.Pictures" Source="Picture" />
                             <form method="post" @formname="@("project-" + id)" @onsubmit="ReviewProjectAsync" class="review-form">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="project" value="@p.Id" />
@@ -105,9 +107,20 @@ else if (_loaded)
                             {
                                 <p class="body" dir="auto">@reflection</p>
                             }
-                            else
+                            else if (s.Evidence is null)
                             {
                                 <p class="hint">@T["provider.work.nothing_written"]</p>
+                            }
+                            @if (s.Evidence is { } evidence)
+                            {
+                                <div class="evidence">
+                                    <h4>@T["provider.work.evidence"] <span dir="auto">@evidence.Title</span></h4>
+                                    @if (evidence.Description is { Length: > 0 } about)
+                                    {
+                                        <p class="body" dir="auto">@about</p>
+                                    }
+                                    <ProjectPictureList Pictures="evidence.Pictures" Source="Picture" />
+                                </div>
                             }
                             <form method="post" @formname="@("step-" + id)" @onsubmit="ReviewStepAsync" class="review-form">
                                 <AntiforgeryToken />
@@ -182,6 +195,9 @@ else if (_loaded)
 
         _loaded = true;
     }
+
+    /// <summary>Where a picture waiting for this organisation's review is fetched from (D104).</summary>
+    private string Picture(Guid mediaId) => ProjectPictureEndpoints.ForReview(OrgId, mediaId);
 
     /// <summary>A young person, by the display name of their portfolio, or not named at all.</summary>
     private string Who(string? displayName) =>

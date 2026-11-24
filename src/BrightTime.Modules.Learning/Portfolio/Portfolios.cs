@@ -40,9 +40,9 @@ public sealed record PublicParticipation(string Title, string? Organisation, Dat
 [YouthData]
 public sealed record PublicSkill(string Name, short? Level, bool Endorsed);
 
-/// <summary>A project its maker published after staff approved it (D69).</summary>
+/// <summary>A project its maker published after staff approved it (D69), with its pictures (D104).</summary>
 [YouthData]
-public sealed record PublicProject(string Title, string? Description);
+public sealed record PublicProject(Guid Id, string Title, string? Description, IReadOnlyList<Records.ProjectPicture> Pictures);
 
 [YouthData]
 public sealed record PublicPortfolio(
@@ -227,9 +227,13 @@ public sealed partial class Portfolios(
                 .ToListAsync(ct).ConfigureAwait(false);
             Dictionary<Guid, string> names = skills.Count == 0 ? []
                 : (await taxonomy.GetTermsAsync([.. skills.Select(k => k.TermId)], tenant.Locale.Code, ct).ConfigureAwait(false)).ToDictionary(t => t.Id, t => t.Name ?? t.Code);
-            List<PublicProject> projects = await db.Projects.AsNoTracking()
+            var published = await db.Projects.AsNoTracking()
                 .Where(p => p.UserId == profile.UserId && p.Status == "published" && (p.Visibility == "public" || p.Visibility == "link_only"))
-                .OrderByDescending(p => p.ApprovedAt).Select(p => new PublicProject(p.Title, p.Description)).ToListAsync(ct).ConfigureAwait(false);
+                .OrderByDescending(p => p.ApprovedAt).Select(p => new { p.Id, p.Title, p.Description }).ToListAsync(ct).ConfigureAwait(false);
+            Guid[] ids = [.. published.Select(p => p.Id)];
+            ILookup<Guid, Records.ProjectPicture> pictures = (await db.ProjectMedia.AsNoTracking().Where(m => ids.Contains(m.ProjectId)).OrderBy(m => m.SortOrder)
+                .ToListAsync(ct).ConfigureAwait(false)).ToLookup(m => m.ProjectId, m => new Records.ProjectPicture(m.MediaId, m.AltText, m.Caption));
+            List<PublicProject> projects = [.. published.Select(p => new PublicProject(p.Id, p.Title, p.Description, [.. pictures[p.Id]]))];
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = PublicRead, SubjectKind = "learner_profile", SubjectIds = [profile.UserId] }, ct).ConfigureAwait(false);
             return new PublicPortfolio(profile.DisplayName, profile.Headline, profile.Bio, profile.Visibility == PortfolioVisibility.Public, shown.Sum(p => p.Hours), shown,
                 [.. skills.Select(k => new PublicSkill(names.GetValueOrDefault(k.TermId) ?? string.Empty, k.Level, k.Endorsed)).OrderBy(k => k.Name, StringComparer.CurrentCulture)],

@@ -870,6 +870,34 @@ button.secondary-button {
     width: 100%;
 }
 
+/* A project's pictures (D104): whole, never cropped, in a row that wraps. */
+.project-pictures {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    list-style: none;
+    margin: 0.75rem 0;
+    padding: 0;
+}
+
+.project-pictures figure {
+    margin: 0;
+}
+
+.project-pictures img {
+    border-radius: 0.25rem;
+    display: block;
+    height: auto;
+    max-height: 20rem;
+    object-fit: contain;
+    width: 100%;
+}
+
+.project-pictures figcaption {
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
 .badge-picture {
     border-radius: 50%;
     display: block;

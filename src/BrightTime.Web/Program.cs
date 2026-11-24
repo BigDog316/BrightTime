@@ -100,6 +100,9 @@ app.MapSavedListings();
 // Pictures on collections and neighbourhood pages (D103): clean, public media only.
 app.MapMedia();
 
+// A young person's project pictures (D104): for reviewing staff, and on a shown portfolio.
+app.MapProjectPictures();
+
 // The import template is the same for everyone and holds nothing private.
 app.MapGet(BrightTime.Web.Components.Console.Provider.ImportPage.TemplatePath, () => Results.File(
     System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(BrightTime.Modules.Opportunities.Import.CsvListingFormat.Template())).ToArray(),

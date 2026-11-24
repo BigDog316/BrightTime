@@ -491,6 +491,24 @@ dl.facts dd {
     white-space: pre-line;
 }
 
+/* A project's picture (D104): whole, never cropped, no wider than the screen. */
+.project-picture {
+    margin: 0 0 var(--bt-space-2);
+}
+
+.project-picture img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 20rem;
+    object-fit: contain;
+    border-radius: 0.25rem;
+}
+
+.project-picture figcaption {
+    margin-top: var(--bt-space-1);
+}
+
 .disclosure {
     padding: var(--bt-space-3);
     border-inline-start: 4px solid var(--bt-line);

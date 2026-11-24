@@ -49,10 +49,14 @@ public sealed record PublicPlaylist(
     decimal? EstimatedHours, string? CompletionBadge, Guid? CompletionBadgeClassId, string? RequiresBadge, IReadOnlyList<StepView> Steps);
 
 /// <summary>One step of a young person's playlist: where they are on it, and whether it's open to them yet.</summary>
-/// <remarks>A quiz (D92) says how many answers the last try got right, and how many tries there were; a try that fell short leaves it <c>in_progress</c>.</remarks>
+/// <remarks>
+/// A quiz (D92) says how many answers the last try got right, and how many tries there were; a try
+/// that fell short leaves it <c>in_progress</c>. An upload step (D104) names the project sent as its evidence.
+/// </remarks>
 [YouthData]
 public sealed record MyStep(
-    StepView Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt, int? QuizCorrect = null, int QuizAttempts = 0);
+    StepView Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt, int? QuizCorrect = null, int QuizAttempts = 0,
+    Guid? EvidenceProjectId = null);
 
 [YouthData]
 public sealed record MyPlaylist(
@@ -60,8 +64,13 @@ public sealed record MyPlaylist(
     Guid? AwardedAssertionId, IReadOnlyList<MyStep> Steps, string? Description = null, string? CompletionBadge = null);
 
 /// <summary>A step waiting for review, named only as the young person names themselves on their portfolio.</summary>
+/// <remarks>An upload step (D104) carries the project sent as its evidence, with its pictures.</remarks>
 [YouthData]
-public sealed record StepSubmission(Guid EnrollmentId, Guid StepId, string StepTitle, string? DisplayName, string? Reflection);
+public sealed record StepSubmission(Guid EnrollmentId, Guid StepId, string StepTitle, string? DisplayName, string? Reflection, StepEvidence? Evidence = null);
+
+/// <summary>The project a young person sent as an upload step's evidence (D104).</summary>
+[YouthData]
+public sealed record StepEvidence(Guid ProjectId, string Title, string? Description, IReadOnlyList<ProjectPicture> Pictures);
 
 /// <summary>
 /// Playlists (M4, D67): an organisation's sequence of steps, which a young person works through
@@ -100,7 +109,10 @@ public sealed partial class Playlists(
     public const string Published = "published";
     public const string Archived = "archived";
 
-    private static readonly HashSet<string> Kinds = new(StringComparer.Ordinal) { "attend_listing", "external_activity", "reflection", "mentor_checkin", "quiz" };
+    /// <summary>A step whose evidence is a project with pictures (D104). Staff always check it.</summary>
+    public const string Upload = "upload_artifact";
+
+    private static readonly HashSet<string> Kinds = new(StringComparer.Ordinal) { "attend_listing", "external_activity", "reflection", "mentor_checkin", "quiz", Upload };
 
     public const int MaxQuestions = 20;
     public const int MaxPrompt = 500;
@@ -219,7 +231,7 @@ public sealed partial class Playlists(
                 if (s?.Kind is not { } kind || !Kinds.Contains(kind))
                 {
                     return Result<PlaylistView>.Failure(Error.Validation("playlists.step_kind",
-                        "Attending a listing, an activity elsewhere, a reflection, or a check-in with staff.", arguments: at));
+                        "Attending a listing, an activity elsewhere, a reflection, a quiz, pictures of their work, or a check-in with staff.", arguments: at));
                 }
 
                 if (s.Title?.Trim() is not { Length: > 0 and <= 200 } title || s.Instructions is { Length: > 4000 } || s.ExpectedMinutes is < 1 or > 1440)
@@ -273,7 +285,7 @@ public sealed partial class Playlists(
                     ExternalUrl = url,
                     ExpectedMinutes = s.ExpectedMinutes,
                     IsRequired = s.IsRequired ?? true,
-                    RequiresReview = kind == "mentor_checkin" || (s.RequiresReview ?? false),
+                    RequiresReview = kind is "mentor_checkin" or Upload || (s.RequiresReview ?? false),
                     Quiz = quiz,
                     QuizPassPercent = pass,
                 });
@@ -354,10 +366,12 @@ public sealed partial class Playlists(
                                  from lp in profiles.DefaultIfEmpty()
                                  where e.PlaylistId == id && pr.State == "submitted"
                                  orderby e.StartedAt, s.SortOrder
-                                 select new { e.Id, e.UserId, StepId = s.Id, s.Title, Name = lp == null ? null : lp.DisplayName, pr.Reflection })
+                                 select new { e.Id, e.UserId, StepId = s.Id, s.Title, Name = lp == null ? null : lp.DisplayName, pr.Reflection, pr.EvidenceProjectId })
                 .Take(500).ToListAsync(ct).ConfigureAwait(false);
+            Dictionary<Guid, StepEvidence> evidence = await EvidenceAsync([.. waiting.Select(w => w.EvidenceProjectId).OfType<Guid>()], ct).ConfigureAwait(false);
             await AuditAsync(Read, org, [.. waiting.Select(w => w.Id).Distinct()], ct, "submissions").ConfigureAwait(false);
-            return Result<IReadOnlyList<StepSubmission>>.Success([.. waiting.Select(w => new StepSubmission(w.Id, w.StepId, w.Title, w.Name, w.Reflection))]);
+            return Result<IReadOnlyList<StepSubmission>>.Success([.. waiting.Select(w => new StepSubmission(w.Id, w.StepId, w.Title, w.Name, w.Reflection,
+                w.EvidenceProjectId is { } project ? evidence.GetValueOrDefault(project) : null))]);
         }, cancellationToken);
 
     /// <summary>Approves a submitted step, or sends it back with a note. Approving may complete the playlist.</summary>
@@ -548,6 +562,14 @@ public sealed partial class Playlists(
     /// <summary>Marks a step done; a quiz's <paramref name="answers"/> (D92) are the chosen option of each question, in order, from 0.</summary>
     public Task<Result<MyPlaylist>> DoStepAsync(
         UserId user, Uri site, Guid playlistId, Guid stepId, string? reflection, IReadOnlyList<int>? answers, CancellationToken cancellationToken = default) =>
+        DoStepAsync(user, site, playlistId, stepId, reflection, answers, null, cancellationToken);
+
+    /// <summary>
+    /// Marks a step done. An upload step's <paramref name="projectId"/> (D104) is one of the young
+    /// person's own projects with at least one picture, sent to staff as its evidence.
+    /// </summary>
+    public Task<Result<MyPlaylist>> DoStepAsync(
+        UserId user, Uri site, Guid playlistId, Guid stepId, string? reflection, IReadOnlyList<int>? answers, Guid? projectId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             ArgumentNullException.ThrowIfNull(site);
@@ -601,6 +623,15 @@ public sealed partial class Playlists(
                 return Result<MyPlaylist>.Failure(Error.Conflict("playlists.not_attended", "This step is done once your attendance at the activity is recorded."));
             }
 
+            // An upload step's evidence (D104): a project of their own, with something to see.
+            if (step.StepKind == Upload
+                && (projectId is not { } evidence
+                    || !await db.Projects.AnyAsync(pj => pj.Id == evidence && pj.UserId == user.Value && pj.Status != Projects.Removed
+                        && db.ProjectMedia.Any(m => m.ProjectId == pj.Id), ct).ConfigureAwait(false)))
+            {
+                return Result<MyPlaylist>.Failure(Error.Validation("playlists.evidence", "Choose one of your projects with at least one picture."));
+            }
+
             // A quiz is marked here (D92): every question answered, and enough right to pass.
             int? right = null;
             if (step.StepKind == "quiz")
@@ -641,6 +672,7 @@ public sealed partial class Playlists(
             mine.CompletedAt = step.RequiresReview ? null : now;
             mine.Reflection = written;
             mine.ReviewNote = null;
+            mine.EvidenceProjectId = step.StepKind == Upload ? projectId : null;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Progressed, SubjectKind = "playlist_enrollment", SubjectIds = [found.e.Id], Detail = What(mine.State) }, ct).ConfigureAwait(false);
             if (mine.State == "completed")
@@ -756,6 +788,21 @@ public sealed partial class Playlists(
         return moved.Contains("completed");
     }
 
+    /// <summary>The projects sent as evidence (D104), with their pictures, by project.</summary>
+    private async Task<Dictionary<Guid, StepEvidence>> EvidenceAsync(IReadOnlyCollection<Guid> projectIds, CancellationToken ct)
+    {
+        if (projectIds.Count == 0)
+        {
+            return [];
+        }
+
+        var projects = await db.Projects.AsNoTracking().Where(pj => projectIds.Contains(pj.Id) && pj.Status != Projects.Removed)
+            .Select(pj => new { pj.Id, pj.Title, pj.Description }).ToListAsync(ct).ConfigureAwait(false);
+        ILookup<Guid, ProjectPicture> pictures = (await db.ProjectMedia.AsNoTracking().Where(m => projectIds.Contains(m.ProjectId)).OrderBy(m => m.SortOrder)
+            .ToListAsync(ct).ConfigureAwait(false)).ToLookup(m => m.ProjectId, m => new ProjectPicture(m.MediaId, m.AltText, m.Caption));
+        return projects.ToDictionary(pj => pj.Id, pj => new StepEvidence(pj.Id, pj.Title, pj.Description, [.. pictures[pj.Id]]));
+    }
+
     private static bool Available(PlaylistRecord playlist, IReadOnlyList<PlaylistStepRecord> steps, IReadOnlyDictionary<Guid, PlaylistStepProgressRecord> progress, PlaylistStepRecord step) =>
         !playlist.IsOrdered || steps.Where(s => s.SortOrder < step.SortOrder && s.IsRequired).All(s => progress.GetValueOrDefault(s.Id)?.State == "completed");
 
@@ -769,7 +816,7 @@ public sealed partial class Playlists(
         return new MyPlaylist(playlist.Id, playlist.Slug, playlist.Title, organisation, playlist.IsOrdered, enrollment.StartedAt, enrollment.CompletedAt,
             enrollment.AwardedAssertionId,
             [.. steps.Select(s => progress.GetValueOrDefault(s.Id) is { } p
-                ? new MyStep(views[s.Id], p.State, Available(playlist, steps, progress, s), p.Reflection, p.ReviewNote, p.CompletedAt, p.QuizCorrect, p.QuizAttempts)
+                ? new MyStep(views[s.Id], p.State, Available(playlist, steps, progress, s), p.Reflection, p.ReviewNote, p.CompletedAt, p.QuizCorrect, p.QuizAttempts, p.EvidenceProjectId)
                 : new MyStep(views[s.Id], "not_started", Available(playlist, steps, progress, s), null, null, null))],
             playlist.Description, await BadgeNameAsync(playlist.CompletionBadgeClassId, ct).ConfigureAwait(false));
     }

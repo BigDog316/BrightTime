@@ -101,6 +101,7 @@
                             {
                                 <p class="bio" dir="auto">@description</p>
                             }
+                            <ProjectPictureList Pictures="project.Pictures" Source="@(media => BrightTime.Web.Composition.ProjectPictureEndpoints.ForPortfolio(Slug, project.Id, media))" />
                         </li>
                     }
                 </ul>

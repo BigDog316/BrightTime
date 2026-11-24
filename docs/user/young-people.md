@@ -140,6 +140,13 @@ in.
   anyone under 13.
 - If you change a project after it's approved, it goes back to a draft. Send it for approval again
   before you show it.
+- **Pictures**: once a project is saved, add up to 6 photos of what you made, each a PNG or JPEG
+  of up to 5 MB. Say what each one shows, for someone who can't see it, and add a caption if you
+  like. Leave out other people's faces unless they say yes. Anything else in the file, like where
+  a photo was taken, is removed. Only you see a picture until you send the project, and nobody
+  else sees it until it's approved and shown.
+- Adding a picture to an approved project makes it a draft again, like any change. **Remove this
+  picture** takes one away at once, and the project stays approved.
 
 **Your goals** are your own aims, like *lead a river walk*. Nobody else sees them, and they're
 never on your portfolio page.
@@ -162,6 +169,9 @@ far along you are, then others to try.
   - **Something to do elsewhere**: **Open the activity** opens it in your browser.
   - **Write about it**: write at least 20 characters about what you think.
   - **Check in with staff**: talk to a member of staff, and add a note if you like.
+  - **Show pictures of your work**: choose one of your projects that has a picture, add a note if
+    you like, and **Send to staff**. Staff see its words and pictures. The project doesn't have to
+    be approved first.
   - **Answer a quiz**: choose an answer to each question, then **Check my answers**. It says how
     many you need to get right. If you get fewer, it tells you how many you got, and you can try
     again as many times as you like. Only your score is kept, not your answers.

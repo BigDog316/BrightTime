@@ -218,6 +218,56 @@ public sealed class PlaylistScreenTests
     }
 
     private const string Quiz = "57e90000-0000-0000-0000-000000000010";
+    private const string Upload = "57e90000-0000-0000-0000-000000000011";
+    private const string Basket = "e0000000-0000-0000-0000-000000000021";
+
+    /// <summary>A playlist whose only step is pictures of their work (D104), not yet done.</summary>
+    private const string UploadPlaylist = $$"""
+        [{"playlistId":"{{River}}","slug":"river-walk","title":"Watershed Explorer","organisation":"Kettle Parks","isOrdered":false,
+          "startedAt":"2026-10-01T12:00:00Z","completedAt":null,"awardedAssertionId":null,
+          "steps":[{"step":{"id":"{{Upload}}","order":1,"kind":"upload_artifact","title":"Show what you made","instructions":null,"listingId":null,"externalUrl":null,
+                            "expectedMinutes":null,"isRequired":true,"requiresReview":true},
+                    "state":"not_started","available":true,"reflection":null,"reviewNote":null,"completedAt":null}]}]
+        """;
+
+    /// <summary>Two projects: one with a picture, one with words alone.</summary>
+    private const string MyProjects = $$"""
+        [{"id":"{{Basket}}","title":"A woven basket","description":null,"listingId":null,"activity":null,"organisation":null,"status":"draft","visibility":"private",
+          "reviewNote":null,"approvedAt":null,"updatedAt":"2026-10-03T12:00:00Z","pictures":[{"mediaId":"ed000000-0000-0000-0000-000000000002","alt":"A basket","caption":null}]},
+         {"id":"e0000000-0000-0000-0000-000000000022","title":"Words only","description":"No pictures.","listingId":null,"activity":null,"organisation":null,"status":"draft",
+          "visibility":"private","reviewNote":null,"approvedAt":null,"updatedAt":"2026-10-03T12:00:00Z","pictures":[]}]
+        """;
+
+    [Fact]
+    public async Task An_upload_step_offers_only_projects_with_a_picture_and_sends_the_one_chosen()
+    {
+        using FakeApi api = SignedIn().Json(HttpMethod.Get, "me/playlists", UploadPlaylist).Json(HttpMethod.Get, "me/projects", MyProjects);
+        string shown = Shown(await RenderAsync<Playlist>(api, Slug("river-walk")));
+
+        shown.ShouldContain("Show pictures of your work");
+        shown.ShouldContain("The project to send");
+        shown.ShouldContain($"<option value=\"{Basket}\">A woven basket</option>");
+        shown.ShouldNotContain("Words only", Case.Sensitive, "a project with no picture isn't evidence");
+        shown.ShouldContain("Add a note, if you like");
+        shown.ShouldContain(">Send to staff</button>");
+        shown.ShouldNotContain("app.playlists.");
+
+        using FakeApi none = SignedIn().Json(HttpMethod.Get, "me/playlists", UploadPlaylist).Json(HttpMethod.Get, "me/projects", "[]");
+        Shown(await RenderAsync<Playlist>(none, Slug("river-walk"))).ShouldContain("None of your projects has a picture yet. Add one to a project first.");
+
+        string? body = null;
+        using FakeApi sending = SignedIn().On(HttpMethod.Put, $"me/playlists/{River}/steps/{Upload}", r =>
+        {
+            body = r.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return FakeApi.Respond(HttpStatusCode.OK, JsonDocument.Parse(UploadPlaylist).RootElement[0].GetRawText());
+        });
+        await using ServiceProvider app = sending.Services();
+        await app.GetRequiredService<AppState>().StartAsync(Ct);
+        (await app.GetRequiredService<AppSession>().SignInAsync("kofi@example.net", "pw", Ct)).ShouldBeNull();
+        (await app.GetRequiredService<BrightTimeApi>().DoStepAsync(Guid.Parse(River), Guid.Parse(Upload), "My first basket.", null, Guid.Parse(Basket), Ct)).Value.ShouldNotBeNull();
+        using JsonDocument sent = JsonDocument.Parse(body!);
+        (sent.RootElement.GetProperty("projectId").GetString(), sent.RootElement.GetProperty("reflection").GetString()).ShouldBe((Basket, "My first basket."));
+    }
 
     /// <summary>A playlist whose only step is a quiz (D92), tried once and short of its pass mark.</summary>
     private const string QuizPlaylist = $$"""

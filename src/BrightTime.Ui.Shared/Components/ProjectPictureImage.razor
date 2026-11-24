@@ -1,0 +1,45 @@
+@* One of the young person's own project pictures (D104). Its bytes come over the signed-in API, so
+   they're shown from memory, never from an address a page could reach; what it shows is said
+   while it loads, and if it can't be fetched. *@
+@inject BrightTimeApi Api
+
+<figure class="project-picture">
+    @if (_source is { } source)
+    {
+        <img src="@source" alt="@Picture.Alt" />
+    }
+    else
+    {
+        <p class="hint" dir="auto">@Picture.Alt</p>
+    }
+    @if (Picture.Caption is { Length: > 0 } caption)
+    {
+        <figcaption dir="auto">@caption</figcaption>
+    }
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    [Parameter, EditorRequired] public ProjectPicture Picture { get; set; } = default!;
+
+    private Guid _loaded;
+    private string? _source;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == Picture.MediaId)
+        {
+            return;
+        }
+
+        _loaded = Picture.MediaId;
+        _source = null;
+        ApiResult<DownloadedFile> file = await Api.ProjectPictureAsync(ProjectId, Picture.MediaId);
+        // Only the two types the server keeps are drawn: nothing else becomes a data address.
+        if (file.Value is { ContentType: "image/png" or "image/jpeg" } picture)
+        {
+            _source = "data:" + picture.ContentType + ";base64," + Convert.ToBase64String(picture.Bytes);
+        }
+    }
+}

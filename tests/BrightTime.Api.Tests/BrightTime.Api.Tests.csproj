@@ -15,6 +15,7 @@
   <ItemGroup>
     <!-- The software authenticator the web's passkey tests use, for the API's. -->
     <Compile Include="../BrightTime.Web.Tests/SoftwarePasskey.cs" Link="SoftwarePasskey.cs" />
+    <Compile Include="../BrightTime.SharedKernel.Tests/TestImages.cs" Link="TestImages.cs" />
   </ItemGroup>
 
 </Project>

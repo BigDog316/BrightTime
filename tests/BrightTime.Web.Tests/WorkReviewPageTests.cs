@@ -6,6 +6,7 @@ using BrightTime.Modules.Learning.Records;
 using BrightTime.Seed;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
+using BrightTime.SharedKernel.Tests;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BrightTime.Web.Tests;
@@ -77,8 +78,9 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
         OrganisationId org = new(provider.Id);
         Guid youth = await YoungPersonAsync(provider, listing);
 
-        // The organisation's playlist: one check-in staff review, with a badge at the end.
-        Guid playlist, step;
+        // The organisation's playlist: one check-in staff review, with a badge at the end, and
+        // pictures of their work (D104), which staff check too but which isn't needed to finish.
+        Guid playlist, step, upload;
         await using (AsyncServiceScope scope = As(admin))
         {
             Badges badges = scope.ServiceProvider.GetRequiredService<Badges>();
@@ -86,23 +88,28 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
             Guid badge = (await badges.CreateAsync(org, Site, new BadgeClassInput("River Talker", "Talked rivers with a ranger.", "Checked in with a ranger.", null), Ct)).Value.Id;
             (await badges.PublishAsync(org, badge, Ct)).IsSuccess.ShouldBeTrue();
             PlaylistView made = (await playlists.CreateAsync(org, new UserId(admin), new PlaylistInput("River Talk " + Guid.NewGuid().ToString("N")[..6], null, true, null, null, null, badge, null, null), Ct)).Value;
-            PlaylistView withSteps = (await playlists.SetStepsAsync(org, made.Id, [new StepInput("mentor_checkin", "Check in with a ranger", null, null, null, null, true, true)], Ct)).Value;
+            PlaylistView withSteps = (await playlists.SetStepsAsync(org, made.Id,
+                [new StepInput("upload_artifact", "Show your map", null, null, null, null, false, false),
+                 new StepInput("mentor_checkin", "Check in with a ranger", null, null, null, null, true, true)], Ct)).Value;
             (await playlists.PublishAsync(org, made.Id, Ct)).IsSuccess.ShouldBeTrue();
-            (playlist, step) = (made.Id, withSteps.Steps.Single().Id);
+            (playlist, step, upload) = (made.Id, withSteps.Steps[1].Id, withSteps.Steps[0].Id);
         }
 
-        // The young person sends two projects, and the check-in with what they told the ranger.
-        Guid kept, returned;
+        // The young person sends two projects, one with a picture, the check-in with what they told
+        // the ranger, and the map as the evidence for the other step.
+        Guid kept, returned, map;
         await using (AsyncServiceScope scope = As(youth))
         {
             Projects projects = scope.ServiceProvider.GetRequiredService<Projects>();
             Playlists playlists = scope.ServiceProvider.GetRequiredService<Playlists>();
             kept = (await projects.CreateAsync(new UserId(youth), new ProjectInput("Mussel map", "A map of the mussel beds.\nWith a key.", listing), Ct)).Value.Id;
             returned = (await projects.CreateAsync(new UserId(youth), new ProjectInput("River poem", null, listing), Ct)).Value.Id;
+            map = (await projects.AddPictureAsync(new UserId(youth), kept, TestImages.Png(640, 480), "A hand-drawn map of the river", "With a key", Ct)).Value.Pictures.Single().MediaId;
             (await projects.SubmitAsync(new UserId(youth), kept, Ct)).IsSuccess.ShouldBeTrue();
             (await projects.SubmitAsync(new UserId(youth), returned, Ct)).IsSuccess.ShouldBeTrue();
             (await playlists.EnrollAsync(new UserId(youth), playlist, Ct)).IsSuccess.ShouldBeTrue();
             (await playlists.DoStepAsync(new UserId(youth), Site, playlist, step, "Told the ranger about the crayfish.", Ct)).IsSuccess.ShouldBeTrue();
+            (await playlists.DoStepAsync(new UserId(youth), Site, playlist, upload, null, null, kept, Ct)).IsSuccess.ShouldBeTrue();
         }
 
         Guid enrollment = await db.ScalarAsync<Guid>("select id from learning.playlist_enrollment where playlist_id = @p and user_id = @u", ("p", playlist), ("u", youth));
@@ -123,6 +130,17 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
         html.ShouldNotContain(youth.ToString(), Case.Sensitive, "nothing of the account");
         html.ShouldNotContain("provider.work.");
 
+        // The picture shows on the project and as the step's evidence, fetched for staff alone.
+        string picture = $"/provider/orgs/{provider.Id}/work/pictures/{map}";
+        html.Split($"<img src=\"{picture}\" alt=\"A hand-drawn map of the river\"").Length.ShouldBe(3, "once on the project, once as the evidence");
+        html.ShouldContain("What they sent: <span dir=\"auto\">Mussel map</span>");
+        html.ShouldContain("With a key");
+        HttpResponseMessage fetched = await staff.GetAsync(picture);
+        fetched.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await fetched.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(TestImages.Png(640, 480));
+        fetched.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        await staff.GetAsync(work);
+
         // Approved, a project leaves the list.
         HttpResponseMessage approved = await staff.PostAsync(work, "project-" + kept.ToString("N"), ("project", kept.ToString()), ("decision", "approve"), ("note", ""));
         approved.StatusCode.ShouldBe(HttpStatusCode.Redirect);
@@ -136,6 +154,13 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
         HttpResponseMessage sentBack = await staff.PostAsync(work, "project-" + returned.ToString("N"), ("project", returned.ToString()), ("decision", "send_back"), ("note", "Add a verse about the heron."));
         sentBack.Headers.Location!.PathAndQuery.ShouldBe($"{work}?done=sent_back");
         (await db.ScalarAsync<string>("select status || ':' || review_note from learning.project where id = @p", ("p", returned))).ShouldBe("draft:Add a verse about the heron.");
+
+        // The approved project's picture is still the waiting step's evidence; checked, it's neither.
+        (await staff.GetAsync(picture)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await staff.GetAsync(work);
+        (await staff.PostAsync(work, "step-" + enrollment.ToString("N") + "-" + upload.ToString("N"),
+            ("playlist", playlist.ToString()), ("step", upload.ToString()), ("enrollment", enrollment.ToString()), ("decision", "approve"), ("note", ""))).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        (await staff.GetAsync(picture)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         // The step approved completes the playlist, and its badge goes to the young person.
         await staff.GetAsync(work);
@@ -157,7 +182,7 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
             from platform.outbox_message where message_type = 'platform.notification.requested' and payload::text like @u
             """,
             ("u", "%" + youth + "%"));
-        told.ShouldBe("notify.project.approved,notify.project.sent_back,notify.badge.awarded,notify.playlist.completed");
+        told.ShouldBe("notify.project.approved,notify.project.sent_back,notify.step.approved,notify.badge.awarded,notify.playlist.completed");
         string payloads = await db.ScalarAsync<string>(
             "select string_agg(payload::text, ' ') from platform.outbox_message where message_type = 'platform.notification.requested' and payload::text like @u",
             ("u", "%" + youth + "%"));
@@ -171,5 +196,6 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
         await stranger.SignInAsync(AdminOf(sorted[50]));
         (await stranger.GetAsync(work)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         stranger.Html.ShouldNotContain("Mussel map");
+        (await stranger.GetAsync(picture)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 }

@@ -8,8 +8,8 @@ documentation and their PDF editions were written alongside.
 
 **Not yet signed off.** Two of the three acceptance criteria are met and tested. The third, a
 third-party validator verifying a credential, needs a check by hand on a host the internet can
-reach, and there is none yet. One item of plan/09's M4 scope isn't built: evidence uploads on
-playlist steps, which wait on media storage. The sections below give the detail.
+reach, and there is none yet. Evidence uploads on playlist steps, the one item of plan/09's M4
+scope that waited on media storage, are built since (D103, D104). The sections below give the detail.
 
 ## Acceptance
 
@@ -155,9 +155,8 @@ Playlists, unlock rules and exports (D67, D68) used tables the approved schema a
 
 ## Known gaps
 
-M4 scope not built:
-- **Evidence uploads on playlist steps**, and **images on projects**, which wait on media storage.
-  That step kind is refused. (Quizzes, listed here before, are D92.)
+M4 scope not built: none since D104, which added **evidence uploads on playlist steps** and
+**pictures on projects** on D103's media store. (Quizzes, listed here before, are D92.)
 
 Left for later, by decision:
 - **Screens.** Since this report: the app has portfolios, badges, skills, projects, goals and
@@ -175,7 +174,7 @@ Left for later, by decision:
 | | Question | Needed by |
 |---|---|---|
 | — | A host the internet can reach (domain, HTTPS), for the validator check that closes M4's first criterion | Signing off M4 |
-| — | Where media and generated files are stored | Evidence uploads, projects, listing images |
+| — | Where media and generated files are stored: answered, D103 (in PostgreSQL) | — |
 | Q4, Q5 | Retention, including `portfolio_export` rows; deletion versus audit for portfolios and badges | Before production data |
 | Q13 | Who reviews the translations (M4's new strings are machine drafts in `@@drafts`) | Launch |
 | D56, D57 | Carried from M3: a waived fee paid anyway, Stripe Connect; QuestPDF's licence and fonts | Live payments; reports and PDF exports in production |

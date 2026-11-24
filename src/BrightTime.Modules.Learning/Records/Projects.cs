@@ -3,6 +3,7 @@ using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -17,11 +18,12 @@ public sealed record ProjectInput(string? Title, string? Description, Guid? List
 [YouthData]
 public sealed record ProjectView(
     Guid Id, string Title, string? Description, Guid? ListingId, string? Activity, string? Organisation,
-    string Status, string Visibility, string? ReviewNote, DateTimeOffset? ApprovedAt, DateTimeOffset UpdatedAt);
+    string Status, string Visibility, string? ReviewNote, DateTimeOffset? ApprovedAt, DateTimeOffset UpdatedAt, IReadOnlyList<ProjectPicture> Pictures);
 
 /// <summary>A project waiting for an organisation's approval, named only as the young person names themselves on their portfolio.</summary>
 [YouthData]
-public sealed record ProjectSubmission(Guid Id, string Title, string? Description, string? Activity, string? DisplayName, DateTimeOffset SubmittedAt);
+public sealed record ProjectSubmission(
+    Guid Id, string Title, string? Description, string? Activity, string? DisplayName, DateTimeOffset SubmittedAt, IReadOnlyList<ProjectPicture> Pictures);
 
 /// <summary>
 /// A young person's projects (M4, D69): something they made, described in words, approved by the
@@ -38,8 +40,16 @@ public sealed record ProjectSubmission(Guid Id, string Title, string? Descriptio
 /// The organisation is found through the young person's own participation record for the
 /// project's listing: they can only ask an organisation they took part with.
 /// </para>
+/// <para>
+/// Pictures (D104) are private media objects, never served at <c>/media</c>. The young person sees
+/// their own; staff see them while the project, or a playlist step it's the evidence for, waits for
+/// their review; anyone else only on a project that's published. Adding a picture, or changing what
+/// one says, makes the project a private draft again like any other change. Taking one away
+/// doesn't: it can only take something away from what staff approved, and should never wait.
+/// </para>
 /// </remarks>
-public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, IIdentityQueries identity, IDirectoryQueries directory)
+public sealed class Projects(
+    LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, IIdentityQueries identity, IDirectoryQueries directory, IMediaLibrary media)
 {
     public const string Read = "learning.project.read";
     public const string Changed = "learning.project.changed";
@@ -174,22 +184,208 @@ public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditT
             return Result<ProjectView>.Success(await ViewAsync(project, ct).ConfigureAwait(false));
         }, cancellationToken);
 
-    /// <summary>Takes a project off the portfolio for good.</summary>
-    public Task<Result> RemoveAsync(UserId user, Guid id, CancellationToken cancellationToken = default) =>
-        db.InTransactionAsync(async ct =>
+    /// <summary>Takes a project off the portfolio for good, and its pictures with it.</summary>
+    public async Task<Result> RemoveAsync(UserId user, Guid id, CancellationToken cancellationToken = default)
+    {
+        List<Guid> pictures = [];
+        Result removed = await db.InTransactionAsync(async ct =>
         {
             if (await OwnAsync(user, id, ct).ConfigureAwait(false) is not { } project)
             {
                 return Result.Failure(NotFound());
             }
 
+            List<ProjectMediaRecord> held = await db.ProjectMedia.Where(m => m.ProjectId == id).ToListAsync(ct).ConfigureAwait(false);
+            pictures.AddRange(held.Select(m => m.MediaId));
+            db.ProjectMedia.RemoveRange(held);
             project.Status = Removed;
             project.Visibility = Private;
             project.UpdatedAt = clock.StoredNow();
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Changed, project, null, Removed, ct).ConfigureAwait(false);
             return Result.Success();
+        }, cancellationToken).ConfigureAwait(false);
+
+        // The bytes are Platform's, in their own transaction: they go once nothing points to them.
+        foreach (Guid picture in pictures)
+        {
+            await media.RemoveAsync(picture, user, cancellationToken).ConfigureAwait(false);
+        }
+
+        return removed;
+    }
+
+    // ---- pictures (D104) ------------------------------------------------------------------------
+
+    /// <summary>Adds a picture, saying what it shows. The project becomes a private draft again.</summary>
+    public async Task<Result<ProjectView>> AddPictureAsync(
+        UserId user, Guid id, ReadOnlyMemory<byte> file, string? alt, string? caption, CancellationToken cancellationToken = default)
+    {
+        Result<(string Alt, string? Caption)> words = ProjectPictures.Words(alt, caption);
+        if (!words.IsSuccess)
+        {
+            return Result<ProjectView>.Failure(words.Error);
+        }
+
+        if (await db.InTransactionAsync(ct => RoomAsync(user, id, ct), cancellationToken).ConfigureAwait(false) is { } refused)
+        {
+            return Result<ProjectView>.Failure(refused);
+        }
+
+        if (await media.AddImageAsync(file, ProjectPictures.Rules, MediaVisibility.Private, user, cancellationToken).ConfigureAwait(false) is not { } image)
+        {
+            return Result<ProjectView>.Failure(ProjectPictures.NotAPicture);
+        }
+
+        Result<ProjectView> added = await db.InTransactionAsync(async ct =>
+        {
+            // Asked again: another picture may have been added meanwhile.
+            if (await RoomAsync(user, id, ct).ConfigureAwait(false) is { } full)
+            {
+                return Result<ProjectView>.Failure(full);
+            }
+
+            ProjectRecord project = (await OwnAsync(user, id, ct).ConfigureAwait(false))!;
+            short last = await db.ProjectMedia.Where(m => m.ProjectId == id).Select(m => (short?)m.SortOrder).MaxAsync(ct).ConfigureAwait(false) ?? -1;
+            db.ProjectMedia.Add(new ProjectMediaRecord
+            {
+                ProjectId = id,
+                MediaId = image.MediaId,
+                AltText = words.Value.Alt,
+                Caption = words.Value.Caption,
+                SortOrder = (short)(last + 1),
+            });
+            Unapprove(project);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Changed, project, null, "picture_added", ct).ConfigureAwait(false);
+            return Result<ProjectView>.Success(await ViewAsync(project, ct).ConfigureAwait(false));
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (!added.IsSuccess)
+        {
+            await media.RemoveAsync(image.MediaId, user, cancellationToken).ConfigureAwait(false);
+        }
+
+        return added;
+    }
+
+    /// <summary>Changes what a picture shows, or its caption. The project becomes a private draft again.</summary>
+    public Task<Result<ProjectView>> DescribePictureAsync(
+        UserId user, Guid id, Guid mediaId, string? alt, string? caption, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            Result<(string Alt, string? Caption)> words = ProjectPictures.Words(alt, caption);
+            if (!words.IsSuccess)
+            {
+                return Result<ProjectView>.Failure(words.Error);
+            }
+
+            if (await OwnAsync(user, id, ct).ConfigureAwait(false) is not { } project)
+            {
+                return Result<ProjectView>.Failure(NotFound());
+            }
+
+            if (await db.ProjectMedia.FirstOrDefaultAsync(m => m.ProjectId == id && m.MediaId == mediaId, ct).ConfigureAwait(false) is not { } picture)
+            {
+                return Result<ProjectView>.Failure(ProjectPictures.NotFound);
+            }
+
+            picture.AltText = words.Value.Alt;
+            picture.Caption = words.Value.Caption;
+            Unapprove(project);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Changed, project, null, "picture_described", ct).ConfigureAwait(false);
+            return Result<ProjectView>.Success(await ViewAsync(project, ct).ConfigureAwait(false));
         }, cancellationToken);
+
+    /// <summary>Takes a picture away, and its bytes with it. The project keeps its approval.</summary>
+    public async Task<Result<ProjectView>> RemovePictureAsync(UserId user, Guid id, Guid mediaId, CancellationToken cancellationToken = default)
+    {
+        Result<ProjectView> removed = await db.InTransactionAsync(async ct =>
+        {
+            if (await OwnAsync(user, id, ct).ConfigureAwait(false) is not { } project)
+            {
+                return Result<ProjectView>.Failure(NotFound());
+            }
+
+            if (await db.ProjectMedia.FirstOrDefaultAsync(m => m.ProjectId == id && m.MediaId == mediaId, ct).ConfigureAwait(false) is not { } picture)
+            {
+                return Result<ProjectView>.Failure(ProjectPictures.NotFound);
+            }
+
+            db.ProjectMedia.Remove(picture);
+            project.UpdatedAt = clock.StoredNow();
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(Changed, project, null, "picture_removed", ct).ConfigureAwait(false);
+            return Result<ProjectView>.Success(await ViewAsync(project, ct).ConfigureAwait(false));
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (removed.IsSuccess)
+        {
+            await media.RemoveAsync(mediaId, user, cancellationToken).ConfigureAwait(false);
+        }
+
+        return removed;
+    }
+
+    /// <summary>One of the young person's own pictures; null if it isn't theirs.</summary>
+    public async Task<MediaFile?> PictureAsync(UserId user, Guid id, Guid mediaId, CancellationToken cancellationToken = default) =>
+        await db.InTransactionAsync(ct => (from m in db.ProjectMedia
+                                           join p in db.Projects on m.ProjectId equals p.Id
+                                           where m.ProjectId == id && m.MediaId == mediaId && p.UserId == user.Value && p.Status != Removed
+                                           select m).AnyAsync(ct), cancellationToken).ConfigureAwait(false)
+            ? await media.GetAsync(mediaId, cancellationToken).ConfigureAwait(false)
+            : null;
+
+    /// <summary>
+    /// A picture for an organisation's staff, while it waits for their review: on a project about
+    /// one of its activities (<paramref name="projects"/>), or on the project that's the evidence for
+    /// a step of one of its playlists (<paramref name="steps"/>). The caller says which its staff
+    /// may review. Null for any other.
+    /// </summary>
+    public async Task<MediaFile?> ReviewPictureAsync(OrganisationId org, Guid mediaId, bool projects, bool steps, CancellationToken cancellationToken = default)
+    {
+        bool waiting = await db.InTransactionAsync(ct =>
+        {
+            IQueryable<ParticipationRecordRecord> ours = db.Participation.Where(r => r.OrgId == org.Value);
+            IQueryable<Guid> evidence = from pr in db.PlaylistProgress
+                                        join e in db.PlaylistEnrollments on pr.PlaylistEnrollmentId equals e.Id
+                                        join pl in db.Playlists on e.PlaylistId equals pl.Id
+                                        where pr.State == "submitted" && pl.OrgId == org.Value && pr.EvidenceProjectId != null
+                                        select pr.EvidenceProjectId!.Value;
+            return (from m in db.ProjectMedia
+                    join p in db.Projects on m.ProjectId equals p.Id
+                    where m.MediaId == mediaId && p.Status != Removed
+                        && ((projects && p.Status == Submitted && ours.Any(r => r.UserId == p.UserId && r.ListingId == p.ListingId))
+                            || (steps && evidence.Contains(p.Id)))
+                    select m).AnyAsync(ct);
+        }, cancellationToken).ConfigureAwait(false);
+        return waiting ? await media.GetAsync(mediaId, cancellationToken).ConfigureAwait(false) : null;
+    }
+
+    /// <summary>A picture on a published project of a portfolio shown by the link name; null for any other.</summary>
+    public async Task<MediaFile?> PublicPictureAsync(string slug, Guid id, Guid mediaId, CancellationToken cancellationToken = default)
+    {
+        string name = (slug ?? string.Empty).Trim().ToLowerInvariant();
+        bool shown = await db.InTransactionAsync(ct => (from m in db.ProjectMedia
+                                                        join p in db.Projects on m.ProjectId equals p.Id
+                                                        join lp in db.Profiles on p.UserId equals lp.UserId
+                                                        where m.ProjectId == id && m.MediaId == mediaId
+                                                            && lp.PublicSlug == name && (lp.Visibility == "link_only" || lp.Visibility == "public")
+                                                            && p.Status == Published && (p.Visibility == "public" || p.Visibility == "link_only")
+                                                        select m).AnyAsync(ct), cancellationToken).ConfigureAwait(false);
+        return shown ? await media.GetAsync(mediaId, cancellationToken).ConfigureAwait(false) : null;
+    }
+
+    /// <summary>The pictures of these projects, in their order, by project.</summary>
+    internal async Task<ILookup<Guid, ProjectPicture>> PicturesOfAsync(IReadOnlyCollection<Guid> projectIds, CancellationToken ct) =>
+        (await db.ProjectMedia.AsNoTracking().Where(m => projectIds.Contains(m.ProjectId)).OrderBy(m => m.SortOrder).ToListAsync(ct).ConfigureAwait(false))
+            .ToLookup(m => m.ProjectId, m => new ProjectPicture(m.MediaId, m.AltText, m.Caption));
+
+    private async Task<Error?> RoomAsync(UserId user, Guid id, CancellationToken ct) =>
+        await OwnAsync(user, id, ct).ConfigureAwait(false) is null ? NotFound()
+        : await db.ProjectMedia.CountAsync(m => m.ProjectId == id, ct).ConfigureAwait(false) >= ProjectPictures.MaxPictures ? ProjectPictures.Full
+        : null;
 
     /// <summary>The projects waiting for this organisation's approval: those about its activities.</summary>
     public Task<IReadOnlyList<ProjectSubmission>> SubmittedAsync(OrganisationId org, CancellationToken cancellationToken = default) =>
@@ -221,7 +417,8 @@ public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditT
                 SubjectIds = [.. waiting.Select(w => w.Id)],
                 ActorOrgId = org,
             }, ct).ConfigureAwait(false);
-            return [.. waiting.Select(w => new ProjectSubmission(w.Id, w.Title, w.Description, w.Activity, w.Name, w.UpdatedAt))];
+            ILookup<Guid, ProjectPicture> pictures = await PicturesOfAsync([.. waiting.Select(w => w.Id)], ct).ConfigureAwait(false);
+            return [.. waiting.Select(w => new ProjectSubmission(w.Id, w.Title, w.Description, w.Activity, w.Name, w.UpdatedAt, [.. pictures[w.Id]]))];
         }, cancellationToken);
 
     /// <summary>Approves a submitted project, or sends it back with a note saying what to change.</summary>
@@ -305,11 +502,12 @@ public sealed class Projects(LearningDbContext db, ITenantContext tenant, AuditT
         Guid[] listings = [.. projects.Where(p => p.ListingId is not null).Select(p => p.ListingId!.Value).Distinct()];
         var activities = await db.Participation.AsNoTracking().Where(r => r.UserId == userId && r.ListingId != null && listings.Contains(r.ListingId!.Value))
             .Select(r => new { Listing = r.ListingId!.Value, r.TitleSnapshot, r.OrgNameSnapshot }).ToListAsync(ct).ConfigureAwait(false);
+        ILookup<Guid, ProjectPicture> pictures = await PicturesOfAsync([.. projects.Select(p => p.Id)], ct).ConfigureAwait(false);
         return [.. projects.Select(p =>
         {
             var activity = p.ListingId is { } l ? activities.FirstOrDefault(a => a.Listing == l) : null;
             return new ProjectView(p.Id, p.Title, p.Description, p.ListingId, activity?.TitleSnapshot, activity?.OrgNameSnapshot,
-                p.Status, p.Visibility, p.ReviewNote, p.ApprovedAt, p.UpdatedAt);
+                p.Status, p.Visibility, p.ReviewNote, p.ApprovedAt, p.UpdatedAt, [.. pictures[p.Id]]);
         })];
     }
 

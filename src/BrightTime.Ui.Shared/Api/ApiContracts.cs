@@ -220,7 +220,15 @@ public sealed record SkillView(Guid Id, Guid TermId, string Name, short? Level, 
 /// </summary>
 public sealed record ProjectView(
     Guid Id, string Title, string? Description, Guid? ListingId, string? Activity, string? Organisation,
-    string Status, string Visibility, string? ReviewNote, DateTimeOffset? ApprovedAt, DateTimeOffset UpdatedAt);
+    string Status, string Visibility, string? ReviewNote, DateTimeOffset? ApprovedAt, DateTimeOffset UpdatedAt,
+    IReadOnlyList<ProjectPicture>? Pictures = null)
+{
+    /// <summary>Its pictures (D104), in order; none from a server before them.</summary>
+    public IReadOnlyList<ProjectPicture> Shown => Pictures ?? [];
+}
+
+/// <summary>A picture on a project (D104): what it shows, and a caption if there is one. Its bytes are fetched on their own.</summary>
+public sealed record ProjectPicture(Guid MediaId, string Alt, string? Caption);
 
 /// <summary>A project as written or changed: what it is, and the activity it came from.</summary>
 public sealed record ProjectDraft(string Title, string? Description, Guid? ListingId);
@@ -252,7 +260,8 @@ public sealed record PlaylistSummary(
 /// or <c>completed</c>; and whether it's open to them yet. A quiz says how many the last try got right.
 /// </summary>
 public sealed record MyStep(
-    PlaylistStep Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt, int? QuizCorrect = null, int QuizAttempts = 0)
+    PlaylistStep Step, string State, bool Available, string? Reflection, string? ReviewNote, DateTimeOffset? CompletedAt, int? QuizCorrect = null, int QuizAttempts = 0,
+    Guid? EvidenceProjectId = null)
 {
     /// <summary>Waiting on the young person: never done, a quiz to try again, or sent back.</summary>
     public bool IsOpen => State is "not_started" or "in_progress" or "needs_rework";

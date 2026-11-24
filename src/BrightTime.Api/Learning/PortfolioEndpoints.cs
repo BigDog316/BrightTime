@@ -3,6 +3,7 @@ using BrightTime.Hosting.Tenancy;
 using BrightTime.Localisation;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Learning.Portfolio;
+using BrightTime.Modules.Learning.Records;
 using BrightTime.Reporting;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -40,6 +41,9 @@ public static class PortfolioEndpoints
         // Shown by its owner's choice; never lists who they are beyond the display name they chose.
         api.MapGet("/public/portfolios/{slug}", PublicAsync).AllowAnonymous().RequireRateLimiting(Public.PublicEndpoints.RateLimit)
             .WithMetadata(new YouthRecordAttribute(Portfolios.PublicRead)).Produces<PublicPortfolio>();
+        // A published project's pictures (D104), on the same terms, and kept by nothing between.
+        api.MapGet("/public/portfolios/{slug}/projects/{id:guid}/pictures/{mediaId:guid}", PublicPictureAsync).AllowAnonymous()
+            .RequireRateLimiting(Public.PublicEndpoints.RateLimit).WithMetadata(new YouthRecordAttribute(Portfolios.PublicRead));
         return api;
     }
 
@@ -74,6 +78,21 @@ public static class PortfolioEndpoints
 
         response.Headers.CacheControl = "no-store";
         return Results.Ok(portfolio);
+    }
+
+    private static async Task<IResult> PublicPictureAsync(string slug, Guid id, Guid mediaId, HttpResponse response, Projects projects, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        if (await projects.PublicPictureAsync(slug, id, mediaId, ct) is not { } file)
+        {
+            return Results.NotFound();
+        }
+
+        response.Headers.CacheControl = "no-store";
+        response.Headers.XContentTypeOptions = "nosniff";
+        response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+        response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+        return Results.File(file.Bytes, file.ContentType);
     }
 
     private static async Task<IResult> ExportAsync(

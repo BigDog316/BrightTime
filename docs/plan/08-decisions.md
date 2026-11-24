@@ -3472,6 +3472,54 @@ compose volume needs them too. `ImageCleanerTests` covers the cleaning and orien
 `HeroImageTests` refusals, the stored and served picture, descriptions in another language,
 replacing, visibility and removing, on a collection and a neighbourhood page.
 
+### D104 — Pictures of young people's work, and upload steps (**proposed 2026-11-23**)
+
+D103 built the media store, and left a young person's pictures for later: projects had a
+`project_media` table and playlist steps an `upload_artifact` kind and an `evidence_project_id`,
+with nothing behind them, so M4's evidence uploads were the one item of its scope not built. Sam
+chose on 2026-11-23: project pictures and upload steps together; a picture is seen as its project
+is; staff approval is what keeps a bad picture from being shown until M5's media safety; six
+pictures of up to 5 MB.
+- **On a project:** up to six PNG or JPEG photos, each up to 5 MB and at least 320 pixels on each
+  side (no side over 8,000), each saying what it shows (up to 250 characters) with an optional
+  caption (up to 300). Cleaned as D103 cleans an image, so where a photo was taken goes. Adding a
+  picture, or changing what one says, makes the project a private draft again, as any change does
+  (D69). Taking one away doesn't: it can only take something away from what staff approved, and a
+  young person who wants a picture gone shouldn't have to wait for anyone. Removing a project
+  takes its pictures' bytes with it.
+- **Who sees a picture:** its media object is `private` and is never served at `/media`. The young
+  person sees their own, over the signed-in API. Staff of an organisation see one while it waits
+  for their review: on a project about one of their activities that's been sent to them, or on the
+  project sent as the evidence for a step of one of their playlists; never before it's sent, never
+  once they've decided. Anyone else sees one only on a published project of a portfolio that's
+  shown, by that portfolio's link name and the project. Every one of these answers is
+  `private, no-store`, `nosniff`, under a sandboxing content security policy; anything else, an
+  unknown id included, is a 404. `IMediaLibrary.GetAsync` hands out a clean object's bytes
+  whatever its visibility, for a caller that has decided who may see it.
+- **Safety until M5:** what's checked is D103's (the type read from the bytes, the sizes, the
+  metadata stripped, SVG refused); there's no virus scan or picture moderation yet. What stands in
+  for them is staff approval: beyond the young person, only the staff reviewing it see a picture
+  before it's approved. The app asks them to leave out other people's faces unless they say yes.
+- **Upload steps:** an organisation can add a step for pictures of their work. Staff always check
+  it, whatever the form says, as with a check-in. The young person sends one of their own projects
+  with at least one picture (`playlists.evidence` otherwise), with a note if they like; the project
+  needn't be sent for approval itself. Staff see its title, description and pictures with the step,
+  and approving or sending back works as for any step. A step sent back can be sent again with the
+  same project or another.
+- **Where it shows:** the app's project screen adds, shows and removes pictures, drawn from memory
+  (data addresses) since a page can't carry the sign-in; the playlist screen offers the projects
+  with a picture for an upload step. The console's *Young people's work* shows a project's pictures
+  and a step's evidence; a shown portfolio's page shows a published project's pictures.
+- **Not yet:** pictures aren't in the portfolio's PDF or other downloads; the app adds and removes
+  pictures but doesn't yet change what one says (the API does) or reorder them; a guardian's view
+  of a child's portfolio (D93) shows no pictures; no resizing, so a large photo is sent whole.
+
+No schema change: `project_media`, the `upload_artifact` kind and `evidence_project_id` were in the
+approved schema. `ProjectPictureApiTests` covers refusals, cleaning, who sees a picture and when,
+approval on adding and not on removing, the limit, removal, and an upload step from sending to
+approval; `WorkReviewPageTests` and `PortfolioPageTests` the console's and the portfolio page's
+pictures; the app's screen tests the pictures, the form sent, and the upload step.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

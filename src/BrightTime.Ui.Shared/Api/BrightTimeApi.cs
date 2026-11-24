@@ -400,6 +400,41 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
         SendAsync(HttpMethod.Delete, $"me/projects/{id:D}", null, signedIn: true, ct);
 
     /// <summary>
+    /// Adds a picture to a project (D104), as a form: the file, what it shows and a caption. The
+    /// server checks and cleans it; the project becomes a draft again.
+    /// </summary>
+    public Task<ApiResult<ProjectView>> AddProjectPictureAsync(
+        Guid id, byte[] file, string contentType, string alt, string? caption, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Post, $"me/projects/{id:D}/pictures", (Func<HttpContent>)(() =>
+        {
+            ByteArrayContent bytes = new(file);
+            bytes.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            MultipartFormDataContent form = new()
+            {
+                { bytes, "file", contentType == "image/png" ? "picture.png" : "picture.jpg" },
+                { new StringContent(alt), "alt" },
+            };
+            if (caption is { Length: > 0 })
+            {
+                form.Add(new StringContent(caption), "caption");
+            }
+
+            return form;
+        }), signedIn: true, ct);
+
+    /// <summary>Changes what a picture shows, or its caption. The project becomes a draft again.</summary>
+    public Task<ApiResult<ProjectView>> DescribeProjectPictureAsync(Guid id, Guid mediaId, string alt, string? caption, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Put, $"me/projects/{id:D}/pictures/{mediaId:D}", new { alt, caption }, signedIn: true, ct);
+
+    /// <summary>Takes a picture off a project; the project keeps its approval.</summary>
+    public Task<ApiResult<ProjectView>> RemoveProjectPictureAsync(Guid id, Guid mediaId, CancellationToken ct = default) =>
+        SendAsync<ProjectView>(HttpMethod.Delete, $"me/projects/{id:D}/pictures/{mediaId:D}", null, signedIn: true, ct);
+
+    /// <summary>One of the young person's own pictures, its bytes and type.</summary>
+    public Task<ApiResult<DownloadedFile>> ProjectPictureAsync(Guid id, Guid mediaId, CancellationToken ct = default) =>
+        GetAsync<DownloadedFile>($"me/projects/{id:D}/pictures/{mediaId:D}", signedIn: true, ct);
+
+    /// <summary>
     /// The portfolio as a file, made when asked and not kept on the server (D68): <c>pdf</c>,
     /// <c>json_ob3</c> (their badges) or <c>clr2</c> (a learner record, which needs a badge).
     /// </summary>
@@ -460,7 +495,12 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
 
     /// <summary>A step done; a quiz's answers (D92) are the option chosen for each question, from 0.</summary>
     public Task<ApiResult<MyPlaylist>> DoStepAsync(Guid playlistId, Guid stepId, string? reflection, IReadOnlyList<int>? answers, CancellationToken ct = default) =>
-        SendAsync<MyPlaylist>(HttpMethod.Put, $"me/playlists/{playlistId:D}/steps/{stepId:D}", new { reflection, answers }, signedIn: true, ct);
+        DoStepAsync(playlistId, stepId, reflection, answers, null, ct);
+
+    /// <summary>A step done; an upload step's evidence (D104) is one of the young person's projects with a picture.</summary>
+    public Task<ApiResult<MyPlaylist>> DoStepAsync(
+        Guid playlistId, Guid stepId, string? reflection, IReadOnlyList<int>? answers, Guid? projectId, CancellationToken ct = default) =>
+        SendAsync<MyPlaylist>(HttpMethod.Put, $"me/playlists/{playlistId:D}/steps/{stepId:D}", new { reflection, answers, projectId }, signedIn: true, ct);
 
     private async Task<ApiResult<T>> GetAsync<T>(string path, bool signedIn, CancellationToken ct) =>
         await SendAsync<T>(HttpMethod.Get, path, null, signedIn, ct).ConfigureAwait(false);
@@ -523,7 +563,12 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
-        if (body is not null)
+        // A form is made afresh for each try: a request disposes its content once sent.
+        if (body is Func<HttpContent> make)
+        {
+            request.Content = make();
+        }
+        else if (body is not null)
         {
             request.Content = JsonContent.Create(body, body.GetType(), options: AppSession.Json);
         }

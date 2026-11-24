@@ -437,6 +437,20 @@ public sealed class ProjectRecord
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>A picture on a project (D104): a private media object, with what it shows and an optional caption.</summary>
+public sealed class ProjectMediaRecord
+{
+    public Guid ProjectId { get; init; }
+
+    public Guid MediaId { get; init; }
+
+    public string? Caption { get; set; }
+
+    public required string AltText { get; set; }
+
+    public short SortOrder { get; set; }
+}
+
 /// <summary>A portfolio export a young person asked for (D68). The file itself is never kept.</summary>
 public sealed class PortfolioExportRecord
 {
@@ -496,6 +510,8 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
     public DbSet<LearnerSkillRecord> Skills => Set<LearnerSkillRecord>();
 
     public DbSet<ProjectRecord> Projects => Set<ProjectRecord>();
+
+    public DbSet<ProjectMediaRecord> ProjectMedia => Set<ProjectMediaRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -629,6 +645,12 @@ public sealed class LearningDbContext(DbContextOptions<LearningDbContext> option
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.UserId, x.CreatedAt }).IsDescending(false, true);
             b.HasIndex(x => new { x.TenantId, x.Status }).HasFilter("status = 'submitted'");
+        });
+
+        modelBuilder.Entity<ProjectMediaRecord>(b =>
+        {
+            b.ToTable("project_media");
+            b.HasKey(x => new { x.ProjectId, x.MediaId });
         });
 
         modelBuilder.Entity<PortfolioExportRecord>(b =>

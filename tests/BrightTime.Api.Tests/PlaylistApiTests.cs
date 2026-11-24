@@ -111,7 +111,7 @@ public sealed class PlaylistApiTests(ApiFixture api)
             (made.GetProperty("status").GetString(), made.GetProperty("completionBadge").GetString()).ShouldBe(("draft", "Watershed Explorer"));
             await ProblemAsync(await admin.PostAsync(Relative($"api/v1/org/{org}/playlists/{playlist}/publish"), null, Ct), HttpStatusCode.BadRequest, "playlists.unpublishable");
             await ProblemAsync(await admin.PutAsJsonAsync($"api/v1/org/{org}/playlists/{playlist}/steps",
-                new { steps = new[] { new { kind = "upload_artifact", title = "A photo" } } }, Ct), HttpStatusCode.BadRequest, "playlists.step_kind");
+                new { steps = new[] { new { kind = "video", title = "A film" } } }, Ct), HttpStatusCode.BadRequest, "playlists.step_kind");
             await ProblemAsync(await admin.PutAsJsonAsync($"api/v1/org/{org}/playlists/{playlist}/steps",
                 new { steps = new[] { new { kind = "external_activity", title = "Read up", externalUrl = "http://example.org/" } } }, Ct), HttpStatusCode.BadRequest, "playlists.step_link");
 

@@ -14,7 +14,8 @@ public sealed record PlaylistStepsRequest(IReadOnlyList<StepInput>? Steps);
 public sealed record StepReviewRequest(Guid EnrollmentId, bool Approve, string? Note);
 
 /// <summary>A step done: what the young person wrote, and for a quiz (D92) the option chosen for each question, from 0.</summary>
-public sealed record StepDoneRequest(string? Reflection, IReadOnlyList<int>? Answers = null);
+/// <summary>A step done: a reflection or note, a quiz's answers (D92), or an upload step's project (D104).</summary>
+public sealed record StepDoneRequest(string? Reflection, IReadOnlyList<int>? Answers = null, Guid? ProjectId = null);
 
 /// <summary>
 /// Playlists (M4, D67): an organisation's playlists, written as drafts and published; the steps
@@ -127,7 +128,7 @@ public static class PlaylistEndpoints
     private static async Task<IResult> DoStepAsync(Guid id, Guid stepId, StepDoneRequest body, ClaimsPrincipal user, SiteContext site, Playlists playlists, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
-        Result<MyPlaylist> done = await playlists.DoStepAsync(Actor(user), Site(site), id, stepId, body.Reflection, body.Answers, ct);
+        Result<MyPlaylist> done = await playlists.DoStepAsync(Actor(user), Site(site), id, stepId, body.Reflection, body.Answers, body.ProjectId, ct);
         return done.IsSuccess ? Results.Ok(done.Value) : ApiProblems.From(done.Error);
     }
 

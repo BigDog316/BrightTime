@@ -1,0 +1,26 @@
+@using BrightTime.Modules.Learning.Records
+@* A project's pictures (D104), each with what it shows and its caption. Where each one is fetched
+   from is the caller's: a reviewer's address, or a shown portfolio's. *@
+@if (Pictures.Count > 0)
+{
+    <ul class="project-pictures">
+        @foreach (ProjectPicture picture in Pictures)
+        {
+            <li>
+                <figure>
+                    <img src="@Source(picture.MediaId)" alt="@picture.Alt" loading="lazy" />
+                    @if (picture.Caption is { Length: > 0 } caption)
+                    {
+                        <figcaption dir="auto">@caption</figcaption>
+                    }
+                </figure>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ProjectPicture> Pictures { get; set; } = [];
+
+    [Parameter, EditorRequired] public Func<Guid, string> Source { get; set; } = _ => "";
+}

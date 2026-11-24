@@ -21,8 +21,9 @@ namespace BrightTime.Modules.Platform.Media;
 /// <para>
 /// Those checks are what makes an image <c>clean</c> for now: the type read from the bytes, the
 /// sizes, the metadata stripped, SVG and everything else refused. Virus scanning and re-encoding
-/// are M5's media safety; until then only adults' uploads use this (curation, D103), and
-/// <c>scan_detail</c> says how far an object was checked.
+/// are M5's media safety. Until then a young person's pictures (D104) are kept private and shown
+/// beyond them and the staff reviewing them only once staff approve the project; <c>scan_detail</c>
+/// says how far an object was checked.
 /// </para>
 /// <para>
 /// A public object is fetchable by its id from the moment it's added, before whatever shows it is
@@ -93,10 +94,16 @@ public sealed class MediaLibrary(PlatformDbContext db, IObjectStore store, ITena
     }
 
     public Task<MediaFile?> GetPublicAsync(Guid mediaId, CancellationToken cancellationToken = default) =>
+        FileAsync(mediaId, publicOnly: true, cancellationToken);
+
+    public Task<MediaFile?> GetAsync(Guid mediaId, CancellationToken cancellationToken = default) =>
+        FileAsync(mediaId, publicOnly: false, cancellationToken);
+
+    private Task<MediaFile?> FileAsync(Guid mediaId, bool publicOnly, CancellationToken cancellationToken) =>
         db.InTransactionAsync<MediaFile?>(async ct =>
         {
             var media = await db.MediaObjects.AsNoTracking()
-                .Where(m => m.Id == mediaId && m.ScanState == "clean" && m.Visibility == MediaVisibility.Public)
+                .Where(m => m.Id == mediaId && m.ScanState == "clean" && (!publicOnly || m.Visibility == MediaVisibility.Public))
                 .Select(m => new { m.ObjectKey, m.ContentType, m.Sha256 })
                 .FirstOrDefaultAsync(ct).ConfigureAwait(false);
             if (media is null || await store.ReadAsync(media.ObjectKey, ct).ConfigureAwait(false) is not { } bytes)

@@ -21,6 +21,9 @@ public sealed record ProjectVisibilityRequest(string? Visibility);
 
 public sealed record ProjectReviewRequest(bool Approve, string? Note);
 
+/// <summary>What a project's picture shows, and its caption (D104).</summary>
+public sealed record PictureWordsRequest(string? Alt, string? Caption);
+
 /// <summary>A skill or interest a young person can list, or aim a goal at, named in the request's language.</summary>
 public sealed record LearningTerm(Guid Id, string Vocabulary, string Name, Guid? ParentId);
 
@@ -51,10 +54,16 @@ public static class LearnerRecordEndpoints
         me.MapPost("/projects/{id:guid}/submit", SubmitProjectAsync).WithMetadata(new YouthRecordAttribute(Projects.Changed)).Produces<ProjectView>();
         me.MapPut("/projects/{id:guid}/visibility", ShowProjectAsync).WithMetadata(new YouthRecordAttribute(Projects.Changed)).Produces<ProjectView>();
         me.MapDelete("/projects/{id:guid}", RemoveProjectAsync).WithMetadata(new YouthRecordAttribute(Projects.Changed));
+        me.MapPost("/projects/{id:guid}/pictures", AddPictureAsync).WithMetadata(new YouthRecordAttribute(Projects.Changed))
+            .Accepts<IFormFile>("multipart/form-data").Produces<ProjectView>();
+        me.MapPut("/projects/{id:guid}/pictures/{mediaId:guid}", DescribePictureAsync).WithMetadata(new YouthRecordAttribute(Projects.Changed)).Produces<ProjectView>();
+        me.MapDelete("/projects/{id:guid}/pictures/{mediaId:guid}", RemovePictureAsync).WithMetadata(new YouthRecordAttribute(Projects.Changed)).Produces<ProjectView>();
+        me.MapGet("/projects/{id:guid}/pictures/{mediaId:guid}", PictureAsync).WithMetadata(new YouthRecordAttribute(Projects.Read));
 
         RouteGroupBuilder org = api.MapGroup("/org/{orgId:guid}").RequireAuthorization();
         org.MapGet("/projects", SubmittedAsync).WithMetadata(new YouthRecordAttribute(Projects.Read)).Produces<IReadOnlyList<ProjectSubmission>>();
         org.MapPost("/projects/{id:guid}/review", ReviewAsync).WithMetadata(new YouthRecordAttribute(Projects.Reviewed));
+        org.MapGet("/pictures/{mediaId:guid}", ReviewPictureAsync).WithMetadata(new YouthRecordAttribute(Projects.Read));
         org.MapPost("/skills/endorse", EndorseAsync).WithMetadata(new YouthRecordAttribute(Skills.Endorsed));
         org.MapPost("/skills/withdraw", WithdrawAsync).WithMetadata(new YouthRecordAttribute(Skills.Endorsed));
         return api;
@@ -151,6 +160,70 @@ public static class LearnerRecordEndpoints
 
     private static async Task<IResult> RemoveProjectAsync(Guid id, ClaimsPrincipal user, Projects projects, CancellationToken ct) =>
         Done(await projects.RemoveAsync(Actor(user), id, ct));
+
+    // ---- pictures (D104) -------------------------------------------------------------------------
+
+    /// <summary>
+    /// A picture, as a form: the file (<c>file</c>), what it shows (<c>alt</c>) and a caption
+    /// (<c>caption</c>). A body much longer than the largest picture is refused unread.
+    /// </summary>
+    private static async Task<IResult> AddPictureAsync(Guid id, HttpRequest request, ClaimsPrincipal user, Projects projects, CancellationToken ct)
+    {
+        if (!request.HasFormContentType || request.ContentLength > ProjectPictures.MaxBytes + (64 * 1024))
+        {
+            return ApiProblems.From(ProjectPictures.NotAPicture);
+        }
+
+        IFormCollection form = await request.ReadFormAsync(ct);
+        if (form.Files.GetFile("file") is not { Length: > 0 and <= ProjectPictures.MaxBytes } file)
+        {
+            return ApiProblems.From(ProjectPictures.NotAPicture);
+        }
+
+        byte[] bytes = new byte[file.Length];
+        await using (Stream read = file.OpenReadStream())
+        {
+            await read.ReadExactlyAsync(bytes, ct);
+        }
+
+        return Answer(await projects.AddPictureAsync(Actor(user), id, bytes, form["alt"], form["caption"], ct));
+    }
+
+    private static async Task<IResult> DescribePictureAsync(Guid id, Guid mediaId, PictureWordsRequest body, ClaimsPrincipal user, Projects projects, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return Answer(await projects.DescribePictureAsync(Actor(user), id, mediaId, body.Alt, body.Caption, ct));
+    }
+
+    private static async Task<IResult> RemovePictureAsync(Guid id, Guid mediaId, ClaimsPrincipal user, Projects projects, CancellationToken ct) =>
+        Answer(await projects.RemovePictureAsync(Actor(user), id, mediaId, ct));
+
+    private static async Task<IResult> PictureAsync(Guid id, Guid mediaId, ClaimsPrincipal user, HttpContext http, Projects projects, CancellationToken ct) =>
+        Picture(http, await projects.PictureAsync(Actor(user), id, mediaId, ct));
+
+    /// <summary>A picture waiting for the organisation's review, on a project or on a playlist step's evidence.</summary>
+    private static async Task<IResult> ReviewPictureAsync(Guid orgId, Guid mediaId, ClaimsPrincipal user, HttpContext http, IAuthorizationService authorization, Projects projects, CancellationToken ct)
+    {
+        bool reviewsProjects = await RefusedAsync(user, orgId, authorization, Permissions.Projects.Review, "projects.forbidden") is null;
+        bool reviewsSteps = await RefusedAsync(user, orgId, authorization, Permissions.Playlists.ReviewSteps, "projects.forbidden") is null;
+        return reviewsProjects || reviewsSteps
+            ? Picture(http, await projects.ReviewPictureAsync(new OrganisationId(orgId), mediaId, reviewsProjects, reviewsSteps, ct))
+            : ApiProblems.From(Error.Forbidden("projects.forbidden", "Your role in this organisation doesn't cover that."));
+    }
+
+    /// <summary>A young person's picture: never kept by anything between, never read as anything but an image.</summary>
+    private static IResult Picture(HttpContext http, MediaFile? file)
+    {
+        if (file is null)
+        {
+            return Results.NotFound();
+        }
+
+        http.Response.Headers.CacheControl = "private, no-store";
+        http.Response.Headers.XContentTypeOptions = "nosniff";
+        http.Response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+        return Results.File(file.Bytes, file.ContentType);
+    }
 
     private static async Task<IResult> SubmittedAsync(Guid orgId, ClaimsPrincipal user, IAuthorizationService authorization, Projects projects, CancellationToken ct) =>
         await RefusedAsync(user, orgId, authorization, Permissions.Projects.Review, "projects.forbidden")

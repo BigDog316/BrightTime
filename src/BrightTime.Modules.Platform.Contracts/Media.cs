@@ -36,6 +36,12 @@ public interface IMediaLibrary
     /// <summary>A clean, public media object's bytes; null for anything else, so an id alone gives nothing away.</summary>
     Task<MediaFile?> GetPublicAsync(Guid mediaId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// A clean media object's bytes, whatever its visibility, for a caller that has already decided
+    /// who may see it (a young person's project pictures, D104); null for anything else.
+    /// </summary>
+    Task<MediaFile?> GetAsync(Guid mediaId, CancellationToken cancellationToken = default);
+
     /// <summary>Removes a media object and its bytes. Whatever pointed to it must have let go first.</summary>
     Task<bool> RemoveAsync(Guid mediaId, UserId actor, CancellationToken cancellationToken = default);
 }

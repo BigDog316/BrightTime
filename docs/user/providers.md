@@ -340,10 +340,11 @@ badges at the end. They're on the **Playlists** tab.
   order, an age range and about how many hours, the badge it awards, and optionally a badge
   someone must already hold to start it.
 - **Add a step**: each is one of **attend an activity** (one of yours, done by itself once their
-  attendance is recorded), **an activity elsewhere** (a link), **a reflection** they write, **a
-  check-in with staff**, or **a quiz**. For a quiz, write each question on a line and its answers
+  attendance is recorded), **an activity elsewhere** (a link), **a reflection** they write,
+  **pictures of their work** (one of their projects with a picture), **a check-in with staff**, or
+  **a quiz**. For a quiz, write each question on a line and its answers
   on the lines below, with `*` before the right one, and a blank line between questions; then the
-  pass mark. Young people see the questions, never the answers, and only their score is kept. Any step can be checked by staff, and a check-in always is. Steps are required
+  pass mark. Young people see the questions, never the answers, and only their score is kept. Any step can be checked by staff, and a check-in or pictures of their work always are. Steps are required
   unless you say otherwise. **Change**, **Move up**, **Move down** and **Remove** rearrange them.
 - **Publish** it, and from then on it never changes, because everyone's progress refers to its
   steps. **Archive** stops anyone new starting; those already on it carry on.
@@ -371,8 +372,13 @@ submit an application. **Try the rules** can say the made-up applicant holds the
 
 The **Young people's work** tab lists what young people have sent you to check:
 - **Projects** they made about one of your activities, such as a map or a write-up, with the
-  activity it came from and what they wrote about it.
-- **Playlist steps** your staff check, such as a check-in with a ranger, with what they wrote.
+  activity it came from, what they wrote about it and any pictures of it.
+- **Playlist steps** your staff check, such as a check-in with a ranger, with what they wrote. For
+  a step showing pictures of their work, you see the project they sent: its words and pictures.
+
+You see a young person's pictures only while they wait for you. Once you approve or send back,
+they're gone from this page. Check that a picture is fit to show before you approve: an approved
+project's pictures can go on the young person's portfolio page.
 
 For each, write a note if you like, then **Approve** or **Send back**. To send something back, say
 what to change: the young person sees your note in the app and can send it again. Either way,

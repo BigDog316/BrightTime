@@ -97,6 +97,9 @@ app.MapGet("/listings/{slug}/calendar.ics", async (
 });
 app.MapSavedListings();
 
+// Pictures on collections and neighbourhood pages (D103): clean, public media only.
+app.MapMedia();
+
 // The import template is the same for everyone and holds nothing private.
 app.MapGet(BrightTime.Web.Components.Console.Provider.ImportPage.TemplatePath, () => Results.File(
     System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(BrightTime.Modules.Opportunities.Import.CsvListingFormat.Template())).ToArray(),

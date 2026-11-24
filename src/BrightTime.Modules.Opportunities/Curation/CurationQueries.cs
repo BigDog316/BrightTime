@@ -40,8 +40,10 @@ public sealed class CurationQueries(OpportunitiesDbContext db, IClock clock, Inf
                 .Select(i => new CollectionEntry(i.ListingId, i.CuratorNote))
                 .ToListAsync(ct).ConfigureAwait(false);
 
+            // The picture's description follows the page's language where the organiser gave one.
+            HeroImage? hero = c.HeroMediaId is { } image ? new HeroImage(image, t?.HeroAlt ?? c.HeroAlt ?? string.Empty) : null;
             return new CollectionView(c.Id, c.Slug, t?.Title ?? c.Title, t is null ? c.Description : t.Description,
-                t is null ? SourceLanguage : locale, entries);
+                t is null ? SourceLanguage : locale, entries, hero);
         }, cancellationToken);
 
     public Task<IReadOnlyList<CollectionSummary>> ListCollectionsAsync(string locale, bool featuredOnly, CancellationToken cancellationToken = default) =>
@@ -86,8 +88,12 @@ public sealed class CurationQueries(OpportunitiesDbContext db, IClock clock, Inf
             // The page in the reader's language if the organiser wrote one, otherwise in English,
             // whole: a page mixing languages block by block reads worse than either.
             string language = blocks.Any(b => b.Locale == locale) ? locale : SourceLanguage;
+            Dictionary<string, string> alts = CurationImages.Alts(page.HeroAlt);
+            HeroImage? hero = page.HeroMediaId is { } image
+                ? new HeroImage(image, alts.GetValueOrDefault(language) ?? alts.GetValueOrDefault(SourceLanguage) ?? string.Empty)
+                : null;
             return new NeighbourhoodPageView(neighbourhoodId, language,
-                [.. blocks.Where(b => b.Locale == language).Select(b => new PageBlock(b.BlockKind, b.Heading, b.BodyMd, b.Payload))]);
+                [.. blocks.Where(b => b.Locale == language).Select(b => new PageBlock(b.BlockKind, b.Heading, b.BodyMd, b.Payload))], hero);
         }, cancellationToken);
 
     /// <summary>Untranslated collection and page text is the organiser's, in English.</summary>

@@ -15,6 +15,9 @@ public sealed class CollectionRecord
 
     public Guid? HeroMediaId { get; set; }
 
+    /// <summary>What the hero image shows (D103), in English; required with one.</summary>
+    public string? HeroAlt { get; set; }
+
     public Guid? CuratorUserId { get; set; }
 
     public string Status { get; set; } = "draft";
@@ -52,6 +55,9 @@ public sealed class CollectionTranslationRecord
     public required string Title { get; set; }
 
     public string? Description { get; set; }
+
+    /// <summary>What the hero image shows, in this language (D103).</summary>
+    public string? HeroAlt { get; set; }
 }
 
 /// <summary><c>opportunity.neighbourhood_page</c>: an organiser's page for one neighbourhood.</summary>
@@ -66,6 +72,9 @@ public sealed class NeighbourhoodPageRecord
     public string Status { get; set; } = "draft";
 
     public Guid? HeroMediaId { get; set; }
+
+    /// <summary>What the hero image shows, by locale, as a JSON object (D103); English is required with one.</summary>
+    public string HeroAlt { get; set; } = "{}";
 
     public Guid? OrganiserUserId { get; set; }
 

@@ -113,6 +113,12 @@ programs. Families find them under **Collections** on the site, and featured one
    note on why it's there. **Move up**, **Move down** and **Remove** put them in order.
 5. **Publish** it. It needs at least one activity.
 
+**A picture.** Under **Picture**, choose a wide photo to go across the top of the collection's
+page, and say what it shows for people who can't see it. Use a PNG or JPEG of up to 3 MB, at least
+960 by 320 pixels; it's cropped to fit, so keep what matters near the middle. Anything else in the
+file, such as where a photo was taken, is removed. Under **Other languages**, say what it shows in
+each language too. A new picture replaces the old one; **Remove the picture** takes it away.
+
 The link name can't change once a collection has been published, because people may have shared
 it. **Archive** takes a collection off the site; publishing it again brings it back. If an
 activity in it stops being published, the collection's page leaves it out, and its page here marks
@@ -137,6 +143,10 @@ activities and collections.
 3. **Move up**, **Move down** and **Remove** put the sections in order. Each can be rewritten and
    saved.
 4. **Publish** the page. It needs at least one section in English.
+
+**A picture.** Under **Picture**, add a wide photo for the top of the page in the same way as for a
+collection, saying in English what it shows. On each language's version of the page you can say it
+in that language too; left empty, the English is used.
 
 **Other languages.** The links at the top switch between the versions of the page, one for each
 of the site's languages. People reading in a language see that version if it has any section, and

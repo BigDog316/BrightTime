@@ -105,8 +105,8 @@ services:
     #   docker compose -f deploy/compose.yml --profile geocoding up nominatim
     profiles: ["geocoding"]
 
-  # No object storage until media storage is decided: nothing reads Storage:* yet, and
-  # minio/minio is no longer published on Docker Hub.
+  # No object storage: media bytes live in the database, in platform.media_blob (D103), so they
+  # are in the db volume and its backups. An S3-compatible store can replace it behind IObjectStore.
 
   api:
     build:

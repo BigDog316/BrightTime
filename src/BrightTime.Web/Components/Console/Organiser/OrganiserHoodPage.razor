@@ -6,6 +6,7 @@
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.SharedKernel.Text
 @using BrightTime.Web.Auth
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Policy = ConsoleServices.NeighbourhoodPagesPolicy)]
 @inherits ConsoleComponent
@@ -28,7 +29,7 @@
         @(" · ")<a href="/neighbourhoods/@hood.Code">@T["hoodpages.view"]</a>
     </p>
 
-    @if (Done is "created" or "saved" or "added" or "removed" or "published" or "archived")
+    @if (Done is "created" or "saved" or "added" or "removed" or "published" or "archived" or "hero" or "hero_described" or "hero_removed")
     {
         <p class="notice success" role="status">@T["hoodpages.done." + Done]</p>
     }
@@ -70,6 +71,48 @@
                 ? T["hoodpages.english_hint"]
                 : T.Format("hoodpages.language_hint", ("language", T["language." + writing.Code])))
         </p>
+
+        <section aria-labelledby="picture-heading">
+            <h2 id="picture-heading">@T["curation.hero.heading"]</h2>
+            <p class="hint" id="hero-hint">@T["curation.hero.hint"]</p>
+            @if (page.Hero is { } hero)
+            {
+                bool english = writing.Code == NeighbourhoodPageEditor.SourceLanguage;
+                string englishAlt = hero.Alts.GetValueOrDefault(NeighbourhoodPageEditor.SourceLanguage) ?? string.Empty;
+                <img class="hero-preview" src="@MediaEndpoints.For(hero.MediaId)" alt="@englishAlt" />
+                <form method="post" @formname="hero-alt" @onsubmit="DescribeHeroAsync" class="editor" lang="@writing.Code" dir="@writing.Direction">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="hero-alt">@T.Format("hoodpages.hero_alt_in", ("language", T["language." + writing.Code]))</label>
+                        <p class="hint" id="hero-alt-hint">@T[english ? "curation.hero.alt_hint" : "hoodpages.hero_alt_other_hint"]</p>
+                        <input id="hero-alt" name="alt" type="text" maxlength="@CurationImages.MaxAlt" required="@english"
+                               value="@hero.Alts.GetValueOrDefault(writing.Code)" aria-describedby="hero-alt-hint" />
+                    </div>
+                    <div class="actions">
+                        <button type="submit">@T["curation.hero.save_alt"]</button>
+                    </div>
+                </form>
+                <form method="post" @formname="hero-remove" @onsubmit="RemoveHeroAsync">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary-button">@T["curation.hero.remove"]</button>
+                </form>
+            }
+            <form method="post" enctype="multipart/form-data" @formname="hero" @onsubmit="SetHeroAsync" class="editor">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="hero-file">@T[page.Hero is null ? "curation.hero.file" : "curation.hero.replace"]</label>
+                    <input id="hero-file" name="image" type="file" accept="image/png,image/jpeg" required aria-describedby="hero-hint" />
+                </div>
+                <div class="field">
+                    <label for="hero-new-alt">@T.Format("hoodpages.hero_alt_in", ("language", T["language." + NeighbourhoodPageEditor.SourceLanguage]))</label>
+                    <p class="hint" id="hero-new-alt-hint">@T["curation.hero.alt_hint"]</p>
+                    <input id="hero-new-alt" name="alt" type="text" maxlength="@CurationImages.MaxAlt" required lang="en" dir="ltr" aria-describedby="hero-new-alt-hint" />
+                </div>
+                <div class="actions">
+                    <button type="submit">@T["curation.hero.upload"]</button>
+                </div>
+            </form>
+        </section>
 
         <section aria-labelledby="sections-heading" lang="@writing.Code" dir="@writing.Direction">
             <h2 id="sections-heading">@T.Format("hoodpages.sections", ("language", T["language." + writing.Code]))</h2>
@@ -422,6 +465,25 @@
     private async Task PublishAsync() => Answer(await Get<NeighbourhoodPageEditor>().PublishAsync(_hood!.Id, Actor), "published", null);
 
     private async Task ArchiveAsync() => Answer(await Get<NeighbourhoodPageEditor>().ArchiveAsync(_hood!.Id, Actor), "archived", null);
+
+    private async Task SetHeroAsync()
+    {
+        IFormFile? file = HttpContext.Request.Form.Files["image"];
+        if (file is null || file.Length is 0 or > CurationImages.MaxBytes)
+        {
+            _problem = T.Error(CurationImages.NotAnImage);
+            return;
+        }
+
+        using MemoryStream bytes = new();
+        await file.CopyToAsync(bytes);
+        Answer(await Get<NeighbourhoodPageEditor>().SetHeroAsync(_hood!.Id, bytes.ToArray(), FormValue("alt"), Actor), "hero", null);
+    }
+
+    private async Task DescribeHeroAsync() =>
+        Answer(await Get<NeighbourhoodPageEditor>().DescribeHeroAsync(_hood!.Id, _in, FormValue("alt"), Actor), "hero_described", null);
+
+    private async Task RemoveHeroAsync() => Answer(await Get<NeighbourhoodPageEditor>().RemoveHeroAsync(_hood!.Id, Actor), "hero_removed", null);
 
     private void Answer(Result done, string what, string? form)
     {

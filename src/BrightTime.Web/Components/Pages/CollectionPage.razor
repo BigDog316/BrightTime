@@ -4,6 +4,7 @@
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.SharedKernel.Ids
 @using BrightTime.SharedKernel.Paging
+@using BrightTime.Web.Composition
 @inject ICurationQueries Curation
 @inject IListingFinder Finder
 @inject IOrganisationProfiles Organisations
@@ -19,6 +20,10 @@
     @if (c.Description is { Length: > 0 } description)
     {
         <p class="lead" dir="auto" lang="@LangAttr">@description</p>
+    }
+    @if (c.Hero is { } hero)
+    {
+        <img class="hero-image" src="@MediaEndpoints.For(hero.MediaId)" alt="@hero.Alt" lang="@LangAttr" />
     }
 
     @if (_items.Count == 0)

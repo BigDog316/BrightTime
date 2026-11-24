@@ -5,6 +5,7 @@
 @using BrightTime.Modules.Opportunities.Search
 @using BrightTime.Modules.Platform.Contracts
 @using BrightTime.SharedKernel.Paging
+@using BrightTime.Web.Composition
 @inject IGeographyQueries Geography
 @inject IListingFinder Finder
 @inject ICurationQueries Curation
@@ -17,6 +18,10 @@
 
     <p class="eyebrow"><a href="/neighbourhoods">@T["hoods.title"]</a></p>
     <h1>@hood.Name</h1>
+    @if (_page?.Hero is { } hero)
+    {
+        <img class="hero-image" src="@MediaEndpoints.For(hero.MediaId)" alt="@hero.Alt" lang="@BlockLang" />
+    }
 
     <section aria-labelledby="counts-heading" class="hood-summary">
         <h2 id="counts-heading" class="visually-hidden">@T["hoods.what_is_here"]</h2>

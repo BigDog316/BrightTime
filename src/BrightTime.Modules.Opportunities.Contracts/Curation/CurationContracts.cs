@@ -10,7 +10,14 @@ public sealed record CollectionView(
     string Title,
     string? Description,
     string ContentLanguage,
-    IReadOnlyList<CollectionEntry> Entries);
+    IReadOnlyList<CollectionEntry> Entries,
+    HeroImage? Hero = null);
+
+/// <summary>
+/// A collection's or neighbourhood page's picture (D103): a public media object, served at
+/// <c>/media/{MediaId}</c>, and what it shows, in the page's language where the organiser said.
+/// </summary>
+public sealed record HeroImage(Guid MediaId, string Alt);
 
 /// <summary>A listing in a collection, with the curator's note on why it is there.</summary>
 public sealed record CollectionEntry(Guid ListingId, string? CuratorNote);
@@ -22,7 +29,7 @@ public sealed record CollectionSummary(Guid Id, string Slug, string Title, strin
 /// A published neighbourhood page's blocks, in one language: the reader's if the organiser
 /// wrote it, otherwise English (<c>ContentLanguage</c>).
 /// </summary>
-public sealed record NeighbourhoodPageView(Guid NeighbourhoodId, string ContentLanguage, IReadOnlyList<PageBlock> Blocks);
+public sealed record NeighbourhoodPageView(Guid NeighbourhoodId, string ContentLanguage, IReadOnlyList<PageBlock> Blocks, HeroImage? Hero = null);
 
 /// <summary>
 /// One block. <see cref="Kind"/> is one of <c>ck_nhp_block_kind</c>'s values; <see cref="Payload"/>

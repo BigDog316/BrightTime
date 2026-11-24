@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
@@ -45,7 +46,11 @@ public sealed record EditedBlock(Guid Id, PageBlockInput Content, bool Editable,
 public sealed record HoodPageRow(Guid NeighbourhoodId, string Code, string Name, string? Status, IReadOnlyList<string> Languages);
 
 /// <summary>A neighbourhood's page as the organiser edits it, its sections in one language.</summary>
-public sealed record HoodPageDetail(Guid Id, string Status, IReadOnlyDictionary<string, int> Languages, IReadOnlyList<EditedBlock> Blocks);
+public sealed record HoodPageDetail(
+    Guid Id, string Status, IReadOnlyDictionary<string, int> Languages, IReadOnlyList<EditedBlock> Blocks, PageHero? Hero = null);
+
+/// <summary>A page's hero image (D103) and what it shows, by locale; English is always there.</summary>
+public sealed record PageHero(Guid MediaId, IReadOnlyDictionary<string, string> Alts);
 
 /// <summary>A published collection a page can point to.</summary>
 public sealed record CollectionChoice(string Slug, string Title);
@@ -69,7 +74,8 @@ public sealed record CollectionChoice(string Slug, string Title);
 /// draft; an archived one is published again. Every change is audited.
 /// </para>
 /// </remarks>
-public sealed class NeighbourhoodPageEditor(OpportunitiesDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit, IGeographyQueries geography)
+public sealed class NeighbourhoodPageEditor(
+    OpportunitiesDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit, IGeographyQueries geography, IMediaLibrary media)
 {
     public const int MaxBlocks = 20;
     public const int MaxHeading = 120;
@@ -136,7 +142,8 @@ public sealed class NeighbourhoodPageEditor(OpportunitiesDbContext db, ITenantCo
                 .ToDictionaryAsync(x => x.Key, x => x.Count, StringComparer.Ordinal, ct).ConfigureAwait(false);
             List<NeighbourhoodPageBlockRecord> blocks = await BlocksAsync(page.Id, locale, ct, tracked: false).ConfigureAwait(false);
             HashSet<string> shown = [.. await ShownCollectionsAsync(ct).ConfigureAwait(false)];
-            return new HoodPageDetail(page.Id, page.Status, languages, [.. blocks.Select(b => Read(b, shown))]);
+            return new HoodPageDetail(page.Id, page.Status, languages, [.. blocks.Select(b => Read(b, shown))],
+                page.HeroMediaId is { } hero ? new PageHero(hero, CurationImages.Alts(page.HeroAlt)) : null);
         }, cancellationToken);
 
     /// <summary>Begins the neighbourhood's page as a draft. Beginning one that exists does nothing.</summary>
@@ -241,6 +248,108 @@ public sealed class NeighbourhoodPageEditor(OpportunitiesDbContext db, ITenantCo
             Renumber(blocks);
             return await ChangedAsync(page, actor, ct, ("locale", block.Locale), ("removed", block.BlockKind)).ConfigureAwait(false);
         }, cancellationToken);
+
+    /// <summary>
+    /// Puts a picture across the top of the page (D103), with what it shows in English; it
+    /// replaces any before it, whose descriptions in other languages go with it.
+    /// </summary>
+    public async Task<Result> SetHeroAsync(Guid neighbourhoodId, ReadOnlyMemory<byte> file, string? alt, UserId actor, CancellationToken cancellationToken = default)
+    {
+        Result<string> said = CurationImages.Alt(alt);
+        if (!said.IsSuccess)
+        {
+            return Result.Failure(said.Error!);
+        }
+
+        if (!await db.InTransactionAsync(ct => db.NeighbourhoodPages.AnyAsync(p => p.NeighbourhoodId == neighbourhoodId, ct), cancellationToken).ConfigureAwait(false))
+        {
+            return Result.Failure(NotFound());
+        }
+
+        if (await media.AddImageAsync(file, CurationImages.Hero, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false) is not { } image)
+        {
+            return Result.Failure(CurationImages.NotAnImage);
+        }
+
+        Guid? before = null;
+        Result set = await WithAsync(neighbourhoodId, (page, ct) =>
+        {
+            before = page.HeroMediaId;
+            page.HeroMediaId = image.MediaId;
+            page.HeroAlt = CurationImages.Json(new Dictionary<string, string>(StringComparer.Ordinal) { [SourceLanguage] = said.Value });
+            return ChangedAsync(page, actor, ct, ("hero", image.MediaId.ToString()));
+        }, cancellationToken).ConfigureAwait(false);
+
+        // The bytes are kept in Platform's own transaction; whichever picture isn't used now goes.
+        if ((set.IsSuccess ? before : image.MediaId) is { } unused)
+        {
+            await media.RemoveAsync(unused, actor, cancellationToken).ConfigureAwait(false);
+        }
+
+        return set;
+    }
+
+    /// <summary>
+    /// What the hero image shows in <paramref name="locale"/>. English can be changed but not
+    /// emptied; an empty description in another language takes it away, and English is read instead.
+    /// </summary>
+    public Task<Result> DescribeHeroAsync(Guid neighbourhoodId, string locale, string? alt, UserId actor, CancellationToken cancellationToken = default) =>
+        WithAsync(neighbourhoodId, (page, ct) =>
+        {
+            if (!Locale.TryFromCode(locale, out Locale language))
+            {
+                return Task.FromResult(Result.Failure(Error.Validation("hood_pages.locale", "One of the site's languages.")));
+            }
+
+            if (page.HeroMediaId is null)
+            {
+                return Task.FromResult(Result.Failure(Error.Conflict("curation.no_hero", "There's no picture to describe.")));
+            }
+
+            Dictionary<string, string> alts = CurationImages.Alts(page.HeroAlt);
+            if (string.IsNullOrWhiteSpace(alt) && language.Code != SourceLanguage)
+            {
+                alts.Remove(language.Code);
+            }
+            else
+            {
+                Result<string> said = CurationImages.Alt(alt);
+                if (!said.IsSuccess)
+                {
+                    return Task.FromResult(Result.Failure(said.Error!));
+                }
+
+                alts[language.Code] = said.Value;
+            }
+
+            page.HeroAlt = CurationImages.Json(alts);
+            return ChangedAsync(page, actor, ct, ("hero_alt", language.Code));
+        }, cancellationToken);
+
+    /// <summary>Takes the picture away, and its bytes with it.</summary>
+    public async Task<Result> RemoveHeroAsync(Guid neighbourhoodId, UserId actor, CancellationToken cancellationToken = default)
+    {
+        Guid? before = null;
+        Result removed = await WithAsync(neighbourhoodId, (page, ct) =>
+        {
+            before = page.HeroMediaId;
+            if (before is null)
+            {
+                return Task.FromResult(Result.Success());
+            }
+
+            page.HeroMediaId = null;
+            page.HeroAlt = "{}";
+            return ChangedAsync(page, actor, ct, ("hero", "removed"));
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (removed.IsSuccess && before is { } gone)
+        {
+            await media.RemoveAsync(gone, actor, cancellationToken).ConfigureAwait(false);
+        }
+
+        return removed;
+    }
 
     /// <summary>Shows the page on the site. It needs a section in English, which every reader can fall back to.</summary>
     public Task<Result> PublishAsync(Guid neighbourhoodId, UserId actor, CancellationToken cancellationToken = default) =>

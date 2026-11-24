@@ -17,4 +17,8 @@
     <Using Include="BrightTime.Hosting.Tenancy" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../BrightTime.SharedKernel.Tests/TestImages.cs" Link="TestImages.cs" />
+  </ItemGroup>
+
 </Project>

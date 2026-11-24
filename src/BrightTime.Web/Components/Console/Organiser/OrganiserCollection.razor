@@ -5,6 +5,7 @@
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.SharedKernel.Text
 @using BrightTime.Web.Auth
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Policy = ConsoleServices.CollectionsPolicy)]
 @inherits ConsoleComponent
@@ -31,7 +32,7 @@
         }
     </p>
 
-    @if (Done is "created" or "saved" or "worded" or "listings" or "published" or "archived")
+    @if (Done is "created" or "saved" or "worded" or "listings" or "published" or "archived" or "hero" or "hero_described" or "hero_removed")
     {
         <p class="notice success" role="status">@T["curation.done." + Done]</p>
     }
@@ -92,6 +93,45 @@
         </form>
     </section>
 
+    <section aria-labelledby="picture-heading">
+        <h2 id="picture-heading">@T["curation.hero.heading"]</h2>
+        <p class="hint" id="hero-hint">@T["curation.hero.hint"]</p>
+        @if (c.Hero is { } hero)
+        {
+            <img class="hero-preview" src="@MediaEndpoints.For(hero.MediaId)" alt="@hero.Alt" />
+            <form method="post" @formname="hero-alt" @onsubmit="DescribeHeroAsync" class="editor">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="hero-alt">@T["curation.hero.alt"]</label>
+                    <p class="hint" id="hero-alt-hint">@T["curation.hero.alt_hint"]</p>
+                    <input id="hero-alt" name="alt" type="text" maxlength="@CurationImages.MaxAlt" required value="@hero.Alt" dir="auto" aria-describedby="hero-alt-hint" />
+                </div>
+                <div class="actions">
+                    <button type="submit">@T["curation.hero.save_alt"]</button>
+                </div>
+            </form>
+            <form method="post" @formname="hero-remove" @onsubmit="RemoveHeroAsync">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">@T["curation.hero.remove"]</button>
+            </form>
+        }
+        <form method="post" enctype="multipart/form-data" @formname="hero" @onsubmit="SetHeroAsync" class="editor">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="hero-file">@T[c.Hero is null ? "curation.hero.file" : "curation.hero.replace"]</label>
+                <input id="hero-file" name="image" type="file" accept="image/png,image/jpeg" required aria-describedby="hero-hint" />
+            </div>
+            <div class="field">
+                <label for="hero-new-alt">@T["curation.hero.alt"]</label>
+                <p class="hint" id="hero-new-alt-hint">@T["curation.hero.alt_hint"]</p>
+                <input id="hero-new-alt" name="alt" type="text" maxlength="@CurationImages.MaxAlt" required dir="auto" aria-describedby="hero-new-alt-hint" />
+            </div>
+            <div class="actions">
+                <button type="submit">@T["curation.hero.upload"]</button>
+            </div>
+        </form>
+    </section>
+
     @if (_locales.Count > 0)
     {
         <section aria-labelledby="languages-heading">
@@ -113,6 +153,13 @@
                             <label for="description-@lang">@T["curation.field.description"]</label>
                             <textarea id="description-@lang" name="wordingDescription" rows="2" maxlength="@CollectionEditor.MaxDescription">@w?.Description</textarea>
                         </div>
+                        @if (c.Hero is not null)
+                        {
+                            <div class="field">
+                                <label for="hero-alt-@lang">@T["curation.hero.alt"]</label>
+                                <input id="hero-alt-@lang" name="wordingHeroAlt" type="text" maxlength="@CurationImages.MaxAlt" value="@w?.HeroAlt" />
+                            </div>
+                        }
                         <div class="actions">
                             <button type="submit">@T["curation.save_language"]</button>
                         </div>
@@ -305,7 +352,35 @@
     }
 
     private async Task WordAsync(string locale) =>
-        Answer(await Get<CollectionEditor>().WordAsync(CollectionId, new CollectionWording(locale, FormValue("wordingTitle"), FormValue("wordingDescription")), Actor), "worded");
+        Answer(await Get<CollectionEditor>().WordAsync(
+            CollectionId, new CollectionWording(locale, FormValue("wordingTitle"), FormValue("wordingDescription"), FormValue("wordingHeroAlt")), Actor), "worded");
+
+    private async Task SetHeroAsync()
+    {
+        if (await HeroFileAsync() is { } file)
+        {
+            Answer(await Get<CollectionEditor>().SetHeroAsync(CollectionId, file, FormValue("alt"), Actor), "hero");
+        }
+    }
+
+    private async Task DescribeHeroAsync() => Answer(await Get<CollectionEditor>().DescribeHeroAsync(CollectionId, FormValue("alt"), Actor), "hero_described");
+
+    private async Task RemoveHeroAsync() => Answer(await Get<CollectionEditor>().RemoveHeroAsync(CollectionId, Actor), "hero_removed");
+
+    /// <summary>The chosen file, or null with the reason shown when there's none or it's too large to be one.</summary>
+    private async Task<byte[]?> HeroFileAsync()
+    {
+        IFormFile? file = HttpContext.Request.Form.Files["image"];
+        if (file is null || file.Length is 0 or > CurationImages.MaxBytes)
+        {
+            _problem = T.Error(CurationImages.NotAnImage);
+            return null;
+        }
+
+        using MemoryStream bytes = new();
+        await file.CopyToAsync(bytes);
+        return bytes.ToArray();
+    }
 
     private async Task NoteAsync(Guid listing) => Answer(await Get<CollectionEditor>().NoteAsync(CollectionId, listing, FormValue("note"), Actor), "listings");
 

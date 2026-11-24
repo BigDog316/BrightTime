@@ -3424,6 +3424,54 @@ as the worker sends them (the note encoded, a stale note left out); `ConsoleTest
 published, sent-back, approved and returned listing books, and none for a refused decision or a
 provider's own take-down.
 
+### D103 — Media storage, and pictures on curation pages (**proposed 2026-11-23**)
+
+Where media is stored was an open question, so evidence uploads, project and listing images and
+curation's hero images all waited; `platform.media_object` and an `IObjectStore` shaped for S3
+presigned URLs existed with nothing behind them. Sam chose on 2026-11-23: bytes in PostgreSQL;
+curation hero images first; PNG and JPEG, checked; badge images (D87) left where they are for now.
+- **Where the bytes live:** `platform.media_blob`, keyed by tenant and object key, beside
+  `media_object`. The bytes and their metadata are written in one transaction on the Platform
+  context, under the same tenant policy, and are in the same backups; nothing is orphaned by a
+  failed write. The column is `STORAGE EXTERNAL`: images arrive compressed, so TOAST doesn't try
+  again. `IObjectStore` (now put, read, delete) hides all of this, so an S3-compatible store can
+  take over without the modules noticing; it would need a sweep for bytes whose row never commits.
+- **Serving:** the application streams the bytes itself, at the website's `/media/{id}`, only for
+  a media object that's `clean` and `public`; anything else, an unknown id included, is a 404. A
+  media object's bytes never change (a new picture is a new object), so the response is cacheable
+  for a year (`immutable`), tagged with the bytes' SHA-256, and sent with `nosniff` and a sandboxing
+  content security policy. There are no presigned URLs.
+- **What's accepted:** `ImageCleaner` (SharedKernel, moved out of D87's `BadgeImageFile`) reads a
+  PNG or JPEG without an imaging package and drops everything that isn't the picture. A JPEG's
+  orientation is the one thing it writes back, alone, so a phone photo isn't shown on its side; the
+  size it reports is as shown. SVG and anything else is refused. Passing these checks is what makes
+  an image `clean` for now (`scan_detail` says so): virus scanning and re-encoding stay with M5's
+  media safety, and until then only adults' uploads use the library.
+- **The library:** `IMediaLibrary` (Platform.Contracts) adds an image against a feature's
+  `ImageRules`, hands out a public one, and removes one; adding and removing are audited
+  (`media.added`, `media.removed`).
+- **Hero images:** an organiser puts one picture across the top of a collection or a neighbourhood
+  page, with what it shows. A collection's description is in English with one per language in its
+  wording (`collection.hero_alt`, `collection_translation.hero_alt`); a page's is by locale
+  (`neighbourhood_page.hero_alt`, a JSON object), English required, as a page's English sections are.
+  The public page shows the description in the page's own language, or the English. A PNG or JPEG of
+  up to 3 MB, at least 960 by 320 pixels and no side over 6,000, shown at 5:2 and cropped to fit;
+  there's no resizing without an imaging package, so the hint asks for a modest file. A new picture
+  replaces the old one, whose bytes and descriptions in other languages go with it; removing it
+  takes its bytes away.
+- **Not yet:** the API's collection and neighbourhood responses don't carry the picture (the app
+  doesn't show curation); a public media object is fetchable by id as soon as it's added, before
+  the page showing it is published (ids are UUIDv7, so not guessable from one another); badge
+  images stay in `learning.badge_image`; evidence uploads, project and listing images are the next
+  users.
+
+Schema: `platform.media_blob` (with its tenant policy and grants), `collection.hero_alt` with
+`ck_collection_hero_alt`, `collection_translation.hero_alt`, and `neighbourhood_page.hero_alt` with
+`ck_neighbourhood_page_hero_alt`; applied by hand to `brighttime_main` and `brighttime`, and the
+compose volume needs them too. `ImageCleanerTests` covers the cleaning and orientation;
+`HeroImageTests` refusals, the stored and served picture, descriptions in another language,
+replacing, visibility and removing, on a collection and a neighbourhood page.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

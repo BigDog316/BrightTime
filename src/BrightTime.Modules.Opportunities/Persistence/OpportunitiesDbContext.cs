@@ -200,6 +200,7 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
             b.ToTable("neighbourhood_page");
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.HeroAlt).HasColumnType("jsonb");
             b.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
 

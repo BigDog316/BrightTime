@@ -216,6 +216,22 @@ create table media_object (
 create index ix_media_object_scan on media_object (scan_state) where scan_state <> 'clean';
 create index ix_media_object_sha on media_object (tenant_id, sha256);
 
+-- The bytes behind an object key, kept in the database (D103): in the same transaction and under
+-- the same tenant policy as the metadata, and in the same backups. IObjectStore hides where they
+-- live, so they can move to S3-compatible storage without the modules noticing. Images arrive
+-- compressed, so the column skips TOAST compression and is stored out of line as it came.
+create table media_blob (
+  tenant_id     uuid not null references tenant(id) on delete cascade,
+  object_key    text not null,
+  content_type  text not null,
+  bytes         bytea not null,
+  sha256        bytea not null,
+  created_at    timestamptz not null default now(),
+  constraint pk_media_blob primary key (tenant_id, object_key),
+  constraint ck_media_blob_size check (octet_length(bytes) between 1 and 536870912)
+);
+alter table media_blob alter column bytes set storage external;
+
 -- ---------------------------------------------------------------------
 -- Audit log.
 --

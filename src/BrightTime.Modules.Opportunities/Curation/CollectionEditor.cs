@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Persistence;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Text;
@@ -14,8 +16,8 @@ namespace BrightTime.Modules.Opportunities.Curation;
 /// <summary>What the organiser writes about a collection. The link name is kept once it has been published.</summary>
 public sealed record CollectionInput(string Title, string? Description, string Slug, DateOnly? StartsOn, DateOnly? EndsOn, bool IsFeatured, short SortOrder);
 
-/// <summary>A collection's title and description in one of the tenant's other languages.</summary>
-public sealed record CollectionWording(string Locale, string Title, string? Description);
+/// <summary>A collection's title and description in one of the tenant's other languages, and what its hero image shows there (D103).</summary>
+public sealed record CollectionWording(string Locale, string Title, string? Description, string? HeroAlt = null);
 
 /// <summary>A collection in the organiser's list, whatever its state. <c>EverPublished</c>: its link name is fixed.</summary>
 public sealed record CuratedRow(
@@ -31,7 +33,7 @@ public sealed record CuratedEntry(Guid ListingId, string Title, string ListingSl
 /// <summary>A collection as the organiser edits it.</summary>
 public sealed record CollectionDetail(
     Guid Id, string Slug, string Title, string? Description, string Status, DateOnly? StartsOn, DateOnly? EndsOn, bool IsFeatured, short SortOrder,
-    bool EverPublished, IReadOnlyList<CollectionWording> Wordings, IReadOnlyList<CuratedEntry> Entries);
+    bool EverPublished, IReadOnlyList<CollectionWording> Wordings, IReadOnlyList<CuratedEntry> Entries, HeroImage? Hero = null);
 
 /// <summary>A published listing the organiser can add.</summary>
 public sealed record ListingChoice(Guid Id, string Title, string Slug);
@@ -55,7 +57,7 @@ public sealed record ListingChoice(Guid Id, string Title, string Slug);
 /// Every change is audited.
 /// </para>
 /// </remarks>
-public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit)
+public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantContext tenant, IClock clock, IAuditWriter audit, IMediaLibrary media)
 {
     public const int MaxTitle = 120;
     public const int MaxDescription = 600;
@@ -166,6 +168,19 @@ public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantC
                 return Result.Failure(Error.Validation("collections.text", $"A title of up to {MaxTitle} characters and a description of up to {MaxDescription}."));
             }
 
+            // What the picture shows, in this language; none, and the English is read.
+            string? heroAlt = null;
+            if (c.HeroMediaId is not null && Optional(wording.HeroAlt) is { } said)
+            {
+                Result<string> alt = CurationImages.Alt(said);
+                if (!alt.IsSuccess)
+                {
+                    return Result.Failure(alt.Error!);
+                }
+
+                heroAlt = alt.Value;
+            }
+
             CollectionTranslationRecord? existing = await db.CollectionTranslations
                 .FirstOrDefaultAsync(t => t.CollectionId == c.Id && t.Locale == locale.Code, ct).ConfigureAwait(false);
             if (title.Length == 0)
@@ -177,12 +192,13 @@ public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantC
             }
             else if (existing is null)
             {
-                db.CollectionTranslations.Add(new CollectionTranslationRecord { CollectionId = c.Id, Locale = locale.Code, Title = title, Description = description });
+                db.CollectionTranslations.Add(new CollectionTranslationRecord { CollectionId = c.Id, Locale = locale.Code, Title = title, Description = description, HeroAlt = heroAlt });
             }
             else
             {
                 existing.Title = title;
                 existing.Description = description;
+                existing.HeroAlt = heroAlt;
             }
 
             c.UpdatedAt = clock.StoredNow();
@@ -260,6 +276,92 @@ public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantC
             Renumber(items);
             return await ChangedAsync(c, actor, ct, ("removed", listingId.ToString())).ConfigureAwait(false);
         }, cancellationToken);
+
+    /// <summary>
+    /// Puts a picture across the top of the collection's page (D103), with what it shows in
+    /// English; it replaces any before it, whose descriptions in other languages go with it.
+    /// </summary>
+    public async Task<Result> SetHeroAsync(Guid id, ReadOnlyMemory<byte> file, string? alt, UserId actor, CancellationToken cancellationToken = default)
+    {
+        Result<string> said = CurationImages.Alt(alt);
+        if (!said.IsSuccess)
+        {
+            return Result.Failure(said.Error!);
+        }
+
+        if (!await db.InTransactionAsync(ct => db.Collections.AnyAsync(c => c.Id == id, ct), cancellationToken).ConfigureAwait(false))
+        {
+            return Result.Failure(Error.NotFound("collections.not_found", "There's no collection like that."));
+        }
+
+        if (await media.AddImageAsync(file, CurationImages.Hero, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false) is not { } image)
+        {
+            return Result.Failure(CurationImages.NotAnImage);
+        }
+
+        Guid? before = null;
+        Result set = await WithAsync(id, async (c, ct) =>
+        {
+            before = c.HeroMediaId;
+            c.HeroMediaId = image.MediaId;
+            c.HeroAlt = said.Value;
+            await ForgetTranslatedAltsAsync(c.Id, ct).ConfigureAwait(false);
+            return await ChangedAsync(c, actor, ct, ("hero", image.MediaId.ToString())).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+
+        // The bytes are kept in Platform's own transaction; whichever picture isn't used now goes.
+        if ((set.IsSuccess ? before : image.MediaId) is { } unused)
+        {
+            await media.RemoveAsync(unused, actor, cancellationToken).ConfigureAwait(false);
+        }
+
+        return set;
+    }
+
+    /// <summary>Changes what the hero image shows, in English.</summary>
+    public Task<Result> DescribeHeroAsync(Guid id, string? alt, UserId actor, CancellationToken cancellationToken = default) =>
+        WithAsync(id, async (c, ct) =>
+        {
+            Result<string> said = CurationImages.Alt(alt);
+            if (!said.IsSuccess)
+            {
+                return Result.Failure(said.Error!);
+            }
+
+            if (c.HeroMediaId is null)
+            {
+                return Result.Failure(Error.Conflict("curation.no_hero", "There's no picture to describe."));
+            }
+
+            c.HeroAlt = said.Value;
+            return await ChangedAsync(c, actor, ct, ("hero_alt", SourceLanguage)).ConfigureAwait(false);
+        }, cancellationToken);
+
+    /// <summary>Takes the picture away, and its bytes with it.</summary>
+    public async Task<Result> RemoveHeroAsync(Guid id, UserId actor, CancellationToken cancellationToken = default)
+    {
+        Guid? before = null;
+        Result removed = await WithAsync(id, async (c, ct) =>
+        {
+            before = c.HeroMediaId;
+            if (before is null)
+            {
+                return Result.Success();
+            }
+
+            c.HeroMediaId = null;
+            c.HeroAlt = null;
+            await ForgetTranslatedAltsAsync(c.Id, ct).ConfigureAwait(false);
+            return await ChangedAsync(c, actor, ct, ("hero", "removed")).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (removed.IsSuccess && before is { } gone)
+        {
+            await media.RemoveAsync(gone, actor, cancellationToken).ConfigureAwait(false);
+        }
+
+        return removed;
+    }
 
     /// <summary>Shows the collection on the site, within its dates. It needs a listing in it.</summary>
     public Task<Result> PublishAsync(Guid id, UserId actor, CancellationToken cancellationToken = default) =>
@@ -423,16 +525,22 @@ public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantC
         }, ct);
     }
 
+    /// <summary>Descriptions in other languages say what the old picture showed, not the new one.</summary>
+    private Task<int> ForgetTranslatedAltsAsync(Guid id, CancellationToken ct) =>
+        db.CollectionTranslations.Where(t => t.CollectionId == id && t.HeroAlt != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.HeroAlt, (string?)null), ct);
+
     private async Task<CollectionDetail> ViewAsync(CollectionRecord c, CancellationToken ct)
     {
         List<CollectionWording> wordings = await db.CollectionTranslations.AsNoTracking().Where(t => t.CollectionId == c.Id)
-            .OrderBy(t => t.Locale).Select(t => new CollectionWording(t.Locale, t.Title, t.Description)).ToListAsync(ct).ConfigureAwait(false);
+            .OrderBy(t => t.Locale).Select(t => new CollectionWording(t.Locale, t.Title, t.Description, t.HeroAlt)).ToListAsync(ct).ConfigureAwait(false);
         List<CuratedEntry> entries = await (from i in db.CollectionItems.AsNoTracking()
                                             join l in db.Listings.AsNoTracking() on i.ListingId equals l.Id
                                             where i.CollectionId == c.Id
                                             orderby i.SortOrder, i.ListingId
                                             select new CuratedEntry(l.Id, l.Title, l.Slug, l.Status == Published, i.CuratorNote)).ToListAsync(ct).ConfigureAwait(false);
-        return new CollectionDetail(c.Id, c.Slug, c.Title, c.Description, c.Status, c.StartsOn, c.EndsOn, c.IsFeatured, c.SortOrder, c.Status != Draft, wordings, entries);
+        return new CollectionDetail(c.Id, c.Slug, c.Title, c.Description, c.Status, c.StartsOn, c.EndsOn, c.IsFeatured, c.SortOrder, c.Status != Draft, wordings, entries,
+            c.HeroMediaId is { } hero ? new HeroImage(hero, c.HeroAlt ?? string.Empty) : null);
     }
 
     private static string? Optional(string? text) => text?.Trim() is { Length: > 0 } t ? t : null;

@@ -303,6 +303,8 @@ create table collection (
   title         text not null,
   description   text,
   hero_media_id uuid references platform.media_object(id),
+  -- What the hero image shows, for anyone who can't see it (D103); in the collection's own language.
+  hero_alt      text,
   curator_user_id uuid references identity.app_user(id),
   status        text not null default 'draft',
   starts_on     date,
@@ -313,7 +315,8 @@ create table collection (
   updated_at    timestamptz not null default now(),
   constraint ux_collection_slug unique (tenant_id, slug),
   constraint ck_collection_status check (status in ('draft','published','archived')),
-  constraint ck_collection_dates check (ends_on is null or starts_on is null or ends_on >= starts_on)
+  constraint ck_collection_dates check (ends_on is null or starts_on is null or ends_on >= starts_on),
+  constraint ck_collection_hero_alt check (hero_media_id is null or length(btrim(hero_alt)) > 0)
 );
 create index ix_collection_featured on collection (tenant_id, sort_order)
   where status = 'published' and is_featured;
@@ -331,6 +334,7 @@ create table collection_translation (
   locale        text not null,
   title         text not null,
   description   text,
+  hero_alt      text,
   constraint pk_collection_translation primary key (collection_id, locale)
 );
 
@@ -340,10 +344,15 @@ create table neighbourhood_page (
   neighbourhood_id uuid not null references platform.neighbourhood(id) on delete cascade,
   status           text not null default 'draft',
   hero_media_id    uuid references platform.media_object(id),
+  -- What the hero image shows, by locale (D103); English is required with an image, as a page's
+  -- English blocks are required to publish it.
+  hero_alt         jsonb not null default '{}'::jsonb,
   organiser_user_id uuid references identity.app_user(id),
   updated_at       timestamptz not null default now(),
   constraint ux_neighbourhood_page unique (neighbourhood_id),
-  constraint ck_neighbourhood_page_status check (status in ('draft','published','archived'))
+  constraint ck_neighbourhood_page_status check (status in ('draft','published','archived')),
+  constraint ck_neighbourhood_page_hero_alt check (jsonb_typeof(hero_alt) = 'object'
+    and (hero_media_id is null or length(btrim(hero_alt->>'en')) > 0))
 );
 
 create table neighbourhood_page_block (

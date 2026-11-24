@@ -40,6 +40,10 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
+    public DbSet<MediaObject> MediaObjects => Set<MediaObject>();
+
+    public DbSet<MediaBlob> MediaBlobs => Set<MediaBlob>();
+
     public DbSet<TaxonomyTermName> TaxonomyTermNames => Set<TaxonomyTermName>();
 
     public DbSet<NeighbourhoodName> NeighbourhoodNames => Set<NeighbourhoodName>();
@@ -103,6 +107,21 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             b.HasKey(j => j.Id);
             b.Property(j => j.Id).ValueGeneratedNever();
             b.Property(j => j.Payload).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<MediaObject>(b =>
+        {
+            b.ToTable("media_object");
+            b.HasKey(m => m.Id);
+            b.Property(m => m.Id).ValueGeneratedNever();
+            b.Property(m => m.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<MediaBlob>(b =>
+        {
+            b.ToTable("media_blob");
+            b.HasKey(m => new { m.TenantId, m.ObjectKey });
+            b.Property(m => m.CreatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.Entity<FeatureFlag>(b =>

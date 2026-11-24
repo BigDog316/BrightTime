@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using BrightTime.Modules.Learning.Badges;
+using BrightTime.SharedKernel.Media;
 
 namespace BrightTime.Api.Tests;
 

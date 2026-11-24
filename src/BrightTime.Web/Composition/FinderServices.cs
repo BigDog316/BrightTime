@@ -10,6 +10,7 @@ using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Opportunities.Search;
 using BrightTime.Modules.Opportunities.Search.Sample;
 using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Media;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.SharedKernel.Time;
 using Microsoft.Extensions.Options;
@@ -80,6 +81,9 @@ public static class FinderServices
             services.AddScoped<IFeatureFlags>(sp => sp.GetRequiredService<PlatformQueries>());
             services.AddScoped<IListingDetails, SqlListingDetails>();
             services.AddScoped<ICurationQueries, Modules.Opportunities.Curation.CurationQueries>();
+
+            // Media in the database, behind IObjectStore (D103): served at /media/{id}, added by organisers.
+            services.AddMediaLibrary();
             services.AddScoped<IOrganisationProfiles, OrganisationProfiles>();
         }
         else

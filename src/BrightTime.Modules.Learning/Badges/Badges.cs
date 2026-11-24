@@ -11,6 +11,7 @@ using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Learning.Persistence;
 using BrightTime.Modules.Learning.Records;
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Media;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
 using BrightTime.SharedKernel.Time;

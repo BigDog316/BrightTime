@@ -3424,7 +3424,7 @@ as the worker sends them (the note encoded, a stale note left out); `ConsoleTest
 published, sent-back, approved and returned listing books, and none for a refused decision or a
 provider's own take-down.
 
-### D103 — Media storage, and pictures on curation pages (**proposed 2026-11-23**)
+### D103 — Media storage, and pictures on curation pages (**accepted 2026-11-23**)
 
 Where media is stored was an open question, so evidence uploads, project and listing images and
 curation's hero images all waited; `platform.media_object` and an `IObjectStore` shaped for S3

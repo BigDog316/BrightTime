@@ -3472,7 +3472,7 @@ compose volume needs them too. `ImageCleanerTests` covers the cleaning and orien
 `HeroImageTests` refusals, the stored and served picture, descriptions in another language,
 replacing, visibility and removing, on a collection and a neighbourhood page.
 
-### D104 — Pictures of young people's work, and upload steps (**proposed 2026-11-23**)
+### D104 — Pictures of young people's work, and upload steps (**accepted 2026-11-24**)
 
 D103 built the media store, and left a young person's pictures for later: projects had a
 `project_media` table and playlist steps an `upload_artifact` kind and an `evidence_project_id`,

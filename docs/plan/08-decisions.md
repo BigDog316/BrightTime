@@ -3520,7 +3520,7 @@ approval on adding and not on removing, the limit, removal, and an upload step f
 approval; `WorkReviewPageTests` and `PortfolioPageTests` the console's and the portfolio page's
 pictures; the app's screen tests the pictures, the form sent, and the upload step.
 
-### D105 — Pictures of listings (**proposed 2026-11-24**)
+### D105 — Pictures of listings (**accepted 2026-11-24**)
 
 D103 built the media store and D104 put young people's pictures on it; a listing still had
 none, though `listing.hero_media_id` and `listing_media` were in the schema with nothing behind

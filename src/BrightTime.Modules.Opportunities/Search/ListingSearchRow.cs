@@ -1,3 +1,4 @@
+using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.SharedKernel.Geo;
 
 namespace BrightTime.Modules.Opportunities.Search;
@@ -34,4 +35,5 @@ public sealed record ListingSearchRow(
     DateTimeOffset? PublishedAt,
     double Popularity,
     string Slug,
-    bool IsPrimary = true);
+    bool IsPrimary = true,
+    ListingPicture? Picture = null);

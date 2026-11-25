@@ -73,6 +73,7 @@ public static class SearchQueryBuilder
         sql.Append("  select ls.listing_id, ls.site_id, ls.slug, ls.title, ls.summary, ls.org_id, ls.kind,\n");
         sql.Append("         ls.cost_cents, ls.is_free, ls.modality, ls.neighbourhood_id,\n");
         sql.Append("         ls.next_start_at, ls.next_deadline_at, ls.popularity, ls.published_at, ls.is_drop_in,\n");
+        sql.Append("         ls.hero_media_id, ls.hero_alt,\n");
         sql.Append(hasOrigin
             ? "         st_distance(ls.location, " + OriginExpression + ") as distance_m,\n"
             : "         null::double precision as distance_m,\n");
@@ -114,7 +115,7 @@ public static class SearchQueryBuilder
         sql.Append(")\n");
         sql.Append("select s.listing_id, s.site_id, s.slug, s.title, s.summary, s.org_id, s.kind,\n");
         sql.Append("       s.cost_cents, s.is_free, s.modality, s.neighbourhood_id,\n");
-        sql.Append("       s.next_start_at, s.next_deadline_at, s.published_at,\n");
+        sql.Append("       s.next_start_at, s.next_deadline_at, s.published_at, s.hero_media_id, s.hero_alt,\n");
         sql.Append("       s.distance_m, s.score, s.interest_overlap, s.text_rank, s.popularity,\n");
         sql.Append("       extract(epoch from (s.next_start_at - @as_of)) / 86400.0 as days_until_start\n");
         sql.Append("from scored s\n");

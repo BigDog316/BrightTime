@@ -236,6 +236,11 @@ public sealed class ListingSearchRecord
 
     public required string Summary { get; init; }
 
+    /// <summary>The listing's main picture (D105), so a result card shows it without a lookup.</summary>
+    public Guid? HeroMediaId { get; init; }
+
+    public string? HeroAlt { get; init; }
+
     public float Popularity { get; init; }
 
     public DateTimeOffset? PublishedAt { get; init; }

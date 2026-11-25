@@ -105,6 +105,30 @@ public sealed class ApplyScreenTests
         .Json(HttpMethod.Get, $"applications/{ApplicationId}/form", Form)
         .Json(HttpMethod.Get, $"applications/{ApplicationId}/waivers", Waivers);
 
+    private const string Garden = "ed000000-0000-0000-0000-0000000000a1";
+    private const string Beds = "ed000000-0000-0000-0000-0000000000a2";
+
+    [Fact]
+    public async Task A_listings_pictures_come_from_the_website_the_main_one_first_in_the_listings_language()
+    {
+        string pictured = ListingJson("none").TrimEnd()[..^1]
+            + $$""","primaryLanguage":"es","pictures":[{"mediaId":"{{Garden}}","alt":"Dos ninos plantando"},{"mediaId":"{{Beds}}","alt":"Bancales en primavera"}]}""";
+        using FakeApi api = SignedIn().Json(HttpMethod.Get, "public/listings/rowing-camp", pictured);
+        string html = await RenderAsync<Listing>(api, new Dictionary<string, object?> { ["Slug"] = "rowing-camp" });
+        html.ShouldContain($"<img class=\"listing-hero\" src=\"https://kettle.test/media/{Garden}\" alt=\"Dos ninos plantando\" lang=\"es\" />");
+        html.ShouldContain($"<li><img src=\"https://kettle.test/media/{Beds}\" alt=\"Bancales en primavera\" lang=\"es\" loading=\"lazy\" /></li>");
+        html.ShouldContain(">Pictures</h2>");
+
+        using FakeApi plain = SignedIn().Json(HttpMethod.Get, "public/listings/rowing-camp", ListingJson("none"));
+        (await RenderAsync<Listing>(plain, new Dictionary<string, object?> { ["Slug"] = "rowing-camp" })).ShouldNotContain("<img");
+
+        ListingSummary card = new(Guid.Parse(ListingId), "rowing-camp", "program", "Rowing Camp", "Learn to row.", null, new Cost(true, null), null, null, null, [],
+            new BrightTime.Ui.Shared.Api.ListingPicture(Guid.Parse(Garden), "Dos ninos plantando"));
+        using FakeApi none = SignedIn();
+        (await RenderAsync<BrightTime.Ui.Shared.Components.ListingCard>(none, new Dictionary<string, object?> { ["Listing"] = card }))
+            .ShouldContain($"<img class=\"card-picture\" src=\"https://kettle.test/media/{Garden}\" alt=\"Dos ninos plantando\" loading=\"lazy\" />");
+    }
+
     [Fact]
     public async Task An_activity_taking_applications_here_offers_Apply_to_a_parent_and_not_to_a_child()
     {

@@ -94,7 +94,8 @@ public sealed class ListingProjectionService(
         IReadOnlyList<Guid> AccommodationTermIds,
         IReadOnlyList<string> Languages,
         IReadOnlyList<DateTimeOffset> Deadlines,
-        IReadOnlyList<ListingSessionRecord> Sessions);
+        IReadOnlyList<ListingSessionRecord> Sessions,
+        ListingPicture? Picture);
 
     private async Task<Snapshot?> LoadAsync(Guid listingId, CancellationToken ct)
     {
@@ -118,7 +119,13 @@ public sealed class ListingProjectionService(
             await db.ListingDeadlines.AsNoTracking().Where(x => x.ListingId == listingId)
                 .Select(x => x.DueAt).ToListAsync(ct).ConfigureAwait(false),
             await db.Sessions.Where(s => s.ListingId == listingId && !s.IsCancelled)
-                .ToListAsync(ct).ConfigureAwait(false));
+                .ToListAsync(ct).ConfigureAwait(false),
+            listing.HeroMediaId is { } hero
+                ? await db.ListingMedia.AsNoTracking()
+                    .Where(m => m.ListingId == listingId && m.MediaId == hero && m.State == ListingMediaRecord.Live)
+                    .Select(m => new ListingPicture(m.MediaId, m.AltText))
+                    .FirstOrDefaultAsync(ct).ConfigureAwait(false)
+                : null);
     }
 
     /// <summary>Occurrences from <paramref name="now"/> to the horizon, for every live session.</summary>
@@ -226,6 +233,7 @@ public sealed class ListingProjectionService(
             Popularity = 0,
             CostCents = listing.CostCentsMin ?? 0,
             IsFree = listing.CostModel == CostModel.Free.ToDbValue(),
+            Picture = snapshot.Picture,
             Facets = new FacetInput
             {
                 Kind = Parse<ListingKind>(listing.Kind, k => k.ToDbValue()),

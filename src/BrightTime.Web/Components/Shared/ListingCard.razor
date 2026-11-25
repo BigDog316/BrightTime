@@ -2,11 +2,17 @@
 @using BrightTime.Modules.Directory.Contracts
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.SharedKernel.Text
+@using BrightTime.Web.Composition
 
 @* One listing in a list: search results, a collection, an organisation's or neighbourhood's
    page, the saved list. Its heading is an h3 under the list's h2. *@
-<article class="listing-card">
+<article class="listing-card@(Item.Picture is null ? "" : " has-picture")">
     <h3 dir="auto"><a href="@Href">@Item.Title</a></h3>
+    @if (Item.Picture is { } picture)
+    {
+        @* D105: the main picture, beside the words. It isn't a second link: the title is the one. *@
+        <img class="card-picture" src="@MediaEndpoints.For(picture.MediaId)" alt="@picture.Alt" loading="lazy" />
+    }
     <p class="meta">
         <span>@T["listing.kind." + Item.Kind.ToDbValue()]</span>
         <span aria-hidden="true">·</span>

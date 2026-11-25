@@ -3,6 +3,7 @@
 @using BrightTime.Modules.Opportunities.Contracts
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Web.Composition
 @using BrightTime.Web.Finder
 @inject ITenantContext Tenant
 
@@ -41,6 +42,12 @@
             </form>
         }
     </header>
+
+    @if (l.Pictures.Count > 0)
+    {
+        @* D105: the main picture across the top; its words are in the provider's language. *@
+        <img class="listing-hero" src="@MediaEndpoints.For(l.Pictures[0].MediaId)" alt="@l.Pictures[0].Alt" lang="@LangAttr(l.PrimaryLanguage)" />
+    }
 
     <section aria-labelledby="glance-heading">
         <h2 id="glance-heading">@T["listing.glance"]</h2>
@@ -262,6 +269,19 @@
             {
                 <p dir="auto" lang="@LangAttr(l.DescriptionLanguage)">@paragraph</p>
             }
+        </section>
+    }
+
+    @if (l.Pictures.Count > 1)
+    {
+        <section aria-labelledby="pictures-heading">
+            <h2 id="pictures-heading">@T["listing.pictures"]</h2>
+            <ul class="listing-pictures">
+                @foreach (ListingPicture picture in l.Pictures.Skip(1))
+                {
+                    <li><img src="@MediaEndpoints.For(picture.MediaId)" alt="@picture.Alt" lang="@LangAttr(l.PrimaryLanguage)" loading="lazy" /></li>
+                }
+            </ul>
         </section>
     }
 

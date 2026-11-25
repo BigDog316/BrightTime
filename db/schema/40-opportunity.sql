@@ -221,8 +221,13 @@ create table listing_media (
   media_id   uuid not null references platform.media_object(id) on delete restrict,
   alt_text   text not null,
   sort_order smallint not null default 0,
+  -- D105: a picture added to a published listing waits, with the listing's pending edit, until
+  -- an organiser approves it; families see only live ones. Anywhere else a picture is live and
+  -- reviewed with the listing.
+  state      text not null default 'live',
   constraint ux_listing_media unique (listing_id, media_id),
-  constraint ck_listing_media_alt check (length(btrim(alt_text)) > 0)
+  constraint ck_listing_media_alt check (length(btrim(alt_text)) > 0),
+  constraint ck_listing_media_state check (state in ('live','waiting'))
 );
 
 comment on column listing_media.alt_text is
@@ -501,6 +506,9 @@ create table listing_search (
   fuzzy_text      text not null default '',
   title           text not null,
   summary         text not null,
+  -- The listing's main picture (D105), copied so a result card shows it without a lookup.
+  hero_media_id   uuid,
+  hero_alt        text,
 
   popularity      real not null default 0,
   published_at    timestamptz,

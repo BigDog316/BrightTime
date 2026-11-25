@@ -320,6 +320,12 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   back from the API as `clearances.not_current` with the kinds missing and expired, and the app
   says so (the attendance screen and offline sync too). With the rules on, approval needs every
   active owner cleared. The gate now acts only where the permission and role would otherwise pass.
+- **Pictures of listings** (D105, proposed): a main picture and up to four more, on a page of
+  their own in the console. On a published listing a new one waits with the pending edit until an
+  organiser approves it; removing, describing and choosing the main one act at once. The main one
+  is on the listing's page and card (`listing_search.hero_media_id`), the rest on its page, and
+  both in the public API and the app. Schema: `listing_media.state`, two `listing_search` columns;
+  rebuild the compose volume.
 - **Pictures of young people's work** (D104): up to six pictures on a project, checked
   and cleaned as D103 does, private, and seen by the young person, by staff while it waits for
   their review, and by anyone only on a published project of a shown portfolio. Adding one makes
@@ -376,6 +382,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D104 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D100 on 2026-11-22, D101 to D103 on 2026-11-23, D104 on 2026-11-24).
+D105 (pictures of listings) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
@@ -397,8 +404,9 @@ Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minut
 
 These have not been asked for yet:
 
-- media: listing images, moving badge images into the media store, and project pictures in the
-  portfolio's downloads (D103 built the store, D104 pictures of work);
+- media: an organisation's logo, moving badge images into the media store, project pictures in
+  the portfolio's downloads, and resized copies for cards (D103 built the store, D104 and D105
+  pictures);
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see
   [plan/03](plan/03-indexing-and-query-plans.md));
 - the app on iOS (the Mac), and on physical phones, which M2's acceptance asks for.

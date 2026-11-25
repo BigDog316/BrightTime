@@ -53,6 +53,9 @@ wheelchair access, meals and transport. Under **How to join** it says what to do
 Some places show only the neighbourhood, not the street address, for example a program held in a
 shelter. The exact address is shared once you register.
 
+An activity's pictures are on its page, and its main picture is beside it in the results. Each
+picture says what it shows, for anyone using a screen reader.
+
 ## Saving activities and reminders
 
 - **On the website**, tap **Save** on any listing. Saved activities are kept **in this browser

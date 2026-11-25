@@ -43,6 +43,9 @@ public sealed record ProjectionSource
     public int CostCents { get; init; }
 
     public bool IsFree { get; init; }
+
+    /// <summary>The main picture, if it has a live one (D105).</summary>
+    public ListingPicture? Picture { get; init; }
 }
 
 public sealed record SiteSource(Guid SiteId, Guid? NeighbourhoodId, Coordinate? Location);
@@ -107,6 +110,7 @@ public static class ListingSearchProjector
             PublishedAt: source.PublishedAt,
             Popularity: source.Popularity,
             Slug: source.Slug,
-            IsPrimary: index == 0))];
+            IsPrimary: index == 0,
+            Picture: source.Picture))];
     }
 }

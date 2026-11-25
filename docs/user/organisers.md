@@ -66,7 +66,8 @@ Decide:
 - **Reject**, saying why. The provider will need to start a new listing.
 
 For a published listing with an edit waiting, the page shows each change against what families
-see now:
+see now, and any **new pictures**, which families don't see until you approve. Check that each
+one is fit to show and that its description says what it shows:
 - **Approve the changes** puts them live and marks the listing reviewed.
 - **Send the changes back**, saying what needs changing. The listing stays as it is, and the
   provider sees your note.

@@ -132,7 +132,9 @@ public static class PublicEndpoints
                 p.IsAddressPublic ? p.TransitNote : null,
                 p.IsWheelchairAccessible))],
             [.. d.Upcoming.Select(t => new SessionResponse(t.StartsAt, t.EndsAt))],
-            [.. d.Deadlines.Select(x => new DeadlineResponse(x.Kind, x.DueAt, x.Label))]));
+            [.. d.Deadlines.Select(x => new DeadlineResponse(x.Kind, x.DueAt, x.Label))],
+            d.PrimaryLanguage,
+            [.. d.Pictures.Select(x => new PictureResponse(x.MediaId, x.Alt))]));
     }
 
     private static async Task<IResult> CollectionsAsync(bool? featured, ITenantContext tenant, ICurationQueries curation, CancellationToken ct)
@@ -287,7 +289,8 @@ public static class PublicEndpoints
             i.NextStartAt,
             i.NextDeadlineAt,
             i.DistanceMetres,
-            [.. i.Reasons.Select(PhraseResponse.From)]))];
+            [.. i.Reasons.Select(PhraseResponse.From)],
+            i.Picture is { } p ? new PictureResponse(p.MediaId, p.Alt) : null))];
     }
 
     private static JsonElement Payload(string? json)

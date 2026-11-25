@@ -86,6 +86,8 @@ public sealed class ListingSearchWriter(OpportunitiesDbContext db, IClock clock)
         FuzzyText = row.FuzzyText,
         Title = row.Title,
         Summary = row.Summary,
+        HeroMediaId = row.Picture?.MediaId,
+        HeroAlt = row.Picture?.Alt,
         Popularity = (float)row.Popularity,
         PublishedAt = row.PublishedAt,
         ProjectedAt = projectedAt,

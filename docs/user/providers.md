@@ -156,7 +156,17 @@ says why: change them and save again. **Take it off the site** (unpublish) asks 
 organiser sees your reason. Changes waiting when you take a listing down become its wording, and
 are reviewed when you submit it again.
 
-**Copy for a new season** makes a new draft with the same details. Choose the first session of the
+**Pictures.** Open **Pictures** from the listing to add up to 5 photos of the activity: the
+place, and what people make or do there. Each is a PNG or JPEG of up to 3 MB, at least 640 by 360
+pixels, and you say what it shows for someone who can't see it. Anything else in the file, like
+where a photo was taken, is removed. Only show children whose families have agreed to their photo
+being used. The first picture is the **main picture**, shown beside the listing in search results
+and across the top of its page; choose another with **Make this the main picture**. On a
+published listing a new picture waits for an organiser, like a change to what it says, and
+families don't see it until it's approved. Removing a picture, changing what it says, or choosing
+the main one happens at once.
+
+**Copy for a new season** makes a new draft with the same details, and the same pictures. Choose the first session of the
 new season: everything else moves by the same number of days, and a weekly session moves to the
 next matching day. Give the copy a season name such as *Summer 2027*, check it, and submit it.
 

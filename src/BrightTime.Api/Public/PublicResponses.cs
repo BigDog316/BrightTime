@@ -38,7 +38,14 @@ public sealed record ListingSummaryResponse(
     DateTimeOffset? NextStartAt,
     DateTimeOffset? NextDeadlineAt,
     double? DistanceMetres,
-    IReadOnlyList<PhraseResponse> Why);
+    IReadOnlyList<PhraseResponse> Why,
+    PictureResponse? Picture);
+
+/// <summary>
+/// A listing's picture (D105): its bytes are at the region's website, <c>/media/{mediaId}</c>, and
+/// <see cref="Alt"/> says what it shows, in the listing's own language.
+/// </summary>
+public sealed record PictureResponse(Guid MediaId, string Alt);
 
 /// <summary>
 /// Where a listing happens. The address is present only when the provider made it public; a
@@ -93,7 +100,9 @@ public sealed record ListingDetailResponse(
     IReadOnlyList<string> Accommodations,
     IReadOnlyList<PlaceResponse> Places,
     IReadOnlyList<SessionResponse> Upcoming,
-    IReadOnlyList<DeadlineResponse> Deadlines);
+    IReadOnlyList<DeadlineResponse> Deadlines,
+    string PrimaryLanguage,
+    IReadOnlyList<PictureResponse> Pictures);
 
 public sealed record CollectionSummaryResponse(string Slug, string Title, string? Description, string ContentLanguage, int ListingCount);
 

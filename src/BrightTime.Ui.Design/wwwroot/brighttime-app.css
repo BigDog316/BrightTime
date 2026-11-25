@@ -323,6 +323,47 @@ legend {
     margin-block: var(--bt-space-1);
 }
 
+/* A listing's main picture on its card (D105): beside the words, cropped to fit. */
+.card-picture {
+    aspect-ratio: 4 / 3;
+    border-radius: var(--bt-radius);
+    float: inline-end;
+    margin-block-end: var(--bt-space-2);
+    margin-inline-start: var(--bt-space-3);
+    object-fit: cover;
+    width: min(7rem, 35%);
+}
+
+.listing-card.has-picture {
+    display: flow-root;
+}
+
+/* A listing's main picture on its screen, wide and cropped; the others whole, two to a row. */
+.listing-hero {
+    aspect-ratio: 16 / 9;
+    border-radius: var(--bt-radius);
+    display: block;
+    margin-block: var(--bt-space-3);
+    object-fit: cover;
+    width: 100%;
+}
+
+.listing-pictures {
+    display: grid;
+    gap: var(--bt-space-2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.listing-pictures img {
+    border-radius: var(--bt-radius);
+    display: block;
+    height: auto;
+    width: 100%;
+}
+
 /* A heading opening a card keeps no gap above it. */
 .card > :first-child {
     margin-block-start: 0;

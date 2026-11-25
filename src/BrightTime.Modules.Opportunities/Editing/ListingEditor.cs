@@ -22,8 +22,11 @@ namespace BrightTime.Modules.Opportunities.Editing;
 /// </summary>
 public sealed record PendingEdit(bool Returned, DateTimeOffset SavedAt, string? ReviewNote, DateTimeOffset? ReviewedAt);
 
-/// <summary>A pending edit and what it would change, field by field, against the live listing.</summary>
-public sealed record PendingEditView(PendingEdit Edit, IReadOnlyList<FieldChange> Changes);
+/// <summary>
+/// A pending edit and what it would change, field by field, against the live listing, with the
+/// pictures waiting with it (D105).
+/// </summary>
+public sealed record PendingEditView(PendingEdit Edit, IReadOnlyList<FieldChange> Changes, IReadOnlyList<ListingPicture> Pictures);
 
 /// <summary>
 /// A listing opened in the editor: its form, and the state around it. With a pending edit, the
@@ -94,13 +97,14 @@ public sealed record ListingsForReview(IReadOnlyList<ListingRow> AwaitingReview,
 /// edit, while families see the approved version (D101).
 /// </para>
 /// </remarks>
-public sealed class ListingEditor(
+public sealed partial class ListingEditor(
     OpportunitiesDbContext db,
     IDirectoryQueries directory,
     ITaxonomyQueries taxonomy,
     ITenantContext tenant,
     IClock clock,
-    IAuditWriter audit)
+    IAuditWriter audit,
+    IMediaLibrary media)
 {
     public const string Zone = "America/New_York";
 
@@ -380,9 +384,10 @@ public sealed class ListingEditor(
     /// Saves an edit to a published listing, in the caller's transaction (D101). A change to what
     /// it says waits as the listing's pending edit, and the schedule's own changes go live; with no
     /// change to what it says, the whole edit goes live as before, and any pending edit is dropped,
-    /// since the provider has put the wording back.
+    /// since the provider has put the wording back, unless pictures wait with it (D105), when it
+    /// keeps them and the live wording.
     /// </summary>
-    /// <returns>Whether anything waits for an organiser.</returns>
+    /// <returns>Whether anything new waits for an organiser.</returns>
     private async Task<bool> SavePublishedAsync(ListingRecord listing, ListingForm form, ParsedListing parsed, ListingPendingEditRecord? pending, UserId actor, CancellationToken ct)
     {
         ListingForm live = (await ReadFormAsync(listing.Id, ct).ConfigureAwait(false))!.Value.Form;
@@ -390,7 +395,15 @@ public sealed class ListingEditor(
         {
             if (pending is not null)
             {
-                db.ListingPendingEdits.Remove(pending);
+                if (await db.ListingMedia.AnyAsync(m => m.ListingId == listing.Id && m.State == ListingMediaRecord.Waiting, ct).ConfigureAwait(false))
+                {
+                    pending.Snapshot = ListingRevisions.Serialise(form);
+                    pending.HoldsSchedule = false;
+                }
+                else
+                {
+                    db.ListingPendingEdits.Remove(pending);
+                }
             }
 
             Apply(listing, parsed);
@@ -443,7 +456,8 @@ public sealed class ListingEditor(
             }
 
             IReadOnlyList<FieldChange> changes = ListingRevisions.Compare(live.Form, proposed);
-            return new PendingEditView(View(edit.Record), await NameIdsAsync(changes, locale, ct).ConfigureAwait(false));
+            return new PendingEditView(
+                View(edit.Record), await NameIdsAsync(changes, locale, ct).ConfigureAwait(false), await WaitingPicturesAsync(listingId, ct).ConfigureAwait(false));
         }, cancellationToken);
 
     /// <summary>
@@ -480,6 +494,7 @@ public sealed class ListingEditor(
 
             Apply(listing, parsed);
             await ReplaceChildrenAsync(listing, parsed, ct).ConfigureAwait(false);
+            await PublishWaitingPicturesAsync(listing, ct).ConfigureAwait(false);
             db.ListingPendingEdits.Remove(pending);
             listing.ReviewedAt = clock.UtcNow;
             listing.ReviewedBy = actor.Value;
@@ -535,9 +550,14 @@ public sealed class ListingEditor(
         }, cancellationToken);
     }
 
-    /// <summary>The provider throws their pending edit away; the editor then shows the approved version.</summary>
-    public Task<Result> DiscardEditAsync(OrganisationId organisation, Guid listingId, UserId actor, CancellationToken cancellationToken = default) =>
-        db.InTransactionAsync(async ct =>
+    /// <summary>
+    /// The provider throws their pending edit away, with the pictures waiting with it; the editor
+    /// then shows the approved version.
+    /// </summary>
+    public async Task<Result> DiscardEditAsync(OrganisationId organisation, Guid listingId, UserId actor, CancellationToken cancellationToken = default)
+    {
+        List<Guid> dropped = [];
+        Result discarded = await db.InTransactionAsync(async ct =>
         {
             ListingRecord? listing = await db.Listings.AsNoTracking().FirstOrDefaultAsync(l => l.Id == listingId, ct).ConfigureAwait(false);
             if (listing is null || listing.OrgId != organisation.Value)
@@ -552,17 +572,27 @@ public sealed class ListingEditor(
             }
 
             db.ListingPendingEdits.Remove(pending);
+            dropped = await DropWaitingPicturesAsync(listingId, ct).ConfigureAwait(false);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await db.ScheduleProjectionAsync(tenant.TenantId, listingId, ct).ConfigureAwait(false);
             await audit.RecordInTransactionAsync(db, new AuditAccess
             {
                 Action = "listing.edit_discarded",
                 ActorId = actor,
                 ActorOrgId = organisation,
                 SubjectKind = "listing",
-                SubjectIds = [listingId],
+                SubjectIds = [listingId, .. dropped],
             }, ct).ConfigureAwait(false);
             return Result.Success();
-        }, cancellationToken);
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (discarded.IsSuccess)
+        {
+            await ForgetPicturesAsync(dropped, actor, cancellationToken).ConfigureAwait(false);
+        }
+
+        return discarded;
+    }
 
     /// <summary>
     /// Seasonal clone: a new draft with everything the original says, its schedule moved so the
@@ -663,6 +693,7 @@ public sealed class ListingEditor(
                     TranslatedBy = x.TranslatedBy,
                     ReviewedAt = x.ReviewedAt,
                 }));
+            await CopyPicturesAsync(listingId, id, ct).ConfigureAwait(false);
             db.ListingDeadlines.AddRange((await db.ListingDeadlines.AsNoTracking().Where(x => x.ListingId == listingId).ToListAsync(ct).ConfigureAwait(false))
                 .Select(x => new ListingDeadlineRecord { Id = UuidV7.NewId(), ListingId = id, DeadlineKind = x.DeadlineKind, DueAt = Shift(x.DueAt, shift, zone), Label = x.Label }));
             db.Sessions.AddRange(sessions.Select(s => new ListingSessionRecord
@@ -844,7 +875,8 @@ public sealed class ListingEditor(
             return allowed;
         }
 
-        return await db.InTransactionAsync(async ct =>
+        List<Guid> dropped = [];
+        Result moved = await db.InTransactionAsync(async ct =>
         {
             ListingRecord listing = await db.Listings.FirstAsync(l => l.Id == listingId, ct).ConfigureAwait(false);
 
@@ -874,6 +906,20 @@ public sealed class ListingEditor(
                 }
 
                 db.ListingPendingEdits.Remove(pending);
+            }
+
+            // Pictures waiting with it go the same way (D105): kept with a listing taken down,
+            // dropped with one archived.
+            if (snapshot.Status == ListingStatus.Published.ToDbValue())
+            {
+                if (to == ListingStatus.Unpublished)
+                {
+                    await PublishWaitingPicturesAsync(listing, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    dropped = await DropWaitingPicturesAsync(listingId, ct).ConfigureAwait(false);
+                }
             }
 
             DateTimeOffset now = clock.UtcNow;
@@ -946,6 +992,13 @@ public sealed class ListingEditor(
             }, ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken).ConfigureAwait(false);
+
+        if (moved.IsSuccess)
+        {
+            await ForgetPicturesAsync(dropped, actor, cancellationToken).ConfigureAwait(false);
+        }
+
+        return moved;
     }
 
     /// <summary>An organiser has looked at a live listing's changes and is content with them (D15).</summary>

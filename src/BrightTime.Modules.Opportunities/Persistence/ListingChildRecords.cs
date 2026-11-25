@@ -18,6 +18,28 @@ public sealed class ListingTermRecord
     public bool IsPrimary { get; set; }
 }
 
+/// <summary>
+/// A row of <c>opportunity.listing_media</c>: a picture of a listing (D105), live, or waiting with
+/// a published listing's pending edit for an organiser.
+/// </summary>
+public sealed class ListingMediaRecord
+{
+    public const string Live = "live";
+    public const string Waiting = "waiting";
+
+    public Guid Id { get; init; }
+
+    public Guid ListingId { get; init; }
+
+    public Guid MediaId { get; init; }
+
+    public required string AltText { get; set; }
+
+    public short SortOrder { get; set; }
+
+    public string State { get; set; } = Live;
+}
+
 /// <summary>A row of <c>opportunity.listing_language</c>.</summary>
 public sealed class ListingLanguageRecord
 {

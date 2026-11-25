@@ -205,7 +205,10 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) 
             score,
             RelevanceScorer.Explain(features),
             sortValue,
-            ReadNullable<DateTimeOffset>(reader, "next_deadline_at"));
+            ReadNullable<DateTimeOffset>(reader, "next_deadline_at"),
+            ReadNullable<Guid>(reader, "hero_media_id") is { } hero && !reader.IsDBNull(reader.GetOrdinal("hero_alt"))
+                ? new ListingPicture(hero, reader.GetString(reader.GetOrdinal("hero_alt")))
+                : null);
     }
 
     /// <summary>

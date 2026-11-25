@@ -28,7 +28,11 @@ public sealed record ListingSummary(
     DateTimeOffset? NextStartAt,
     DateTimeOffset? NextDeadlineAt,
     double? DistanceMetres,
-    IReadOnlyList<Phrase> Why);
+    IReadOnlyList<Phrase> Why,
+    ListingPicture? Picture = null);
+
+/// <summary>A listing's picture (D105), at the region's website, saying what it shows in the listing's own language.</summary>
+public sealed record ListingPicture(Guid MediaId, string Alt);
 
 public sealed record Place(
     string Name,
@@ -79,7 +83,9 @@ public sealed record ListingDetail(
     IReadOnlyList<string> Accommodations,
     IReadOnlyList<Place> Places,
     IReadOnlyList<Session> Upcoming,
-    IReadOnlyList<Deadline> Deadlines);
+    IReadOnlyList<Deadline> Deadlines,
+    string PrimaryLanguage = "en",
+    IReadOnlyList<ListingPicture>? Pictures = null);
 
 public sealed record Coordinate(double Longitude, double Latitude);
 

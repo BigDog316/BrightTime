@@ -18,6 +18,12 @@ public sealed record ListingPlace(
     bool? IsWheelchairAccessible,
     Guid? NeighbourhoodId = null);
 
+/// <summary>
+/// A picture of a listing (D105), served at <c>/media/{id}</c>, with what it shows for anyone who
+/// can't see it, in the listing's own language.
+/// </summary>
+public sealed record ListingPicture(Guid MediaId, string Alt);
+
 /// <summary>One upcoming session.</summary>
 public sealed record ListingTime(DateTimeOffset StartsAt, DateTimeOffset EndsAt);
 
@@ -107,6 +113,9 @@ public sealed record ListingDetail
     public IReadOnlyList<ListingTime> Upcoming { get; init; } = [];
 
     public IReadOnlyList<ListingDeadlineView> Deadlines { get; init; } = [];
+
+    /// <summary>Its live pictures, the main one first (D105); none waiting for an organiser.</summary>
+    public IReadOnlyList<ListingPicture> Pictures { get; init; } = [];
 }
 
 /// <summary>

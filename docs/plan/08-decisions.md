@@ -3520,6 +3520,55 @@ approval on adding and not on removing, the limit, removal, and an upload step f
 approval; `WorkReviewPageTests` and `PortfolioPageTests` the console's and the portfolio page's
 pictures; the app's screen tests the pictures, the form sent, and the upload step.
 
+### D105 — Pictures of listings (**proposed 2026-11-24**)
+
+D103 built the media store and D104 put young people's pictures on it; a listing still had
+none, though `listing.hero_media_id` and `listing_media` were in the schema with nothing behind
+them. Sam chose on 2026-11-24: listing pictures next; a new picture on a published listing waits
+for an organiser as D101's wording does; a main picture and up to four more; the organisation's
+logo left for later.
+- **On a listing:** up to five PNG or JPEG photos, each up to 3 MB and at least 640 by 360 pixels
+  (no side over 6,000), each saying what it shows (up to 250 characters), cleaned as D103 cleans
+  an image. The main one is `hero_media_id`, always one of its live pictures: the first added,
+  until the provider chooses another, and the next one when it's removed. The console has a page
+  of its own for them (*Pictures*, linked from the listing editor), so the editor's form stays as
+  it was.
+- **Waiting for an organiser:** on a draft, a listing sent back or one taken down, a picture is
+  part of the listing, reviewed when it's sent in. On a published listing a new one is `waiting`
+  (`listing_media.state`, new) with the listing's pending edit, which one is made for it if
+  there's none: approved, it's live (and the main one if there was none); sent back, it waits
+  still; discarded, it goes, bytes and all; with the listing taken down it's live, to be reviewed
+  before it's published again; archived, it goes. A save that puts the wording back keeps a
+  pending edit that still holds pictures. Removing a picture, saying what one shows, and choosing
+  the main one act at once: the first only takes something away from what was approved, and the
+  other two put the listing among those changed since review (D15). A pending edit that held
+  nothing but a picture that's then removed goes too.
+- **Who sees it:** a listing's picture is a `public` media object, served at `/media/{id}` as
+  D103's are, from the moment it's added; nothing shows it to families until it's live on a
+  published listing, and its id is in the console only. That's what stands in for moderation
+  until M5, as staff approval does for D104's.
+- **Where it shows:** the main picture across the top of the listing's page and beside its card
+  wherever cards are (search, collections, organisation and neighbourhood pages, saved), and the
+  others on its page under *Pictures*; what a picture shows is marked in the listing's own
+  language. The organiser's review shows the waiting pictures with the edit. The public API's
+  listing has `pictures` (the main one first) and `primaryLanguage`, and its search results a
+  `picture`; the app shows them, from the website's `/media`.
+- **The finder:** `listing_search` carries `hero_media_id` and `hero_alt` (new), copied by the
+  projection, because the finder's role reads nothing else (D13). Its query only selects the two
+  columns more.
+- **A seasonal clone** shares its original's live pictures, so a picture's bytes are removed only
+  once no listing points to it.
+- **Not yet:** the organisation's logo; reordering beyond choosing the main picture; resizing, so
+  a card fetches the whole photo; listing pictures in imports; the changes-since-review diff
+  doesn't list a described picture or a new main one, though they put the listing in that lane.
+
+Schema: `listing_media.state` (`live` or `waiting`) and `listing_search.hero_media_id`/`hero_alt`;
+applied by hand to `brighttime_main` and `brighttime`, and the compose volume needs rebuilding.
+`ListingPicturesTests` covers the refusals, waiting and approval, the page and the card, describing,
+removing, discarding, the limit, the main picture, another organisation, a clone sharing pictures
+and a listing taken down; `ListingPictureApiTests` the API and the app's client; the app's screen
+test the listing and its card.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

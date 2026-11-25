@@ -1,0 +1,205 @@
+@page "/provider/orgs/{OrgId:guid}/listings/{ListingId:guid}/pictures"
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Domain
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Composition
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@* A listing's pictures (D105): a main one for its card, and up to four more for its page. *@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["editor.denied"]</h1>
+    <p>@T["provider.only_staff"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_listing is { } listing)
+{
+    <PageTitle>@T.Format("editor.pictures.title", ("title", listing.Form.Title)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/listings/@ListingId">@listing.Form.Title</a></p>
+    <h1>@T.Format("editor.pictures.title", ("title", listing.Form.Title))</h1>
+
+    @if (Done is "added" or "held" or "described" or "main" or "removed")
+    {
+        <p class="notice success" role="status">@T["editor.pictures.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p>@T["editor.pictures.intro"]</p>
+    @if (listing.Status == ListingStatus.Published)
+    {
+        <p class="hint">@T["editor.pictures.published_rule"]</p>
+    }
+
+    @if (_pictures.Count == 0)
+    {
+        <p>@T["editor.pictures.none"]</p>
+    }
+    else
+    {
+        <p>@T.Format("editor.pictures.count", ("count", _pictures.Count), ("max", ListingPictureRules.MaxPictures))</p>
+        <ul class="listing-pictures">
+            @for (int i = 0; i < _pictures.Count; i++)
+            {
+                int n = i;
+                ListingPictureView picture = _pictures[n];
+                <li>
+                    <img src="@MediaEndpoints.For(picture.MediaId)" alt="@picture.Alt" lang="@LangAttr" />
+                    @if (picture.IsMain)
+                    {
+                        <p><strong>@T["editor.pictures.main"]</strong></p>
+                    }
+                    @if (picture.Waiting)
+                    {
+                        <p><strong>@T["editor.pictures.waiting"]</strong></p>
+                    }
+                    @if (CanEdit)
+                    {
+                        <form method="post" class="editor" @formname="@($"describe-{n}")" @onsubmit="() => DescribeAsync(picture.MediaId)">
+                            <AntiforgeryToken />
+                            <div class="field">
+                                <label for="alt-@n">@T["editor.pictures.alt"]</label>
+                                <input id="alt-@n" name="alt" type="text" maxlength="@ListingPictureRules.MaxAlt" required value="@picture.Alt" dir="auto" />
+                            </div>
+                            <button type="submit" class="secondary-button">@T["editor.pictures.save_alt"]</button>
+                        </form>
+                        <div class="inline-actions">
+                            @if (!picture.IsMain && !picture.Waiting)
+                            {
+                                <form method="post" @formname="@($"main-{n}")" @onsubmit="() => MakeMainAsync(picture.MediaId)">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary-button">@T["editor.pictures.make_main"]</button>
+                                </form>
+                            }
+                            <form method="post" @formname="@($"remove-{n}")" @onsubmit="() => RemoveAsync(picture.MediaId)">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary-button">@T["editor.pictures.remove"]</button>
+                            </form>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (!CanEdit)
+    {
+        <p>@T.Format("editor.not_editable", ("status", T[ListingLifecycle.StatusPhrase(listing.Status)]))</p>
+    }
+    else if (_pictures.Count >= ListingPictureRules.MaxPictures)
+    {
+        <p>@T["editor.pictures.full"]</p>
+    }
+    else
+    {
+        <section aria-labelledby="add-heading">
+            <h2 id="add-heading">@T["editor.pictures.add_heading"]</h2>
+            <p class="hint" id="file-hint">@T["editor.pictures.rules"]</p>
+            <p class="hint">@T["editor.pictures.consent"]</p>
+            <form method="post" enctype="multipart/form-data" class="editor" @formname="add" @onsubmit="AddAsync">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="picture-file">@T["editor.pictures.file"]</label>
+                    <input id="picture-file" name="image" type="file" accept="image/png,image/jpeg" required aria-describedby="file-hint" />
+                </div>
+                <div class="field">
+                    <label for="picture-alt">@T["editor.pictures.alt"]</label>
+                    <p class="hint" id="picture-alt-hint">@T["editor.pictures.alt_hint"]</p>
+                    <input id="picture-alt" name="alt" type="text" maxlength="@ListingPictureRules.MaxAlt" required dir="auto" aria-describedby="picture-alt-hint" />
+                </div>
+                <button type="submit">@T["editor.pictures.add"]</button>
+            </form>
+        </section>
+    }
+
+    <p class="back"><a href="/provider/orgs/@OrgId/listings/@ListingId">@T["editor.pictures.back"]</a></p>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid ListingId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private EditableListing? _listing;
+    private IReadOnlyList<ListingPictureView> _pictures = [];
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    private bool CanEdit => _listing is { } l && ListingEditor.IsEditable(l.Status);
+
+    /// <summary>What a picture shows is in the listing's own language.</summary>
+    private string? LangAttr => _listing is { } l && !string.Equals(l.Form.PrimaryLanguage, Tenant.Locale.Code, StringComparison.OrdinalIgnoreCase)
+        ? l.Form.PrimaryLanguage
+        : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Listings.Create))
+        {
+            Forbid();
+            return;
+        }
+
+        EditableListing? listing = await Get<ListingEditor>().LoadAsync(ListingId);
+        if (listing is null || listing.OrganisationId != Org)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _listing = listing;
+        _pictures = await Get<ListingEditor>().PicturesAsync(ListingId);
+    }
+
+    private async Task AddAsync()
+    {
+        IFormFile? file = HttpContext.Request.Form.Files["image"];
+        if (file is null || file.Length is 0 or > ListingPictureRules.MaxBytes)
+        {
+            _problem = T.Error(ListingPictureRules.NotAnImage);
+            return;
+        }
+
+        using MemoryStream bytes = new();
+        await file.CopyToAsync(bytes);
+        bool published = _listing!.Status == ListingStatus.Published;
+        Answer(await Get<ListingEditor>().AddPictureAsync(Org, ListingId, bytes.ToArray(), FormValue("alt"), Actor), published ? "held" : "added");
+    }
+
+    private async Task DescribeAsync(Guid mediaId) =>
+        Answer(await Get<ListingEditor>().DescribePictureAsync(Org, ListingId, mediaId, FormValue("alt"), Actor), "described");
+
+    private async Task MakeMainAsync(Guid mediaId) =>
+        Answer(await Get<ListingEditor>().MakeMainPictureAsync(Org, ListingId, mediaId, Actor), "main");
+
+    private async Task RemoveAsync(Guid mediaId) =>
+        Answer(await Get<ListingEditor>().RemovePictureAsync(Org, ListingId, mediaId, Actor), "removed");
+
+    private void Answer(Result done, string what)
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/listings/{ListingId}/pictures?done={what}");
+    }
+}

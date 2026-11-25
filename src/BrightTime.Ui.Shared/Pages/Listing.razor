@@ -19,6 +19,11 @@ else if (_listing is { } l)
         <h1>@l.Title</h1>
         <p class="byline">@T.Format("listing.byline", ("organisation", Text.Name(l.Organisation.Name)))</p>
         <p class="summary">@l.Summary</p>
+        @if (l.Pictures is [var main, ..])
+        {
+            @* D105: the main picture; what it shows is in the listing's own language. *@
+            <img class="listing-hero" src="@Endpoints.Media(main.MediaId)" alt="@main.Alt" lang="@l.PrimaryLanguage" />
+        }
 
         <div class="actions" lang="@T.Locale.Code">
             @if (Session.IsSignedIn)
@@ -84,6 +89,19 @@ else if (_listing is { } l)
                 {
                     <p>@paragraph</p>
                 }
+            </section>
+        }
+
+        @if (l.Pictures is { Count: > 1 } pictures)
+        {
+            <section lang="@T.Locale.Code" aria-labelledby="pictures">
+                <h2 id="pictures">@T["listing.pictures"]</h2>
+                <ul class="listing-pictures">
+                    @foreach (ListingPicture picture in pictures.Skip(1))
+                    {
+                        <li><img src="@Endpoints.Media(picture.MediaId)" alt="@picture.Alt" lang="@l.PrimaryLanguage" loading="lazy" /></li>
+                    }
+                </ul>
             </section>
         }
 

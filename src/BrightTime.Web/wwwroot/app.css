@@ -268,6 +268,21 @@ a.secondary {
     overflow-wrap: anywhere;
 }
 
+/* A listing's main picture on its card (D105): beside the words, cropped to fit. */
+.card-picture {
+    aspect-ratio: 4 / 3;
+    border-radius: 0.25rem;
+    float: inline-end;
+    margin: 0 0 0.5rem;
+    margin-inline-start: 0.75rem;
+    object-fit: cover;
+    width: min(9rem, 35%);
+}
+
+.listing-card.has-picture {
+    display: flow-root;
+}
+
 .meta {
     color: var(--bt-muted);
     display: flex;
@@ -867,6 +882,35 @@ button.secondary-button {
     margin: 0.5rem 0 1rem;
     max-width: 30rem;
     object-fit: cover;
+    width: 100%;
+}
+
+/* A listing's main picture (D105): wide, cropped to fit; the others whole, in a row that wraps. */
+.listing-hero {
+    aspect-ratio: 16 / 9;
+    border-radius: 0.5rem;
+    display: block;
+    margin: 0 0 1.5rem;
+    max-height: 40vh;
+    object-fit: cover;
+    width: 100%;
+}
+
+.listing-pictures {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    list-style: none;
+    margin: 0.75rem 0;
+    padding: 0;
+}
+
+.listing-pictures img {
+    border-radius: 0.25rem;
+    display: block;
+    height: auto;
+    max-height: 20rem;
+    object-fit: contain;
     width: 100%;
 }
 

@@ -5,6 +5,7 @@
 @using BrightTime.Modules.Opportunities.Editing
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.Web.Auth
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Policy = ConsoleServices.ReviewPolicy)]
 @inherits ConsoleComponent
@@ -50,7 +51,25 @@
             {
                 <p class="notice">@T.Format("organiser.review.edit_returned", ("date", T.DateTime(returnedAt))) <q dir="auto">@returnedNote</q></p>
             }
-            <ListingChanges Changes="edit.Changes" />
+            @if (edit.Changes.Count > 0)
+            {
+                <ListingChanges Changes="edit.Changes" />
+            }
+            @if (edit.Pictures.Count > 0)
+            {
+                @* D105: new pictures wait with the edit; families see none of them until it's approved. *@
+                <h3>@T["organiser.review.edit_pictures"]</h3>
+                <p class="hint">@T["organiser.review.edit_pictures_hint"]</p>
+                <ul class="listing-pictures">
+                    @foreach (ListingPicture picture in edit.Pictures)
+                    {
+                        <li>
+                            <img src="@MediaEndpoints.For(picture.MediaId)" alt="@picture.Alt" lang="@PictureLang" />
+                            <p dir="auto">@picture.Alt</p>
+                        </li>
+                    }
+                </ul>
+            }
         </section>
     }
 
@@ -121,6 +140,11 @@
     private OrganisationStatus _orgStatus;
     private string? _problem;
     private readonly Dictionary<string, string> _reasonErrors = [];
+
+    /// <summary>What a picture shows is in the listing's own language.</summary>
+    private string? PictureLang => _detail is { } d && !string.Equals(d.PrimaryLanguage, Tenant.Locale.Code, StringComparison.OrdinalIgnoreCase)
+        ? d.PrimaryLanguage
+        : null;
 
     protected override async Task OnInitializedAsync()
     {

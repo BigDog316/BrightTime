@@ -1,6 +1,12 @@
 @* One result: what, who, when and how much, and why it was shown (D30). *@
-<article class="card listing-card">
+@inject AppEndpoints Endpoints
+<article class="card listing-card@(Listing.Picture is null ? "" : " has-picture")">
     <h3><a href="listings/@Uri.EscapeDataString(Listing.Slug)">@Listing.Title</a></h3>
+    @if (Listing.Picture is { } picture)
+    {
+        @* D105: the main picture, beside the words; the title is the link. *@
+        <img class="card-picture" src="@Endpoints.Media(picture.MediaId)" alt="@picture.Alt" loading="lazy" />
+    }
     @if (Listing.Organisation is { } org)
     {
         <p class="byline">@T.Format("listing.byline", ("organisation", Text.Name(org.Name)))</p>

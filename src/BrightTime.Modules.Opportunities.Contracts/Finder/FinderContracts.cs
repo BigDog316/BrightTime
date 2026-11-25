@@ -19,7 +19,8 @@ public sealed record FinderItem(
     double Score,
     IReadOnlyList<Phrase> Reasons,
     string SortValue,
-    DateTimeOffset? NextDeadlineAt = null);
+    DateTimeOffset? NextDeadlineAt = null,
+    ListingPicture? Picture = null);
 
 /// <summary>A page of finder results. <see cref="NextCursor"/> is null on the last page.</summary>
 public sealed record FinderPage(IReadOnlyList<FinderItem> Items, string? NextCursor)

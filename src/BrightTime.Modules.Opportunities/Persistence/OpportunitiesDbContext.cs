@@ -42,6 +42,8 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
 
     public DbSet<ListingPendingEditRecord> ListingPendingEdits => Set<ListingPendingEditRecord>();
 
+    public DbSet<ListingMediaRecord> ListingMedia => Set<ListingMediaRecord>();
+
     public DbSet<CollectionRecord> Collections => Set<CollectionRecord>();
 
     public DbSet<CollectionItemRecord> CollectionItems => Set<CollectionItemRecord>();
@@ -157,6 +159,13 @@ public sealed class OpportunitiesDbContext(DbContextOptions<OpportunitiesDbConte
         {
             b.ToTable("listing_accommodation");
             b.HasKey(x => new { x.ListingId, x.TermId });
+        });
+
+        modelBuilder.Entity<ListingMediaRecord>(b =>
+        {
+            b.ToTable("listing_media");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<ListingDeadlineRecord>(b =>

@@ -94,6 +94,11 @@ public sealed class SqlListingDetails(
                     .Where(d => d.ListingId == id && d.DueAt >= now)
                     .OrderBy(d => d.DueAt)
                     .Select(d => new ListingDeadlineView(d.DeadlineKind, d.DueAt, d.Label))
+                    .ToListAsync(ct).ConfigureAwait(false),
+                await db.ListingMedia.AsNoTracking()
+                    .Where(m => m.ListingId == id && m.State == ListingMediaRecord.Live)
+                    .OrderBy(m => m.MediaId == listing.HeroMediaId ? 0 : 1).ThenBy(m => m.SortOrder).ThenBy(m => m.Id)
+                    .Select(m => new ListingPicture(m.MediaId, m.AltText))
                     .ToListAsync(ct).ConfigureAwait(false));
         }, cancellationToken).ConfigureAwait(false);
 
@@ -183,6 +188,7 @@ public sealed class SqlListingDetails(
             })],
             Upcoming = loaded.Upcoming,
             Deadlines = loaded.Deadlines,
+            Pictures = loaded.Pictures,
         };
     }
 
@@ -194,7 +200,8 @@ public sealed class SqlListingDetails(
         IReadOnlyList<Guid> AccommodationTermIds,
         IReadOnlyList<string> Languages,
         IReadOnlyList<ListingTime> Upcoming,
-        IReadOnlyList<ListingDeadlineView> Deadlines);
+        IReadOnlyList<ListingDeadlineView> Deadlines,
+        IReadOnlyList<ListingPicture> Pictures);
 
     /// <summary>
     /// A link the URL checker found broken or blocked is withheld: sending a family to a dead

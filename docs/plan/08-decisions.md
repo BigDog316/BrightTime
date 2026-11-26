@@ -3569,7 +3569,7 @@ removing, discarding, the limit, the main picture, another organisation, a clone
 and a listing taken down; `ListingPictureApiTests` the API and the app's client; the app's screen
 test the listing and its card.
 
-### D106 — Smaller copies of public pictures (**proposed 2026-11-25**)
+### D106 — Smaller copies of public pictures (**accepted 2026-11-26**)
 
 D105 put a listing's main picture beside its card, and every card fetched the whole photo, up to
 3 MB; ImageCleaner (D103) reads only an image's headers, so it couldn't make a smaller one. Sam

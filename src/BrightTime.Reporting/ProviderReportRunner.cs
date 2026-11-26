@@ -87,6 +87,7 @@ public sealed class ProviderReportRunner(ProviderReports reports, Text text, ICl
         ReportDocument document = made.Value with
         {
             RightToLeft = text.Culture.TextInfo.IsRightToLeft,
+            Language = text.Culture.Name,
             FileName = $"{report.Replace('.', '-')}-{text.FileDay(clock.UtcNow)}",
         };
         return Result<RenderedReport>.Success(new RenderedReport(ReportRenderer.Render(document, chosen), ReportFormats.ContentType(chosen), $"{document.FileName}.{chosen}"));

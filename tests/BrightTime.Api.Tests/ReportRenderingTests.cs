@@ -132,6 +132,41 @@ public sealed class ReportRenderingTests
         book.Worksheets.First().CellsUsed().Select(c => c.GetString()).ShouldContain("A poem about rain");
     }
 
+    /// <summary>How many structure elements of a kind a PDF has (its structure tree isn't compressed).</summary>
+    internal static int Tags(string pdf, string kind) => Regex.Count(pdf, $@"/S\s*/{kind}\b");
+
+    [Fact]
+    public void A_pdf_is_tagged_so_a_screen_reader_can_read_it()
+    {
+        ReportRenderer.Configure("Community");
+        string pdf = Encoding.Latin1.GetString(ReportRenderer.Render(WithPictures(), ReportFormats.Pdf));
+        pdf.ShouldContain("pdfuaid:part>1<", Case.Sensitive, "it says it's PDF/UA-1");
+        pdf.ShouldContain("/Lang (en)");
+        pdf.ShouldContain("/DisplayDocTitle true");
+        (Tags(pdf, "H1"), Tags(pdf, "H2"), Tags(pdf, "H3")).ShouldBe((1, 1, 2), "the title, the group, each entry");
+        Tags(pdf, "Figure").ShouldBe(3);
+        foreach (string alt in new[] { "A hand-drawn map of the river bend", "Mussels in a bucket", "Our group by the water" })
+        {
+            pdf.ShouldContain($"/Alt ({alt})");
+        }
+
+        Tags(pdf, "Caption").ShouldBe(1, "a caption that only repeats what the picture shows isn't read a second time");
+
+        // A table's header cells are headers of their columns; a long one runs on, and the title
+        // printed again atop each later page isn't another heading.
+        ReportDocument tall = Sample() with
+        {
+            Tables = [new ReportTable("Everyone", [new("Name"), new("Hours", Numeric: true)], [.. Enumerable.Range(1, 200).Select(i => (IReadOnlyList<string>)[$"Person {i}", "3"])])],
+            Language = "ar",
+            RightToLeft = true,
+        };
+        string table = Encoding.Latin1.GetString(ReportRenderer.Render(tall, ReportFormats.Pdf));
+        Regex.Count(table, @"/Type\s*/Page\b").ShouldBeGreaterThan(1);
+        table.ShouldContain("/Lang (ar)");
+        (Tags(table, "H1"), Tags(table, "Table"), Tags(table, "TH"), Tags(table, "TD")).ShouldBe((1, 1, 2, 400));
+        Regex.Count(table, @"/Scope\s*/Column").ShouldBe(2);
+    }
+
     [Fact]
     public void A_csv_starts_with_a_byte_order_mark_so_spreadsheets_read_the_names_right()
     {

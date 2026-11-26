@@ -309,7 +309,8 @@ and each conversation lists who is in it.
 ## Reports
 
 **Reports** makes a file when you download it, as **PDF**, **Excel** or **CSV**. Nothing is kept on
-BrightTime afterwards.
+BrightTime afterwards. A PDF can be read with a screen reader: its headings and table headers are
+marked.
 
 | Report | What's in it |
 |---|---|

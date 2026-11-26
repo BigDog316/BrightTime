@@ -40,6 +40,9 @@ public sealed record ReportDocument(string Title, IReadOnlyList<string> Lines, I
     /// <summary>For Arabic: the page reads from the right.</summary>
     public bool RightToLeft { get; init; }
 
+    /// <summary>The language it's worded in, as a BCP 47 tag (<c>en</c>, <c>zh-Hans</c>): a screen reader reads a PDF in it (D108).</summary>
+    public string Language { get; init; } = "en";
+
     /// <summary>The file's name without an extension, safe on every platform.</summary>
     public string FileName { get; init; } = "report";
 }

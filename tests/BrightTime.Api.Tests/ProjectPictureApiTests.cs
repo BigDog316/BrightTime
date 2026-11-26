@@ -227,6 +227,13 @@ public sealed class ProjectPictureApiTests(ApiFixture api)
             images.ShouldAllBe(i => i.Width <= 1000 && i.Height <= 1000);
             images[0].Width.ShouldBeLessThan(images[0].Height, "the photo turned as it's shown");
             images[1].ShouldBe((800, 600), "the PNG as it was");
+
+            // What each shows is read out, and only the one with its own caption has a caption to read (D108).
+            string tagged = Encoding.Latin1.GetString(bytes);
+            tagged.ShouldContain("/Alt (The boat from above)");
+            tagged.ShouldContain("/Alt (A clay boat on a table)");
+            tagged.ShouldContain("/Lang (en)");
+            ReportRenderingTests.Tags(tagged, "Caption").ShouldBe(1);
         }
     }
 

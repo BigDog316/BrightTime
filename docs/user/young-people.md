@@ -189,7 +189,7 @@ At the bottom of **Your portfolio**, *Take it with you* makes a file of your por
 and your phone asks where to save or send it.
 - **Printable portfolio (PDF)**: your activities, hours and badges, each badge with the link where
   anyone can check it, and your approved projects with their pictures. Print it or attach it to an
-  application.
+  application. A screen reader reads what each picture shows, from what you wrote when you added it.
 - **Your badges (Open Badges)**: your badges as credentials, for a digital wallet or another
   platform.
 - **Learner record (CLR)**: a single credential holding your activities and badges that colleges

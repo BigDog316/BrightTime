@@ -10,7 +10,9 @@ namespace BrightTime.Reporting;
 /// <summary>
 /// Renders a <see cref="ReportDocument"/> as PDF (QuestPDF), Excel (ClosedXML) or CSV (D57).
 /// Everything happens in memory and nothing is written to disk: a report holds young people's
-/// names, and the bytes go only to whoever asked.
+/// names, and the bytes go only to whoever asked. A PDF is tagged to PDF/UA-1 (D108): its
+/// language and title, headings, tables with their header cells, and each picture with what it
+/// shows, so a screen reader can read it; page numbers and the running title are left out of it.
 /// </summary>
 public static class ReportRenderer
 {
@@ -57,65 +59,73 @@ public static class ReportRenderer
                 page.ContentFromRightToLeft();
             }
 
-            page.Header().Column(header =>
-            {
-                header.Item().Text(report.Title).FontSize(16).SemiBold();
-                foreach (string line in report.Lines)
-                {
-                    header.Item().Text(line).FontColor(Colors.Grey.Darken2);
-                }
-
-                header.Item().PaddingBottom(8);
-            });
+            // From the second page, the title and what it covers again as a running head: not read out a second time.
+            page.Header().SkipOnce().SemanticIgnore().PaddingBottom(8).Text(string.Join(" · ", [report.Title, .. report.Lines])).FontColor(Colors.Grey.Darken2);
 
             page.Content().Column(body =>
             {
                 body.Spacing(14);
+                body.Item().Column(title =>
+                {
+                    title.Item().SemanticHeading1().Text(report.Title).FontSize(16).SemiBold();
+                    foreach (string line in report.Lines)
+                    {
+                        title.Item().SemanticParagraph().Text(line).FontColor(Colors.Grey.Darken2);
+                    }
+                });
+
                 foreach (ReportTable table in report.Tables)
                 {
-                    body.Item().Column(section =>
+                    body.Item().SemanticSection().Column(section =>
                     {
-                        section.Item().PaddingBottom(4).Text(table.Heading).FontSize(11).SemiBold();
-                        section.Item().Element(e => PdfTable(e, table));
+                        section.Item().PaddingBottom(4).SemanticHeading2().Text(table.Heading).FontSize(11).SemiBold();
+                        section.Item().SemanticTable().Element(e => PdfTable(e, table));
                     });
                 }
 
                 foreach (ReportGroup group in report.Groups.Where(g => g.Entries.Count > 0))
                 {
-                    body.Item().Column(section =>
+                    body.Item().SemanticSection().Column(section =>
                     {
                         section.Spacing(10);
-                        section.Item().Text(group.Heading).FontSize(11).SemiBold();
+                        section.Item().SemanticHeading2().Text(group.Heading).FontSize(11).SemiBold();
                         foreach (ReportEntry entry in group.Entries)
                         {
                             // A title isn't left alone at the foot of a page.
-                            section.Item().EnsureSpace(entry.Pictures.Count > 0 ? 160 : 40).Element(e => PdfEntry(e, entry));
+                            section.Item().EnsureSpace(entry.Pictures.Count > 0 ? 160 : 40).SemanticSection().Element(e => PdfEntry(e, entry));
                         }
                     });
                 }
 
                 foreach (string note in report.Notes)
                 {
-                    body.Item().Text(note).FontColor(Colors.Grey.Darken2);
+                    body.Item().SemanticParagraph().Text(note).FontColor(Colors.Grey.Darken2);
                 }
             });
 
-            page.Footer().AlignCenter().Text(t =>
+            page.Footer().SemanticIgnore().AlignCenter().Text(t =>
             {
                 t.CurrentPageNumber();
                 t.Span(" / ");
                 t.TotalPages();
             });
-        })).GeneratePdf();
+        }))
+        .WithMetadata(new DocumentMetadata { Title = report.Title, Language = report.Language })
+        .WithSettings(new DocumentSettings { PDFUA_Conformance = PDFUA_Conformance.PDFUA_1 })
+        .GeneratePdf();
     }
 
-    /// <summary>An entry: its title and lines, then its pictures two to a row, each kept whole with its caption.</summary>
+    /// <summary>
+    /// An entry: its title and lines, then its pictures two to a row, each kept whole with its
+    /// caption. A screen reader reads what a picture shows, then its caption; a caption that only
+    /// repeats what it shows is printed but not read again (D108).
+    /// </summary>
     private static void PdfEntry(IContainer container, ReportEntry entry) => container.Column(column =>
     {
-        column.Item().Text(entry.Title).FontSize(10).SemiBold();
+        column.Item().SemanticHeading3().Text(entry.Title).FontSize(10).SemiBold();
         foreach (string line in entry.Lines)
         {
-            column.Item().Text(line).FontColor(Colors.Grey.Darken2);
+            column.Item().SemanticParagraph().Text(line).FontColor(Colors.Grey.Darken2);
         }
 
         if (entry.Pictures.Count == 0)
@@ -135,8 +145,10 @@ public static class ReportRenderer
             {
                 t.Cell().Padding(4).ShowEntire().Column(cell =>
                 {
-                    cell.Item().MaxHeight(PictureHeight).AlignCenter().SemanticImage(picture.Alt).Image(picture.Image).FitArea();
-                    cell.Item().PaddingTop(3).SemanticCaption().Text(picture.Caption).FontSize(8).FontColor(Colors.Grey.Darken2);
+                    cell.Item().MaxHeight(PictureHeight).AlignCenter().SemanticFigure(picture.Alt).Image(picture.Image).FitArea();
+                    IContainer caption = cell.Item().PaddingTop(3);
+                    caption = string.Equals(picture.Caption, picture.Alt, StringComparison.Ordinal) ? caption.SemanticIgnore() : caption.SemanticCaption();
+                    caption.Text(picture.Caption).FontSize(8).FontColor(Colors.Grey.Darken2);
                 });
             }
         });

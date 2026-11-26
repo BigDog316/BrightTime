@@ -88,6 +88,7 @@ public static class PortfolioDocuments
             Groups = [projects],
             Notes = notes,
             RightToLeft = text.Culture.TextInfo.IsRightToLeft,
+            Language = text.Culture.Name,
             FileName = $"portfolio-{text.FileDay(now)}",
         };
     }

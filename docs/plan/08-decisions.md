@@ -3651,6 +3651,39 @@ one left as it is, a see-through PNG on white, the refusals); `ReportRenderingTe
 pictures in either direction and the spreadsheet and CSV rows; `ProjectPictureApiTests` an export
 with an approved project's two pictures and not a draft's.
 
+### D108 — Tagged PDFs for screen readers (**proposed 2026-11-26**)
+
+D107 marked what each picture shows, but QuestPDF writes that only into a tagged PDF, and no
+report was tagged. A county platform's documents fall under the ADA Title II web rule (WCAG 2.1
+AA), PDFs it hands out included. Sam chose on 2026-11-26: every PDF, through the one renderer;
+tests that read the PDF's structure, with a hand check in veraPDF or PAC; a picture's description
+read out and its caption shown.
+- **Which:** every PDF `ReportRenderer` makes: the provider reports (roster, attendance,
+  participation) and the portfolio, a young person's and a guardian's of a child profile. They're
+  PDF/UA-1 (QuestPDF's `PDFUA_Conformance`; no new package).
+- **Tagged:** the report's language (`ReportDocument.Language`, new, from the catalogue's culture:
+  `en`, `es`, `ar`, `zh-Hans` and so on) and its title, shown as the window's title. The title is
+  a first heading, a table's or group's heading a second, an entry's title a third, each table or
+  group a section; a table's header cells are headers of their columns; lines and notes are
+  paragraphs.
+- **Pictures:** each is a figure read as what it shows (the young person's description). A
+  caption of their own is tagged as its caption, so it's read after. A caption that only repeats
+  the description (there's none of their own) is printed but left out of what's read, so it
+  isn't read twice.
+- **Pages:** the title and what it covers are now at the top of the first page, in the body, and
+  read once. From the second page they're a small running head, as page numbers are, left out of
+  what's read. Before, every page repeated them in full.
+- **Not yet:** a name in a script no installed font covers is still drawn with a fallback (D57's
+  open font question), and such a glyph fails a PDF/UA check; the hand check should try an
+  Arabic, Bengali and Chinese name. A name in another language than the report's isn't marked as
+  such. Total rows are body rows, not a table foot.
+
+QuestPDF warns that a PDF/UA document isn't byte-for-byte reproducible (it carries a fresh id and
+time). Nothing relies on that: files are made when asked and never kept or compared. No schema
+change. `ReportRenderingTests` reads the structure (the PDF/UA identifier, language, headings,
+figures with their descriptions, one caption, table headers, a long table in Arabic over pages
+with one first heading); `ProjectPictureApiTests` a real export's descriptions and language.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

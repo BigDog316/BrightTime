@@ -3614,7 +3614,7 @@ PNGs, the sizes an image isn't wider than, all eight orientations and the refusa
 `MediaSizesTests` the copies made on adding, serving, the redirects, private pictures, a file that
 doesn't decode, removing, and the jobs worker's run.
 
-### D107 — Project pictures in the printable portfolio (**proposed 2026-11-26**)
+### D107 — Project pictures in the printable portfolio (**accepted 2026-11-26**)
 
 D104 left a project's pictures out of the portfolio's downloads. Sam chose on 2026-11-26: the
 printable portfolio next; every picture of each approved project, with its caption; made small as

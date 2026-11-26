@@ -29,6 +29,9 @@ public static class ImageSizer
 
     public const float Quality = 80;
 
+    /// <summary>A print copy's JPEG quality (D107).</summary>
+    public const int PrintQuality = 85;
+
     private static readonly SemaphoreSlim Decoding = new(2, 2);
 
     /// <summary>
@@ -51,7 +54,99 @@ public static class ImageSizer
         }
     }
 
+    /// <summary>
+    /// The image as a JPEG for print (D107): its longest side at most <paramref name="longest"/>,
+    /// turned as it's shown, on white where it's see-through, at <see cref="PrintQuality"/>. Made
+    /// when asked and never kept. Null when it isn't a picture of <paramref name="shownWidth"/> by
+    /// <paramref name="shownHeight"/>.
+    /// </summary>
+    public static async Task<byte[]?> PrintCopyAsync(
+        ReadOnlyMemory<byte> image, int shownWidth, int shownHeight, int longest, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(longest);
+        await Decoding.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return PrintCopy(image.Span, shownWidth, shownHeight, longest);
+        }
+        finally
+        {
+            Decoding.Release();
+        }
+    }
+
+    private static byte[]? PrintCopy(ReadOnlySpan<byte> image, int shownWidth, int shownHeight, int longest)
+    {
+        if (shownWidth <= 0 || shownHeight <= 0)
+        {
+            return null;
+        }
+
+        double fit = Math.Min(1d, (double)longest / Math.Max(shownWidth, shownHeight));
+        int width = Math.Max(1, (int)Math.Round(shownWidth * fit, MidpointRounding.AwayFromZero));
+        int height = Math.Max(1, (int)Math.Round(shownHeight * fit, MidpointRounding.AwayFromZero));
+        if (Decode(image, shownWidth, shownHeight, width) is not { } decoded)
+        {
+            return null;
+        }
+
+        using SKBitmap stored = decoded.Bitmap;
+        using SKBitmap shown = Orient(stored, decoded.Origin);
+        using SKBitmap? smaller = shown.Width == width && shown.Height == height ? null : Shrink(shown, width, height);
+        SKBitmap copy = smaller ?? shown;
+        using SKBitmap flat = new(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque));
+        using (SKCanvas canvas = new(flat))
+        {
+            canvas.Clear(SKColors.White);
+            canvas.DrawBitmap(copy, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest), null);
+            canvas.Flush();
+        }
+
+        using SKPixmap pixels = flat.PeekPixels();
+        using SKData jpeg = pixels.Encode(new SKJpegEncoderOptions(PrintQuality, SKJpegEncoderDownsample.Downsample420, SKJpegEncoderAlphaOption.Ignore))
+            ?? throw new InvalidOperationException("Skia couldn't encode JPEG.");
+        return jpeg.ToArray();
+    }
+
     private static List<ImageCopy>? Copies(ReadOnlySpan<byte> image, int shownWidth, int shownHeight, IReadOnlyList<int> sizes)
+    {
+        int[] wanted = [.. sizes.Where(s => s > 0 && s < shownWidth).Distinct().Order()];
+
+        // Only as large as the biggest copy needs; with none, as small as the codec will go.
+        if (Decode(image, shownWidth, shownHeight, wanted.Length == 0 ? 0 : wanted[^1]) is not { } decoded)
+        {
+            return null;
+        }
+
+        using SKBitmap stored = decoded.Bitmap;
+        if (wanted.Length == 0)
+        {
+            return [];
+        }
+
+        using SKBitmap shown = Orient(stored, decoded.Origin);
+        List<ImageCopy> copies = [];
+        foreach (int size in wanted)
+        {
+            // As tall as the original makes it: a scaled decode rounds its sides.
+            int height = Math.Max(1, (int)Math.Round((double)shownHeight * size / shownWidth, MidpointRounding.AwayFromZero));
+            using SKBitmap copy = Shrink(shown, size, height);
+            using SKPixmap pixels = copy.PeekPixels();
+            using SKData webp = pixels.Encode(new SKWebpEncoderOptions(SKWebpEncoderCompression.Lossy, Quality))
+                ?? throw new InvalidOperationException("Skia couldn't encode WebP.");
+            copies.Add(new ImageCopy(size, webp.ToArray(), copy.Width, copy.Height));
+        }
+
+        return copies;
+    }
+
+    /// <summary>
+    /// The image decoded as it's stored, at least <paramref name="width"/> wide as it's shown (a
+    /// JPEG no larger than that needs; with 0, as small as the codec will go), and its orientation.
+    /// Null when it doesn't decode whole, or isn't <paramref name="shownWidth"/> by
+    /// <paramref name="shownHeight"/> as it's shown.
+    /// </summary>
+    private static (SKBitmap Bitmap, SKEncodedOrigin Origin)? Decode(ReadOnlySpan<byte> image, int shownWidth, int shownHeight, int width)
     {
         using SKData data = SKData.CreateCopy(image);
         using SKCodec? codec = SKCodec.Create(data);
@@ -70,43 +165,23 @@ public static class ImageSizer
             return null;
         }
 
-        int[] wanted = [.. sizes.Where(s => s > 0 && s < shownWidth).Distinct().Order()];
-
-        // Only as large as the biggest copy needs; with none, as small as the codec will go.
-        float scale = wanted.Length == 0 ? 0.125f : Math.Min(1f, (float)wanted[^1] / shownWidth);
+        float scale = width <= 0 ? 0.125f : Math.Min(1f, (float)width / shownWidth);
         SKSizeI scaled = codec.GetScaledDimensions(scale);
-        if ((turned ? scaled.Height : scaled.Width) < (wanted.Length == 0 ? 1 : wanted[^1]))
+        if ((turned ? scaled.Height : scaled.Width) < Math.Max(1, width))
         {
             scaled = encoded;
         }
 
         SKImageInfo info = new(scaled.Width, scaled.Height, SKColorType.Rgba8888,
             codec.Info.AlphaType == SKAlphaType.Opaque ? SKAlphaType.Opaque : SKAlphaType.Premul);
-        using SKBitmap decoded = new(info);
+        SKBitmap decoded = new(info);
         if (codec.GetPixels(info, decoded.GetPixels()) != SKCodecResult.Success)
         {
+            decoded.Dispose();
             return null;
         }
 
-        if (wanted.Length == 0)
-        {
-            return [];
-        }
-
-        using SKBitmap shown = Orient(decoded, origin);
-        List<ImageCopy> copies = [];
-        foreach (int size in wanted)
-        {
-            // As tall as the original makes it: a scaled decode rounds its sides.
-            int height = Math.Max(1, (int)Math.Round((double)shownHeight * size / shownWidth, MidpointRounding.AwayFromZero));
-            using SKBitmap copy = Shrink(shown, size, height);
-            using SKPixmap pixels = copy.PeekPixels();
-            using SKData webp = pixels.Encode(new SKWebpEncoderOptions(SKWebpEncoderCompression.Lossy, Quality))
-                ?? throw new InvalidOperationException("Skia couldn't encode WebP.");
-            copies.Add(new ImageCopy(size, webp.ToArray(), copy.Width, copy.Height));
-        }
-
-        return copies;
+        return (decoded, origin);
     }
 
     /// <summary>Whether the image is stored on its side: shown, its width is its stored height.</summary>

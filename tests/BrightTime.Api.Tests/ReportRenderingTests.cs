@@ -1,6 +1,8 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using BrightTime.Abstractions.Reporting;
 using BrightTime.Reporting;
+using BrightTime.SharedKernel.Tests;
 using ClosedXML.Excel;
 
 namespace BrightTime.Api.Tests;
@@ -87,6 +89,47 @@ public sealed class ReportRenderingTests
             byte[] pdf = ReportRenderer.Render(Sample(rtl), ReportFormats.Pdf);
             Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
         }
+    }
+
+    /// <summary>Projects as a portfolio has them (D107): one with three pictures, one with none.</summary>
+    private static ReportDocument WithPictures(bool rtl = false) =>
+        new("Ayo Builds", ["Rivers and robots"], [])
+        {
+            Groups =
+            [
+                new ReportGroup("Projects",
+                [
+                    new ReportEntry("Mapping the mussel beds", ["River Rangers · Kettle Nature Trust"],
+                    [
+                        new ReportPicture(TestImages.Jpeg(1000, 750), "A hand-drawn map of the river bend", "The map, with its key"),
+                        new ReportPicture(TestImages.Jpeg(750, 1000), "Mussels in a bucket", "Mussels in a bucket"),
+                        new ReportPicture(TestImages.Png(900, 600), "Our group by the water", "Our group by the water"),
+                    ]),
+                    new ReportEntry("A poem about rain", [], []),
+                ]),
+                new ReportGroup("Nothing here", []),
+            ],
+            RightToLeft = rtl,
+        };
+
+    [Fact]
+    public void A_pdf_shows_each_entry_with_its_pictures_and_a_spreadsheet_lists_the_entries()
+    {
+        ReportRenderer.Configure("Community");
+        foreach (bool rtl in new[] { false, true })
+        {
+            byte[] pdf = ReportRenderer.Render(WithPictures(rtl), ReportFormats.Pdf);
+            Encoding.ASCII.GetString(pdf, 0, 5).ShouldBe("%PDF-");
+            Regex.Count(Encoding.Latin1.GetString(pdf), @"/Subtype\s*/Image").ShouldBe(3, "each picture, once");
+        }
+
+        string csv = Encoding.UTF8.GetString(ReportRenderer.Render(WithPictures(), ReportFormats.Csv)[3..]);
+        csv.ShouldContain("Projects\r\nProjects,\r\nMapping the mussel beds,River Rangers · Kettle Nature Trust\r\nA poem about rain,\r\n");
+        csv.ShouldNotContain("Nothing here", Case.Sensitive, "a group with nothing in it is left out, as in the PDF");
+
+        using XLWorkbook book = new(new MemoryStream(ReportRenderer.Render(WithPictures(), ReportFormats.Xlsx)));
+        book.Worksheets.Select(w => w.Name).ShouldBe(["Projects"]);
+        book.Worksheets.First().CellsUsed().Select(c => c.GetString()).ShouldContain("A poem about rain");
     }
 
     [Fact]

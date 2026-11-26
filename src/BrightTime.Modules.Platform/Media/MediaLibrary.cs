@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using BrightTime.Abstractions.Storage;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
@@ -134,6 +135,29 @@ public sealed class MediaLibrary(PlatformDbContext db, IObjectStore store, ITena
 
     public Task<MediaFile?> GetAsync(Guid mediaId, CancellationToken cancellationToken = default) =>
         FileAsync(mediaId, publicOnly: false, cancellationToken);
+
+    public async Task<MediaFile?> GetPrintCopyAsync(Guid mediaId, int longest, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(longest);
+        var image = await db.InTransactionAsync(async ct =>
+        {
+            var media = await db.MediaObjects.AsNoTracking()
+                .Where(m => m.Id == mediaId && m.ScanState == "clean" && m.Width != null && m.Height != null)
+                .Select(m => new { m.ObjectKey, Width = m.Width!.Value, Height = m.Height!.Value })
+                .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            return media is null || await store.ReadAsync(media.ObjectKey, ct).ConfigureAwait(false) is not { } bytes
+                ? null
+                : new { Bytes = bytes, media.Width, media.Height };
+        }, cancellationToken).ConfigureAwait(false);
+
+        // Decoded outside the transaction: a connection isn't held while Skia works.
+        if (image is null || await ImageSizer.PrintCopyAsync(image.Bytes, image.Width, image.Height, longest, cancellationToken).ConfigureAwait(false) is not { } jpeg)
+        {
+            return null;
+        }
+
+        return new MediaFile("image/jpeg", jpeg, "\"" + Convert.ToHexStringLower(SHA256.HashData(jpeg)) + "\"");
+    }
 
     private Task<MediaFile?> FileAsync(Guid mediaId, bool publicOnly, CancellationToken cancellationToken) =>
         db.InTransactionAsync<MediaFile?>(async ct =>

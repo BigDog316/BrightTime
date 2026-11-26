@@ -179,8 +179,9 @@ be changed here.
 - **Badges**: each one, who gave it and when. **Check it** opens the page anyone can use to check
   it's real.
 - **Skills**: the skills organisations endorsed, and how far along your child is.
-- **Take it with you**: save or send a printable portfolio (PDF), and once they have a badge, their
-  badges (Open Badges) and a learner record (CLR). The files never have your child's legal name.
+- **Take it with you**: save or send a printable portfolio (PDF), with the pictures of their
+  approved projects, and once they have a badge, their badges (Open Badges) and a learner record
+  (CLR). The files never have your child's legal name.
 
 The button shows once your consent is confirmed. When your child gets their own sign-in at 13,
 the portfolio becomes theirs, and you can't see it any more.

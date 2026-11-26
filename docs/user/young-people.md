@@ -188,7 +188,8 @@ far along you are, then others to try.
 At the bottom of **Your portfolio**, *Take it with you* makes a file of your portfolio. Tap one,
 and your phone asks where to save or send it.
 - **Printable portfolio (PDF)**: your activities, hours and badges, each badge with the link where
-  anyone can check it. Print it or attach it to an application.
+  anyone can check it, and your approved projects with their pictures. Print it or attach it to an
+  application.
 - **Your badges (Open Badges)**: your badges as credentials, for a digital wallet or another
   platform.
 - **Learner record (CLR)**: a single credential holding your activities and badges that colleges

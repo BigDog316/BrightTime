@@ -16,6 +16,9 @@ public static class ReportRenderer
 {
     private static readonly char[] FormulaStarts = ['=', '+', '-', '@', '\t', '\r'];
 
+    /// <summary>The most a picture stands on the page, in points (D107): about three inches.</summary>
+    private const float PictureHeight = 210;
+
     /// <summary>
     /// Sets QuestPDF's licence for this deployment (<c>Community</c>, <c>Professional</c> or
     /// <c>Enterprise</c>; the Community licence has a revenue limit, see D57). A name in a script no
@@ -77,6 +80,20 @@ public static class ReportRenderer
                     });
                 }
 
+                foreach (ReportGroup group in report.Groups.Where(g => g.Entries.Count > 0))
+                {
+                    body.Item().Column(section =>
+                    {
+                        section.Spacing(10);
+                        section.Item().Text(group.Heading).FontSize(11).SemiBold();
+                        foreach (ReportEntry entry in group.Entries)
+                        {
+                            // A title isn't left alone at the foot of a page.
+                            section.Item().EnsureSpace(entry.Pictures.Count > 0 ? 160 : 40).Element(e => PdfEntry(e, entry));
+                        }
+                    });
+                }
+
                 foreach (string note in report.Notes)
                 {
                     body.Item().Text(note).FontColor(Colors.Grey.Darken2);
@@ -91,6 +108,39 @@ public static class ReportRenderer
             });
         })).GeneratePdf();
     }
+
+    /// <summary>An entry: its title and lines, then its pictures two to a row, each kept whole with its caption.</summary>
+    private static void PdfEntry(IContainer container, ReportEntry entry) => container.Column(column =>
+    {
+        column.Item().Text(entry.Title).FontSize(10).SemiBold();
+        foreach (string line in entry.Lines)
+        {
+            column.Item().Text(line).FontColor(Colors.Grey.Darken2);
+        }
+
+        if (entry.Pictures.Count == 0)
+        {
+            return;
+        }
+
+        column.Item().PaddingTop(4).Table(t =>
+        {
+            t.ColumnsDefinition(columns =>
+            {
+                columns.RelativeColumn();
+                columns.RelativeColumn();
+            });
+
+            foreach (ReportPicture picture in entry.Pictures)
+            {
+                t.Cell().Padding(4).ShowEntire().Column(cell =>
+                {
+                    cell.Item().MaxHeight(PictureHeight).AlignCenter().SemanticImage(picture.Alt).Image(picture.Image).FitArea();
+                    cell.Item().PaddingTop(3).SemanticCaption().Text(picture.Caption).FontSize(8).FontColor(Colors.Grey.Darken2);
+                });
+            }
+        });
+    });
 
     private static void PdfTable(IContainer container, ReportTable table) => container.Table(t =>
     {
@@ -145,11 +195,25 @@ public static class ReportRenderer
 
     // ---- Excel -------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The tables, then each group with entries as one: a row per entry of its title and lines, as
+    /// many cells in each, and no pictures. A group with none is left out, as in a PDF.
+    /// </summary>
+    private static IEnumerable<ReportTable> AllTables(ReportDocument report) =>
+        report.Tables.Concat(report.Groups.Where(g => g.Entries.Count > 0).Select(g =>
+        {
+            int width = 1 + g.Entries.Max(e => e.Lines.Count);
+            return new ReportTable(
+                g.Heading,
+                [.. Enumerable.Range(0, width).Select(i => new ReportColumn(i == 0 ? g.Heading : string.Empty))],
+                [.. g.Entries.Select(e => (IReadOnlyList<string>)[e.Title, .. e.Lines, .. Enumerable.Repeat(string.Empty, width - 1 - e.Lines.Count)])]);
+        }));
+
     private static byte[] Xlsx(ReportDocument report)
     {
         using XLWorkbook book = new();
         HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
-        foreach (ReportTable table in report.Tables.DefaultIfEmpty(new ReportTable(report.Title, [], [])))
+        foreach (ReportTable table in AllTables(report).DefaultIfEmpty(new ReportTable(report.Title, [], [])))
         {
             IXLWorksheet sheet = book.Worksheets.Add(SheetName(table.Heading, names));
             sheet.RightToLeft = report.RightToLeft;
@@ -249,7 +313,7 @@ public static class ReportRenderer
             Line(csv, [line]);
         }
 
-        foreach (ReportTable table in report.Tables)
+        foreach (ReportTable table in AllTables(report))
         {
             csv.Append("\r\n");
             Line(csv, [table.Heading]);

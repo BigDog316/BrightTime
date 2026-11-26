@@ -13,12 +13,28 @@ public sealed record ReportTable(string Heading, IReadOnlyList<ReportColumn> Col
     public IReadOnlyList<string>? Total { get; init; }
 }
 
+/// <summary>A picture in a report (D107): JPEG or PNG bytes, what it shows (for screen readers), and the caption printed under it.</summary>
+public sealed record ReportPicture(byte[] Image, string Alt, string Caption);
+
+/// <summary>One entry of a <see cref="ReportGroup"/>: a title, lines under it, and its pictures.</summary>
+public sealed record ReportEntry(string Title, IReadOnlyList<string> Lines, IReadOnlyList<ReportPicture> Pictures);
+
+/// <summary>
+/// Entries under a heading, after a report's tables (D107). A PDF gives each entry a section, its
+/// pictures two to a row with their captions; a spreadsheet or CSV gives each a row of its title
+/// and lines, and no pictures.
+/// </summary>
+public sealed record ReportGroup(string Heading, IReadOnlyList<ReportEntry> Entries);
+
 /// <summary>
 /// A report, worded and ready to render (D57): a title, a few lines saying what it covers, its
 /// tables, and notes such as what was hidden and why. The renderers lay it out; they decide nothing.
 /// </summary>
 public sealed record ReportDocument(string Title, IReadOnlyList<string> Lines, IReadOnlyList<ReportTable> Tables)
 {
+    /// <summary>Entries with pictures, after the tables (D107).</summary>
+    public IReadOnlyList<ReportGroup> Groups { get; init; } = [];
+
     public IReadOnlyList<string> Notes { get; init; } = [];
 
     /// <summary>For Arabic: the page reads from the right.</summary>

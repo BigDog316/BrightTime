@@ -9,7 +9,8 @@ namespace BrightTime.Modules.Platform.Tests;
 
 /// <summary>
 /// The smaller copies of an image (D106): WebP, as wide as each size it's wider than, turned as
-/// it's shown; and the decode that refuses a file that isn't a picture.
+/// it's shown; and the decode that refuses a file that isn't a picture. And the copy for print
+/// (D107): a JPEG no longer than asked on its longest side, turned, on white.
 /// </summary>
 public sealed class ImageSizerTests
 {
@@ -105,6 +106,59 @@ public sealed class ImageSizerTests
         int data = png.AsSpan().IndexOf("IDAT"u8) + 4;
         png.AsSpan(data + 2, 40).Fill(0xA5);
         (await ImageSizer.CopiesAsync(png, 800, 600, MediaSizes.All, Ct)).ShouldBeNull();
+    }
+
+    private static SKBitmap DecodeJpeg(byte[] jpeg)
+    {
+        jpeg[..3].ShouldBe(new byte[] { 0xFF, 0xD8, 0xFF });
+        return SKBitmap.Decode(jpeg).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_print_copy_is_a_JPEG_no_longer_than_asked_and_turned_as_shown()
+    {
+        // Landscape, and a phone photo on its side: the longest side is held to 1,000.
+        CleanImage wide = ImageCleaner.Clean(TestImages.Jpeg(4000, 3000), Max).ShouldNotBeNull();
+        byte[] print = (await ImageSizer.PrintCopyAsync(wide.Bytes, wide.Width, wide.Height, 1000, Ct)).ShouldNotBeNull();
+        using (SKBitmap shown = DecodeJpeg(print))
+        {
+            (shown.Width, shown.Height).ShouldBe((1000, 750));
+        }
+
+        print.Length.ShouldBeLessThan(wide.Bytes.Length);
+
+        CleanImage tall = ImageCleaner.Clean(TestImages.Jpeg(2000, 1500, orientation: 6, marked: true), Max).ShouldNotBeNull();
+        using (SKBitmap shown = DecodeJpeg((await ImageSizer.PrintCopyAsync(tall.Bytes, tall.Width, tall.Height, 1000, Ct)).ShouldNotBeNull()))
+        {
+            (shown.Width, shown.Height).ShouldBe((750, 1000));
+            shown.GetPixel(shown.Width * 3 / 4, shown.Height / 4).Red.ShouldBeLessThan((byte)40, "orientation 6 shows the stored top-left at the top right");
+            shown.GetPixel(shown.Width / 4, shown.Height * 3 / 4).Red.ShouldBeGreaterThan((byte)100);
+        }
+
+        // Smaller than asked: as it is, not made larger.
+        CleanImage small = ImageCleaner.Clean(TestImages.Png(600, 400), Max).ShouldNotBeNull();
+        using (SKBitmap shown = DecodeJpeg((await ImageSizer.PrintCopyAsync(small.Bytes, 600, 400, 1000, Ct)).ShouldNotBeNull()))
+        {
+            (shown.Width, shown.Height).ShouldBe((600, 400));
+        }
+    }
+
+    [Fact]
+    public async Task A_print_copy_of_a_see_through_picture_is_on_white_and_a_file_that_is_not_one_gets_none()
+    {
+        using SKBitmap clear = new(new SKImageInfo(400, 400, SKColorType.Rgba8888, SKAlphaType.Premul));
+        clear.Erase(SKColors.Transparent);
+        using SKPixmap pixels = clear.PeekPixels();
+        using SKData png = pixels.Encode(new SKPngEncoderOptions()).ShouldNotBeNull();
+        using (SKBitmap shown = DecodeJpeg((await ImageSizer.PrintCopyAsync(png.ToArray(), 400, 400, 1000, Ct)).ShouldNotBeNull()))
+        {
+            SKColor middle = shown.GetPixel(200, 200);
+            (middle.Red, middle.Green, middle.Blue).ShouldBe(((byte)255, (byte)255, (byte)255));
+        }
+
+        byte[] fake = [0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x0B, 8, 0x02, 0x58, 0x03, 0x20, 1, 1, 0x11, 0, 0xFF, 0xDA, 0x00, 0x08, 1, 1, 0, 0, 63, 0, 0x12, 0x34, 0x56, 0xFF, 0xD9];
+        (await ImageSizer.PrintCopyAsync(fake, 800, 600, 1000, Ct)).ShouldBeNull();
+        (await ImageSizer.PrintCopyAsync(TestImages.Png(800, 600), 800, 601, 1000, Ct)).ShouldBeNull("another size than it says");
     }
 
     [Fact]

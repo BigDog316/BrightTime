@@ -3614,6 +3614,43 @@ PNGs, the sizes an image isn't wider than, all eight orientations and the refusa
 `MediaSizesTests` the copies made on adding, serving, the redirects, private pictures, a file that
 doesn't decode, removing, and the jobs worker's run.
 
+### D107 — Project pictures in the printable portfolio (**proposed 2026-11-26**)
+
+D104 left a project's pictures out of the portfolio's downloads. Sam chose on 2026-11-26: the
+printable portfolio next; every picture of each approved project, with its caption; made small as
+the PDF is made, with no stored copies; a section per project in place of the projects table.
+- **Which:** each project staff approved (approved or published), as the projects table took, with
+  every picture in the project's order. A project still a draft or waiting for review, and its
+  pictures, stay out. A picture that's gone or doesn't decode is left out; the rest still print.
+- **Made small:** `IMediaLibrary.GetPrintCopyAsync` (new) reads a clean picture of any visibility
+  and makes a JPEG of it with D106's `ImageSizer`: its longest side at most 1,000 pixels, turned
+  as it's shown, on white where it's see-through, at quality 85. Made when asked and never kept,
+  one picture at a time under D106's limit of two decodes a process, so an export holds only small
+  copies, not up to six 5 MB originals a project, each decoded whole (an 8,000-pixel PNG is
+  256 MB). QuestPDF then takes each down again to the size it's printed at, at its 288 per inch.
+  That's two layers where Sam's choice named QuestPDF's alone: on its own it would hold every
+  original, decoded, while it lays the PDF out.
+- **Laid out:** a report can now have groups after its tables (`ReportGroup`, `ReportEntry`,
+  `ReportPicture`). In the portfolio, "Projects" comes after badges, each project with its title,
+  then its activity and organisation, then its pictures two to a row, each at most 210 points tall
+  and kept whole with its caption: the young person's caption, or what it shows when there's none.
+  A project's title isn't left alone at the foot of a page. With no approved projects the section
+  isn't there (the empty table was). A spreadsheet or CSV of a report with groups lists each entry
+  as a row of its title and lines, with no pictures; no portfolio is downloaded as one.
+- **Who:** the young person's own download, and a guardian's of a child profile (D93), which
+  already took the same facts: a guardian now sees the pictures of their child's approved projects
+  in it.
+- **Not yet:** what a picture shows is marked for screen readers (`SemanticImage`), but QuestPDF
+  writes that only in a tagged PDF (PDF/UA), which the reports aren't yet; until then a picture
+  with its own caption prints that, and what it shows isn't in the file. Pictures aren't in the
+  Open Badges or CLR files, which carry credentials, not work.
+
+No schema change. The projects table's column heading `portfolio.export.col.project` is gone from
+the catalogues. `ImageSizerTests` covers the print copy (its size, a phone photo turned, a small
+one left as it is, a see-through PNG on white, the refusals); `ReportRenderingTests` the PDF's
+pictures in either direction and the spreadsheet and CSV rows; `ProjectPictureApiTests` an export
+with an approved project's two pictures and not a draft's.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

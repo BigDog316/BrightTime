@@ -6,8 +6,9 @@ namespace BrightTime.Reporting;
 
 /// <summary>
 /// A young person's portfolio as a printable document (D68): their own words at the top, what
-/// they took part in, and the badges they hold with the link where each can be checked. Worded in
-/// their language; laid out by <see cref="ReportRenderer"/> like any report.
+/// they took part in, their skills, the badges they hold with the link where each can be checked,
+/// and their approved projects, each with its pictures (D107). Worded in their language; laid out
+/// by <see cref="ReportRenderer"/> like any report.
 /// </summary>
 public static class PortfolioDocuments
 {
@@ -60,10 +61,13 @@ public static class PortfolioDocuments
                 k.EndorsedBy ?? text["portfolio.export.self"],
             ])]);
 
-        ReportTable projects = new(
+        // A section per project (D107): what it was part of, then its pictures with their captions.
+        ReportGroup projects = new(
             text["portfolio.export.projects"],
-            [new(text["portfolio.export.col.project"]), new(text["portfolio.export.col.activity"]), new(text["portfolio.export.col.organisation"])],
-            [.. facts.Projects.Select(p => (IReadOnlyList<string>)[p.Title, p.Activity ?? "", p.Organisation ?? ""])]);
+            [.. facts.Projects.Select(p => new ReportEntry(
+                p.Title,
+                string.Join(" · ", new[] { p.Activity, p.Organisation }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } of ? [of] : [],
+                [.. p.Pictures.Select(i => new ReportPicture(i.Jpeg, i.Alt, i.Caption))]))]);
 
         List<string> notes = [];
         if (facts.HasHidden)
@@ -79,8 +83,9 @@ public static class PortfolioDocuments
         return new ReportDocument(
             facts.DisplayName is { } name ? text.Format("portfolio.export.title", ("name", name)) : text["portfolio.export.title_plain"],
             lines,
-            [activities, skills, projects, badges])
+            [activities, skills, badges])
         {
+            Groups = [projects],
             Notes = notes,
             RightToLeft = text.Culture.TextInfo.IsRightToLeft,
             FileName = $"portfolio-{text.FileDay(now)}",

@@ -7,6 +7,7 @@ using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Learning.Badges;
 using BrightTime.Modules.Learning.Persistence;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -34,9 +35,19 @@ public sealed record ExportedBadge(string Name, string Issuer, DateTimeOffset Is
 [YouthData]
 public sealed record ExportedSkill(string Name, short? Level, string? EndorsedBy);
 
-/// <summary>A project staff approved (D69).</summary>
+/// <summary>A project staff approved (D69), and its pictures (D107).</summary>
 [YouthData]
-public sealed record ExportedProject(string Title, string? Activity, string? Organisation);
+public sealed record ExportedProject(string Title, string? Activity, string? Organisation)
+{
+    public IReadOnlyList<ExportedPicture> Pictures { get; init; } = [];
+}
+
+/// <summary>
+/// A project's picture for print (D107): a JPEG no more than <see cref="PortfolioExports.PrintSide"/>
+/// on its longest side, what it shows, and the caption printed under it (its own, or what it shows).
+/// </summary>
+[YouthData]
+public sealed record ExportedPicture(byte[] Jpeg, string Alt, string Caption);
 
 /// <summary>What a portfolio export says: the young person's own choices and unhidden records, their skills and approved projects, and the badges they hold.</summary>
 [YouthData]
@@ -62,9 +73,15 @@ public sealed record ExportFile(byte[] Bytes, string ContentType, string FileNam
 /// CLR identifies them as their badges do, by a salted hash.
 /// </remarks>
 public sealed class PortfolioExports(
-    LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, Badges.Badges badges, Records.Skills skills, Records.Projects projects)
+    LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, Badges.Badges badges, Records.Skills skills, Records.Projects projects,
+    IMediaLibrary media)
 {
     public const string Exported = "learning.portfolio.exported";
+
+    /// <summary>
+    /// A printed picture's longest side, in pixels (D107): two to a row on A4, about 280 per inch.
+    /// </summary>
+    public const int PrintSide = 1000;
 
     public const string ClrContext = "https://purl.imsglobal.org/spec/clr/v2p0/context-2.0.1.json";
     public const string ClrSchema = "https://purl.imsglobal.org/spec/clr/v2p0/schema/json/clr_v2p0_clrcredential_schema.json";
@@ -217,8 +234,33 @@ public sealed class PortfolioExports(
             [.. held.Select(h => new ExportedBadge(h.Name, h.Issuer, h.IssuedOn, h.ExpiresOn, BadgeDocuments.Credential(site, h.VerifySlug)))])
         {
             Skills = [.. (await skills.OfAsync(user.Value, ct).ConfigureAwait(false)).Select(k => new ExportedSkill(k.Name, k.Level, k.EndorsedBy))],
-            Projects = [.. (await projects.ApprovedOfAsync(user.Value, ct).ConfigureAwait(false)).Select(p => new ExportedProject(p.Title, p.Activity, p.Organisation))],
+            Projects = await ProjectsAsync(user, ct).ConfigureAwait(false),
         };
+    }
+
+    /// <summary>
+    /// The approved projects, each with its pictures for print in their order (D107). A picture is
+    /// made small one at a time, so an export holds only the small copies; one that's gone, or
+    /// doesn't decode, is left out.
+    /// </summary>
+    private async Task<List<ExportedProject>> ProjectsAsync(UserId user, CancellationToken ct)
+    {
+        List<ExportedProject> exported = [];
+        foreach (Records.ProjectView project in await projects.ApprovedOfAsync(user.Value, ct).ConfigureAwait(false))
+        {
+            List<ExportedPicture> pictures = [];
+            foreach (Records.ProjectPicture picture in project.Pictures)
+            {
+                if (await media.GetPrintCopyAsync(picture.MediaId, PrintSide, ct).ConfigureAwait(false) is { } copy)
+                {
+                    pictures.Add(new ExportedPicture(copy.Bytes, picture.Alt, picture.Caption ?? picture.Alt));
+                }
+            }
+
+            exported.Add(new ExportedProject(project.Title, project.Activity, project.Organisation) { Pictures = pictures });
+        }
+
+        return exported;
     }
 
     private async Task<Guid> RecordAsync(UserId user, string format, CancellationToken ct)

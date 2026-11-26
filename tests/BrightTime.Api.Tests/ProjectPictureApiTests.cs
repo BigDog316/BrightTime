@@ -1,7 +1,10 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using BrightTime.SharedKernel.Tests;
 
 namespace BrightTime.Api.Tests;
@@ -9,7 +12,8 @@ namespace BrightTime.Api.Tests;
 /// <summary>
 /// A young person's pictures (D104): on a project, checked and cleaned, kept private, and shown
 /// beyond them only to staff while it waits for their review and to anyone once it's published.
-/// An upload step sends a project with a picture to staff as its evidence.
+/// An upload step sends a project with a picture to staff as its evidence. An approved project's
+/// pictures go into the printable portfolio, made small for print (D107).
 /// </summary>
 /// <remarks>Uses the twentieth organisation with no staff (the API tests use the others up to it); the ninth's admin is the outsider.</remarks>
 [Collection(ApiDatabase.Name)]
@@ -180,6 +184,49 @@ public sealed class ProjectPictureApiTests(ApiFixture api)
             (await api.ScalarAsync<long>("select count(*) from learning.project_media where project_id = @p", ("p", projectId))).ShouldBe(0);
             (await api.ScalarAsync<long>("select count(*) from platform.media_object where uploaded_by = @u", ("u", learnerId))).ShouldBe(0);
             (await api.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'media.added' and actor_id = @u", ("u", learnerId))).ShouldBe(7);
+        }
+    }
+
+    /// <summary>Each image in a PDF, by the width and height its dictionary gives.</summary>
+    private static List<(int Width, int Height)> PdfImages(byte[] pdf) =>
+        [.. Regex.Matches(Encoding.Latin1.GetString(pdf), @"<<(?:(?!>>).)*?/Subtype\s*/Image(?:(?!>>).)*>>", RegexOptions.Singleline)
+            .Select(m => (
+                int.Parse(Regex.Match(m.Value, @"/Width\s+(\d+)").Groups[1].Value, CultureInfo.InvariantCulture),
+                int.Parse(Regex.Match(m.Value, @"/Height\s+(\d+)").Groups[1].Value, CultureInfo.InvariantCulture)))];
+
+    [Fact]
+    public async Task An_approved_projects_pictures_go_into_the_printable_portfolio_made_small()
+    {
+        RequireDatabase();
+        (Guid listing, Guid org) = Programme(19);
+        (HttpClient admin, _) = await SignedInAsync(AdminOf(org));
+        (HttpClient learner, Guid learnerId) = await SignedInAsync(await api.NewAdultAsync());
+        using (admin)
+        using (learner)
+        {
+            await AttendedAsync(learnerId, listing, org);
+
+            // Approved, with a large phone photo on its side and a PNG.
+            Guid approved = await ProjectAsync(learner, listing, "A clay boat");
+            await JsonAsync(await PostPictureAsync(learner, $"api/v1/me/projects/{approved}/pictures", TestImages.Jpeg(4000, 3000, orientation: 6), "image/jpeg", "The boat from above", "Drying on the shelf"));
+            await JsonAsync(await PostPictureAsync(learner, $"api/v1/me/projects/{approved}/pictures", TestImages.Png(800, 600), "image/png", "A clay boat on a table"));
+            await JsonAsync(await learner.PostAsync(Relative($"api/v1/me/projects/{approved}/submit"), null, Ct));
+            (await admin.PostAsJsonAsync($"api/v1/org/{org}/projects/{approved}/review", new { approve = true }, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+            // Still a draft: not in the portfolio, nor are its pictures.
+            Guid draft = await ProjectAsync(learner, listing, "A half-made kite");
+            await JsonAsync(await PostPictureAsync(learner, $"api/v1/me/projects/{draft}/pictures", TestImages.Png(1200, 900), "image/png", "A kite frame"));
+
+            HttpResponseMessage pdf = await learner.PostAsJsonAsync("api/v1/me/portfolio/export", new { format = "pdf" }, Ct);
+            pdf.StatusCode.ShouldBe(HttpStatusCode.OK);
+            byte[] bytes = await pdf.Content.ReadAsByteArrayAsync(Ct);
+            Encoding.ASCII.GetString(bytes[..5]).ShouldBe("%PDF-");
+            // Made no longer than 1,000 on a side for print (QuestPDF takes it down again to the size it's printed at).
+            List<(int Width, int Height)> images = PdfImages(bytes);
+            images.Count.ShouldBe(2, "the approved project's two pictures, and not the draft's");
+            images.ShouldAllBe(i => i.Width <= 1000 && i.Height <= 1000);
+            images[0].Width.ShouldBeLessThan(images[0].Height, "the photo turned as it's shown");
+            images[1].ShouldBe((800, 600), "the PNG as it was");
         }
     }
 

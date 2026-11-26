@@ -68,6 +68,14 @@ public interface IMediaLibrary
     /// </summary>
     Task<MediaFile?> GetAsync(Guid mediaId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// A clean image, whatever its visibility, as a JPEG for print (D107): its longest side at most
+    /// <paramref name="longest"/> pixels, turned as it's shown. For a caller that has already
+    /// decided who may see it; made when asked and never kept. Null for anything else, or an image
+    /// that doesn't decode.
+    /// </summary>
+    Task<MediaFile?> GetPrintCopyAsync(Guid mediaId, int longest, CancellationToken cancellationToken = default);
+
     /// <summary>Removes a media object and its bytes. Whatever pointed to it must have let go first.</summary>
     Task<bool> RemoveAsync(Guid mediaId, UserId actor, CancellationToken cancellationToken = default);
 }

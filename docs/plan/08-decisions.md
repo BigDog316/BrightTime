@@ -3651,7 +3651,7 @@ one left as it is, a see-through PNG on white, the refusals); `ReportRenderingTe
 pictures in either direction and the spreadsheet and CSV rows; `ProjectPictureApiTests` an export
 with an approved project's two pictures and not a draft's.
 
-### D108 — Tagged PDFs for screen readers (**proposed 2026-11-26**)
+### D108 — Tagged PDFs for screen readers (**accepted 2026-11-26**)
 
 D107 marked what each picture shows, but QuestPDF writes that only into a tagged PDF, and no
 report was tagged. A county platform's documents fall under the ADA Title II web rule (WCAG 2.1

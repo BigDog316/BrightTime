@@ -51,7 +51,8 @@ public sealed class MediaLibrary(PlatformDbContext db, IObjectStore store, ITena
 
         if (ImageCleaner.Clean(file.Span, rules.MaxBytes) is not { } clean
             || clean.Width < rules.MinWidth || clean.Height < rules.MinHeight
-            || Math.Max(clean.Width, clean.Height) > rules.MaxSide)
+            || Math.Max(clean.Width, clean.Height) > rules.MaxSide
+            || (rules.MaxAspect > 0 && Math.Max(clean.Width, clean.Height) > rules.MaxAspect * Math.Min(clean.Width, clean.Height)))
         {
             return null;
         }

@@ -9,6 +9,7 @@
 @using BrightTime.SharedKernel.Ids
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.Web.Auth
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Policy = ConsoleServices.VetPolicy)]
 @inherits ConsoleComponent
@@ -27,6 +28,10 @@
     @if (Saved == "1")
     {
         <p class="notice success" role="status">@T["organiser.checklist.saved"]</p>
+    }
+    else if (Saved == "logo")
+    {
+        <p class="notice success" role="status">@T["organiser.org.logo_removed"]</p>
     }
 
     <dl class="facts review-facts">
@@ -66,6 +71,20 @@
     {
         <h2>@T["organiser.org.mission"]</h2>
         <p dir="auto">@mission</p>
+    }
+
+    @if (o.Logo is { } logo)
+    {
+        @* The logo (D109) went live when it was added; an organiser can take one down that isn't fit to show. *@
+        <section aria-labelledby="logo-heading">
+            <h2 id="logo-heading">@T["organiser.org.logo"]</h2>
+            <img class="org-logo" src="@MediaEndpoints.Card(logo)" alt="@T["organiser.org.logo_alt"]" />
+            <form method="post" @formname="logo-remove" @onsubmit="RemoveLogoAsync">
+                <AntiforgeryToken />
+                <p class="hint">@T["organiser.org.logo_hint"]</p>
+                <button type="submit" class="secondary-button">@T["organiser.org.logo_remove"]</button>
+            </form>
+        </section>
     }
 
     <section class="review-actions" aria-labelledby="decide-heading">
@@ -242,6 +261,18 @@
     }
 
     private Task StartReviewAsync() => DecideAsync(OrganisationStatus.UnderReview, null, "started");
+
+    private async Task RemoveLogoAsync()
+    {
+        Result removed = await Get<OrganisationLogos>().RemoveAsync(OrgId, Actor, OrganisationLogos.Remover.Organiser);
+        if (!removed.IsSuccess)
+        {
+            _problem = T.Error(removed.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/review/organisations/{OrgId}?saved=logo");
+    }
 
     private static bool CanSaveChecklist(OrganisationStatus status) =>
         status is OrganisationStatus.Applied or OrganisationStatus.UnderReview or OrganisationStatus.ChangesRequested

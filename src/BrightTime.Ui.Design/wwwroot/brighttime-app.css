@@ -153,6 +153,17 @@ a {
     color: var(--bt-ink-muted);
 }
 
+/* An organisation's logo (D109): whole, inside a small square, on white so a see-through one shows on a dark screen. */
+.org-logo-small {
+    background: #ffffff;
+    border-radius: 0.25rem;
+    height: 2rem;
+    margin-inline-end: 0.5rem;
+    object-fit: contain;
+    vertical-align: middle;
+    width: 2rem;
+}
+
 .visually-hidden {
     position: absolute;
     inline-size: 1px;

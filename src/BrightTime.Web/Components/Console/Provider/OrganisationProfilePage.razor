@@ -7,6 +7,7 @@
 @using BrightTime.SharedKernel.Ids
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.Web.Components.Console.Forms
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inherits ConsoleComponent
@@ -36,6 +37,10 @@ else if (_view is { } view)
     {
         <p class="notice success" role="status">@T["provider.profile.saved"]</p>
     }
+    @if (LogoDone is "added" or "removed")
+    {
+        <p class="notice success" role="status">@T["provider.logo.done." + LogoDone]</p>
+    }
     @if (_problem is not null)
     {
         <p class="notice error" role="alert">@_problem</p>
@@ -48,6 +53,39 @@ else if (_view is { } view)
             <p dir="auto">@note</p>
         </section>
     }
+
+    @* The logo (D109): live at once, beside the name on the organisation's page and listings once it's approved. *@
+    <section class="logo-editor" aria-labelledby="logo-heading">
+        <h2 id="logo-heading">@T["provider.logo.heading"]</h2>
+        <p>@T["provider.logo.intro"]</p>
+        @if (view.Logo is { } logo)
+        {
+            <img class="org-logo" src="@MediaEndpoints.Card(logo)" alt="@T["provider.logo.current"]" />
+        }
+        else
+        {
+            <p>@T["provider.logo.none"]</p>
+        }
+        @if (_canEdit)
+        {
+            <form method="post" enctype="multipart/form-data" class="editor" @formname="logo" @onsubmit="SetLogoAsync">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="logo-file">@T[view.Logo is null ? "provider.logo.file" : "provider.logo.replace"]</label>
+                    <p class="hint" id="logo-hint">@T["provider.logo.rules"]</p>
+                    <input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg" required aria-describedby="logo-hint" />
+                </div>
+                <button type="submit">@T["provider.logo.upload"]</button>
+            </form>
+            @if (view.Logo is not null)
+            {
+                <form method="post" @formname="logo-remove" @onsubmit="RemoveLogoAsync">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary-button">@T["provider.logo.remove"]</button>
+                </form>
+            }
+        }
+    </section>
 
     @if (_canEdit)
     {
@@ -87,6 +125,8 @@ else if (_view is { } view)
     [Parameter] public Guid OrgId { get; set; }
 
     [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    [SupplyParameterFromQuery(Name = "logo")] public string? LogoDone { get; set; }
 
     private OrganisationProfileView? _view;
     private OrganisationForm _form = new();
@@ -163,5 +203,45 @@ else if (_view is { } view)
         }
 
         Navigation.NavigateTo($"/provider/orgs/{OrgId}/profile");
+    }
+
+    private async Task SetLogoAsync()
+    {
+        if (!_canEdit)
+        {
+            return;
+        }
+
+        IFormFile? file = HttpContext.Request.Form.Files["logo"];
+        if (file is null || file.Length is 0 or > OrganisationLogoRules.MaxBytes)
+        {
+            _problem = T.Error(OrganisationLogoRules.NotAnImage);
+            return;
+        }
+
+        using MemoryStream bytes = new();
+        await file.CopyToAsync(bytes);
+        LogoAnswer(await Get<OrganisationLogos>().SetAsync(OrgId, bytes.ToArray(), Actor), "added");
+    }
+
+    private async Task RemoveLogoAsync()
+    {
+        if (!_canEdit)
+        {
+            return;
+        }
+
+        LogoAnswer(await Get<OrganisationLogos>().RemoveAsync(OrgId, Actor, OrganisationLogos.Remover.Provider), "removed");
+    }
+
+    private void LogoAnswer(Result done, string what)
+    {
+        if (!done.IsSuccess)
+        {
+            _problem = T.Error(done.Error!);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/profile?logo={what}");
     }
 }

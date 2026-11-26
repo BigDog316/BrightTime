@@ -13,7 +13,11 @@ using Microsoft.EntityFrameworkCore;
 namespace BrightTime.Modules.Directory.Provider;
 
 /// <summary>An organisation's profile as its admins see it: the form, where vetting stands, and what the organiser said.</summary>
-public sealed record OrganisationProfileView(OrganisationForm Form, OrganisationStatus Status, string? ReviewNote, string Slug, uint Version);
+public sealed record OrganisationProfileView(OrganisationForm Form, OrganisationStatus Status, string? ReviewNote, string Slug, uint Version)
+{
+    /// <summary>Its logo (D109), if it has one.</summary>
+    public Guid? Logo { get; init; }
+}
 
 /// <summary>
 /// The organisation's own profile, edited by its owners and admins, and its side of vetting:
@@ -49,7 +53,10 @@ public sealed class OrganisationSettings(DirectoryDbContext db, ITenantContext t
                         PublicPhone = o.PublicPhone ?? "",
                         Languages = o.LanguagesServed,
                     },
-                    o.ResolvedStatus, o.ReviewNote, o.Slug, row!.Version);
+                    o.ResolvedStatus, o.ReviewNote, o.Slug, row!.Version)
+                {
+                    Logo = o.LogoMediaId,
+                };
         }, cancellationToken);
 
     /// <summary>Saves the profile. The form must already have passed <see cref="ProviderForms.Check(OrganisationForm)"/>.</summary>

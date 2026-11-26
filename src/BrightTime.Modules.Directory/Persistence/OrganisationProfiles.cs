@@ -30,7 +30,10 @@ public sealed class OrganisationProfiles(DirectoryDbContext db) : IOrganisationP
 
             return new OrganisationProfile(
                 new OrganisationId(o.Id), o.Slug, o.DisplayName, o.OrgKind, o.Mission, o.WebsiteUrl, o.PublicEmail, o.PublicPhone,
-                o.LanguagesServed, [.. sites.Select(ToPublic)]);
+                o.LanguagesServed, [.. sites.Select(ToPublic)])
+            {
+                Logo = o.LogoMediaId,
+            };
         }, cancellationToken);
 
     public Task<IReadOnlyDictionary<OrganisationId, OrganisationLink>> GetLinksAsync(
@@ -44,9 +47,9 @@ public sealed class OrganisationProfiles(DirectoryDbContext db) : IOrganisationP
             : db.InTransactionAsync<IReadOnlyDictionary<OrganisationId, OrganisationLink>>(async ct =>
                 (await db.Organisations.AsNoTracking()
                     .Where(o => keys.Contains(o.Id) && o.Status == Approved)
-                    .Select(o => new { o.Id, o.Slug, o.DisplayName })
+                    .Select(o => new { o.Id, o.Slug, o.DisplayName, o.LogoMediaId })
                     .ToListAsync(ct).ConfigureAwait(false))
-                .ToDictionary(o => new OrganisationId(o.Id), o => new OrganisationLink(new OrganisationId(o.Id), o.Slug, o.DisplayName)),
+                .ToDictionary(o => new OrganisationId(o.Id), o => new OrganisationLink(new OrganisationId(o.Id), o.Slug, o.DisplayName) { Logo = o.LogoMediaId }),
                 cancellationToken);
     }
 

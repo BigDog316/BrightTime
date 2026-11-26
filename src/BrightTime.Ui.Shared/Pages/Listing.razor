@@ -17,7 +17,14 @@ else if (_listing is { } l)
 {
     <article class="listing" lang="@l.ContentLanguage">
         <h1>@l.Title</h1>
-        <p class="byline">@T.Format("listing.byline", ("organisation", Text.Name(l.Organisation.Name)))</p>
+        <p class="byline">
+            @if (l.Organisation.Logo is { } logo)
+            {
+                @* Beside the name it stands for, so a screen reader needn't hear it (D109). *@
+                <img class="org-logo-small" src="@Endpoints.Media(logo, AppEndpoints.MediaCard)" alt="" />
+            }
+            @T.Format("listing.byline", ("organisation", Text.Name(l.Organisation.Name)))
+        </p>
         <p class="summary">@l.Summary</p>
         @if (l.Pictures is [var main, ..])
         {

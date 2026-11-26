@@ -211,6 +211,7 @@ public static class ConsoleServices
             services.AddScoped<OrganisationReview>();
             services.AddScoped<OrganisationApplications>();
             services.AddScoped<OrganisationSettings>();
+            services.AddScoped<OrganisationLogos>();
             services.AddScoped<SiteEditor>();
             services.AddScoped<StaffDirectory>();
             services.AddScoped<BrightTime.Modules.Directory.Clearances.StaffClearances>();

@@ -39,7 +39,11 @@ public sealed record OrganisationForReview(
     IReadOnlyList<string> Sites,
     int ActiveOwners,
     IReadOnlyList<VettingHistoryRow> History,
-    VettingState Vetting);
+    VettingState Vetting)
+{
+    /// <summary>Its logo (D109), live as soon as it's added; an organiser can take it down.</summary>
+    public Guid? Logo { get; init; }
+}
 
 /// <summary>
 /// The organiser's side of vetting: the queue, one application, and decisions on it.
@@ -91,7 +95,10 @@ public sealed class OrganisationReview(DirectoryDbContext db, ITenantContext ten
             VettingState vetting = await VettingStateAsync(o, sites.Count > 0, owners, ct).ConfigureAwait(false);
             return new OrganisationForReview(
                 o.OrganisationId, o.DisplayName, o.LegalName, o.OrgKind, o.ResolvedStatus, o.WebsiteUrl, o.Mission,
-                o.PublicEmail, o.PublicPhone, o.LanguagesServed, o.SubmittedAt, o.ReviewNote, sites, owners, history, vetting);
+                o.PublicEmail, o.PublicPhone, o.LanguagesServed, o.SubmittedAt, o.ReviewNote, sites, owners, history, vetting)
+            {
+                Logo = o.LogoMediaId,
+            };
         }, cancellationToken);
 
     /// <summary>

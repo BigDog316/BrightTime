@@ -109,6 +109,17 @@ public sealed class ApplyScreenTests
     private const string Beds = "ed000000-0000-0000-0000-0000000000a2";
 
     [Fact]
+    public async Task An_organisations_logo_is_in_the_byline_beside_its_name_and_not_read_out()
+    {
+        string logoed = ListingJson("none").Replace(
+            "\"name\":\"Kettle Rowing\"}", $"\"name\":\"Kettle Rowing\",\"logo\":\"{Beds}\"}}", StringComparison.Ordinal);
+        logoed.ShouldContain(Beds);
+        using FakeApi api = SignedIn().Json(HttpMethod.Get, "public/listings/rowing-camp", logoed);
+        string html = await RenderAsync<Listing>(api, new Dictionary<string, object?> { ["Slug"] = "rowing-camp" });
+        html.ShouldContain($"<img class=\"org-logo-small\" src=\"https://kettle.test/media/{Beds}/480\" alt />");
+    }
+
+    [Fact]
     public async Task A_listings_pictures_come_from_the_website_the_main_one_first_in_the_listings_language()
     {
         string pictured = ListingJson("none").TrimEnd()[..^1]

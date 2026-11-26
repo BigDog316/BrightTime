@@ -13,7 +13,11 @@ public sealed record OrganisationProfile(
     string? PublicEmail,
     string? PublicPhone,
     IReadOnlyList<string> LanguagesServed,
-    IReadOnlyList<PublicSite> Sites);
+    IReadOnlyList<PublicSite> Sites)
+{
+    /// <summary>Its logo (D109), a public media object shown beside its name; none when it has none.</summary>
+    public Guid? Logo { get; init; }
+}
 
 /// <summary>
 /// A site as the public sees it. No coordinates, ever; and for a site whose address is not
@@ -33,8 +37,11 @@ public sealed record PublicSite(
     bool? HasElevator,
     bool? HasQuietSpace);
 
-/// <summary>An approved organisation's name and page address, for linking to it.</summary>
-public sealed record OrganisationLink(OrganisationId Id, string Slug, string DisplayName);
+/// <summary>An approved organisation's name and page address, for linking to it, and its logo (D109).</summary>
+public sealed record OrganisationLink(OrganisationId Id, string Slug, string DisplayName)
+{
+    public Guid? Logo { get; init; }
+}
 
 /// <summary>Public organisation pages. Only approved organisations have one.</summary>
 public interface IOrganisationProfiles

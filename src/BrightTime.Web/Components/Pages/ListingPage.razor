@@ -14,7 +14,7 @@
         <meta name="description" content="@l.Summary" />
     </HeadContent>
 
-    <ListingView Listing="l" Lang="@Lang" OrganisationSlug="@_orgSlug" NeighbourhoodCodes="_hoodCodes" />
+    <ListingView Listing="l" Lang="@Lang" OrganisationSlug="@_orgSlug" OrganisationLogo="@_orgLogo" NeighbourhoodCodes="_hoodCodes" />
 }
 
 @code {
@@ -24,6 +24,7 @@
 
     private ListingDetail? _listing;
     private string? _orgSlug;
+    private Guid? _orgLogo;
     private IReadOnlyDictionary<Guid, string> _hoodCodes = new Dictionary<Guid, string>();
 
     protected override async Task OnParametersSetAsync()
@@ -42,7 +43,8 @@
 
         if (_listing.OrganisationId is { } org)
         {
-            _orgSlug = (await Organisations.GetLinksAsync([org])).GetValueOrDefault(org)?.Slug;
+            BrightTime.Modules.Directory.Contracts.OrganisationLink? link = (await Organisations.GetLinksAsync([org])).GetValueOrDefault(org);
+            (_orgSlug, _orgLogo) = (link?.Slug, link?.Logo);
         }
 
         if (_listing.Places.Any(p => p.NeighbourhoodId is not null))

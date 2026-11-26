@@ -3684,6 +3684,41 @@ change. `ReportRenderingTests` reads the structure (the PDF/UA identifier, langu
 figures with their descriptions, one caption, table headers, a long table in Arabic over pages
 with one first heading); `ProjectPictureApiTests` a real export's descriptions and language.
 
+### D109 — An organisation's logo (**proposed 2026-11-26**)
+
+`directory.organisation.logo_media_id` was in the schema from the start, unused. Sam chose on
+2026-11-26: the logo next; on the organisation's page, its listings' pages (web and app) and in the
+console, with search cards keeping the listing's own picture; live at once, like the rest of the
+profile; PNG or JPEG of up to 2 MB, at least 200 pixels each way, at most four to one.
+- **Adding:** owners and admins (`orgs.edit`) add, replace or remove it on the organisation's
+  profile page (`OrganisationLogos` in Directory). It's a public media object (D103), checked,
+  cleaned and given its smaller copies (D106) like any picture; `ImageRules` gains `MaxAspect`,
+  so a banner more than four times as wide as it's tall, or tall as it's wide, is refused. A new
+  logo replaces the old, whose bytes are removed once nothing points to them; two changes at once
+  can't both let go of the same one (the organisation's row version), and the loser is told to
+  look again.
+- **Live at once:** as with every other profile edit, an approved organisation's new logo is on
+  its pages straight away, and `organisation.logo_set` is in the audit log. It's shown only where
+  the organisation is: its public page and listing bylines exist only once it's approved, though
+  the bytes, like a listing's waiting picture (D105), are at `/media/{id}` for anyone with the id.
+- **Taken down:** an organiser sees it on the organisation's review page and can take it down
+  (`organisation.logo_removed`, `by: organiser`, with no organisation as actor). The organisation
+  isn't told beyond seeing it gone; it can add another.
+- **Shown:** on the organisation's page beside its name, in a listing's byline beside the linked
+  name (web, and the app's listing screen), and on the console's profile and review pages. It's
+  fitted whole inside a square on white, so a see-through logo shows on a dark page, from the
+  480-wide copy. It has no description: always beside the name it stands for, it's decoration
+  (`alt=""`, which Blazor writes as a bare `alt`); in the console, where it stands alone, it's
+  "Your organisation's logo".
+- **API:** `logo` (a media id, or null) on the public organisation and on `organisation` in a
+  listing's detail and each search result; the app's `OrganisationRef` has it too.
+- **Not yet:** the logo isn't the issuer image in Open Badges or CLR files, nor on search cards
+  or the printable reports. SVG isn't taken (it would need a sanitiser).
+
+No schema change. Tests: `OrganisationLogoTests` (refused files, added with its copy and audit,
+shown on both pages, replaced, taken down by an organiser), `OrganisationLogoApiTests` (profile,
+listing and result, through the app's client), and an app screen test for the byline.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

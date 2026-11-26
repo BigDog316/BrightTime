@@ -74,6 +74,11 @@ few sentences for your public page), **website**, **public email** and **phone**
 people edit the profile at once, the second save is refused rather than overwriting the first:
 reload and make your changes again.
 
+**Logo.** Owners and admins can add your logo on the profile page: a PNG or JPEG of up to 2 MB,
+at least 200 pixels each way, and no more than four times as wide as it's tall. Once you're
+approved, families see it beside your name on your page and on your listings. A new one replaces
+the old. Network organisers can take down a logo that isn't fit to show.
+
 **Sites** are the places where you run activities. For each site:
 - its **name** (imports match sites by name), **street address**, **town** and **ZIP code**;
 - its **neighbourhood**, which places it on the map and in distance search;

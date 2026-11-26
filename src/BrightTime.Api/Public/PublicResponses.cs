@@ -22,7 +22,8 @@ public sealed record PhraseResponse(string Key, IReadOnlyDictionary<string, obje
 /// <summary>A page of results. <c>nextCursor</c> is opaque; pass it back as <c>cursor</c>.</summary>
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, string? NextCursor, IReadOnlyList<PhraseResponse> Notices);
 
-public sealed record OrganisationRef(Guid Id, string Slug, string Name);
+/// <summary>An organisation a listing belongs to, with its logo (D109): a public media id, shown beside its name.</summary>
+public sealed record OrganisationRef(Guid Id, string Slug, string Name, Guid? Logo = null);
 
 public sealed record CostResponse(bool IsFree, int? FromCents);
 
@@ -160,7 +161,8 @@ public sealed record OrganisationResponse(
     string? PublicEmail,
     string? PublicPhone,
     IReadOnlyList<string> LanguagesServed,
-    IReadOnlyList<SiteResponse> Sites);
+    IReadOnlyList<SiteResponse> Sites,
+    Guid? Logo);
 
 public sealed record TermResponse(string Code, string Name, string? ParentCode, int SortOrder);
 

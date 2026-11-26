@@ -5,6 +5,7 @@
 @using BrightTime.Modules.Platform.Contracts
 @using BrightTime.SharedKernel.Paging
 @using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Composition
 @inject IOrganisationProfiles Organisations
 @inject IListingFinder Finder
 @inject IGeographyQueries Geography
@@ -24,7 +25,18 @@
     <article class="organisation" aria-labelledby="org-title">
         <header>
             <p class="eyebrow">@(T.Has("organisation.kind." + o.Kind) ? T["organisation.kind." + o.Kind] : o.Kind)</p>
-            <h1 id="org-title" dir="auto">@o.DisplayName</h1>
+            @if (o.Logo is { } logo)
+            {
+                @* Beside the name it stands for, so a screen reader needn't hear it (D109). *@
+                <div class="org-name">
+                    <img class="org-logo" src="@MediaEndpoints.Card(logo)" alt="" />
+                    <h1 id="org-title" dir="auto">@o.DisplayName</h1>
+                </div>
+            }
+            else
+            {
+                <h1 id="org-title" dir="auto">@o.DisplayName</h1>
+            }
             @if (o.Mission is { Length: > 0 } mission)
             {
                 <p class="lead" dir="auto">@mission</p>

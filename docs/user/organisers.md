@@ -54,6 +54,10 @@ active owners, and its history of decisions.
 Later, you can **suspend** an approved organisation (saying why; it sees your reason) and
 **reinstate** it.
 
+An organisation's **logo** is live as soon as it's added, like the rest of its profile. You see it
+on the organisation's review page, and can **take the logo down** if it isn't fit to show; the
+organisation can add another.
+
 ## Reviewing a listing
 
 A listing's review page shows it **as families will see it**. For a listing reviewed before, it

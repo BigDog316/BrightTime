@@ -11,8 +11,12 @@ public static class MediaVisibility
     public const string Public = "public";
 }
 
-/// <summary>What a feature accepts as an image: its file size, and its size in pixels as it's shown.</summary>
-public sealed record ImageRules(int MaxBytes, int MinWidth, int MinHeight, int MaxSide);
+/// <summary>
+/// What a feature accepts as an image: its file size, and its size in pixels as it's shown. A
+/// <paramref name="MaxAspect"/> above zero is how many times longer one side may be than the
+/// other (D109).
+/// </summary>
+public sealed record ImageRules(int MaxBytes, int MinWidth, int MinHeight, int MaxSide, double MaxAspect = 0);
 
 /// <summary>An image kept as a media object.</summary>
 public sealed record StoredImage(Guid MediaId, int Width, int Height);

@@ -13,7 +13,8 @@ public sealed record Phrase(string Key, IReadOnlyDictionary<string, JsonElement>
 /// <summary>A page of results. Pass <see cref="NextCursor"/> back as <c>cursor</c> for the next one.</summary>
 public sealed record Page<T>(IReadOnlyList<T> Items, string? NextCursor, IReadOnlyList<Phrase>? Notices);
 
-public sealed record OrganisationRef(Guid Id, string Slug, string Name);
+/// <summary>An organisation a listing belongs to, with its logo (D109), a public media id.</summary>
+public sealed record OrganisationRef(Guid Id, string Slug, string Name, Guid? Logo = null);
 
 public sealed record Cost(bool IsFree, int? FromCents);
 

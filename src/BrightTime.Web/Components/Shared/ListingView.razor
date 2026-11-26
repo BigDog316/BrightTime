@@ -15,7 +15,13 @@
         <h1 id="listing-title" dir="auto" lang="@LangAttr(l.ContentLanguage)">@l.Title</h1>
         @if (OrganisationSlug is { } orgSlug)
         {
-            <p class="byline">@T["listing.byline_before"] <a href="/organisations/@Uri.EscapeDataString(orgSlug)"><bdi>@l.OrganisationName</bdi></a></p>
+            <p class="byline">
+                @if (OrganisationLogo is { } logo)
+                {
+                    <img class="org-logo org-logo-small" src="@MediaEndpoints.Card(logo)" alt="" />
+                }
+                @T["listing.byline_before"] <a href="/organisations/@Uri.EscapeDataString(orgSlug)"><bdi>@l.OrganisationName</bdi></a>
+            </p>
         }
         else
         {
@@ -303,6 +309,9 @@
 
     /// <summary>The organisation's page, when it has one (approved organisations only).</summary>
     [Parameter] public string? OrganisationSlug { get; set; }
+
+    /// <summary>The organisation's logo (D109), shown in the byline beside its linked name.</summary>
+    [Parameter] public Guid? OrganisationLogo { get; set; }
 
     /// <summary>Neighbourhood codes by id, for linking a place to its neighbourhood's page.</summary>
     [Parameter] public IReadOnlyDictionary<Guid, string>? NeighbourhoodCodes { get; set; }

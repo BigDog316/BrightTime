@@ -115,7 +115,7 @@ public static class PublicEndpoints
         return Results.Ok(new ListingDetailResponse(
             d.Id.Value, d.Slug, d.Kind.ToDbValue(), d.Title, d.Summary, d.Description,
             d.ContentLanguage, d.DescriptionLanguage, d.IsMachineTranslated,
-            new OrganisationRef(d.OrganisationId?.Value ?? Guid.Empty, link?.Slug ?? string.Empty, link?.DisplayName ?? d.OrganisationName),
+            new OrganisationRef(d.OrganisationId?.Value ?? Guid.Empty, link?.Slug ?? string.Empty, link?.DisplayName ?? d.OrganisationName, link?.Logo),
             d.AgeMin, d.AgeMax, d.GradeMin, d.GradeMax,
             d.CostModel.ToDbValue(), d.CostCentsMin, d.CostCentsMax, d.SlidingScaleNote,
             d.Modality.ToDbValue(), d.RegistrationMode.ToDbValue(), d.ExternalUrl,
@@ -233,7 +233,8 @@ public static class PublicEndpoints
                 s.IsAddressPublic ? s.Locality : null,
                 s.IsAddressPublic ? s.PostalCode : null,
                 s.IsAddressPublic ? s.TransitNote : null,
-                s.IsWheelchairAccessible, s.HasAccessibleRestroom, s.HasElevator, s.HasQuietSpace))]));
+                s.IsWheelchairAccessible, s.HasAccessibleRestroom, s.HasElevator, s.HasQuietSpace))],
+            org.Logo));
     }
 
     private static async Task<IResult> TaxonomyAsync(string vocabulary, ITenantContext tenant, ITaxonomyQueries taxonomy, CancellationToken ct)
@@ -284,7 +285,7 @@ public static class PublicEndpoints
             i.Kind.ToDbValue(),
             i.Title,
             i.Summary,
-            links.TryGetValue(i.OrganisationId, out OrganisationLink? l) ? new OrganisationRef(l.Id.Value, l.Slug, l.DisplayName) : null,
+            links.TryGetValue(i.OrganisationId, out OrganisationLink? l) ? new OrganisationRef(l.Id.Value, l.Slug, l.DisplayName, l.Logo) : null,
             new CostResponse(i.IsFree, i.IsFree ? null : i.CostCents),
             i.NextStartAt,
             i.NextDeadlineAt,

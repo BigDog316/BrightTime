@@ -203,6 +203,8 @@ create table media_object (
   exif_stripped_at timestamptz,
   uploaded_by   uuid,
   visibility    text not null default 'private',
+  -- When a public image's smaller copies were made (D106); null until then, and for the rest.
+  sized_at      timestamptz,
   created_at    timestamptz not null default now(),
   constraint ux_media_object_key unique (tenant_id, object_key),
   constraint ck_media_size check (byte_size > 0 and byte_size <= 536870912),
@@ -231,6 +233,30 @@ create table media_blob (
   constraint ck_media_blob_size check (octet_length(bytes) between 1 and 536870912)
 );
 alter table media_blob alter column bytes set storage external;
+
+-- A public image's smaller copies (D106): WebP, as wide as the size asked for and as tall as that
+-- makes it, turned as it's shown. Made when the image is added, or by the jobs worker for one added
+-- before; none for a size the image isn't wider than, so the original stands in. Its bytes are a
+-- media_blob of their own, removed with the image.
+create table media_variant (
+  tenant_id     uuid not null references tenant(id) on delete cascade,
+  media_id      uuid not null references media_object(id) on delete cascade,
+  size          int not null,
+  object_key    text not null,
+  content_type  text not null,
+  byte_size     bigint not null,
+  sha256        bytea not null,
+  width         int not null,
+  height        int not null,
+  created_at    timestamptz not null default now(),
+  constraint pk_media_variant primary key (media_id, size),
+  constraint ux_media_variant_key unique (tenant_id, object_key),
+  constraint ck_media_variant_size check (size in (480, 1280)),
+  constraint ck_media_variant_type check (content_type = 'image/webp'),
+  constraint ck_media_variant_bytes check (byte_size > 0)
+);
+create index ix_media_object_unsized on media_object (tenant_id, id)
+  where visibility = 'public' and scan_state = 'clean' and sized_at is null;
 
 -- ---------------------------------------------------------------------
 -- Audit log.

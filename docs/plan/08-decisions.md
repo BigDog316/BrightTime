@@ -3569,6 +3569,51 @@ removing, discarding, the limit, the main picture, another organisation, a clone
 and a listing taken down; `ListingPictureApiTests` the API and the app's client; the app's screen
 test the listing and its card.
 
+### D106 — Smaller copies of public pictures (**proposed 2026-11-25**)
+
+D105 put a listing's main picture beside its card, and every card fetched the whole photo, up to
+3 MB; ImageCleaner (D103) reads only an image's headers, so it couldn't make a smaller one. Sam
+chose on 2026-11-25: smaller copies next; SkiaSharp to make them; made as a picture is added, and
+by the jobs worker for those added before; 480 and 1,280 pixels wide, as WebP.
+- **The package:** SkiaSharp 4.155.0 (MIT) and its Linux build without dependencies, for the
+  containers, in `Modules.Platform` alone: the app takes none. It was the newest release more than
+  two weeks old.
+- **A real decode:** every image `MediaLibrary` keeps, private ones too, is now decoded after it's
+  cleaned, and one that doesn't decode whole, or decodes to another size than its header says,
+  isn't kept: the feature refuses it as it refuses any file that isn't a picture. A file of JPEG
+  headers around nonsense got in before. A JPEG is decoded only as large as the largest copy needs
+  (an eighth at the least, for a private one); a PNG whole. At most two decodes run at once in a
+  process, since a 6,000-pixel PNG takes 144 MB.
+- **The copies:** a public image gets one at each of 480 and 1,280 it's wider than, as wide as
+  that and as tall as the original makes it, turned as the image is shown (WebP carries no
+  orientation), lossy WebP at quality 80: halved, then one cubic step. They're in
+  `platform.media_variant` (new), their bytes blobs of their own (`images/{id}-480.webp`), written
+  in the same transaction as the image; `media_object.sized_at` (new) says they're made. Removing
+  an image removes its copies' bytes. A private image gets none.
+- **Served:** `/media/{id}/480` and `/media/{id}/1280`, as `/media/{id}` is: public and clean
+  only, a year, `nosniff`, sandboxed. Where there's no copy, a redirect to the original: kept a
+  year when the image isn't wider than that size, and `no-store` while the worker hasn't made it
+  yet. Any other size is a 404.
+- **Where:** a card takes the 480 copy; a listing's, collection's or neighbourhood page's main
+  picture takes the 1,280 one with a `srcset` of both, sized to the 44rem column; a listing's other
+  pictures the 480 one with the same `srcset`. The app does the same from the website. The console
+  still shows originals, since that's what an organiser reviews.
+- **Pictures added before:** at its start the jobs worker books a run per tenant
+  (`platform.media_sizes`), which sizes 20 at a time, each in its own transaction, and books the
+  next run while a batch comes back full. One that doesn't decode is marked sized with no copies,
+  logged, and not tried again; the original stands in.
+- **Tests' JPEGs** are now real ones, encoded by Skia, so the test projects that make them
+  reference SkiaSharp too.
+- **Not yet:** copies of private pictures (a young person's, D104), `width` and `height` on the
+  page's images, and a copy for an organisation's logo, which isn't built.
+
+Schema: `media_object.sized_at`, the `media_variant` table and a partial index on the images
+still to size; applied by hand to `brighttime_main` and `brighttime`, with the table's tenant
+policy and grants, and the compose volume needs rebuilding. `ImageSizerTests` covers the copies,
+PNGs, the sizes an image isn't wider than, all eight orientations and the refusals;
+`MediaSizesTests` the copies made on adding, serving, the redirects, private pictures, a file that
+doesn't decode, removing, and the jobs worker's run.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

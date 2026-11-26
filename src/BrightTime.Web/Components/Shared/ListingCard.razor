@@ -11,7 +11,7 @@
     @if (Item.Picture is { } picture)
     {
         @* D105: the main picture, beside the words. It isn't a second link: the title is the one. *@
-        <img class="card-picture" src="@MediaEndpoints.For(picture.MediaId)" alt="@picture.Alt" loading="lazy" />
+        <img class="card-picture" src="@MediaEndpoints.Card(picture.MediaId)" alt="@picture.Alt" loading="lazy" />
     }
     <p class="meta">
         <span>@T["listing.kind." + Item.Kind.ToDbValue()]</span>

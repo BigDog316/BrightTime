@@ -46,7 +46,7 @@
     @if (l.Pictures.Count > 0)
     {
         @* D105: the main picture across the top; its words are in the provider's language. *@
-        <img class="listing-hero" src="@MediaEndpoints.For(l.Pictures[0].MediaId)" alt="@l.Pictures[0].Alt" lang="@LangAttr(l.PrimaryLanguage)" />
+        <img class="listing-hero" src="@MediaEndpoints.Page(l.Pictures[0].MediaId)" srcset="@MediaEndpoints.SrcSet(l.Pictures[0].MediaId)" sizes="@MediaEndpoints.PageWidth" alt="@l.Pictures[0].Alt" lang="@LangAttr(l.PrimaryLanguage)" />
     }
 
     <section aria-labelledby="glance-heading">
@@ -279,7 +279,7 @@
             <ul class="listing-pictures">
                 @foreach (ListingPicture picture in l.Pictures.Skip(1))
                 {
-                    <li><img src="@MediaEndpoints.For(picture.MediaId)" alt="@picture.Alt" lang="@LangAttr(l.PrimaryLanguage)" loading="lazy" /></li>
+                    <li><img src="@MediaEndpoints.Card(picture.MediaId)" srcset="@MediaEndpoints.SrcSet(picture.MediaId)" sizes="@MediaEndpoints.GalleryWidth" alt="@picture.Alt" lang="@LangAttr(l.PrimaryLanguage)" loading="lazy" /></li>
                 }
             </ul>
         </section>

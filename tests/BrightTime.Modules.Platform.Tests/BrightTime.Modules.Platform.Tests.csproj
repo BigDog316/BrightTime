@@ -6,6 +6,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../BrightTime.SharedKernel.Tests/TestImages.cs" Link="TestImages.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/BrightTime.Modules.Platform/BrightTime.Modules.Platform.csproj" />
   </ItemGroup>
 

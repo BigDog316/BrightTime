@@ -23,7 +23,7 @@
     }
     @if (c.Hero is { } hero)
     {
-        <img class="hero-image" src="@MediaEndpoints.For(hero.MediaId)" alt="@hero.Alt" lang="@LangAttr" />
+        <img class="hero-image" src="@MediaEndpoints.Page(hero.MediaId)" srcset="@MediaEndpoints.SrcSet(hero.MediaId)" sizes="@MediaEndpoints.PageWidth" alt="@hero.Alt" lang="@LangAttr" />
     }
 
     @if (_items.Count == 0)

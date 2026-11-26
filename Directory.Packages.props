@@ -30,6 +30,10 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
     <!-- Check-in badges drawn as QR codes in the app (D76). Pure managed, MIT. -->
     <PackageVersion Include="QRCoder" Version="1.6.0" />
+    <!-- Smaller copies of public pictures (D106), and a real decode of every upload. MIT; the server
+         only. The Linux build without dependencies is for the containers. -->
+    <PackageVersion Include="SkiaSharp" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.155.0" />
   </ItemGroup>
 
   <ItemGroup Label="Mobile (BrightTime.Mobile; the MAUI workload's version)">

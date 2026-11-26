@@ -21,20 +21,46 @@ public sealed record StoredImage(Guid MediaId, int Width, int Height);
 public sealed record MediaFile(string ContentType, byte[] Bytes, string ETag);
 
 /// <summary>
+/// The smaller copies made of a public image (D106), by width: one for cards and lists, one for a
+/// page's main picture. A copy is WebP, and there's none of a size the image isn't wider than.
+/// </summary>
+public static class MediaSizes
+{
+    public const int Card = 480;
+
+    public const int Page = 1280;
+
+    public static IReadOnlyList<int> All { get; } = [Card, Page];
+
+    public static bool IsSize(int width) => width is Card or Page;
+}
+
+/// <summary>
+/// A public image at a size: the copy's bytes, or none, when the original is the one to show. Then
+/// <paramref name="Settled"/> says whether that's for good (the copies were made and it isn't
+/// wider) or only until the jobs worker makes them.
+/// </summary>
+public sealed record SizedMedia(MediaFile? File, bool Settled);
+
+/// <summary>
 /// The tenant's media (D103): images checked and cleaned on the way in, kept with their
 /// metadata, and handed out only when they're clean and visible to whoever asks.
 /// </summary>
 public interface IMediaLibrary
 {
     /// <summary>
-    /// Keeps a PNG or JPEG that meets <paramref name="rules"/>, with its metadata stripped. Null
-    /// when the file isn't one: the caller says why, in its own words.
+    /// Keeps a PNG or JPEG that meets <paramref name="rules"/> and decodes whole, with its metadata
+    /// stripped, and a public one's smaller copies (D106). Null when the file isn't one: the caller
+    /// says why, in its own words.
     /// </summary>
     Task<StoredImage?> AddImageAsync(
         ReadOnlyMemory<byte> file, ImageRules rules, string visibility, UserId uploadedBy, CancellationToken cancellationToken = default);
 
     /// <summary>A clean, public media object's bytes; null for anything else, so an id alone gives nothing away.</summary>
     Task<MediaFile?> GetPublicAsync(Guid mediaId, CancellationToken cancellationToken = default);
+
+    /// <summary>A clean, public image's copy at <paramref name="size"/> (one of <see cref="MediaSizes.All"/>); null when the image isn't one.</summary>
+    Task<SizedMedia?> GetPublicSizeAsync(Guid mediaId, int size, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// A clean media object's bytes, whatever its visibility, for a caller that has already decided

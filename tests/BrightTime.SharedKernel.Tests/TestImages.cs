@@ -1,13 +1,15 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using SkiaSharp;
 
 namespace BrightTime.SharedKernel.Tests;
 
 /// <summary>
-/// Small images for tests (D103), built by hand: a decodable grey PNG of any size, with an optional
-/// text chunk; and a JPEG's segments around a frame header, with EXIF holding a place and, if asked,
-/// an orientation. Linked into the web tests, which upload them.
+/// Small images for tests (D103): a decodable grey PNG of any size, built by hand, with an optional
+/// text chunk; and a real grey JPEG, encoded by Skia (D106), with EXIF holding a place and, if
+/// asked, an orientation, and a comment. Linked into the web, API and platform tests, which upload
+/// them.
 /// </summary>
 internal static class TestImages
 {
@@ -41,21 +43,55 @@ internal static class TestImages
         return png.ToArray();
     }
 
-    /// <summary>A JPEG whose EXIF holds a place and, when <paramref name="orientation"/> isn't 1, that orientation; little-endian if asked.</summary>
-    public static byte[] Jpeg(int width, int height, ushort orientation = 1, bool littleEndian = false)
+    /// <summary>
+    /// A JPEG of <paramref name="width"/> by <paramref name="height"/> as stored, whose EXIF holds a
+    /// place and, when <paramref name="orientation"/> isn't 1, that orientation; little-endian if
+    /// asked. Grey, with the stored top-left quarter black when <paramref name="marked"/>, so a
+    /// test can tell which way it's turned.
+    /// </summary>
+    public static byte[] Jpeg(int width, int height, ushort orientation = 1, bool littleEndian = false, bool marked = false)
     {
+        using SKBitmap bitmap = new(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        using (SKCanvas canvas = new(bitmap))
+        {
+            canvas.Clear(new SKColor(0x80, 0x80, 0x80));
+            if (marked)
+            {
+                using SKPaint black = new() { Color = SKColors.Black };
+                canvas.DrawRect(0, 0, width / 2f, height / 2f, black);
+            }
+        }
+
+        using SKPixmap pixels = bitmap.PeekPixels();
+        using SKData encoded = pixels.Encode(new SKJpegEncoderOptions(90, SKJpegEncoderDownsample.Downsample420, SKJpegEncoderAlphaOption.Ignore))
+            ?? throw new InvalidOperationException("Skia couldn't encode a JPEG.");
+        byte[] skia = encoded.ToArray();
+
+        // Skia's own segments, less its application ones, then the scan as it came.
         using MemoryStream jpeg = new();
         jpeg.Write([0xFF, 0xD8]);
         Segment(jpeg, 0xE1, Exif(orientation, littleEndian));
         Segment(jpeg, 0xE0, [.. "JFIF\0"u8.ToArray(), 1, 1, 0, 0, 1, 0, 1, 0, 0]);
         Segment(jpeg, 0xFE, "Taken at home"u8.ToArray());
-        Segment(jpeg, 0xDB, [0, .. Enumerable.Repeat((byte)1, 64)]);
-        byte[] frame = [8, 0, 0, 0, 0, 1, 1, 0x11, 0];
-        BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(1), (ushort)height);
-        BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(3), (ushort)width);
-        Segment(jpeg, 0xC0, frame);
-        Segment(jpeg, 0xDA, [1, 1, 0, 0, 63, 0]);
-        jpeg.Write([0x12, 0x34, 0x56, 0xFF, 0xD9]);
+        int at = 2;
+        while (at + 4 <= skia.Length)
+        {
+            byte marker = skia[at + 1];
+            int length = BinaryPrimitives.ReadUInt16BigEndian(skia.AsSpan(at + 2));
+            if (marker == 0xDA)
+            {
+                jpeg.Write(skia.AsSpan(at));
+                break;
+            }
+
+            if (marker is not (>= 0xE0 and <= 0xEF) and not 0xFE)
+            {
+                jpeg.Write(skia.AsSpan(at, length + 2));
+            }
+
+            at += length + 2;
+        }
+
         return jpeg.ToArray();
     }
 

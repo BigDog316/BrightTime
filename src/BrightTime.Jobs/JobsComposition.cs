@@ -31,6 +31,7 @@ using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Opportunities.Personal;
 using BrightTime.Modules.Opportunities.Projection;
 using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Media;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.SharedKernel.Time;
 using Npgsql;
@@ -75,6 +76,9 @@ public static class JobsComposition
         services.AddScoped<PlatformQueries>();
         services.AddScoped<ITaxonomyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
+
+        // Smaller copies of public images added before D106, made once at the worker's start.
+        services.AddMediaSizeJobs();
 
         services.AddSingleton(_ => NpgsqlDataSource.Create(connection));
         services.AddSingleton<JobStore>();

@@ -22,7 +22,7 @@ else if (_listing is { } l)
         @if (l.Pictures is [var main, ..])
         {
             @* D105: the main picture; what it shows is in the listing's own language. *@
-            <img class="listing-hero" src="@Endpoints.Media(main.MediaId)" alt="@main.Alt" lang="@l.PrimaryLanguage" />
+            <img class="listing-hero" src="@Endpoints.Media(main.MediaId, AppEndpoints.MediaPage)" srcset="@Endpoints.MediaSrcSet(main.MediaId)" sizes="100vw" alt="@main.Alt" lang="@l.PrimaryLanguage" />
         }
 
         <div class="actions" lang="@T.Locale.Code">
@@ -99,7 +99,7 @@ else if (_listing is { } l)
                 <ul class="listing-pictures">
                     @foreach (ListingPicture picture in pictures.Skip(1))
                     {
-                        <li><img src="@Endpoints.Media(picture.MediaId)" alt="@picture.Alt" lang="@l.PrimaryLanguage" loading="lazy" /></li>
+                        <li><img src="@Endpoints.Media(picture.MediaId, AppEndpoints.MediaCard)" srcset="@Endpoints.MediaSrcSet(picture.MediaId)" sizes="50vw" alt="@picture.Alt" lang="@l.PrimaryLanguage" loading="lazy" /></li>
                     }
                 </ul>
             </section>

@@ -115,8 +115,8 @@ public sealed class ApplyScreenTests
             + $$""","primaryLanguage":"es","pictures":[{"mediaId":"{{Garden}}","alt":"Dos ninos plantando"},{"mediaId":"{{Beds}}","alt":"Bancales en primavera"}]}""";
         using FakeApi api = SignedIn().Json(HttpMethod.Get, "public/listings/rowing-camp", pictured);
         string html = await RenderAsync<Listing>(api, new Dictionary<string, object?> { ["Slug"] = "rowing-camp" });
-        html.ShouldContain($"<img class=\"listing-hero\" src=\"https://kettle.test/media/{Garden}\" alt=\"Dos ninos plantando\" lang=\"es\" />");
-        html.ShouldContain($"<li><img src=\"https://kettle.test/media/{Beds}\" alt=\"Bancales en primavera\" lang=\"es\" loading=\"lazy\" /></li>");
+        html.ShouldContain($"<img class=\"listing-hero\" src=\"https://kettle.test/media/{Garden}/1280\" srcset=\"https://kettle.test/media/{Garden}/480 480w, https://kettle.test/media/{Garden}/1280 1280w\" sizes=\"100vw\" alt=\"Dos ninos plantando\" lang=\"es\" />");
+        html.ShouldContain($"<li><img src=\"https://kettle.test/media/{Beds}/480\" srcset=\"https://kettle.test/media/{Beds}/480 480w, https://kettle.test/media/{Beds}/1280 1280w\" sizes=\"50vw\" alt=\"Bancales en primavera\" lang=\"es\" loading=\"lazy\" /></li>");
         html.ShouldContain(">Pictures</h2>");
 
         using FakeApi plain = SignedIn().Json(HttpMethod.Get, "public/listings/rowing-camp", ListingJson("none"));
@@ -126,7 +126,7 @@ public sealed class ApplyScreenTests
             new BrightTime.Ui.Shared.Api.ListingPicture(Guid.Parse(Garden), "Dos ninos plantando"));
         using FakeApi none = SignedIn();
         (await RenderAsync<BrightTime.Ui.Shared.Components.ListingCard>(none, new Dictionary<string, object?> { ["Listing"] = card }))
-            .ShouldContain($"<img class=\"card-picture\" src=\"https://kettle.test/media/{Garden}\" alt=\"Dos ninos plantando\" loading=\"lazy\" />");
+            .ShouldContain($"<img class=\"card-picture\" src=\"https://kettle.test/media/{Garden}/480\" alt=\"Dos ninos plantando\" loading=\"lazy\" />");
     }
 
     [Fact]

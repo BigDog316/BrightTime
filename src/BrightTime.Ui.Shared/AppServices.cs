@@ -1,3 +1,4 @@
+using System.Globalization;
 using BrightTime.Localisation;
 using BrightTime.Ui.Shared.Api;
 using BrightTime.Ui.Shared.Attendance;
@@ -28,6 +29,19 @@ public sealed record AppEndpoints(Uri ApiBase, Uri SiteBase)
 
     /// <summary>A public picture at the website (D105): a listing's, which the API names by its id.</summary>
     public Uri Media(Guid mediaId) => new(SiteBase, $"/media/{mediaId:D}");
+
+    /// <summary>The width of a picture's copy for a card (D106), as the website makes it.</summary>
+    public const int MediaCard = 480;
+
+    /// <summary>The width of a picture's copy for a screen's main picture (D106).</summary>
+    public const int MediaPage = 1280;
+
+    /// <summary>A public picture's smaller copy (D106); the website sends the original where there's none.</summary>
+    public Uri Media(Guid mediaId, int width) => new(SiteBase, $"/media/{mediaId:D}/{width.ToString(CultureInfo.InvariantCulture)}");
+
+    /// <summary>A <c>srcset</c> of a public picture's copies, for the WebView to choose from by the screen.</summary>
+    public string MediaSrcSet(Guid mediaId) =>
+        $"{Media(mediaId, MediaCard)} {MediaCard.ToString(CultureInfo.InvariantCulture)}w, {Media(mediaId, MediaPage)} {MediaPage.ToString(CultureInfo.InvariantCulture)}w";
 
     /// <summary>A shown portfolio's web page (D77), by its link name, for its owner to share.</summary>
     public Uri Portfolio(string slug) => new(SiteBase, $"/portfolios/{Uri.EscapeDataString(slug)}");

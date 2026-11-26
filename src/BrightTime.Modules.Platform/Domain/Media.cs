@@ -34,6 +34,34 @@ public sealed class MediaObject
 
     public string Visibility { get; set; } = "private";
 
+    /// <summary>When a public image's smaller copies were made (D106); null until then.</summary>
+    public DateTimeOffset? SizedAt { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>A row of <c>platform.media_variant</c>: a smaller WebP copy of a public image (D106).</summary>
+public sealed class MediaVariant
+{
+    public Guid TenantId { get; init; }
+
+    public Guid MediaId { get; init; }
+
+    /// <summary>The size asked for, one of <c>MediaSizes.All</c>: the copy is this wide.</summary>
+    public int Size { get; init; }
+
+    public required string ObjectKey { get; init; }
+
+    public required string ContentType { get; init; }
+
+    public long ByteSize { get; init; }
+
+    public required byte[] Sha256 { get; init; }
+
+    public int Width { get; init; }
+
+    public int Height { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 }
 

@@ -44,6 +44,8 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
 
     public DbSet<MediaBlob> MediaBlobs => Set<MediaBlob>();
 
+    public DbSet<MediaVariant> MediaVariants => Set<MediaVariant>();
+
     public DbSet<TaxonomyTermName> TaxonomyTermNames => Set<TaxonomyTermName>();
 
     public DbSet<NeighbourhoodName> NeighbourhoodNames => Set<NeighbourhoodName>();
@@ -115,6 +117,13 @@ public sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> option
             b.HasKey(m => m.Id);
             b.Property(m => m.Id).ValueGeneratedNever();
             b.Property(m => m.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<MediaVariant>(b =>
+        {
+            b.ToTable("media_variant");
+            b.HasKey(v => new { v.MediaId, v.Size });
+            b.Property(v => v.CreatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.Entity<MediaBlob>(b =>

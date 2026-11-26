@@ -76,6 +76,7 @@ public sealed class ListingPictureApiTests(ApiFixture api)
             ListingDetail shown = (await client.ListingAsync(listing.Slug, Ct)).Value!;
             shown.Pictures!.Select(p => p.MediaId).ShouldBe([main, second]);
             app.GetRequiredService<AppEndpoints>().Media(main).ShouldBe(new Uri($"https://kettle.localhost/media/{main:D}"));
+            app.GetRequiredService<AppEndpoints>().Media(main, AppEndpoints.MediaCard).ShouldBe(new Uri($"https://kettle.localhost/media/{main:D}/480"));
 
             Page<ListingSummary> found = (await client.SearchAsync(new SearchFilters { Text = listing.Title }, ct: Ct)).Value!;
             found.Items.Single(i => i.Id == listing.Id).Picture.ShouldBe(new BrightTime.Ui.Shared.Api.ListingPicture(main, "Two children planting seedlings"));

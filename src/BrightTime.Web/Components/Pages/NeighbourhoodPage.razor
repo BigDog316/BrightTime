@@ -20,7 +20,7 @@
     <h1>@hood.Name</h1>
     @if (_page?.Hero is { } hero)
     {
-        <img class="hero-image" src="@MediaEndpoints.For(hero.MediaId)" alt="@hero.Alt" lang="@BlockLang" />
+        <img class="hero-image" src="@MediaEndpoints.Page(hero.MediaId)" srcset="@MediaEndpoints.SrcSet(hero.MediaId)" sizes="@MediaEndpoints.PageWidth" alt="@hero.Alt" lang="@BlockLang" />
     }
 
     <section aria-labelledby="counts-heading" class="hood-summary">

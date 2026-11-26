@@ -117,10 +117,10 @@ public sealed class ListingPicturesTests(ConsoleFixture db)
         // Live: across the top of the page, and on the card in search.
         await ProjectAsync(seeded.Id);
         await family.GetAsync($"/listings/{seeded.Slug}");
-        family.Html.ShouldContain($"<img class=\"listing-hero\" src=\"/media/{planting:D}\" alt=\"Two children planting seedlings\"");
+        family.Html.ShouldContain($"<img class=\"listing-hero\" src=\"/media/{planting:D}/1280\" srcset=\"/media/{planting:D}/480 480w, /media/{planting:D}/1280 1280w\" sizes=\"(min-width: 46rem) 44rem, 100vw\" alt=\"Two children planting seedlings\"");
         (await family.GetAsync($"/media/{planting:D}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         await family.GetAsync($"/organisations/{org.Slug}");
-        family.Html.ShouldContain($"<img class=\"card-picture\" src=\"/media/{planting:D}\" alt=\"Two children planting seedlings\" loading=\"lazy\" />");
+        family.Html.ShouldContain($"<img class=\"card-picture\" src=\"/media/{planting:D}/480\" alt=\"Two children planting seedlings\" loading=\"lazy\" />");
 
         // Described again: live at once, and the listing is among those changed since review.
         await provider.GetAsync(pictures);

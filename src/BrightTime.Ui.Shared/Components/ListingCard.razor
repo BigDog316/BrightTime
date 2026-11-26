@@ -5,7 +5,7 @@
     @if (Listing.Picture is { } picture)
     {
         @* D105: the main picture, beside the words; the title is the link. *@
-        <img class="card-picture" src="@Endpoints.Media(picture.MediaId)" alt="@picture.Alt" loading="lazy" />
+        <img class="card-picture" src="@Endpoints.Media(picture.MediaId, AppEndpoints.MediaCard)" alt="@picture.Alt" loading="lazy" />
     }
     @if (Listing.Organisation is { } org)
     {

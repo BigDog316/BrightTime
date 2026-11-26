@@ -73,7 +73,7 @@ public sealed class HeroImageTests(ConsoleFixture db)
         // On the site with what it shows; served to anyone, for a year, as nothing but an image.
         using Browser anyone = db.NewBrowser();
         await anyone.GetAsync($"/collections/{slug}");
-        anyone.Html.ShouldContain($"<img class=\"hero-image\" src=\"/media/{first:D}\" alt=\"Teens painting a mural\"");
+        anyone.Html.ShouldContain($"<img class=\"hero-image\" src=\"/media/{first:D}/1280\" srcset=\"/media/{first:D}/480 480w, /media/{first:D}/1280 1280w\" sizes=\"(min-width: 46rem) 44rem, 100vw\" alt=\"Teens painting a mural\"");
         HttpResponseMessage served = await anyone.GetAsync($"/media/{first:D}");
         served.StatusCode.ShouldBe(HttpStatusCode.OK);
         served.Content.Headers.ContentType!.MediaType.ShouldBe("image/jpeg");
@@ -160,7 +160,7 @@ public sealed class HeroImageTests(ConsoleFixture db)
 
         using Browser anyone = db.NewBrowser();
         await anyone.GetAsync($"/neighbourhoods/{hood.Code}");
-        anyone.Html.ShouldContain($"<img class=\"hero-image\" src=\"/media/{image:D}\" alt=\"A footbridge over the creek\"");
+        anyone.Html.ShouldContain($"<img class=\"hero-image\" src=\"/media/{image:D}/1280\" srcset=\"/media/{image:D}/480 480w, /media/{image:D}/1280 1280w\" sizes=\"(min-width: 46rem) 44rem, 100vw\" alt=\"A footbridge over the creek\"");
         await anyone.GetAsync($"/neighbourhoods/{hood.Code}?lang=es");
         anyone.Html.ShouldContain("alt=\"A footbridge over the creek\"", Case.Sensitive, "no Spanish sections, so the page and its picture are in English");
         (await anyone.GetAsync($"/media/{image:D}")).StatusCode.ShouldBe(HttpStatusCode.OK);

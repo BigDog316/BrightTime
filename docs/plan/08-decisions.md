@@ -3719,7 +3719,7 @@ No schema change. Tests: `OrganisationLogoTests` (refused files, added with its 
 shown on both pages, replaced, taken down by an organiser), `OrganisationLogoApiTests` (profile,
 listing and result, through the app's client), and an app screen test for the byline.
 
-### D110 — The organisation's logo as its badges' issuer image (**proposed 2026-11-26**)
+### D110 — The organisation's logo as its badges' issuer image (**accepted 2026-11-26**)
 
 D109 gave organisations a logo; Open Badges lets an issuer's profile carry an image, which wallets
 and backpacks show beside its name. Sam chose on 2026-11-26: this next; at one stable address

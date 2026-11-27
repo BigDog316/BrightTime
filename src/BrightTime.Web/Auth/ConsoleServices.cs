@@ -41,6 +41,9 @@ public static class ConsoleServices
     /// <summary>The county's clearance rules (D99): a tenant setting.</summary>
     public const string ClearanceRulesPolicy = "console.clearance_rules";
 
+    /// <summary>The county's moderation queue (D114): held messages, for network organisers and moderators.</summary>
+    public const string ModerationPolicy = "console.moderation";
+
     private const string AuthDataSourceKey = "auth";
 
     /// <summary>How long a cookie's claims are trusted before they are rebuilt from the database.</summary>
@@ -90,6 +93,7 @@ public static class ConsoleServices
             .AddPolicy(NeighbourhoodPagesPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.NeighbourhoodPages.Manage)))
             .AddPolicy(WordingPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
             .AddPolicy(ClearanceRulesPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
+            .AddPolicy(ModerationPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Moderation.Triage)))
             .AddPolicy(AuditPolicy, p => p.RequireAuthenticatedUser()
                 .RequireRole(BrightTimeRoles.TenantWideAudit)
                 .AddRequirements(new PermissionRequirement(Permissions.Audit.Read)))

@@ -222,6 +222,9 @@ public sealed partial class KettleSeedTests
         IReadOnlyList<string> Permissions(string role) => Data.Roles.Single(r => r.Name == role).Permissions;
 
         Data.Users.Count(u => u.Roles.Contains("network_organiser")).ShouldBe(2);
+        Data.Users.Single(u => u.Roles.Contains("moderator")).Email.ShouldBe(KettleAccounts.ModeratorEmail, "the moderation queue's own account (D114)");
+        Permissions("moderator").ShouldContain("moderation.triage");
+        Permissions("moderator").ShouldNotContain("listings.review");
         Permissions("network_organiser").ShouldContain("listings.review");
         Permissions("provider_admin").ShouldNotContain("listings.review");
         Permissions("program_staff").ShouldNotContain("listings.review");

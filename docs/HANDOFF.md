@@ -320,6 +320,12 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   back from the API as `clearances.not_current` with the kinds missing and expired, and the app
   says so (the attendance screen and offline sync too). With the rules on, approval needs every
   active owner cleared. The gate now acts only where the permission and role would otherwise pass.
+- **Held messages: the moderation queue** (D114, proposed), M5's first piece: the county's
+  moderators and network organisers release or remove the messages D53's screen held, each with
+  a reason, in `moderation_action` and the audit log. Nobody of the sender's organisation decides.
+  A released message is delivered as sent then; a removed one shows only to its sender, marked so.
+  New permissions `moderation.triage` and `moderation.remove`; the seed gains
+  `moderator@kettle.example.org`. No schema change; reseed for the moderator.
 - **Typo tolerance as a fallback** (D113): a text search asks first whether its words
   match anything with its filters; if so it's full text alone, if not `<<%` alone. "robotics"
   30 → 23 ms on the synthetic load; a misspelt query costs the same as before (plan/03 says
@@ -413,6 +419,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D113 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D100 on 2026-11-22, D101 to D103 on 2026-11-23, D104 and D105 on 2026-11-24, D106 to D112 on 2026-11-26, D113 on 2026-11-27).
+D114 (the held-message moderation queue) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

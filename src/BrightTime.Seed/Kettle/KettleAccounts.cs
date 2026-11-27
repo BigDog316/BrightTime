@@ -10,8 +10,8 @@ internal sealed record SeedUser(Guid Id, string Email, IReadOnlyList<string> Rol
 
 /// <summary>
 /// Roles with their default permissions, and the accounts that sign in to the consoles:
-/// an owner for every organisation, a staff member for the larger ones, and two network
-/// organisers.
+/// an owner for every organisation, a staff member for the larger ones, two network
+/// organisers and a moderator.
 /// </summary>
 /// <remarks>
 /// No account has a password. Until Identity sign-in exists they are reached through the
@@ -20,6 +20,9 @@ internal sealed record SeedUser(Guid Id, string Email, IReadOnlyList<string> Rol
 internal static class KettleAccounts
 {
     public const string OrganiserEmail = "organiser@kettle.example.org";
+
+    /// <summary>The county's moderator (D114): the moderation queue, and nothing of the organisers' else.</summary>
+    public const string ModeratorEmail = "moderator@kettle.example.org";
 
     public static Guid OrganiserId { get; } = SeedIds.For("user/" + OrganiserEmail);
 
@@ -38,6 +41,7 @@ internal static class KettleAccounts
         [
             Organiser(OrganiserEmail),
             Organiser("organiser2@kettle.example.org"),
+            new(SeedIds.For("user/" + ModeratorEmail), ModeratorEmail, [BrightTimeRoles.Moderator], []),
         ];
 
         foreach (SeedOrganisation org in organisations)

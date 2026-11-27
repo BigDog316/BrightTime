@@ -73,7 +73,8 @@ public sealed class MessageRecord
 
     public string? ScreenResult { get; set; }
 
-    public DateTimeOffset SentAt { get; init; }
+    /// <summary>When it was written; for a held message a moderator released, when it was released (D114).</summary>
+    public DateTimeOffset SentAt { get; set; }
 
     public DateTimeOffset? EditedAt { get; set; }
 
@@ -82,7 +83,34 @@ public sealed class MessageRecord
     public Guid? RemovedBy { get; set; }
 }
 
-/// <summary>The Community module's context (M3b): messaging so far.</summary>
+/// <summary>
+/// A moderator's decision (D114), in <c>moderation_action</c>: append-only, by a trigger and by the
+/// application roles having no update or delete on it.
+/// </summary>
+public sealed class ModerationActionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? ReportId { get; init; }
+
+    public required string TargetKind { get; init; }
+
+    public Guid TargetId { get; init; }
+
+    public required string Action { get; init; }
+
+    public Guid ActorUserId { get; init; }
+
+    public required string Reason { get; init; }
+
+    public int? DurationHours { get; init; }
+
+    public DateTimeOffset OccurredAt { get; init; }
+}
+
+/// <summary>The Community module's context (M3b): messaging, and the moderation of what screening holds (D114).</summary>
 public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -96,6 +124,8 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
     public DbSet<ConversationParticipantRecord> Participants => Set<ConversationParticipantRecord>();
 
     public DbSet<MessageRecord> Messages => Set<MessageRecord>();
+
+    public DbSet<ModerationActionRecord> ModerationActions => Set<ModerationActionRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -126,6 +156,15 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.Property(x => x.ScreenResult).HasColumnType("jsonb");
             b.HasIndex(x => new { x.ConversationId, x.SentAt }).IsDescending(false, true).HasFilter("state = 'sent'");
             b.HasIndex(x => new { x.TenantId, x.SentAt }).HasFilter("state in ('screening','held')");
+        });
+
+        modelBuilder.Entity<ModerationActionRecord>(b =>
+        {
+            b.ToTable("moderation_action");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.TargetKind, x.TargetId, x.OccurredAt }).IsDescending(false, false, true);
+            b.HasIndex(x => new { x.ActorUserId, x.OccurredAt }).IsDescending(false, true);
         });
 
         modelBuilder.ApplySnakeCaseNames();

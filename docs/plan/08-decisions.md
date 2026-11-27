@@ -3829,6 +3829,51 @@ No schema change. Tests: `QueryBuilderTests` (each arm alone, the probe, the map
 as before), `FinderPlanTests` (05 is chosen as typos, the probe uses an index; the recorded
 plans for 02, 05, 06 and the new 08 refreshed).
 
+### D114 — Held messages: the county's moderation queue (**proposed 2026-11-27**)
+
+D53 holds an adult's message to a young person when it looks like an attempt to take the
+conversation off the platform, and nothing let a held message out or took it away: it stayed held
+for good. Sam chose on 2026-11-27: this as M5's first piece of moderation; county moderators only,
+nobody of the sender's organisation; release or remove, each with a reason, recorded in
+`moderation_action`, and the sender sees the outcome.
+- **Who:** docs/plan/04's `moderation.triage` and `moderation.remove`, now defined and given to
+  network organisers and moderators (●), and to nobody else. **Not the platform admin**, against
+  what the question put to Sam said: plan/04 gives them neither, and a message to a young person
+  is youth data, which the platform admin never has (`RolePermissionTests`). plan/04's "◐ org" for
+  a provider admin's `moderation.remove` is for content in its own spaces (M5) and isn't granted
+  here. The seed gains `moderator@kettle.example.org`, with the moderator role alone.
+- **Never the sender's organisation:** the sender, or any member of the organisation the
+  conversation belongs to (its admin reading along among them), is refused
+  (`moderation.own_organisation`), and the queue says another moderator decides that one.
+- **The queue** (`/organiser/moderation`, `HeldMessages`): held messages oldest first, at most
+  100, each with its organisation, conversation subject, the sender's role (never a name), the
+  screen's reasons in words, and the three messages before it, so a moderator can tell "add me"
+  from "add me to the carpool list". Reading it is audited (`moderation.held_read`, the page is a
+  `[YouthRecord]`).
+- **Release:** the message is sent, with its time set to the release, so it lands where the young
+  person will read it and counts as unread; the other participants are told as for any message
+  (`Conversations.NotifyAsync`, factored out of sending). Refused into a closed conversation
+  (`moderation.closed`), and when a contact restriction now keeps the sender from a young person in
+  it (`moderation.restricted`); removing is always possible. The original time is in the audit
+  trail and the moderation record.
+- **Remove:** `state = 'removed'`, with who and when. Nobody sees it but its sender, who sees it
+  marked "Removed by a moderator" in the console and in the app (`ConversationMessage.IsRemoved`).
+  The moderator's reason isn't shown to the sender.
+- **Once:** each change is conditional on the message still being held, so two moderators at
+  once get one decision and one `moderation.not_held`. A reason of 1 to 1,000 characters is
+  required (`moderation.reason`; the schema's `ck_moderation_reason` too). Each decision is a
+  `moderation_action` row (`publish` or `remove`, target `message`), append-only by trigger and
+  grant, and an audit event (`moderation.message_released`, `.message_removed`).
+- **Not in this:** warning or muting the sender, reports from users (`community.report`), and
+  telling the sender's organisation. Screening itself is unchanged (D53's contact-exchange screen;
+  Q8 is still open).
+
+No schema change: `moderation_action` and the message states were in `70-community.sql` from the
+start. Tests: `HeldMessagesPageTests` (the queue, release and the young person told, removal and
+the sender's view, no reason, twice, the sender and the admin reading along refused, a closed
+conversation, a provider kept out, a moderator kept out of the organisers' other pages),
+`RolePermissionTests`, `KettleSeedTests`, and the route matrix covers the new page.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

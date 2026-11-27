@@ -54,6 +54,10 @@ else
                     {
                         <strong>@(" · " + T["app.messages.held"])</strong>
                     }
+                    else if (m.IsRemoved)
+                    {
+                        <strong>@(" · " + T["app.messages.removed"])</strong>
+                    }
                 </p>
                 <p class="body" dir="auto">@m.Body</p>
             </li>

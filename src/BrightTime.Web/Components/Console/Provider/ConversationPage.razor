@@ -13,7 +13,8 @@
 
 @*
     One conversation, for a member of the organisation's staff who is in it (D53, D64). It says who
-    else reads it, and a message held for a moderator shows only to its sender, marked so.
+    else reads it, and a message held for a moderator shows only to its sender, marked so, as does
+    one a moderator removed (D114).
 *@
 @if (Forbidden)
 {
@@ -64,6 +65,10 @@ else if (_conversation is { } c)
                     @if (m.State == MessageStates.Held)
                     {
                         <strong>@(" · " + T["provider.messages.held"])</strong>
+                    }
+                    else if (m.State == MessageStates.Removed)
+                    {
+                        <strong>@(" · " + T["provider.messages.removed"])</strong>
                     }
                 </p>
                 <p class="body" dir="auto">@m.Body</p>

@@ -2,11 +2,13 @@
 
 This guide is for the county's network organisers: the people who decide which organisations and
 listings appear on BrightTime, and who run the site itself. Sign in, then use the links at the top
-of the console: **Review queue**, **Taxonomy**, **Collections**, **Neighbourhood pages**, **Wording** and **Audit log**.
+of the console: **Review queue**, **Held messages**, **Taxonomy**, **Collections**, **Neighbourhood pages**, **Wording** and **Audit log**.
+The county's moderators see **Held messages** alone.
 
 - [The review queue](#the-review-queue)
 - [Reviewing an organisation](#reviewing-an-organisation)
 - [Reviewing a listing](#reviewing-a-listing)
+- [Held messages](#held-messages)
 - [Taxonomy](#taxonomy)
 - [Collections](#collections)
 - [Neighbourhood pages](#neighbourhood-pages)
@@ -83,6 +85,26 @@ For a published listing that changed since review:
 
 Each of these decisions is emailed to whoever sent the listing in and the organisation's owners
 and admins, with your note or reason. Write it for them: it's quoted as you typed it.
+
+## Held messages
+
+When an organisation's staff write to a young person, BrightTime holds any message that looks like
+an attempt to move the conversation elsewhere: a phone number, an email address, a link, a social
+media handle, another messaging app, or a request to talk privately. Until a moderator decides,
+only the sender sees it.
+
+**Held messages** lists them, oldest first. Each shows the organisation, the conversation's
+subject, who wrote it (by role, such as staff), why it was held, and the messages just before it.
+Write a reason, then:
+
+- **Release it** to deliver it now. The others in the conversation are told there's a new message.
+  You can't release a message into a conversation that has been closed, or when a contact
+  restriction now keeps the sender from the young person.
+- **Remove it** to keep it from everyone but the sender, who sees that a moderator removed it. They
+  don't see your reason.
+
+Your reason and decision are kept in the moderation record and the audit log, and can't be changed.
+If you're a member of the organisation that wrote a message, another moderator decides it.
 
 ## Taxonomy
 
@@ -213,5 +235,6 @@ the scenes; its screen in the console is still to come.
 ## What you can't see
 
 Being a network organiser doesn't give you young people's records. You see organisations,
-listings and the audit log. A family's details are seen only by the organisations the family
+listings and the audit log, and, in **Held messages**, only the messages waiting for a moderator
+and the few before each. A family's details are seen only by the organisations the family
 shares them with. Platform administrators, who run the servers, can't see them either.

@@ -85,6 +85,25 @@ public sealed class RolePermissionTests
     }
 
     [Fact]
+    public void Only_the_countys_organisers_and_moderators_decide_what_screening_held()
+    {
+        // docs/plan/04: moderation is county-wide, and nobody of a provider decides on what its
+        // own staff wrote to a young person (D114). The platform admin has no youth data, and a
+        // held message to a young person is youth data.
+        foreach (string permission in new[] { Permissions.Moderation.Triage, Permissions.Moderation.Remove })
+        {
+            string[] holders =
+            [
+                .. BrightTimeRoles.DefaultPermissions
+                    .Where(kv => kv.Value.Contains(permission, StringComparer.Ordinal))
+                    .Select(kv => kv.Key),
+            ];
+
+            holders.ShouldBe([BrightTimeRoles.NetworkOrganiser, BrightTimeRoles.Moderator], ignoreOrder: true, $"for '{permission}'");
+        }
+    }
+
+    [Fact]
     public void A_civic_viewer_and_a_researcher_get_no_write_permission_at_all()
     {
         string[] readOnly =

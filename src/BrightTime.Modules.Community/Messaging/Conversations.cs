@@ -21,7 +21,10 @@ namespace BrightTime.Modules.Community.Messaging;
 [YouthData]
 public sealed record ConversationSummary(Guid Id, Guid OrgId, string OrgName, string Kind, string? Subject, bool IsOrgVisible, bool IncludesMinor, DateTimeOffset? LastMessageAt, int Unread, DateTimeOffset? ClosedAt);
 
-/// <summary>A message as one participant sees it. A held message is shown only to its sender, marked so.</summary>
+/// <summary>
+/// A message as one participant sees it. A held message is shown only to its sender, marked so;
+/// so is one a moderator removed (D114).
+/// </summary>
 [YouthData]
 public sealed record MessageView(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt);
 
@@ -357,23 +360,33 @@ public sealed class Conversations(
 
         if (message.State == MessageStates.Sent)
         {
-            string org = await directory.GetOrganisationNameAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false) ?? "";
-            List<Guid> others = await db.Participants.AsNoTracking()
-                .Where(p => p.ConversationId == conversation.Id && p.UserId != sender.Value && p.RemovedAt == null && !p.IsImplicitReader)
-                .Select(p => p.UserId).ToListAsync(ct).ConfigureAwait(false);
-            foreach (Guid other in others)
-            {
-                await db.PublishAsync(tenant.TenantId, new NotificationRequested(
-                    other,
-                    NewMessageKind,
-                    NewMessageTitle,
-                    new Dictionary<string, string>(StringComparer.Ordinal) { ["org"] = org },
-                    "/messages/" + conversation.Id.ToString("D"),
-                    "message:" + message.Id.ToString("N") + ":" + other.ToString("N")), ct).ConfigureAwait(false);
-            }
+            await NotifyAsync(conversation, message, ct).ConfigureAwait(false);
         }
 
         return message;
+    }
+
+    /// <summary>
+    /// Tells the conversation's other participants (not its implicit readers) that there is a new
+    /// message: when it is sent, or when a moderator releases a held one (D114). Once per message
+    /// and person, by the notification's key.
+    /// </summary>
+    internal async Task NotifyAsync(ConversationRecord conversation, MessageRecord message, CancellationToken ct)
+    {
+        string org = await directory.GetOrganisationNameAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false) ?? "";
+        List<Guid> others = await db.Participants.AsNoTracking()
+            .Where(p => p.ConversationId == conversation.Id && p.UserId != message.SenderUserId && p.RemovedAt == null && !p.IsImplicitReader)
+            .Select(p => p.UserId).ToListAsync(ct).ConfigureAwait(false);
+        foreach (Guid other in others)
+        {
+            await db.PublishAsync(tenant.TenantId, new NotificationRequested(
+                other,
+                NewMessageKind,
+                NewMessageTitle,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["org"] = org },
+                "/messages/" + conversation.Id.ToString("D"),
+                "message:" + message.Id.ToString("N") + ":" + other.ToString("N")), ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -423,7 +436,8 @@ public sealed class Conversations(
             .Where(p => p.ConversationId == conversation.Id && p.RemovedAt == null).ToListAsync(ct).ConfigureAwait(false);
         Dictionary<Guid, string> roles = people.ToDictionary(p => p.UserId, p => p.ParticipantRole);
         List<MessageRecord> messages = await db.Messages.AsNoTracking()
-            .Where(m => m.ConversationId == conversation.Id && (m.State == MessageStates.Sent || (m.SenderUserId == viewer.Value && m.State == MessageStates.Held)))
+            .Where(m => m.ConversationId == conversation.Id && (m.State == MessageStates.Sent
+                || (m.SenderUserId == viewer.Value && (m.State == MessageStates.Held || m.State == MessageStates.Removed))))
             .OrderBy(m => m.SentAt).Take(500).ToListAsync(ct).ConfigureAwait(false);
         // The database marks a conversation with a minor as visible to the organisation at commit;
         // a conversation just made may not show it yet, so read it from the people in it.
@@ -468,6 +482,7 @@ public static class CommunityModule
     public static IServiceCollection AddCommunity(this IServiceCollection services)
     {
         services.AddScoped<Conversations>();
+        services.AddScoped<Moderation.HeldMessages>();
         return services;
     }
 }

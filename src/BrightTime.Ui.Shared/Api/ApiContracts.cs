@@ -435,10 +435,15 @@ public sealed record Conversation(
     public bool IsAnnouncement => Kind == "org_broadcast";
 }
 
-/// <summary>A message; a held one is shown only to its sender, until a moderator lets it through.</summary>
+/// <summary>
+/// A message; a held one is shown only to its sender, until a moderator lets it through, and so is
+/// one a moderator removed (D114).
+/// </summary>
 public sealed record ConversationMessage(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt)
 {
     public bool IsHeld => State == "held";
+
+    public bool IsRemoved => State == "removed";
 }
 
 /// <summary>A waiver an application asks for (D47), signed against its exact text's <see cref="Hash"/>.</summary>

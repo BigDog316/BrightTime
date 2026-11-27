@@ -138,9 +138,11 @@ public static class BrightTimeRoles
                 Permissions.Tenant.FeatureFlags,
                 Permissions.Audit.Read,
                 Permissions.SubjectRequests.Fulfil,
+                Permissions.Moderation.Triage,
+                Permissions.Moderation.Remove,
             ],
 
-            [Moderator] = [.. PublicBrowse, Permissions.Audit.Read],
+            [Moderator] = [.. PublicBrowse, Permissions.Audit.Read, Permissions.Moderation.Triage, Permissions.Moderation.Remove],
 
             [CivicViewer] = [.. PublicBrowse],
 

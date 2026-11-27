@@ -17,6 +17,10 @@
             {
                 <a href="/organiser/review">@T["site.nav.review"]</a>
             }
+            @if (user.HasPermission(Permissions.Moderation.Triage))
+            {
+                <a href="/organiser/moderation">@T["site.nav.moderation"]</a>
+            }
             @if (user.HasPermission(Permissions.Audit.Read) && BrightTimeRoles.TenantWideAudit.Any(user.IsInRole))
             {
                 <a href="/organiser/audit">@T["site.nav.audit"]</a>

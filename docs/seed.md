@@ -16,7 +16,7 @@ demonstrated on. Nothing in it is a real provider, place or person:
 | Providers | 60 organisations (54 approved, 6 awaiting review) and 85 sites, 5 of them with a private address |
 | Listings | 420 across all four kinds, about 93% published and the rest spread across draft, review, changes requested and unpublished |
 | Languages | Spanish for every listing and all six locales for 12 of the 54 activity templates; a few listings are written in Spanish, Chinese, Bengali, Haitian Creole or Arabic first |
-| Accounts | 12 roles with their default permissions; an owner for every organisation (`admin@<org-slug>.example.org`), a staff member for those with more than one site (`staff@…`), and two network organisers (`organiser@kettle.example.org`, `organiser2@…`). No passwords. |
+| Accounts | 12 roles with their default permissions; an owner for every organisation (`admin@<org-slug>.example.org`), a staff member for those with more than one site (`staff@…`), two network organisers (`organiser@kettle.example.org`, `organiser2@…`), and a moderator (`moderator@kettle.example.org`, D114). No passwords. |
 
 All schedules are relative to the run date, so the site always has upcoming sessions.
 A given date always produces the same catalogue: the ids come from names, and the choices

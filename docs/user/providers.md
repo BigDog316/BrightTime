@@ -303,7 +303,9 @@ and the kiosk screen, are still to come: until then, mark the young person on yo
   an admin of your organisation joins and reads along, and everyone in it is told so. If no admin
   can, BrightTime refuses to start it.
 - A message an adult sends to a young person may be **held for a moderator** if it looks like an
-  attempt to swap contact details. Only you see it, marked as held.
+  attempt to swap contact details. Only you see it, marked as held. A moderator from the county,
+  never someone from your organisation, then releases it, and it's delivered, or removes it, and
+  you see it marked as removed.
 - **Announce to an activity's families** sends one message to every family with a child enrolled.
   Families don't reply and never see each other. A young person gets it only with consent and
   an admin reading along; the page tells you how many were left out.

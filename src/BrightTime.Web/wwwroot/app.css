@@ -435,6 +435,25 @@ a.secondary {
     font-size: 0.95rem;
 }
 
+/* D114: the moderation queue, one held message after another. */
+.held-messages {
+    list-style: none;
+    padding: 0;
+}
+
+.held-messages > li {
+    border-top: 1px solid var(--bt-muted);
+    padding-block: 1rem;
+}
+
+.held-body {
+    background: var(--bt-tint);
+    border-inline-start: 0.25rem solid var(--bt-muted);
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    white-space: pre-wrap;
+}
+
 .register {
     background: var(--bt-tint);
     border-radius: 0.5rem;

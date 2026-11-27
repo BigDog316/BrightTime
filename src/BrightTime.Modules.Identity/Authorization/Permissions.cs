@@ -159,6 +159,19 @@ public static class Permissions
         public const string AttestSignedForm = "consent.attest_signed_form";
     }
 
+    public static class Moderation
+    {
+        /// <summary>
+        /// The county's moderation queue (D114): reading what screening held, and releasing it. County-wide;
+        /// docs/plan/04 gives it to network organisers and moderators, and nobody of the organisation whose
+        /// staff wrote it.
+        /// </summary>
+        public const string Triage = "moderation.triage";
+
+        /// <summary>Removing held content, so that nobody but its author sees it.</summary>
+        public const string Remove = "moderation.remove";
+    }
+
     public static class Taxonomy
     {
         public const string Manage = "taxonomy.manage";
@@ -199,6 +212,7 @@ public static class Permissions
         Applications.View, Applications.Decide,
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Messages.SendToFamily,
+        Moderation.Triage, Moderation.Remove,
         Payments.Waive,
         Reports.RunProvider,
         Badges.Define, Badges.Issue, Badges.Revoke,

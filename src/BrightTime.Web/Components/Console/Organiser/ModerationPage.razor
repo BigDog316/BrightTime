@@ -13,13 +13,15 @@
 @*
     The county's moderation queue. Reports first (D115), critical ones at the top and marked when
     they've waited an hour unacknowledged: a moderator takes one on, then dismisses it, removes the
-    message or escalates it, with a note. Then the messages screening held (D114), oldest first: a
-    moderator releases one or removes it, with a reason. Nobody of the conversation's organisation
-    decides either.
+    message or escalates it, with a note. Then escalations waiting for their outcome (D116), then
+    the messages screening held (D114), oldest first: a moderator releases one or removes it, with
+    a reason. Nobody of the conversation's organisation decides any. Each links to its message's
+    history (D116).
 *@
 <PageTitle>@T["site.nav.moderation"] · BrightTime</PageTitle>
 
 <h1>@T["site.nav.moderation"]</h1>
+<p><a href="/organiser/moderation/history">@T["moderation.history.recent_link"]</a></p>
 
 @if (Done is { Length: > 0 } && T.Has("moderation.done." + Done))
 {
@@ -87,6 +89,7 @@ else
                             {
                                 <p class="note">@T["moderation.reports.already_removed"]</p>
                             }
+                            <p><a href="@HistoryOf(r.MessageId)">@T["moderation.history.link"]</a></p>
 
                             @if (r.OwnOrganisation)
                             {
@@ -131,6 +134,63 @@ else
         }
     </section>
 
+    @* D116: an escalation stays here until a moderator records how it ended. *@
+    <section aria-labelledby="escalated-heading">
+        <h2 id="escalated-heading">@T["moderation.escalated.heading"] <span class="count">(@_escalated.Count)</span></h2>
+        <p class="hint">@T["moderation.escalated.intro"]</p>
+        @if (_escalated.Count == 0)
+        {
+            <p>@T["moderation.escalated.none"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (EscalatedReport e in _escalated)
+                {
+                    string id = e.Id.ToString("N");
+                    bool invalid = _outcomeErrors.ContainsKey(e.Id);
+                    <li class="report report-@e.Severity">
+                        <article aria-labelledby="escalated-@id">
+                            <h3 id="escalated-@id">@T["moderation.report_reason." + e.Reason] <span class="severity">@T["moderation.severity." + e.Severity]</span></h3>
+                            <dl class="facts">
+                                <dt>@T["moderation.reports.organisation"]</dt>
+                                <dd><bdi>@e.OrgName</bdi></dd>
+                                <dt>@T["moderation.escalated.when"]</dt>
+                                <dd>@T.DateTime(e.EscalatedAt)</dd>
+                                @if (e.EscalationNote is { Length: > 0 } note)
+                                {
+                                    <dt>@T["moderation.escalated.note"]</dt>
+                                    <dd dir="auto">@note</dd>
+                                }
+                            </dl>
+                            <p><a href="@HistoryOf(e.MessageId)">@T["moderation.history.link"]</a></p>
+                            @if (e.OwnOrganisation)
+                            {
+                                <p class="notice">@T["moderation.reports.own"]</p>
+                            }
+                            else
+                            {
+                                <form method="post" class="reason-form" @formname="@("close-" + id)" @onsubmit="() => CloseAsync(e.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="outcome-@id">@T["moderation.escalated.outcome"]</label>
+                                        <textarea id="outcome-@id" name="outcome" rows="3" maxlength="@Reports.MaxNote" dir="auto"
+                                                  aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? "outcome-" + id + "-error" : null)"></textarea>
+                                        @if (invalid)
+                                        {
+                                            <p class="field-error" id="outcome-@id-error">@_outcomeErrors[e.Id]</p>
+                                        }
+                                    </div>
+                                    <button type="submit">@T["moderation.escalated.close"]</button>
+                                </form>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+
     <section aria-labelledby="held-heading">
         <h2 id="held-heading">@T["moderation.held.heading_section"] <span class="count">(@_held.Count)</span></h2>
         <p class="hint">@T["moderation.held.intro"]</p>
@@ -161,6 +221,7 @@ else
 
                             <h4>@T["moderation.held.message"]</h4>
                             <blockquote class="held-body" dir="auto">@m.Body</blockquote>
+                            <p><a href="@HistoryOf(m.Id)">@T["moderation.history.link"]</a></p>
 
                             @if (m.OwnOrganisation)
                             {
@@ -199,6 +260,8 @@ else
 
     private IReadOnlyList<QueuedReport> _reports = [];
     private IReadOnlyList<HeldMessage> _held = [];
+    private IReadOnlyList<EscalatedReport> _escalated = [];
+    private readonly Dictionary<Guid, string> _outcomeErrors = [];
     private string? _problem;
     private readonly Dictionary<Guid, string> _reasonErrors = [];
     private readonly Dictionary<Guid, string> _noteErrors = [];
@@ -210,6 +273,7 @@ else
         if (Availability.IsAvailable)
         {
             _reports = await Get<Reports>().ListAsync(Actor);
+            _escalated = await Get<Reports>().EscalatedAsync(Actor);
             _held = await Get<HeldMessages>().ListAsync(Actor);
         }
     }
@@ -288,6 +352,27 @@ else
             _problem = T.Error(result.Error);
         }
     }
+
+    private async Task CloseAsync(Guid report)
+    {
+        Result result = await Get<Reports>().CloseEscalationAsync(Actor, report, FormValue("outcome"));
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo("/organiser/moderation?done=escalation_closed");
+            return;
+        }
+
+        if (result.Error!.Code == "reports.outcome")
+        {
+            _outcomeErrors[report] = T.Error(result.Error);
+        }
+        else
+        {
+            _problem = T.Error(result.Error);
+        }
+    }
+
+    private static string HistoryOf(Guid message) => $"/organiser/moderation/history?message={message:D}";
 
     /// <summary>The messages before one, for context, every person by role.</summary>
     private RenderFragment Earlier(IReadOnlyList<EarlierMessage> earlier) => __builder =>

@@ -3925,6 +3925,47 @@ No schema change: `community.report` was in `70-community.sql` from the start. T
 removing with every report of the message settled, the records, the organisation refused, a
 decided report), `CriticalReportMailTests` (the email).
 
+### D116 — Moderation history, and closing escalations (**proposed 2026-11-27**)
+
+M5's acceptance asks that the moderation audit trail reconstruct every decision, and that a
+mandated-reporter escalation be a documented, testable workflow. D114 and D115 recorded the
+decisions, but nothing read them back, and an escalated report left the queue with nowhere to
+follow it up. Sam chose on 2026-11-27: the history next; an escalation is closed with an outcome
+note; the history is for the queue's moderators, never of their own organisation.
+- **The history** (`/organiser/moderation/history?message=…`, `ModerationHistory`): one
+  message as it stands (organisation, subject, the sender's role, the text, its state now), then
+  what happened to it, in order: screening's decision and reasons; each report, by the reporter's
+  role, with its reason, severity and their words; when it was taken on and by whom; each
+  moderator's decision (released, removed, dismissed, escalated) with who and their note; and an
+  escalation's close with its outcome. Moderators are named by their address; nobody else by name.
+  Without `?message=`, the county's 50 most recent decisions, each linking to its message.
+  Every queue item links to its history.
+- **From the records, not the audit log:** each step's own row (`screening_result`, `report`, the
+  append-only `moderation_action`), so the story doesn't depend on reading back thousands of audit
+  rows. Reading it is audited (`moderation.history_read`).
+- **Screening is now recorded:** each screened message (an adult's message into a conversation
+  with a young person) gets a `community.screening_result` row: provider `contact_exchange`,
+  `pass` or `hold`, the reasons as labels, and when. plan/09 asks for screening results to be
+  recorded; the table was there from the start and nothing wrote it. A message held before this
+  shows its hold without a time, from the message's own `screen_result`.
+- **Closing an escalation:** escalated reports wait in the queue under **Escalated, waiting for
+  the outcome**, with the escalation note, until a moderator records how it ended (1 to 1,000
+  characters, such as the agency's reference). The report becomes `actioned` with the outcome as
+  its resolution, and the close is a `moderation_action` (`no_action`: nothing more for
+  BrightTime to do) with its `report_id`, so it has an actor; the history shows a `no_action`
+  after an escalation as the escalation's close. Audited as `reports.escalation_closed`; reading the
+  list is `reports.escalated_read`.
+- **Who:** the queue's people (`moderation.triage`). A moderator who is of the conversation's
+  organisation, or the sender, is refused the history (`moderation.own_organisation`) and can't
+  close its escalation (`reports.own_organisation`).
+- **Not in this:** plan/05's `GET /moderation/history` (the console has it; the API doesn't yet),
+  the history of anything but a message, and searching the history.
+
+No schema change. Tests: `ModerationHistoryTests` (a message held, released, reported, taken on,
+escalated with its removal and closed, rebuilt in order with each moderator and note; one
+screening let through; the recent decisions; closing needs an outcome and leaves the list; the
+organisation refused; an unknown message).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

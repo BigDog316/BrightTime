@@ -356,6 +356,23 @@ public sealed class Conversations(
             SentAt = clock.StoredNow(),
         };
         db.Messages.Add(message);
+        if (screen)
+        {
+            // When and why, as its own record (D116): the moderation history reads the hold from here.
+            db.ScreeningResults.Add(new ScreeningResultRecord
+            {
+                Id = UuidV7.NewId(),
+                TenantId = conversation.TenantId,
+                TargetKind = "message",
+                TargetId = message.Id,
+                Provider = ContactExchangeScreen.Provider,
+                Decision = reasons.Count > 0 ? "hold" : "pass",
+                Labels = JsonSerializer.Serialize(reasons.ToDictionary(r => r, _ => 1.0)),
+                PiiSpans = "[]",
+                CreatedAt = message.SentAt,
+            });
+        }
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         if (message.State == MessageStates.Sent)
@@ -484,6 +501,7 @@ public static class CommunityModule
         services.AddScoped<Conversations>();
         services.AddScoped<Moderation.HeldMessages>();
         services.AddScoped<Moderation.Reports>();
+        services.AddScoped<Moderation.ModerationHistory>();
         return services;
     }
 }

@@ -13,6 +13,9 @@ namespace BrightTime.Modules.Community.Messaging;
 /// </remarks>
 public static partial class ContactExchangeScreen
 {
+    /// <summary>The screen's name in <c>screening_result.provider</c> (D116).</summary>
+    public const string Provider = "contact_exchange";
+
     public const string Phone = "phone";
     public const string Email = "email";
     public const string Link = "link";

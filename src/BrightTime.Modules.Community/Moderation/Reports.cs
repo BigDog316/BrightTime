@@ -44,6 +44,21 @@ public sealed record QueuedReport(
     IReadOnlyList<EarlierMessage> Earlier);
 
 /// <summary>
+/// An escalated report waiting for its outcome (D116): what was escalated, when, the moderator's
+/// note of what they did and who they told, and the message's history to open.
+/// </summary>
+[YouthData]
+public sealed record EscalatedReport(
+    Guid Id,
+    string Reason,
+    string Severity,
+    DateTimeOffset EscalatedAt,
+    string? EscalationNote,
+    Guid MessageId,
+    string OrgName,
+    bool OwnOrganisation);
+
+/// <summary>
 /// Reporting a message (D115): someone in a conversation reports a message another person wrote
 /// in it, with a reason, and it joins the county's moderation queue. A report of grooming or
 /// self-harm is critical whoever makes it, goes to the top, is to be acknowledged within the hour,
@@ -76,6 +91,8 @@ public sealed class Reports(
     public const string Dismissed = "reports.dismissed";
     public const string Removed = "reports.message_removed";
     public const string Escalated = "reports.escalated";
+    public const string EscalationsRead = "reports.escalated_read";
+    public const string EscalationClosed = "reports.escalation_closed";
 
     public const int MaxDetails = 2000;
     public const int MaxNote = 1000;
@@ -227,6 +244,82 @@ public sealed class Reports(
             return list;
         }, cancellationToken);
 
+    /// <summary>
+    /// The escalated reports still waiting for their outcome (D116), oldest first: each stays here
+    /// until a moderator records how it ended. Reading them is audited.
+    /// </summary>
+    public Task<IReadOnlyList<EscalatedReport>> EscalatedAsync(UserId moderator, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync<IReadOnlyList<EscalatedReport>>(async ct =>
+        {
+            List<ReportRecord> escalated = await db.Reports.AsNoTracking()
+                .Where(r => r.State == ReportStates.Escalated)
+                .OrderBy(r => r.EscalatedAt).ThenBy(r => r.Id)
+                .Take(PageSize).ToListAsync(ct).ConfigureAwait(false);
+            Dictionary<Guid, (string Name, bool Mine)> orgs = [];
+            List<EscalatedReport> list = [];
+            foreach (ReportRecord report in escalated)
+            {
+                if (await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == report.TargetId, ct).ConfigureAwait(false) is not { } message)
+                {
+                    continue;
+                }
+
+                Guid orgId = await db.Conversations.AsNoTracking().Where(c => c.Id == message.ConversationId).Select(c => c.OrgId).FirstAsync(ct).ConfigureAwait(false);
+                if (!orgs.TryGetValue(orgId, out (string Name, bool Mine) org))
+                {
+                    OrganisationId id = new(orgId);
+                    org = (await directory.GetOrganisationNameAsync(id, ct).ConfigureAwait(false) ?? "",
+                        (await directory.GetOrganisationMembersAsync(id, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
+                    orgs[orgId] = org;
+                }
+
+                list.Add(new EscalatedReport(report.Id, report.ReasonCode, report.Severity, report.EscalatedAt ?? report.CreatedAt, report.EscalationNote,
+                    message.Id, org.Name, org.Mine || report.ReporterUserId == moderator.Value || message.SenderUserId == moderator.Value));
+            }
+
+            await AuditAsync(EscalationsRead, "report", [.. list.Select(r => r.Id)], ct).ConfigureAwait(false);
+            return list;
+        }, cancellationToken);
+
+    /// <summary>
+    /// Records how an escalation ended (D116), such as the agency's reference and what they said:
+    /// the report is closed as actioned with the outcome, and the decision is a
+    /// <c>moderation_action</c> (<c>no_action</c>: nothing more for BrightTime to do).
+    /// </summary>
+    public Task<Result> CloseEscalationAsync(UserId moderator, Guid reportId, string? outcome, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (outcome?.Trim() is not { Length: > 0 and <= MaxNote } said)
+            {
+                return Result.Failure(Error.Validation("reports.outcome", $"Write how it ended in up to {MaxNote} characters; it's kept in the moderation record."));
+            }
+
+            ReportRecord? report = await db.Reports.AsNoTracking().FirstOrDefaultAsync(r => r.Id == reportId && r.State == ReportStates.Escalated, ct).ConfigureAwait(false);
+            if (report is null || await OwnAsync(moderator, report, ct).ConfigureAwait(false) is not { } own)
+            {
+                return Result.Failure(Error.NotFound("reports.not_escalated", "That report isn't waiting for its outcome any more."));
+            }
+
+            if (own)
+            {
+                return Result.Failure(OwnOrganisation());
+            }
+
+            DateTimeOffset now = clock.StoredNow();
+            int changed = await db.Reports.Where(r => r.Id == reportId && r.State == ReportStates.Escalated)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.State, ReportStates.Actioned)
+                    .SetProperty(r => r.ResolvedAt, now).SetProperty(r => r.Resolution, said), ct).ConfigureAwait(false);
+            if (changed == 0)
+            {
+                return Result.Failure(Error.NotFound("reports.not_escalated", "That report isn't waiting for its outcome any more."));
+            }
+
+            Act(report, "no_action", moderator, said, now);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await AuditAsync(EscalationClosed, "report", [reportId], ct).ConfigureAwait(false);
+            return Result.Success();
+        }, cancellationToken);
+
     /// <summary>A moderator takes a report on: it's acknowledged, and theirs.</summary>
     public Task<Result> AcknowledgeAsync(UserId moderator, Guid reportId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
@@ -340,16 +433,27 @@ public sealed class Reports(
             return (null, NotWaiting());
         }
 
-        ConversationRecord conversation = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId, ct).ConfigureAwait(false);
-        bool member = (await directory.GetOrganisationMembersAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false)).Any(m => m.UserId == moderator);
-        if (member || report.ReporterUserId == moderator.Value || message.SenderUserId == moderator.Value)
+        return await OwnAsync(moderator, report, ct).ConfigureAwait(false) is true ? (null, OwnOrganisation()) : (report, null);
+    }
+
+    /// <summary>
+    /// Whether the report is the moderator's own business: their organisation's conversation, their
+    /// report, or their message. Null when the message is gone.
+    /// </summary>
+    private async Task<bool?> OwnAsync(UserId moderator, ReportRecord report, CancellationToken ct)
+    {
+        if (await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == report.TargetId, ct).ConfigureAwait(false) is not { } message)
         {
-            return (null, Error.Forbidden("reports.own_organisation",
-                "You're in this conversation's organisation, or it's your own report or message, so another moderator decides it."));
+            return null;
         }
 
-        return (report, null);
+        ConversationRecord conversation = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId, ct).ConfigureAwait(false);
+        bool member = (await directory.GetOrganisationMembersAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false)).Any(m => m.UserId == moderator);
+        return member || report.ReporterUserId == moderator.Value || message.SenderUserId == moderator.Value;
     }
+
+    private static Error OwnOrganisation() => Error.Forbidden("reports.own_organisation",
+        "You're in this conversation's organisation, or it's your own report or message, so another moderator decides it.");
 
     private void Act(ReportRecord report, string action, UserId moderator, string reason, DateTimeOffset at) =>
         db.ModerationActions.Add(new ModerationActionRecord

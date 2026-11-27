@@ -1,0 +1,163 @@
+@page "/organiser/moderation/history"
+@using BrightTime.Modules.Community.Moderation
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.ModerationPolicy)]
+@attribute [YouthRecord(ModerationHistory.Read)]
+@inherits ConsoleComponent
+
+@*
+    The moderation trail, read back (D116). With ?message=, one message's whole story: as it is now,
+    then what screening, reporters and moderators did, in order, each decision with who made it and
+    their note. Without, the county's recent decisions, each linking to its message's story. Never
+    of the moderator's own organisation's conversations.
+*@
+<PageTitle>@T["moderation.history.title"] · BrightTime</PageTitle>
+
+<p class="eyebrow"><a href="/organiser/moderation">@T["site.nav.moderation"]</a></p>
+<h1>@T["moderation.history.title"]</h1>
+
+@if (_problem is not null)
+{
+    <p class="notice error" role="alert">@_problem</p>
+}
+else if (!Availability.IsAvailable)
+{
+    <p>@T["moderation.no_database"]</p>
+}
+else if (_history is { } h)
+{
+    <section aria-labelledby="message-heading">
+        <h2 id="message-heading">@T["moderation.history.message"]</h2>
+        <dl class="facts">
+            <dt>@T["moderation.reports.organisation"]</dt>
+            <dd><bdi>@h.OrgName</bdi></dd>
+            <dt>@T["moderation.held.conversation"]</dt>
+            <dd dir="auto">@(h.Subject ?? T["provider.messages.no_subject"])</dd>
+            <dt>@T["moderation.held.sender"]</dt>
+            <dd>@Role(h.SenderRole)</dd>
+            <dt>@T["moderation.history.state"]</dt>
+            <dd>@(T.Has("moderation.history.state." + h.State) ? T["moderation.history.state." + h.State] : h.State)</dd>
+        </dl>
+        <blockquote class="held-body" dir="auto">@h.Body</blockquote>
+    </section>
+
+    <section aria-labelledby="events-heading">
+        <h2 id="events-heading">@T["moderation.history.events"]</h2>
+        <ol class="history">
+            @foreach (HistoryEvent e in h.Events)
+            {
+                <li>
+                    <p class="note">@(e.At is { } at ? T.DateTime(at) : T["moderation.history.no_time"])</p>
+                    <p>@Describe(e)</p>
+                    @if (e.Note is { Length: > 0 } note)
+                    {
+                        <p><span class="note">@(e.Kind == HistoryKinds.Reported ? T["moderation.reports.details"] : T["moderation.history.note"]):</span> <q dir="auto">@note</q></p>
+                    }
+                </li>
+            }
+        </ol>
+    </section>
+}
+else
+{
+    <section aria-labelledby="recent-heading">
+        <h2 id="recent-heading">@T["moderation.history.recent"]</h2>
+        @if (_recent.Count == 0)
+        {
+            <p>@T["moderation.history.recent_none"]</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@T["moderation.history.col.when"]</th>
+                            <th scope="col">@T["moderation.history.col.decision"]</th>
+                            <th scope="col">@T["moderation.history.col.moderator"]</th>
+                            <th scope="col">@T["moderation.reports.organisation"]</th>
+                            <th scope="col">@T["moderation.history.note"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (RecentDecision d in _recent)
+                        {
+                            <tr>
+                                <td><a href="@($"/organiser/moderation/history?message={d.MessageId:D}")">@T.DateTime(d.At)</a></td>
+                                <td>@Action(d.Action)</td>
+                                <td>@d.Moderator</td>
+                                <td><bdi>@d.OrgName</bdi></td>
+                                <td dir="auto">@d.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "message")] public Guid? MessageId { get; set; }
+
+    private MessageHistory? _history;
+    private IReadOnlyList<RecentDecision> _recent = [];
+    private string? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            return;
+        }
+
+        ModerationHistory history = Get<ModerationHistory>();
+        if (MessageId is not { } id)
+        {
+            _recent = await history.RecentAsync(Actor);
+            return;
+        }
+
+        Result<MessageHistory> found = await history.ForMessageAsync(Actor, id);
+        if (found.IsSuccess)
+        {
+            _history = found.Value;
+            return;
+        }
+
+        if (found.Error.Kind == ErrorKind.NotFound)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+        _problem = T.Error(found.Error);
+    }
+
+    private string Describe(HistoryEvent e)
+    {
+        string who = e.Actor ?? "";
+        return e.Kind switch
+        {
+            HistoryKinds.Held => T.Format("moderation.history.event.screened_held", ("reasons", string.Join(", ", e.Codes.Select(Reason)))),
+            HistoryKinds.Passed => T["moderation.history.event.screened_passed"],
+            HistoryKinds.Reported => T.Format("moderation.history.event.reported", ("role", Role(who)),
+                ("reason", T["moderation.report_reason." + e.Codes[0]]), ("severity", T["moderation.severity." + e.Codes[1]])),
+            HistoryKinds.TakenOn => T.Format("moderation.history.event.taken_on", ("moderator", who)),
+            HistoryKinds.EscalationClosed => T.Format("moderation.history.event.escalation_closed", ("moderator", who)),
+            _ => T.Has("moderation.history.event.decided." + e.Codes[0])
+                ? T.Format("moderation.history.event.decided." + e.Codes[0], ("moderator", who))
+                : e.Codes[0],
+        };
+    }
+
+    private string Action(string action) => T.Has("moderation.history.action." + action) ? T["moderation.history.action." + action] : action;
+
+    private string Role(string role) => T.Has("provider.messages.role." + role) ? T["provider.messages.role." + role] : role;
+
+    private string Reason(string reason) => T.Has("moderation.reason." + reason) ? T["moderation.reason." + reason] : reason;
+}

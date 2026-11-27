@@ -236,7 +236,7 @@ result: an honest caller should be told why.
 
 | Concern | Control | Where |
 |---|---|---|
-| Grooming through messaging (T1) | No adult alone with a minor; an admin observes or it's refused; contact-exchange attempts to a minor held until a county moderator, never one of the sender's organisation, releases or removes them with a reason (D114); anyone in a conversation reports a message, grooming and self-harm critical, moderators emailed, escalation recorded (D115); pushes say only who wrote | Database trigger, Community module, `moderation_action` (append-only) |
+| Grooming through messaging (T1) | No adult alone with a minor; an admin observes or it's refused; contact-exchange attempts to a minor held until a county moderator, never one of the sender's organisation, releases or removes them with a reason (D114); anyone in a conversation reports a message, grooming and self-harm critical, moderators emailed, escalation recorded (D115); every step rebuilt in a message's history, an escalation closed with its outcome (D116); pushes say only who wrote | Database trigger, Community module, `moderation_action` (append-only) |
 | Where children are (T4, T6) | No youth addresses; private sites show only a neighbourhood; the finder reads a projection without people in it; check-in codes name nobody | Schema, finder role, Attendance |
 | Over-reach by providers (T8) | Names and fields only through a live family share; every read audited | Enrollment, audit |
 | Unsafe adult gains access (T9) | Verified guardian links, revocable; consent per scope with the exact text hashed | Identity |

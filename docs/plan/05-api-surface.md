@@ -500,7 +500,8 @@ how many it reached and how many young people it left out.
 *Built (2026-11-27, D115):* `POST /reports {targetKind: "message", targetId, reason, details?}`
 → `201 {id, reason, severity}`, for a message someone else wrote in the caller's conversation.
 The moderation queue and its decisions are the console's (`/organiser/moderation`), not the API's
-yet.
+yet; so is a message's history (`/organiser/moderation/history`, D116), in place of
+`GET /moderation/history`.
 
 ---
 

@@ -458,6 +458,17 @@ a.secondary {
     padding-inline-start: 0.75rem;
 }
 
+/* D116: a message's moderation history, one thing after another. */
+.history {
+    border-inline-start: 2px solid var(--bt-muted);
+    list-style: none;
+    padding-inline-start: 1rem;
+}
+
+.history > li {
+    margin-block-end: 1rem;
+}
+
 .held-body {
     background: var(--bt-tint);
     border-inline-start: 0.25rem solid var(--bt-muted);

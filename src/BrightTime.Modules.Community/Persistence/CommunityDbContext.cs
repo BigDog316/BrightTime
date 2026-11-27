@@ -110,6 +110,35 @@ public sealed class ModerationActionRecord
     public DateTimeOffset OccurredAt { get; init; }
 }
 
+/// <summary>
+/// What screening decided about a piece of content, and when (<c>community.screening_result</c>):
+/// so far, D53's contact-exchange screen on an adult's message to a young person (D116).
+/// </summary>
+public sealed class ScreeningResultRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public required string TargetKind { get; init; }
+
+    public Guid TargetId { get; init; }
+
+    public required string Provider { get; init; }
+
+    public required string Decision { get; init; }
+
+    public required string Labels { get; init; }
+
+    public required string PiiSpans { get; init; }
+
+    public string? ModelVersion { get; init; }
+
+    public int? LatencyMs { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
 /// <summary>A report of something someone saw (D115, <c>community.report</c>): so far, a message.</summary>
 public sealed class ReportRecord
 {
@@ -172,6 +201,8 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
 
     public DbSet<ReportRecord> Reports => Set<ReportRecord>();
 
+    public DbSet<ScreeningResultRecord> ScreeningResults => Set<ScreeningResultRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -210,6 +241,16 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.TargetKind, x.TargetId, x.OccurredAt }).IsDescending(false, false, true);
             b.HasIndex(x => new { x.ActorUserId, x.OccurredAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<ScreeningResultRecord>(b =>
+        {
+            b.ToTable("screening_result");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Labels).HasColumnType("jsonb");
+            b.Property(x => x.PiiSpans).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.TargetKind, x.TargetId });
         });
 
         modelBuilder.Entity<ReportRecord>(b =>

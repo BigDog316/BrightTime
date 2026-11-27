@@ -10,6 +10,7 @@ The county's moderators see **Moderation** alone.
 - [Reviewing a listing](#reviewing-a-listing)
 - [Moderation: reports](#moderation-reports)
 - [Moderation: held messages](#moderation-held-messages)
+- [Moderation history](#moderation-history)
 - [Taxonomy](#taxonomy)
 - [Collections](#collections)
 - [Neighbourhood pages](#neighbourhood-pages)
@@ -107,6 +108,10 @@ Then write a note and:
 As with held messages, your note and decision can't be changed, and you can't decide a report from
 your own organisation's conversation, or your own report or message.
 
+An escalated report waits under **Escalated, waiting for the outcome** until someone records how it
+ended, such as the agency's reference and what they said. Write it and **Record the outcome and
+close**.
+
 ## Moderation: held messages
 
 When an organisation's staff write to a young person, BrightTime holds any message that looks like
@@ -126,6 +131,15 @@ Write a reason, then:
 
 Your reason and decision are kept in the moderation record and the audit log, and can't be changed.
 If you're a member of the organisation that wrote a message, another moderator decides it.
+
+## Moderation history
+
+Every report and held message has a **History** link. It shows the message as it is now, then
+everything that happened to it, in order: whether screening held it or let it through and why,
+each report and what the reporter said, who took it on, each decision with who made it and their
+note, and how an escalation ended. **Recent decisions and each message's history**, at the top of
+**Moderation**, lists the county's latest decisions. You can't see the history of a message from
+your own organisation.
 
 ## Taxonomy
 

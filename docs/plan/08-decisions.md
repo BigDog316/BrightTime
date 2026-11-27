@@ -3803,7 +3803,7 @@ copy; removed, bytes and all), `PortfolioPageTests` (the check page shows the co
 `BadgeImageFileTests` is gone (`ImageCleanerTests` covers the cleaning); its PNG maker is
 `BadgeTestImages`.
 
-### D113 — Typo tolerance as a fallback (**proposed 2026-11-26**)
+### D113 — Typo tolerance as a fallback (**accepted 2026-11-27**)
 
 plan/03 named the next step after D6's typo tolerance: run the trigram arm only when full text
 finds too little. Sam chose on 2026-11-26: this next; typo tolerance only when the words, as

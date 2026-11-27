@@ -4001,7 +4001,7 @@ No schema change. Tests: `LocalPiiScreenTests` (each kind and where, ordinary wr
 the outcome), `MessagingApiTests` (a young person's number held, them told why, staff not
 seeing it, both messages recorded with the screen's decision and the span).
 
-### D118 — Screening the rest of what young people write (**proposed 2026-11-27**)
+### D118 — Screening the rest of what young people write (**accepted 2026-11-27**)
 
 D117 screened young people's messages; their other writing still reached staff or the public
 unscreened. Sam chose on 2026-11-27: the same screen on projects, playlist reflections, picture

@@ -4035,7 +4035,7 @@ No schema change. Tests: `LearnerRecordApiTests` (a project sharing an email isn
 refusal's audit row), `PlaylistApiTests` (a reflection with a phone number), `PortfolioApiTests`
 (a bio with a handle), `LocalPiiScreenTests` (moved).
 
-### D119 — Muting and suspending a person (**proposed 2026-11-27**)
+### D119 — Muting and suspending a person (**accepted 2026-11-27**)
 
 A moderator could act on a message but not on the person who wrote it. Sam chose on 2026-11-27:
 mute and suspend; set lengths, liftable early; adults only, for now.

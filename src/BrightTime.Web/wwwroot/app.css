@@ -409,6 +409,26 @@ a.secondary {
     border-color: var(--bt-error);
 }
 
+.badge-head {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.25rem;
+}
+
+.badge-head .badge-picture {
+    flex: none;
+}
+
+/* A badge that no longer stands keeps its pictures, greyed beside the notice (D111). */
+.badge-check.revoked .badge-picture,
+.badge-check.revoked .org-logo,
+.badge-check.expired .badge-picture,
+.badge-check.expired .org-logo {
+    filter: grayscale(1);
+    opacity: 0.6;
+}
+
 .note {
     color: var(--bt-muted);
     display: block;

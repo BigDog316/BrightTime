@@ -2,8 +2,10 @@
 @* A badge check (D66, D77): the page a badge's holder sends someone to, saying in words whether it
    is genuine and still stands, who awarded it and when. It never names the holder: the
    credential carries only a salted hash, and they prove it's theirs by showing it. Software reads
-   the credential itself at the API's address. *@
+   the credential itself at the API's address. It shows the badge's picture, its own or the
+   generated one, and the issuer's logo beside its name (D111), greyed once it no longer stands. *@
 @using BrightTime.Modules.Learning.Badges
+@using BrightTime.Web.Composition
 @inject Badges Badges
 @inject NavigationManager Navigation
 
@@ -14,10 +16,13 @@
         <meta name="robots" content="noindex, nofollow" />
     </HeadContent>
 
-    <article class="badge-check" aria-labelledby="badge-title">
-        <header>
-            <p class="eyebrow">@T["badge.page.eyebrow"]</p>
-            <h1 id="badge-title" dir="auto">@b.Name</h1>
+    <article class="badge-check @b.Status" aria-labelledby="badge-title">
+        <header class="badge-head">
+            <img class="badge-picture" src="@BadgeDocuments.ImagePath(b.BadgeClassId)" alt="@T.Format("badge.page.picture_alt", ("badge", b.Name))" width="96" height="96" />
+            <div>
+                <p class="eyebrow">@T["badge.page.eyebrow"]</p>
+                <h1 id="badge-title" dir="auto">@b.Name</h1>
+            </div>
         </header>
 
         <p class="badge-status @b.Status" role="status">
@@ -41,7 +46,14 @@
 
         <dl class="facts">
             <dt>@T["portfolio.export.col.issuer"]</dt>
-            <dd dir="auto">@b.Issuer</dd>
+            <dd dir="auto">
+                @if (b.IssuerLogo is { } logo)
+                {
+                    @* Beside the name it stands for, so not read out (D109). *@
+                    <img class="org-logo org-logo-small" src="@MediaEndpoints.Card(logo)" alt="" />
+                }
+                @b.Issuer
+            </dd>
             <dt>@T["portfolio.export.col.awarded"]</dt>
             <dd>@T.DateShort(b.IssuedOn)</dd>
             @if (b.ExpiresOn is { } expires)

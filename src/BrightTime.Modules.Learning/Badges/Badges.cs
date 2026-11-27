@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using BrightTime.Abstractions.Security;
 using BrightTime.Infrastructure.Auditing;
@@ -43,8 +44,19 @@ public sealed record HeldBadge(
     Guid Id, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, bool Revoked, Uri Verify, string Credential, Uri Page,
     DateTimeOffset? RevokedAt = null, string? RevocationReason = null);
 
-/// <summary>What the public verification page says about a credential. Never who holds it.</summary>
-public sealed record Verification(string Status, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, DateTimeOffset? RevokedAt, string? RevocationReason, JsonElement Credential, string Jwt);
+/// <summary>
+/// What the public verification page says about a credential. Never who holds it. The page also
+/// shows the badge's picture and the issuer's logo as it is now (D111); the API's answer leaves
+/// those out, as the credential names both.
+/// </summary>
+public sealed record Verification(string Status, string Name, string Issuer, DateTimeOffset IssuedOn, DateTimeOffset? ExpiresOn, DateTimeOffset? RevokedAt, string? RevocationReason, JsonElement Credential, string Jwt)
+{
+    [JsonIgnore]
+    public Guid BadgeClassId { get; init; }
+
+    [JsonIgnore]
+    public Guid? IssuerLogo { get; init; }
+}
 
 /// <summary>
 /// Open Badges (M4, D66): an organisation's achievements, awarded to the young people who took part
@@ -328,7 +340,7 @@ public sealed partial class Badges(
                                join c in db.BadgeClasses on a.BadgeClassId equals c.Id
                                join i in db.Issuers on c.IssuerId equals i.Id
                                where a.VerifySlug == slug
-                               select new { a, c.Name, Issuer = i.Name }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+                               select new { a, c.Name, Issuer = i.Name, i.OrgId }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
             if (found?.a.CredentialJson is null || found.a.CredentialJwt is null)
             {
                 return null;
@@ -337,7 +349,11 @@ public sealed partial class Badges(
             string status = found.a.RevokedAt is not null ? "revoked" : found.a.ExpiresOn is { } expires && expires <= clock.UtcNow ? "expired" : "valid";
             using JsonDocument credential = JsonDocument.Parse(found.a.CredentialJson);
             return new Verification(status, found.Name, found.Issuer, found.a.IssuedOn, found.a.ExpiresOn, found.a.RevokedAt, found.a.RevocationReason,
-                credential.RootElement.Clone(), found.a.CredentialJwt);
+                credential.RootElement.Clone(), found.a.CredentialJwt)
+            {
+                BadgeClassId = found.a.BadgeClassId,
+                IssuerLogo = found.OrgId is { } org ? await directory.GetOrganisationLogoAsync(new OrganisationId(org), ct).ConfigureAwait(false) : null,
+            };
         }, cancellationToken);
 
     /// <summary>The OB 2.0 hosted assertion, or the revocation that replaces it; null when there is no such badge.</summary>

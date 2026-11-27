@@ -3749,6 +3749,29 @@ organisation's, so it's read where it lives). Tests: `BadgeApiTests` (none named
 logo; named on the credential, achievement and OB 2.0 issuer after; served, replaced through the
 same address, then 404 and no longer named once removed; the county's issuer and a stranger 404).
 
+### D111 — Pictures on the badge check page (**proposed 2026-11-26**)
+
+The page anyone opens to check a badge (`/badges/{slug}`, D77) said everything in words and
+showed no picture. Sam chose on 2026-11-26: the badge's picture and the issuer's logo; the
+picture described and the logo not read out; both kept, greyed, once the badge no longer stands.
+- **The badge's picture:** beside its name at the top, its own (D87) or the generated one, from
+  the address its credentials name (`/api/v1/public/badges/classes/{id}/image`), on the same host
+  since the proxy sends `/api/` to the API (as the page's link to the credential already is).
+  It's described as "The {badge} badge", the console's words for it.
+- **The issuer's logo:** beside the issuer's name, the organisation's logo as it is now (D109),
+  from the website's card copy (`/media/{id}/480`), with an empty `alt`, as on the D109 pages.
+  It's shown whatever the organisation's status, as with its issuer image (D110). An issuer that
+  isn't an organisation, or one without a logo, shows only its name.
+- **Revoked or expired:** the page keeps both pictures, greyed and faded (`.badge-check.revoked`,
+  `.badge-check.expired`), beside the notice that says it no longer stands. Expired is greyed
+  too, as it no longer stands either.
+- `Verification` gains `BadgeClassId` and `IssuerLogo`, which the API's answer at
+  `/public/badges/{slug}` leaves out (`[JsonIgnore]`): software reads both from the credential.
+- **Not yet:** a caption on the issuer image in the credential.
+
+No schema change. Tests: `PortfolioPageTests` (the picture and its description, the logo's empty
+`alt`, the revoked state, an issuer with no organisation or no logo).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

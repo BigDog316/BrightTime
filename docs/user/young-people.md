@@ -112,9 +112,10 @@ did, like *River Surveyor*. They're listed under your records, with who gave eac
   places that read badges, such as a college application or a professional profile.
 - The badge never names you. It carries a scrambled code that only proves it's yours when you show
   it.
-- **Check it** opens the badge's page, where anyone can check it's real. **Share** sends that
-  page to someone. If an organisation takes a badge back (for example, it was given by mistake),
-  the page says so, with the reason, and your list marks it as **revoked**, with the date and the
+- **Check it** opens the badge's page, where anyone can check it's real: it shows the badge's
+  picture and the organisation's logo, if it has one. **Share** sends that page to someone. If an
+  organisation takes a badge back (for example, it was given by mistake), the page says so, with
+  the reason, and greys the pictures, and your list marks it as **revoked**, with the date and the
   reason.
 
 ## Your skills, projects and goals (app)

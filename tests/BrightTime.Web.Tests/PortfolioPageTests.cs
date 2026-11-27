@@ -42,15 +42,18 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
         return (user, slug);
     }
 
-    /// <summary>A badge awarded to <paramref name="holder"/>, revoked with a reason when given one.</summary>
-    private async Task<string> BadgeAsync(Guid holder, string name, string? revokedFor = null, bool expired = false)
+    /// <summary>
+    /// A badge awarded to <paramref name="holder"/>, revoked with a reason when given one, from an
+    /// issuer of its own: the organisation's when given one, else none.
+    /// </summary>
+    private async Task<string> BadgeAsync(Guid holder, string name, string? revokedFor = null, bool expired = false, Guid? org = null)
     {
         Guid issuer = UuidV7.NewId();
         Guid badgeClass = UuidV7.NewId();
         string slug = "check-" + Guid.NewGuid().ToString("N");
         await db.ScalarAsync<int>(
             """
-            insert into learning.issuer_profile (id, tenant_id, did, name) values (@i, @t, 'did:web:kettle.test:issuers:' || @i::text, 'Kettle Rowing Club');
+            insert into learning.issuer_profile (id, tenant_id, org_id, did, name) values (@i, @t, @o, 'did:web:kettle.test:issuers:' || @i::text, 'Kettle Rowing Club');
             insert into learning.badge_class (id, tenant_id, issuer_id, slug, name, description, criteria_md, status)
             values (@c, @t, @i, @cs, @n, 'Surveyed a stretch of the river.', 'Walked and recorded two miles of riverbank.', 'published');
             insert into learning.badge_assertion (id, tenant_id, badge_class_id, recipient_user_id, recipient_identity_hash, recipient_salt,
@@ -61,7 +64,7 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
             select 1;
             """,
             ("i", issuer), ("t", db.Data.TenantId), ("c", badgeClass), ("cs", "surveyor-" + badgeClass.ToString("N")[^8..]), ("n", name),
-            ("a", UuidV7.NewId()), ("u", holder), ("expired", expired), ("slug", slug), ("reason", revokedFor ?? string.Empty));
+            ("a", UuidV7.NewId()), ("u", holder), ("expired", expired), ("slug", slug), ("reason", revokedFor ?? string.Empty), ("o", org is { } o ? o : DBNull.Value));
         return slug;
     }
 
@@ -210,5 +213,69 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
         WebUtility.HtmlDecode(browser.Html).ShouldContain("This badge is genuine, but it expired on");
 
         (await browser.GetAsync("/badges/no-such-badge")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// The badge's picture, described, and the issuer's logo beside its name, as decoration (D111);
+    /// both greyed once the badge no longer stands. Gives Hollis Bend Community Garden a logo straight
+    /// in the tables, and takes it away again.
+    /// </summary>
+    [Fact]
+    public async Task A_badge_check_shows_the_badges_picture_and_the_issuers_logo_greyed_once_it_no_longer_stands()
+    {
+        RequireDatabase();
+        Guid org = db.Data.Organisations.Single(o => o.Slug == "hollis-bend-community-garden").Id;
+        (Guid holder, _) = await PortfolioAsync("private");
+        string plain = await BadgeAsync(holder, "Seed Saver");
+        string valid = await BadgeAsync(holder, "Tree Warden", org: org);
+        string revoked = await BadgeAsync(holder, "Pond Keeper", revokedFor: "Awarded twice.", org: org);
+        Guid logo = UuidV7.NewId();
+        byte[] bytes = TestImages.Png(300, 300);
+        string key = "images/" + logo.ToString("N") + ".png";
+        await db.ScalarAsync<int>(
+            """
+            insert into platform.media_object (id, tenant_id, object_key, content_type, byte_size, sha256, width, height, scan_state, uploaded_by, visibility)
+            values (@m, @t, @k, 'image/png', @n, @h, 300, 300, 'clean', (select id from identity.app_user order by id limit 1), 'public');
+            insert into platform.media_blob (tenant_id, object_key, content_type, bytes, sha256) values (@t, @k, 'image/png', @b, @h);
+            update directory.organisation set logo_media_id = @m where id = @o;
+            select 1;
+            """,
+            ("m", logo), ("t", db.Data.TenantId), ("k", key), ("n", (long)bytes.Length), ("h", SHA256.HashData(bytes)), ("b", bytes), ("o", org));
+        try
+        {
+            using Browser browser = db.NewBrowser();
+
+            // Its picture, its own or the generated one, under the API's address on this host, described; the logo isn't read out.
+            await browser.GetAsync($"/badges/{valid}");
+            Guid badgeClass = await db.ScalarAsync<Guid>("select badge_class_id from learning.badge_assertion where verify_slug = @s", ("s", valid));
+            browser.Html.ShouldContain("<article class=\"badge-check valid\"");
+            browser.Html.ShouldContain($"<img class=\"badge-picture\" src=\"/api/v1/public/badges/classes/{badgeClass:N}/image\" alt=\"The Tree Warden badge\" width=\"96\" height=\"96\" />");
+            browser.Html.ShouldContain($"<img class=\"org-logo org-logo-small\" src=\"/media/{logo:D}/480\" alt />", Case.Sensitive, "an empty alt: Blazor writes it bare");
+
+            // Revoked, the same pictures, greyed by the page's state.
+            await browser.GetAsync($"/badges/{revoked}");
+            browser.Html.ShouldContain("<article class=\"badge-check revoked\"");
+            browser.Html.ShouldContain("alt=\"The Pond Keeper badge\"");
+            browser.Html.ShouldContain($"src=\"/media/{logo:D}/480\"");
+
+            // An issuer with no logo, or no organisation, shows only its name.
+            await browser.GetAsync($"/badges/{plain}");
+            browser.Html.ShouldContain("alt=\"The Seed Saver badge\"");
+            browser.Html.ShouldNotContain("org-logo");
+            await db.ScalarAsync<int>("update directory.organisation set logo_media_id = null where id = @o; select 1;", ("o", org));
+            await browser.GetAsync($"/badges/{valid}");
+            browser.Html.ShouldNotContain("org-logo");
+        }
+        finally
+        {
+            await db.ScalarAsync<int>(
+                """
+                update directory.organisation set logo_media_id = null where id = @o;
+                delete from platform.media_blob where tenant_id = @t and object_key = @k;
+                delete from platform.media_object where id = @m;
+                select 1;
+                """,
+                ("o", org), ("t", db.Data.TenantId), ("k", key), ("m", logo));
+        }
     }
 }

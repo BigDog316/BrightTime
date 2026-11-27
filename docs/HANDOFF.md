@@ -320,6 +320,9 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   back from the API as `clearances.not_current` with the kinds missing and expired, and the app
   says so (the attendance screen and offline sync too). With the rules on, approval needs every
   active owner cleared. The gate now acts only where the permission and role would otherwise pass.
+- **Pictures on the badge check page** (D111, proposed): `/badges/{slug}` shows the badge's
+  picture (described) and the issuer's logo beside its name (not read out), both greyed once the
+  badge is revoked or expired. No schema change.
 - **The logo as the badge issuer's image** (D110): while an organisation has a logo,
   its OB 3.0 credentials (issuer and achievement creator) and OB 2.0 Issuer name
   `/api/v1/public/issuers/{org}/image`, which serves its logo as it is now, so credentials signed
@@ -402,6 +405,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D110 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D100 on 2026-11-22, D101 to D103 on 2026-11-23, D104 and D105 on 2026-11-24, D106 to D110 on 2026-11-26).
+D111 (pictures on the badge check page) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).
@@ -423,9 +427,9 @@ Q3 is answered (email plus, with a signed-form fallback), and the youth 30-minut
 
 These have not been asked for yet:
 
-- media: moving badge images into the media store, and the logo on a badge's check page (D103
-  built the store, D104 and D105 pictures, D106 smaller copies, D107 pictures in the printable
-  portfolio, D109 logos, D110 the issuer's image);
+- media: moving badge images into the media store (D103 built the store, D104 and D105
+  pictures, D106 smaller copies, D107 pictures in the printable portfolio, D109 logos, D110 the
+  issuer's image, D111 pictures on the badge check page);
 - a hand check of a tagged PDF in veraPDF or PAC, with names in Arabic, Bengali and Chinese
   (D108; fonts are D57's open question);
 - finder speed: text 44 ms and typo 56–77 ms on the synthetic load, mostly ranking (see

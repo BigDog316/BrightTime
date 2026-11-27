@@ -3684,7 +3684,7 @@ change. `ReportRenderingTests` reads the structure (the PDF/UA identifier, langu
 figures with their descriptions, one caption, table headers, a long table in Arabic over pages
 with one first heading); `ProjectPictureApiTests` a real export's descriptions and language.
 
-### D109 — An organisation's logo (**proposed 2026-11-26**)
+### D109 — An organisation's logo (**accepted 2026-11-26**)
 
 `directory.organisation.logo_media_id` was in the schema from the start, unused. Sam chose on
 2026-11-26: the logo next; on the organisation's page, its listings' pages (web and app) and in the

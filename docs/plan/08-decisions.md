@@ -3874,7 +3874,7 @@ the sender's view, no reason, twice, the sender and the admin reading along refu
 conversation, a provider kept out, a moderator kept out of the organisers' other pages),
 `RolePermissionTests`, `KettleSeedTests`, and the route matrix covers the new page.
 
-### D115 — Reporting a message (**proposed 2026-11-27**)
+### D115 — Reporting a message (**accepted 2026-11-27**)
 
 D114 gave moderators what screening held; nothing let a person report what got through. Sam chose
 on 2026-11-27: reporting a message next; a message, by the people in its conversation; a moderator

@@ -3772,7 +3772,7 @@ picture described and the logo not read out; both kept, greyed, once the badge n
 No schema change. Tests: `PortfolioPageTests` (the picture and its description, the logo's empty
 `alt`, the revoked state, an issuer with no organisation or no logo).
 
-### D112 — Badge pictures in the media store (**proposed 2026-11-26**)
+### D112 — Badge pictures in the media store (**accepted 2026-11-26**)
 
 D87 kept a badge's own picture in `learning.badge_image` "until media storage is decided"; D103
 decided it, and `badge_class.image_media_id` was in the schema from the start, unused. Sam chose

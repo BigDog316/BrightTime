@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using BrightTime.Hosting.Tenancy;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Learning.Badges;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -46,6 +47,7 @@ public static class BadgeEndpoints
         open.MapGet("/issuers/{orgId:guid}/did.json", DidDocumentAsync);
         open.MapGet("/issuers/{orgId:guid}/ob2", Issuer2Async);
         open.MapGet("/issuers/{orgId:guid}/revocations", RevocationsAsync);
+        open.MapGet("/issuers/{orgId:guid}/image", IssuerImageAsync);
         open.MapGet("/badges/classes/{id:guid}", AchievementAsync);
         open.MapGet("/badges/classes/{id:guid}/ob2", BadgeClass2Async);
         open.MapGet("/badges/classes/{id:guid}/image.svg", ImageAsync);
@@ -171,6 +173,25 @@ public static class BadgeEndpoints
         // A verifier must see a revocation at once.
         response.Headers.CacheControl = "no-store";
         return Document(await badges.RevocationsAsync(orgId, Site(site), ct), "application/json");
+    }
+
+    /// <summary>
+    /// The organisation's logo, as its credentials name it (D110): the logo it has now, as it was
+    /// added (PNG or JPEG). Kept an hour, so a new or removed logo shows soon in a wallet.
+    /// </summary>
+    private static async Task<IResult> IssuerImageAsync(Guid orgId, HttpResponse response, Badges badges, IMediaLibrary media, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(media);
+        if (await badges.IssuerLogoAsync(orgId, ct) is not { } logo || await media.GetPublicAsync(logo, ct) is not { } file)
+        {
+            return NotFound();
+        }
+
+        response.Headers.CacheControl = "public, max-age=3600";
+        response.Headers.XContentTypeOptions = "nosniff";
+        response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+        return Results.File(file.Bytes, file.ContentType, entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue(file.ETag));
     }
 
     private static async Task<IResult> AchievementAsync(Guid id, SiteContext site, Badges badges, CancellationToken ct) =>

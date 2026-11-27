@@ -132,6 +132,17 @@ public sealed class DirectoryQueries(DirectoryDbContext db, IClock clock) : IDir
                 .FirstOrDefaultAsync(ct),
             cancellationToken);
 
+    public Task<Guid?> GetOrganisationLogoAsync(
+        OrganisationId organisationId,
+        CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct =>
+            db.Organisations
+                .AsNoTracking()
+                .Where(o => o.Id == organisationId.Value)
+                .Select(o => o.LogoMediaId)
+                .FirstOrDefaultAsync(ct),
+            cancellationToken);
+
     public Task<OrganisationStatus?> GetStatusAsync(
         OrganisationId organisationId,
         CancellationToken cancellationToken = default) =>

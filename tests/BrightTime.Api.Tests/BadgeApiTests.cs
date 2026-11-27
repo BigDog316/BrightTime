@@ -4,6 +4,9 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BrightTime.Seed.Kettle;
+using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Tests;
 
 namespace BrightTime.Api.Tests;
 
@@ -14,7 +17,8 @@ namespace BrightTime.Api.Tests;
 /// </summary>
 /// <remarks>
 /// Uses the first builtin listing of the tenth organisation with no staff (PortfolioApiTests takes
-/// the ninth). The young person is a fresh adult account applying for themselves.
+/// the ninth), and of the eighteenth for the issuer's logo, which it gives a logo straight in the
+/// tables and takes away again. The young person is a fresh adult account applying for themselves.
 /// </remarks>
 [Collection(ApiDatabase.Name)]
 public sealed class BadgeApiTests(ApiFixture api)
@@ -252,5 +256,100 @@ public sealed class BadgeApiTests(ApiFixture api)
             (await api.ScalarAsync<long>("select count(*) from learning.issuer_key k join learning.issuer_profile i on i.id = k.issuer_id where i.org_id = @o", ("o", org))).ShouldBe(1);
             (await api.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'learning.badge.issued' and @a = any(subject_ids)", ("a", assertion))).ShouldBe(1);
         }
+    }
+
+    /// <summary>
+    /// The organisation's logo as the issuer's image (D110): named on the issuer and the
+    /// achievement's creator in a credential signed while it has one, and on the hosted OB 2.0
+    /// issuer, at one address that serves whatever the logo is now.
+    /// </summary>
+    [Fact]
+    public async Task A_credential_names_the_issuers_logo_at_an_address_that_serves_the_logo_it_has_now()
+    {
+        RequireDatabase();
+        (Guid listing, Guid org) = Programme(17);
+        (HttpClient admin, _) = await SignedInAsync(AdminOf(org));
+        (HttpClient learner, Guid learnerId) = await SignedInAsync(await api.NewAdultAsync());
+        using HttpClient anonymous = api.Client();
+        string image = $"https://{ApiFixture.Host}/api/v1/public/issuers/{org:N}/image";
+        Guid logo = UuidV7.NewId();
+        Guid replacement = UuidV7.NewId();
+        using (admin)
+        using (learner)
+        {
+            try
+            {
+                Guid enrolment = await EnrolledAsync(learner, learnerId, admin, listing, org);
+                object badge = new { name = "Pond Dipper", description = "Dipped the pond and named what came up.", criteria = "Took three dips and named five creatures in each." };
+                Guid classId = (await JsonAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-classes", badge, Ct), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+                await JsonAsync(await admin.PostAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/publish"), null, Ct));
+
+                // No logo yet: nothing named, nothing served.
+                (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/issuers/{org:N}/ob2"), Ct))).TryGetProperty("image", out _).ShouldBeFalse();
+                (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}"), Ct))).GetProperty("creator").TryGetProperty("image", out _).ShouldBeFalse();
+                await ProblemAsync(await anonymous.GetAsync(new Uri(image), Ct), HttpStatusCode.NotFound, "badges.not_found");
+
+                // With one, a credential signed now names the address, on the issuer and the achievement's creator.
+                byte[] first = TestImages.Png(400, 400);
+                await LogoAsync(org, logo, first);
+                JsonElement award = await JsonAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}/awards", new { enrollmentId = enrolment }, Ct), HttpStatusCode.Created);
+                JsonElement credential = (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/badges/{award.GetProperty("verifySlug").GetString()}"), Ct))).GetProperty("credential");
+                JsonElement named = credential.GetProperty("issuer").GetProperty("image");
+                (named.GetProperty("id").GetString(), named.GetProperty("type").GetString()).ShouldBe((image, "Image"));
+                credential.GetProperty("credentialSubject").GetProperty("achievement").GetProperty("creator").GetProperty("image").GetProperty("id").GetString().ShouldBe(image);
+                (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}"), Ct))).GetProperty("creator").GetProperty("image").GetProperty("id").GetString().ShouldBe(image);
+                (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/issuers/{org:N}/ob2"), Ct))).GetProperty("image").GetString().ShouldBe(image);
+
+                // The address serves the logo as it was added, for anyone, kept an hour, never run as a page.
+                HttpResponseMessage served = await anonymous.GetAsync(new Uri(image), Ct);
+                served.StatusCode.ShouldBe(HttpStatusCode.OK);
+                served.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
+                (await served.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(first);
+                served.Headers.CacheControl!.MaxAge.ShouldBe(TimeSpan.FromHours(1));
+                served.Headers.GetValues("X-Content-Type-Options").Single().ShouldBe("nosniff");
+
+                // A new logo: the same address, the credential unchanged, serves the new one.
+                byte[] second = TestImages.Jpeg(300, 300);
+                await LogoAsync(org, replacement, second);
+                HttpResponseMessage now = await anonymous.GetAsync(new Uri(image), Ct);
+                now.Content.Headers.ContentType!.MediaType.ShouldBe("image/jpeg");
+                (await now.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(second);
+
+                // Taken away: the address answers 404, and the hosted documents stop naming it.
+                await api.ExecuteAsync("update directory.organisation set logo_media_id = null where id = @o", ("o", org));
+                await ProblemAsync(await anonymous.GetAsync(new Uri(image), Ct), HttpStatusCode.NotFound, "badges.not_found");
+                (await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/issuers/{org:N}/ob2"), Ct))).TryGetProperty("image", out _).ShouldBeFalse();
+
+                // The county's own issuer (D68), under the tenant's id, has no logo; nor has an organisation that isn't an issuer.
+                await ProblemAsync(await anonymous.GetAsync(Relative($"api/v1/public/issuers/{KettleSeed.TenantId:N}/image"), Ct), HttpStatusCode.NotFound, "badges.not_found");
+                await ProblemAsync(await anonymous.GetAsync(Relative($"api/v1/public/issuers/{Guid.NewGuid():N}/image"), Ct), HttpStatusCode.NotFound, "badges.not_found");
+            }
+            finally
+            {
+                await api.ExecuteAsync("update directory.organisation set logo_media_id = null where id = @o", ("o", org));
+                foreach (Guid media in new[] { logo, replacement })
+                {
+                    await api.ExecuteAsync(
+                        "delete from platform.media_blob where tenant_id = @t and object_key like @k; delete from platform.media_object where id = @m;",
+                        ("t", KettleSeed.TenantId), ("k", "images/" + media.ToString("N") + ".%"), ("m", media));
+                }
+            }
+        }
+    }
+
+    /// <summary>Gives the organisation a public, clean logo straight in the tables, as D109 would.</summary>
+    private Task LogoAsync(Guid org, Guid media, byte[] bytes)
+    {
+        bool png = bytes[0] == 0x89;
+        string type = png ? "image/png" : "image/jpeg";
+        string key = "images/" + media.ToString("N") + (png ? ".png" : ".jpg");
+        return api.ExecuteAsync(
+            """
+            insert into platform.media_object (id, tenant_id, object_key, content_type, byte_size, sha256, width, height, scan_state, uploaded_by, visibility)
+            values (@m, @t, @k, @c, @n, @h, 300, 300, 'clean', (select id from identity.app_user order by id limit 1), 'public');
+            insert into platform.media_blob (tenant_id, object_key, content_type, bytes, sha256) values (@t, @k, @c, @b, @h);
+            update directory.organisation set logo_media_id = @m where id = @o;
+            """,
+            ("m", media), ("t", KettleSeed.TenantId), ("k", key), ("c", type), ("n", (long)bytes.Length), ("h", SHA256.HashData(bytes)), ("b", bytes), ("o", org));
     }
 }

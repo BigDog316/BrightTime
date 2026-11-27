@@ -102,6 +102,7 @@ All anonymous and rate-limited.
 | `GET /public/issuers/{orgId}/did.json` | An organisation's DID document (`application/did+json`), every non-compromised key (D66). With the tenant's own id, the site's, which signs CLRs (D68) |
 | `GET /public/issuers/{orgId}/ob2` | The OB 2.0 Issuer |
 | `GET /public/issuers/{orgId}/revocations` | The `1EdTechRevocationList` of its revoked credentials (`no-store`) |
+| `GET /public/issuers/{orgId}/image` | The organisation's logo as it is now (PNG or JPEG, kept an hour), which its credentials name as the issuer's image; 404 without one (D110) |
 | `GET /public/badges/classes/{id}` | A published badge as an OB 3.0 Achievement |
 | `GET /public/badges/classes/{id}/ob2` | As an OB 2.0 BadgeClass |
 | `GET /public/badges/classes/{id}/image.svg` | Its generated image |

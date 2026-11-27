@@ -84,6 +84,11 @@ public interface IDirectoryQueries
         OrganisationId organisationId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The organisation's logo (D109), a public media object, whatever its status; null when it has none.</summary>
+    Task<Guid?> GetOrganisationLogoAsync(
+        OrganisationId organisationId,
+        CancellationToken cancellationToken = default);
+
     Task<OrganisationStatus?> GetStatusAsync(
         OrganisationId organisationId,
         CancellationToken cancellationToken = default);

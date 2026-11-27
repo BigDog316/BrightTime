@@ -3719,6 +3719,36 @@ No schema change. Tests: `OrganisationLogoTests` (refused files, added with its 
 shown on both pages, replaced, taken down by an organiser), `OrganisationLogoApiTests` (profile,
 listing and result, through the app's client), and an app screen test for the byline.
 
+### D110 — The organisation's logo as its badges' issuer image (**proposed 2026-11-26**)
+
+D109 gave organisations a logo; Open Badges lets an issuer's profile carry an image, which wallets
+and backpacks show beside its name. Sam chose on 2026-11-26: this next; at one stable address
+rather than the logo's media id; on the OB 3.0 issuer and achievement creator and the OB 2.0
+issuer, not in the CLR.
+- **The address:** `GET /api/v1/public/issuers/{org}/image` serves the organisation's logo as it
+  is now, as it was added (PNG or JPEG: what every wallet reads, where the smaller copies are
+  WebP), `public, max-age=3600` with its tag, `nosniff` and a sandbox policy. A signed credential
+  can't change, and D109 removes a replaced logo's bytes, so a credential naming the media id would
+  point at nothing after the first change; this address keeps working, and shows the new logo
+  within the hour. It answers 404 when the organisation has no logo, hasn't defined a badge (so
+  isn't an issuer), or is the county's own issuer (D68), which has none. It serves the logo
+  whatever the organisation's status, as its badges stand when it's suspended; an organiser's
+  take-down (D109) removes it here too.
+- **OB 3.0:** a credential signed while the organisation has a logo carries
+  `issuer.image` and `achievement.creator.image` as `{ "id": <the address>, "type": "Image" }`;
+  one signed without, neither. The hosted achievement names it while there's a logo.
+- **OB 2.0:** the hosted Issuer document has `image` (the address) while there's a logo.
+- **The CLR** (D68) is left alone: its issuer is the county's site, and each activity's
+  achievement doesn't name an organisation as creator.
+- `IDirectoryQueries.GetOrganisationLogoAsync` is how Learning learns of the logo; it reads no
+  Directory table.
+- **Not yet:** the logo on the badge's own check page (D77), and a caption on the image.
+
+No schema change (`learning.issuer_profile.image_media_id` stays unused: the logo is the
+organisation's, so it's read where it lives). Tests: `BadgeApiTests` (none named and 404 before a
+logo; named on the credential, achievement and OB 2.0 issuer after; served, replaced through the
+same address, then 404 and no longer named once removed; the county's issuer and a stranger 404).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

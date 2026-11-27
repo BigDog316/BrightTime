@@ -346,7 +346,9 @@ Badges standard, so they can show them anywhere that reads badges. They're on th
   Anything else in the file, such as where a photo was taken, is removed. Without one, the badge
   has a plain image made from its name.
 - Your organisation is the badge's issuer, under its own digital identity, so a badge says who
-  vouched for it.
+  vouched for it. Once you've added a **logo** to your profile, badges you award show it beside
+  your name in badge wallets. Badges awarded before then may not; one awarded since shows your
+  logo as it is now, so a new logo replaces the old one there too, within the hour.
 
 ## Playlists
 

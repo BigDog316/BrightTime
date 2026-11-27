@@ -383,8 +383,9 @@ public sealed partial class Badges(
                 return BadgeDocuments.BadgeClass2(site, org, found.c.Id, found.c.Name, found.c.Description, found.c.CriteriaMd);
             }
 
+            bool logo = found.i.OrgId is { } owner && await directory.GetOrganisationLogoAsync(new OrganisationId(owner), ct).ConfigureAwait(false) is not null;
             JsonObject achievement = BadgeDocuments.Achievement(new BadgeFacts(site, org, found.i.Did, found.i.Name, found.c.Id, found.c.Name, found.c.Description,
-                found.c.CriteriaMd, string.Empty, default, null, string.Empty, string.Empty, null));
+                found.c.CriteriaMd, string.Empty, default, null, string.Empty, string.Empty, null, logo));
             achievement["@context"] = new JsonArray(BadgeDocuments.CredentialsContext, BadgeDocuments.OpenBadgesContext);
             return achievement;
         }, cancellationToken);
@@ -506,8 +507,20 @@ public sealed partial class Badges(
     public Task<JsonObject?> Issuer2Async(Guid orgId, Uri site, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<JsonObject?>(async ct =>
             await db.Issuers.AsNoTracking().FirstOrDefaultAsync(i => i.OrgId == orgId, ct).ConfigureAwait(false) is { } issuer
-                ? BadgeDocuments.Issuer2Document(site, orgId, issuer.Name)
+                ? BadgeDocuments.Issuer2Document(site, orgId, issuer.Name, await LogoOfIssuerAsync(orgId, ct).ConfigureAwait(false) is not null)
                 : null, cancellationToken);
+
+    /// <summary>
+    /// An organisation's logo as an issuer (D110): its logo now, if it has defined a badge and has
+    /// one. The county's own issuer (D68) has none.
+    /// </summary>
+    public Task<Guid?> IssuerLogoAsync(Guid orgId, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(ct => LogoOfIssuerAsync(orgId, ct), cancellationToken);
+
+    private async Task<Guid?> LogoOfIssuerAsync(Guid orgId, CancellationToken ct) =>
+        await db.Issuers.AsNoTracking().AnyAsync(i => i.OrgId == orgId, ct).ConfigureAwait(false)
+            ? await directory.GetOrganisationLogoAsync(new OrganisationId(orgId), ct).ConfigureAwait(false)
+            : null;
 
     /// <summary>The issuer's revoked credentials, as a 1EdTechRevocationList.</summary>
     public Task<JsonObject?> RevocationsAsync(Guid orgId, Uri site, CancellationToken cancellationToken = default) =>
@@ -543,8 +556,9 @@ public sealed partial class Badges(
         DateTimeOffset now = clock.StoredNow();
         string salt = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
         string identity = BadgeDocuments.RecipientIdentity(recipient);
+        bool logo = await directory.GetOrganisationLogoAsync(org, ct).ConfigureAwait(false) is not null;
         BadgeFacts facts = new(site, org.Value, issuer.Did, issuer.Name, badge.Id, badge.Name, badge.Description, badge.CriteriaMd,
-            VerifySlug(), now, badge.ExpiresAfterMonths is { } months ? now.AddMonths(months) : null, identity, salt, story);
+            VerifySlug(), now, badge.ExpiresAfterMonths is { } months ? now.AddMonths(months) : null, identity, salt, story, logo);
         JsonObject credential = BadgeDocuments.Credential(facts);
         string signingInput = BadgeDocuments.SigningInput(credential, $"{issuer.Did}#{key.KeyId}", key.PublicJwk, facts.IssuedOn, facts.ExpiresOn);
         byte[] signature = await vault.SignAsync(key.PrivateKeyRef, Encoding.UTF8.GetBytes(signingInput), ct).ConfigureAwait(false);

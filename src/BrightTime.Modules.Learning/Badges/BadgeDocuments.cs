@@ -6,7 +6,11 @@ using System.Text.Json.Nodes;
 
 namespace BrightTime.Modules.Learning.Badges;
 
-/// <summary>What a credential says, before it is shaped as Open Badges 3.0 or 2.0.</summary>
+/// <summary>
+/// What a credential says, before it is shaped as Open Badges 3.0 or 2.0. <paramref name="IssuerLogo"/>
+/// is whether the organisation had a logo (D109) when it was said: then its profile names
+/// <see cref="BadgeDocuments.IssuerImage"/> (D110).
+/// </summary>
 public sealed record BadgeFacts(
     Uri Site,
     Guid OrgId,
@@ -21,7 +25,8 @@ public sealed record BadgeFacts(
     DateTimeOffset? ExpiresOn,
     string RecipientIdentity,
     string Salt,
-    string? Narrative);
+    string? Narrative,
+    bool IssuerLogo = false);
 
 /// <summary>
 /// The shapes of a badge (D66): the Open Badges 3.0 credential and its RS256 JWT proof, the OB 2.0
@@ -65,6 +70,12 @@ public static class BadgeDocuments
 
     public static Uri Revocations(Uri site, Guid orgId) => new(site, $"api/v1/public/issuers/{orgId:N}/revocations");
 
+    /// <summary>
+    /// The organisation's logo as an issuer (D110): whatever its logo is now, so a credential signed
+    /// before the logo changed still shows one. Named only while it has one.
+    /// </summary>
+    public static Uri IssuerImage(Uri site, Guid orgId) => new(site, $"api/v1/public/issuers/{orgId:N}/image");
+
     public static Uri Achievement(Uri site, Guid badgeClassId) => new(site, $"api/v1/public/badges/classes/{badgeClassId:N}");
 
     public static Uri BadgeClass2(Uri site, Guid badgeClassId) => new(site, $"api/v1/public/badges/classes/{badgeClassId:N}/ob2");
@@ -98,6 +109,11 @@ public static class BadgeDocuments
     {
         ArgumentNullException.ThrowIfNull(f);
         JsonObject issuer = new() { ["id"] = f.IssuerDid, ["type"] = new JsonArray("Profile"), ["name"] = f.IssuerName, ["url"] = f.Site.ToString() };
+        if (f.IssuerLogo)
+        {
+            issuer["image"] = ProfileImage(f);
+        }
+
         JsonObject credential = new()
         {
             ["@context"] = new JsonArray(CredentialsContext, OpenBadgesContext),
@@ -138,6 +154,12 @@ public static class BadgeDocuments
     public static JsonObject Achievement(BadgeFacts f)
     {
         ArgumentNullException.ThrowIfNull(f);
+        JsonObject creator = new() { ["id"] = f.IssuerDid, ["type"] = new JsonArray("Profile"), ["name"] = f.IssuerName };
+        if (f.IssuerLogo)
+        {
+            creator["image"] = ProfileImage(f);
+        }
+
         return new JsonObject
         {
             ["id"] = Achievement(f.Site, f.BadgeClassId).ToString(),
@@ -146,9 +168,11 @@ public static class BadgeDocuments
             ["description"] = f.BadgeDescription,
             ["criteria"] = new JsonObject { ["narrative"] = f.Criteria },
             ["image"] = new JsonObject { ["id"] = Image(f.Site, f.BadgeClassId).ToString(), ["type"] = "Image" },
-            ["creator"] = new JsonObject { ["id"] = f.IssuerDid, ["type"] = new JsonArray("Profile"), ["name"] = f.IssuerName },
+            ["creator"] = creator,
         };
     }
+
+    private static JsonObject ProfileImage(BadgeFacts f) => new() { ["id"] = IssuerImage(f.Site, f.OrgId).ToString(), ["type"] = "Image" };
 
     /// <summary>
     /// The JWT's header and payload, base64url-encoded and joined: what is signed. The payload is the
@@ -249,10 +273,10 @@ public static class BadgeDocuments
         ["issuer"] = Issuer2(site, orgId).ToString(),
     };
 
-    public static JsonObject Issuer2Document(Uri site, Guid orgId, string name)
+    public static JsonObject Issuer2Document(Uri site, Guid orgId, string name, bool logo = false)
     {
         ArgumentNullException.ThrowIfNull(site);
-        return new JsonObject
+        JsonObject issuer = new()
         {
             ["@context"] = OpenBadges2Context,
             ["type"] = "Issuer",
@@ -260,6 +284,12 @@ public static class BadgeDocuments
             ["name"] = name,
             ["url"] = site.ToString(),
         };
+        if (logo)
+        {
+            issuer["image"] = IssuerImage(site, orgId).ToString();
+        }
+
+        return issuer;
     }
 
     /// <summary>What a hosted assertion says once revoked (OB 2.0 § Hosted Verification), served with 410 Gone.</summary>

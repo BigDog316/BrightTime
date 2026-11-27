@@ -143,7 +143,7 @@ public sealed class ProjectPictureApiTests(ApiFixture api)
 
             // Published on a shown portfolio, anyone sees it there, by its project and portfolio.
             await JsonAsync(await learner.PutAsJsonAsync($"api/v1/me/projects/{projectId}/visibility", new { visibility = "public" }, Ct));
-            string slug = "clay-" + Guid.NewGuid().ToString("N")[..8];
+            string slug = "clay-" + ApiFixture.Letters();
             await JsonAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Sam Clay", visibility = "link_only", publicSlug = slug }, Ct));
             JsonElement page = await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/portfolios/{slug}"), Ct));
             JsonElement shown = page.GetProperty("projects").EnumerateArray().Single();

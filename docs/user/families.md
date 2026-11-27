@@ -313,7 +313,8 @@ message a young person once their consent allows it; until then, **Messages** sa
 Everything a young person writes is checked before anyone else sees it. A message that seems to
 share a phone number, an email or home address, a social media handle or a link is held for a
 moderator from the county, and says why; only they can see it. To send it at once, they write it
-again without that part.
+again without that part. A project sent for approval, a playlist reflection, or their portfolio
+with any of those in it isn't sent or saved: the form says to take it out first.
 
 ## Check-in and attendance (app)
 

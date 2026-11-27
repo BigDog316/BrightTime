@@ -94,7 +94,8 @@ public sealed partial class Playlists(
     IIdentityQueries identity,
     IDirectoryQueries directory,
     IListingDetails listings,
-    Badges.Badges badges)
+    Badges.Badges badges,
+    Infrastructure.Screening.WritingScreen screen)
 {
     public const int MaxSteps = 50;
     public const int MinReflection = 20;
@@ -615,6 +616,12 @@ public sealed partial class Playlists(
             if (written is { Length: > MaxReflection })
             {
                 return Result<MyPlaylist>.Failure(Error.Validation("playlists.reflection", "Write between 20 and 2,000 characters."));
+            }
+
+            // Staff read a reflection (D118): screened before it's sent.
+            if (written is not null && await screen.CheckAsync(db, "reflection", "playlist_step", stepId, [written], ct).ConfigureAwait(false) is { } personal)
+            {
+                return Result<MyPlaylist>.Failure(personal);
             }
 
             if (step.StepKind == "attend_listing"

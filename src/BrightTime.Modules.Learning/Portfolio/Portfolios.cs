@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Outbox;
+using BrightTime.Infrastructure.Screening;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Enrollment.Contracts;
 using BrightTime.Modules.Identity.Contracts;
@@ -75,7 +76,8 @@ public sealed partial class Portfolios(
     IIdentityQueries identity,
     IEnrolmentQueries enrolments,
     ParticipationProjector projector,
-    ITaxonomyQueries taxonomy)
+    ITaxonomyQueries taxonomy,
+    WritingScreen screen)
 {
     public const int MaxDisplayName = 60;
     public const int MaxHeadline = 120;
@@ -121,6 +123,12 @@ public sealed partial class Portfolios(
             if (slug is not null && !Slug().IsMatch(slug))
             {
                 return Result<PortfolioView>.Failure(Error.Validation("portfolio.slug", "A link name of 3 to 40 lower-case letters, digits and hyphens."));
+            }
+
+            // Staff see the display name on every review, and anyone a shown portfolio (D118).
+            if (await screen.CheckAsync(db, "portfolio", "portfolio", user.Value, [name, headline, bio, slug], ct).ConfigureAwait(false) is { } personal)
+            {
+                return Result<PortfolioView>.Failure(personal);
             }
 
             if (PortfolioVisibility.IsShown(visibility))
@@ -278,6 +286,7 @@ public static class LearningModule
     /// <summary>The request side: the young person's portfolio. The host registers <see cref="LearningDbContext"/>.</summary>
     public static IServiceCollection AddLearning(this IServiceCollection services)
     {
+        services.AddLocalScreening();
         services.AddScoped<ParticipationProjector>();
         services.AddScoped<Portfolios>();
         services.AddScoped<Badges.Badges>();
@@ -310,6 +319,7 @@ public static class LearningModule
     /// </summary>
     public static IServiceCollection AddLearningJobs(this IServiceCollection services)
     {
+        services.AddLocalScreening();
         services.AddScoped<ParticipationProjector>();
         services.AddScoped<Badges.Badges>();
         services.AddScoped<Playlists.Playlists>();

@@ -131,6 +131,12 @@ public sealed class ApiFixture : IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<TokenPair>(TestContext.Current.CancellationToken))!;
     }
 
+    /// <summary>
+    /// Eight random lower-case letters, for a link name: hex would sometimes give seven digits in a
+    /// row, which the screen rightly takes for a phone number (D118).
+    /// </summary>
+    public static string Letters() => string.Concat(Guid.NewGuid().ToString("N")[..8].Select(c => (char)('a' + (c % 26))));
+
     public static HttpClient WithBearer(HttpClient client, string accessToken)
     {
         ArgumentNullException.ThrowIfNull(client);

@@ -4001,6 +4001,40 @@ No schema change. Tests: `LocalPiiScreenTests` (each kind and where, ordinary wr
 the outcome), `MessagingApiTests` (a young person's number held, them told why, staff not
 seeing it, both messages recorded with the screen's decision and the span).
 
+### D118 — Screening the rest of what young people write (**proposed 2026-11-27**)
+
+D117 screened young people's messages; their other writing still reached staff or the public
+unscreened. Sam chose on 2026-11-27: the same screen on projects, playlist reflections, picture
+descriptions and the portfolio; refuse and say what to take out, with nothing waiting on a
+moderator (these are forms the young person is still filling in, not chat); and move the screen
+to Infrastructure, registered once for every host.
+- **Where it runs, each where the writing first reaches someone else:**
+  - a project, when it's **sent for approval**: its title, its description, and every picture's
+    description and caption. Any change to an approved project makes it a draft again (D69), so
+    whatever staff or the public read was screened;
+  - a playlist **reflection**, when the step is done (staff review it);
+  - the **portfolio**, whenever it's saved: the display name (staff see it on every review),
+    headline, bio and link name.
+    A link name with seven or more digits in a row ("kwesi-91455501") reads as a phone number and is
+    refused; the tests' random link names are letters only (`ApiFixture.Letters()`) for that reason.
+- **A refusal** is `screening.personal_information`, 400: "Take out any phone number, email or
+  home address, social media handle or link before sending this: they can't be shared here." The
+  form keeps what was typed. A screen that errs refuses too.
+- **Recorded as an audit event, not a `screening_result` row:** that table is Community's, and
+  Learning comes before Community in the module order. Each check is `screening.checked` in the
+  form's own transaction, allowed or denied, the kinds found as the reason, the form, the rules'
+  version and how many spans, never the text. A refused result is returned, not thrown, so the
+  row stays.
+- **The screen** (`LocalPiiScreen`) moved to `BrightTime.Infrastructure.Screening`, with
+  `WritingScreen` (the form check) beside it; `AddLocalScreening()` registers both, and Community,
+  Learning and Learning's jobs each call it (a second call changes nothing).
+- **Not in this:** goals (private, never shown); a report's own words (moderators only);
+  quiz answers (choices); names in a project's text (no rule finds them well, as D117).
+
+No schema change. Tests: `LearnerRecordApiTests` (a project sharing an email isn't sent, the
+refusal's audit row), `PlaylistApiTests` (a reflection with a phone number), `PortfolioApiTests`
+(a bio with a handle), `LocalPiiScreenTests` (moved).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

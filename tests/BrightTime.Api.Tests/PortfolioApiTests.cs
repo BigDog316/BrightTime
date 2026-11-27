@@ -199,12 +199,15 @@ public sealed class PortfolioApiTests(ApiFixture api)
             await ProblemAsync(await someoneElse.PostAsync(new Uri($"api/v1/me/portfolio/participation/{participation}/hide", UriKind.Relative), null, Ct), HttpStatusCode.NotFound, "portfolio.not_found");
 
             // Shown only with a link name and a display name without the family name.
-            string slug = "kwesi-" + Guid.NewGuid().ToString("N")[..8];
+            string slug = "kwesi-" + ApiFixture.Letters();
             using HttpClient anonymous = api.Client();
             (await anonymous.GetAsync(new Uri($"api/v1/public/portfolios/{slug}", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
             await ProblemAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Kwesi", visibility = "link_only" }, Ct), HttpStatusCode.BadRequest, "portfolio.slug");
             await ProblemAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Kwesi Ofori", visibility = "link_only", publicSlug = slug }, Ct),
                 HttpStatusCode.BadRequest, "portfolio.display_name_legal");
+            await ProblemAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio",
+                new { displayName = "Kwesi Builds", headline = "Robots and rivers", bio = "Find me @kwesi_builds", visibility = "link_only", publicSlug = slug }, Ct),
+                HttpStatusCode.BadRequest, "screening.personal_information");
             (await JsonAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Kwesi Builds", headline = "Robots and rivers", visibility = "link_only", publicSlug = slug }, Ct)))
                 .GetProperty("visibility").GetString().ShouldBe("link_only");
             await ProblemAsync(await someoneElse.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Another", visibility = "public", publicSlug = slug }, Ct),
@@ -233,7 +236,7 @@ public sealed class PortfolioApiTests(ApiFixture api)
                 values (@u, @t, false, true, false, now())
                 on conflict (user_id) do update set can_publish_showcase = false
                 """, ("u", otherId), ("t", api.Data.TenantId));
-            await ProblemAsync(await someoneElse.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Another", visibility = "public", publicSlug = "another-" + Guid.NewGuid().ToString("N")[..8] }, Ct),
+            await ProblemAsync(await someoneElse.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Another", visibility = "public", publicSlug = "another-" + ApiFixture.Letters() }, Ct),
                 HttpStatusCode.Forbidden, "portfolio.showcase");
 
             // Unlinked, the enrolment leaves the young person's portfolio.
@@ -259,7 +262,7 @@ public sealed class PortfolioApiTests(ApiFixture api)
             (await NamesChangedAsync(learnerId)).ShouldBe(1);
 
             // The household's names count though nothing is linked (D80).
-            string slug = "ama-" + Guid.NewGuid().ToString("N")[..8];
+            string slug = "ama-" + ApiFixture.Letters();
             await ProblemAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Ama Mensah", visibility = "link_only", publicSlug = slug }, Ct),
                 HttpStatusCode.BadRequest, "portfolio.display_name_legal");
             await JsonAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Ama Asante", visibility = "link_only", publicSlug = slug }, Ct));

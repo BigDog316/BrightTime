@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using BrightTime.Abstractions.Screening;
 
-namespace BrightTime.Modules.Community.Screening;
+namespace BrightTime.Infrastructure.Screening;
 
 /// <summary>
 /// Screens youth-authored text for personal information, by rules, on our own servers (Q8's "local

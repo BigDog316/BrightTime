@@ -1,4 +1,5 @@
 using BrightTime.Infrastructure.Auditing;
+using BrightTime.Infrastructure.Screening;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Identity.Contracts;
@@ -49,7 +50,8 @@ public sealed record ProjectSubmission(
 /// </para>
 /// </remarks>
 public sealed class Projects(
-    LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, IIdentityQueries identity, IDirectoryQueries directory, IMediaLibrary media)
+    LearningDbContext db, ITenantContext tenant, AuditTrail audit, IClock clock, IIdentityQueries identity, IDirectoryQueries directory, IMediaLibrary media,
+    WritingScreen screen)
 {
     public const string Read = "learning.project.read";
     public const string Changed = "learning.project.changed";
@@ -142,6 +144,14 @@ public sealed class Projects(
             if (project.ListingId is not { } listing || !await TookPartAsync(user.Value, listing, ct).ConfigureAwait(false))
             {
                 return Result<ProjectView>.Failure(Error.Validation("projects.activity", "Say which activity it came from: one you took part in."));
+            }
+
+            // Staff read it from here on (D118): its words, and every picture's, are screened first.
+            ILookup<Guid, ProjectPicture> pictures = await PicturesOfAsync([project.Id], ct).ConfigureAwait(false);
+            if (await screen.CheckAsync(db, "project", "project", project.Id,
+                    [project.Title, project.Description, .. pictures[project.Id].SelectMany(pic => new[] { pic.Alt, pic.Caption })], ct).ConfigureAwait(false) is { } personal)
+            {
+                return Result<ProjectView>.Failure(personal);
             }
 
             project.Status = Submitted;

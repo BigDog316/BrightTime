@@ -1,5 +1,5 @@
 using BrightTime.Abstractions.Screening;
-using BrightTime.Modules.Community.Screening;
+using BrightTime.Infrastructure.Screening;
 
 namespace BrightTime.IntegrationTests;
 

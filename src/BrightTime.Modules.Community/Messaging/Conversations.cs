@@ -425,7 +425,7 @@ public sealed class Conversations(
                 TenantId = conversation.TenantId,
                 TargetKind = "message",
                 TargetId = message.Id,
-                Provider = screen == MessageScreen.YouthPii ? Screening.LocalPiiScreen.Provider : ContactExchangeScreen.Provider,
+                Provider = screen == MessageScreen.YouthPii ? Infrastructure.Screening.LocalPiiScreen.Provider : ContactExchangeScreen.Provider,
                 Decision = decision,
                 Labels = JsonSerializer.Serialize(reasons.ToDictionary(r => r, _ => 1.0)),
                 PiiSpans = JsonSerializer.Serialize(spans.Select(s => new { start = s.Start, length = s.Length, kind = s.Kind })),
@@ -562,7 +562,7 @@ public static class CommunityModule
     public static IServiceCollection AddCommunity(this IServiceCollection services)
     {
         services.AddScoped<Conversations>();
-        services.AddSingleton<IScreeningService, Screening.LocalPiiScreen>();
+        Infrastructure.Screening.ScreeningServices.AddLocalScreening(services);
         services.AddScoped<Moderation.HeldMessages>();
         services.AddScoped<Moderation.Reports>();
         services.AddScoped<Moderation.ModerationHistory>();

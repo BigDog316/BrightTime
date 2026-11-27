@@ -155,6 +155,15 @@ public sealed class LearnerRecordApiTests(ApiFixture api)
             Guid projectId = project.GetProperty("id").GetGuid();
             (project.GetProperty("status").GetString(), project.GetProperty("activity").GetString()).ShouldBe(("draft", activity));
             await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/projects/{projectId}/visibility", new { visibility = "public" }, Ct), HttpStatusCode.Conflict, "projects.not_approved");
+
+            // Not sent for approval while it shares their email (D118); the refusal is on record, without the text.
+            await JsonAsync(await learner.PutAsJsonAsync($"api/v1/me/projects/{projectId}",
+                new { title = "Mapping the mussel beds", description = "A hand-drawn map. Ask me at kwesi.maps@example.com for a copy.", listingId = listing }, Ct));
+            await ProblemAsync(await learner.PostAsync(Relative($"api/v1/me/projects/{projectId}/submit"), null, Ct), HttpStatusCode.BadRequest, "screening.personal_information");
+            (await api.ScalarAsync<string>("select outcome || '/' || reason || '/' || (detail->>'surface') from platform.audit_event where action = 'screening.checked' and @p = any(subject_ids)",
+                ("p", projectId))).ShouldBe("deny/email/project");
+            await JsonAsync(await learner.PutAsJsonAsync($"api/v1/me/projects/{projectId}",
+                new { title = "Mapping the mussel beds", description = "A hand-drawn map of three mussel beds.", listingId = listing }, Ct));
             (await JsonAsync(await learner.PostAsync(Relative($"api/v1/me/projects/{projectId}/submit"), null, Ct))).GetProperty("status").GetString().ShouldBe("submitted");
 
             // Staff see it under its maker's display name only, send it back once, then approve it.
@@ -176,7 +185,7 @@ public sealed class LearnerRecordApiTests(ApiFixture api)
             // Published, it shows on their shown portfolio with both skills; the goal never does.
             (await JsonAsync(await learner.PutAsJsonAsync($"api/v1/me/projects/{projectId}/visibility", new { visibility = "public" }, Ct)))
                 .GetProperty("status").GetString().ShouldBe("published");
-            string slug = "tobi-" + Guid.NewGuid().ToString("N")[..8];
+            string slug = "tobi-" + ApiFixture.Letters();
             await JsonAsync(await learner.PutAsJsonAsync("api/v1/me/portfolio", new { displayName = "Tobi Maps", visibility = "link_only", publicSlug = slug }, Ct));
             JsonElement page = await JsonAsync(await anonymous.GetAsync(Relative($"api/v1/public/portfolios/{slug}"), Ct));
             page.GetProperty("projects").EnumerateArray().Single().GetProperty("title").GetString().ShouldBe("Mapping the mussel beds");

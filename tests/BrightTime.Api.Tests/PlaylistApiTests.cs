@@ -157,6 +157,10 @@ public sealed class PlaylistApiTests(ApiFixture api)
             mine.GetProperty("steps")[1].GetProperty("available").GetBoolean().ShouldBeFalse();
             await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{checkin}", new { }, Ct), HttpStatusCode.Conflict, "playlists.out_of_order");
             await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{reflect}", new { reflection = "Fish." }, Ct), HttpStatusCode.BadRequest, "playlists.reflection");
+
+            // Staff read a reflection, so one sharing a phone number isn't sent (D118).
+            await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{reflect}",
+                new { reflection = "Mayflies, I think. Text me on 914-555-0105 if you find more." }, Ct), HttpStatusCode.BadRequest, "screening.personal_information");
             States(await JsonAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{reflect}",
                 new { reflection = "Mayfly nymphs under the stones, and maybe a crayfish." }, Ct))).ShouldBe(["completed", "not_started", "not_started"]);
             await ProblemAsync(await learner.PutAsJsonAsync($"api/v1/me/playlists/{playlist}/steps/{reflect}", new { reflection = "Again and again and again." }, Ct),

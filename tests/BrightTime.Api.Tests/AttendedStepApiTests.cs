@@ -127,6 +127,7 @@ public sealed class AttendedStepApiTests(ApiFixture api)
         services.AddScoped<ISiteAddress, FixedSite>();
         services.AddScoped<IAuditWriter>(sp => sp.GetRequiredService<AuditTrail>());
         services.AddMediaLibrary(); // badges take it (D112), as the worker registers it
+        BrightTime.Infrastructure.Screening.ScreeningServices.AddLocalScreening(services); // playlists take it (D118), as AddLearningJobs does
         services.AddScoped<ParticipationProjector>();
         services.AddScoped<Badges>();
         services.AddScoped<Playlists>();

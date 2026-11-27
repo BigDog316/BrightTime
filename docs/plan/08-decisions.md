@@ -3966,7 +3966,7 @@ escalated with its removal and closed, rebuilt in order with each moderator and 
 screening let through; the recent decisions; closing needs an outcome and leaves the list; the
 organisation refused; an unknown message).
 
-### D117 — Screening what young people write (**proposed 2026-11-27**)
+### D117 — Screening what young people write (**accepted 2026-11-27**)
 
 M5's first acceptance criterion is that nothing youth-authored reaches another user before
 screening. A young person's own messages went straight through; only adults' messages to them

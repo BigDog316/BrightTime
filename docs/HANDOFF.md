@@ -320,6 +320,11 @@ Rebuild the compose volume first: the schema and the role permissions changed.
   back from the API as `clearances.not_current` with the kinds missing and expired, and the app
   says so (the attendance screen and offline sync too). With the rules on, approval needs every
   active owner cleared. The gate now acts only where the permission and role would otherwise pass.
+- **Muting and suspending a person** (D119, proposed): from a message's history, a moderator mutes
+  an adult from writing to young people, or suspends their account, for 24 hours, 7 days or 30
+  days, with a reason; either can be lifted early. A suspension sets the account `suspended`,
+  ends its sessions and books its own end. New `community.person_restriction` and
+  `identity.app_user.suspended_until`: rebuild the compose volume.
 - **Screening the rest of what young people write** (D118): projects (when sent for
   approval, pictures' words included), playlist reflections and the portfolio are screened by the
   same rules, and refused with what to take out; each check is a `screening.checked` audit event.
@@ -438,6 +443,7 @@ Rebuild the compose volume first: the schema and the role permissions changed.
 ## Waiting on Sam
 
 Every decision through D118 is accepted (D30 and D31 on 2026-10-19, D32 to D46 on 2026-10-20, D47 to D57 on 2026-10-21, D58 to D66 on 2026-10-22, D67 to D70 on 2026-10-25, D71 on 2026-10-29, D72 to D74 on 2026-10-31, D75 and D76 on 2026-11-04, D77 to D81 on 2026-11-05, D82 and D83 on 2026-11-06, D84 to D93 on 2026-11-21, D94 to D100 on 2026-11-22, D101 to D103 on 2026-11-23, D104 and D105 on 2026-11-24, D106 to D112 on 2026-11-26, D113 to D118 on 2026-11-27).
+D119 (muting and suspending a person) is proposed.
 D74 leaves two things for you before cards go live: add the `checkout.session.*` events to the webhook endpoint in Stripe, and try it with test keys.
 D57 leaves two things open: QuestPDF's licence (Community is free only under US$1M revenue) and fonts for names in Bengali, Chinese and Arabic.
 D56 leaves two things open: what to do when a waived fee is paid anyway (it is logged now, not changed), and whether organisations must be paid out directly (Stripe Connect).

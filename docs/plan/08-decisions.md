@@ -4035,6 +4035,43 @@ No schema change. Tests: `LearnerRecordApiTests` (a project sharing an email isn
 refusal's audit row), `PlaylistApiTests` (a reflection with a phone number), `PortfolioApiTests`
 (a bio with a handle), `LocalPiiScreenTests` (moved).
 
+### D119 — Muting and suspending a person (**proposed 2026-11-27**)
+
+A moderator could act on a message but not on the person who wrote it. Sam chose on 2026-11-27:
+mute and suspend; set lengths, liftable early; adults only, for now.
+- **Mute:** the adult can't write in any conversation with a young person, can't open one, and an
+  announcement of theirs leaves young people out (counted, as other skips are), until the mute
+  ends (`messaging.muted`). Conversations with families and no young person go on.
+- **Suspend:** the account's status is `suspended`, which every way of signing in already refuses,
+  with `suspended_until` (new on `identity.app_user`) for when it ends. Its security stamp changes
+  and its refresh tokens are revoked, so cookie sessions and access tokens stop at their next
+  check; Identity books an `identity.suspension_ends` job for that time, which makes it active
+  again unless a longer suspension now runs (`IAccountSuspensions`, `AccountSuspensions`,
+  `SuspensionEndsHandler`). No recurring sweep: each suspension books its own end.
+- **For a time:** 24 hours, 7 days or 30 days, with a reason; any moderator can lift either early,
+  with a reason. Lifting a suspension makes the account active only if no other suspension of it
+  is still running.
+- **Recorded:** each measure is a row of the new `community.person_restriction` (who, which, why,
+  by whom, from which message, until when, lifted by whom and why) and a `moderation_action`
+  on the person (`mute` or `suspend_user` with `duration_hours`; `restore` when lifted); audited as
+  `moderation.person_restricted` and `.person_restriction_lifted`. The message's history shows
+  each, in order.
+- **Where:** a held or reported message's history page, under **The sender**: what's been done to
+  them so far, a form to mute or suspend, and a lift form on each one in force. The new permission
+  `moderation.suspend_user` (plan/04: network organisers and moderators) guards it.
+- **Who:** adults only (`moderation.adults_only` for a young person's message). Nobody of the
+  conversation's organisation, and nobody on themselves (`moderation.own_organisation`).
+  Suspension is booked with Identity first and recorded after; if the record then fails, it's
+  lifted again, so there's never a suspension without its reason.
+- **Not in this:** telling the person why (they see only that they're muted or can't sign in),
+  muting or suspending a young person, and suspending an organisation (D33's own path).
+
+Schema: `identity.app_user.suspended_until` (with `ck_app_user_suspended_until`), and
+`community.person_restriction`. Rebuild the compose volume. Tests: `RestrictionTests` (no reason,
+a mute stopping a message and a new conversation, lifting it, a suspension's status, stamp and
+booked end, lifting it, the history in order, a young person and the organisation refused),
+`SuspensionEndsTests` (an ended suspension, a longer one, one with no end), `RolePermissionTests`.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

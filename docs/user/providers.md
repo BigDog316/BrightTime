@@ -306,6 +306,9 @@ and the kiosk screen, are still to come: until then, mark the young person on yo
   attempt to swap contact details. Only you see it, marked as held. A moderator from the county,
   never someone from your organisation, then releases it, and it's delivered, or removes it, and
   you see it marked as removed.
+- A moderator can also pause your messages to young people for a while. Until it ends you can't
+  write in a conversation with a young person or start one, and announcements leave young people
+  out; conversations with families go on as usual.
 - **Announce to an activity's families** sends one message to every family with a child enrolled.
   Families don't reply and never see each other. A young person gets it only with consent and
   an admin reading along; the page tells you how many were left out.

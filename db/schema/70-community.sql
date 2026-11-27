@@ -378,6 +378,31 @@ create trigger moderation_action_append_only
   before update or delete on moderation_action
   for each statement execute function platform.deny_write();
 
+-- A moderator's measure against a person (D119): a mute keeps an adult from writing in any
+-- conversation with a young person; a suspension keeps the account from signing in or acting
+-- (identity.app_user.status, which Identity keeps). Each lasts until ends_at unless lifted, and
+-- names the message it came from. Its decisions are moderation_action rows too.
+create table person_restriction (
+  id                uuid primary key,
+  tenant_id         uuid not null references platform.tenant(id) on delete cascade,
+  user_id           uuid not null references identity.app_user(id) on delete cascade,
+  kind              text not null,
+  reason            text not null,
+  imposed_by        uuid not null references identity.app_user(id) on delete restrict,
+  source_message_id uuid references message(id) on delete set null,
+  starts_at         timestamptz not null default now(),
+  ends_at           timestamptz not null,
+  lifted_at         timestamptz,
+  lifted_by         uuid references identity.app_user(id) on delete restrict,
+  lift_reason       text,
+  constraint ck_person_restriction_kind check (kind in ('mute','suspend')),
+  constraint ck_person_restriction_reason check (length(btrim(reason)) > 0),
+  constraint ck_person_restriction_span check (ends_at > starts_at),
+  constraint ck_person_restriction_lift check ((lifted_at is null) = (lifted_by is null) and (lifted_at is null) = (lift_reason is null))
+);
+create index ix_person_restriction_user on person_restriction (user_id, kind, ends_at) where lifted_at is null;
+create index ix_person_restriction_message on person_restriction (source_message_id) where source_message_id is not null;
+
 create table showcase_item (
   id            uuid primary key,
   tenant_id     uuid not null references platform.tenant(id) on delete cascade,

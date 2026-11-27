@@ -47,7 +47,7 @@ public sealed class ModerationHistoryTests(ConsoleFixture db)
         Guid enrolment = await YouthEnrolment.EnrolAsync(db, youth, owner, provider, listing, "Abena", linked: true);
 
         // Written: one let through, one held.
-        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string suffix = YouthEnrolment.Letters();
         Guid welcome, held;
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, staff))
         {

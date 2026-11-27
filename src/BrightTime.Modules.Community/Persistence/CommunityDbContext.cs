@@ -139,6 +139,34 @@ public sealed class ScreeningResultRecord
     public DateTimeOffset CreatedAt { get; init; }
 }
 
+/// <summary>A moderator's mute or suspension of a person (D119, <c>community.person_restriction</c>).</summary>
+public sealed class PersonRestrictionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string Reason { get; init; }
+
+    public Guid ImposedBy { get; init; }
+
+    public Guid? SourceMessageId { get; init; }
+
+    public DateTimeOffset StartsAt { get; init; }
+
+    public DateTimeOffset EndsAt { get; init; }
+
+    public DateTimeOffset? LiftedAt { get; set; }
+
+    public Guid? LiftedBy { get; set; }
+
+    public string? LiftReason { get; set; }
+}
+
 /// <summary>A report of something someone saw (D115, <c>community.report</c>): so far, a message.</summary>
 public sealed class ReportRecord
 {
@@ -203,6 +231,8 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
 
     public DbSet<ScreeningResultRecord> ScreeningResults => Set<ScreeningResultRecord>();
 
+    public DbSet<PersonRestrictionRecord> PersonRestrictions => Set<PersonRestrictionRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -241,6 +271,15 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.TargetKind, x.TargetId, x.OccurredAt }).IsDescending(false, false, true);
             b.HasIndex(x => new { x.ActorUserId, x.OccurredAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<PersonRestrictionRecord>(b =>
+        {
+            b.ToTable("person_restriction");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.UserId, x.Kind, x.EndsAt }).HasFilter("lifted_at is null");
+            b.HasIndex(x => x.SourceMessageId).HasFilter("source_message_id is not null");
         });
 
         modelBuilder.Entity<ScreeningResultRecord>(b =>

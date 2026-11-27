@@ -46,7 +46,7 @@ public sealed class HeldMessagesPageTests(ConsoleFixture db)
         Guid enrolment = await YouthEnrolment.EnrolAsync(db, youth, owner, provider, listing, "Esi", linked: true);
 
         // Staff open a conversation with the young person; three tries at taking it elsewhere are held.
-        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string suffix = YouthEnrolment.Letters();
         Guid conversation;
         Guid phone, app, third;
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, staff))

@@ -89,6 +89,9 @@ public sealed class AppUser
 
     public DateTimeOffset? DeletedAt { get; set; }
 
+    /// <summary>When a moderator's suspension ends (D119); set only while suspended.</summary>
+    public DateTimeOffset? SuspendedUntil { get; set; }
+
     public UserId UserId => new(Id);
 
     public bool IsMinorAccount =>

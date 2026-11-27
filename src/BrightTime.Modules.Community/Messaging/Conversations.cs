@@ -148,6 +148,11 @@ public sealed class Conversations(
                 return Result<ConversationView>.Failure(Error.Forbidden("messaging.restricted", "A contact restriction keeps you from messaging this family."));
             }
 
+            if (ownerIsMinor && await Moderation.Restrictions.IsMutedAsync(db, staff.Value, clock.StoredNow(), ct).ConfigureAwait(false))
+            {
+                return Result<ConversationView>.Failure(Muted());
+            }
+
             // A minor is never in a conversation with one adult: an admin of the organisation reads it too.
             Guid? observer = null;
             if (ownerIsMinor)
@@ -234,6 +239,12 @@ public sealed class Conversations(
                 }
 
                 recipients.Add((owner, minor));
+            }
+
+            // A muted sender's announcement leaves young people out, counted (D119).
+            if (recipients.Any(r => r.Minor) && await Moderation.Restrictions.IsMutedAsync(db, staff.Value, clock.StoredNow(), ct).ConfigureAwait(false))
+            {
+                skipped += recipients.RemoveAll(r => r.Minor);
             }
 
             Guid? observer = null;
@@ -348,6 +359,11 @@ public sealed class Conversations(
             if (conversation.ConversationKind == ConversationKinds.OrgBroadcast && me.ParticipantRole is ParticipantRoles.Guardian or ParticipantRoles.Youth)
             {
                 return Result<MessageView>.Failure(Error.Forbidden("messaging.broadcast", "This is an announcement; it takes no replies."));
+            }
+
+            if (conversation.IncludesMinor && !me.IsMinor && await Moderation.Restrictions.IsMutedAsync(db, user.Value, clock.StoredNow(), ct).ConfigureAwait(false))
+            {
+                return Result<MessageView>.Failure(Muted());
             }
 
             // Everything a young person writes is screened (D117); an adult's message to one, for contact exchange (D53).
@@ -553,6 +569,9 @@ public sealed class Conversations(
     private static Error BadBody() => Error.Validation("messaging.body", $"A message of 1 to {MaxBody} characters.");
 
     private static Error NotFound() => Error.NotFound("messaging.not_found", "You aren't in a conversation with that id.");
+
+    private static Error Muted() => Error.Forbidden("messaging.muted",
+        "A moderator has paused your messages to young people for now. You can still write to families without a young person in the conversation.");
 }
 
 /// <summary>Registration of the Community module.</summary>
@@ -566,6 +585,7 @@ public static class CommunityModule
         services.AddScoped<Moderation.HeldMessages>();
         services.AddScoped<Moderation.Reports>();
         services.AddScoped<Moderation.ModerationHistory>();
+        services.AddScoped<Moderation.Restrictions>();
         return services;
     }
 }

@@ -90,7 +90,7 @@ public sealed class RolePermissionTests
         // docs/plan/04: moderation is county-wide, and nobody of a provider decides on what its
         // own staff wrote to a young person (D114). The platform admin has no youth data, and a
         // held message to a young person is youth data.
-        foreach (string permission in new[] { Permissions.Moderation.Triage, Permissions.Moderation.Remove })
+        foreach (string permission in new[] { Permissions.Moderation.Triage, Permissions.Moderation.Remove, Permissions.Moderation.SuspendUser })
         {
             string[] holders =
             [

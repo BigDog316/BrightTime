@@ -149,6 +149,7 @@ public static class ApiComposition
         // Messaging (M3b): conversations with families, never a pair with a minor (D53, T1).
         services.AddBrightTimeDbContext<CommunityDbContext>(app, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);
         services.AddCommunity();
+        BrightTime.Modules.Identity.Moderation.SuspensionModule.AddAccountSuspensions(services);
 
         // The authentication path's login: Identity stores only.
         services.AddKeyedSingleton(AuthDataSourceKey, (_, _) => NpgsqlDataSource.Create(auth));

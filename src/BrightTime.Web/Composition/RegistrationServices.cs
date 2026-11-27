@@ -60,6 +60,7 @@ public static class RegistrationServices
         services.AddScoped<IIdentityQueries, IdentityQueries>();
         services.AddBrightTimeDbContext<CommunityDbContext>(connection, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);
         services.AddCommunity();
+        BrightTime.Modules.Identity.Moderation.SuspensionModule.AddAccountSuspensions(services);
         return services;
     }
 }

@@ -140,9 +140,10 @@ public static class BrightTimeRoles
                 Permissions.SubjectRequests.Fulfil,
                 Permissions.Moderation.Triage,
                 Permissions.Moderation.Remove,
+                Permissions.Moderation.SuspendUser,
             ],
 
-            [Moderator] = [.. PublicBrowse, Permissions.Audit.Read, Permissions.Moderation.Triage, Permissions.Moderation.Remove],
+            [Moderator] = [.. PublicBrowse, Permissions.Audit.Read, Permissions.Moderation.Triage, Permissions.Moderation.Remove, Permissions.Moderation.SuspendUser],
 
             [CivicViewer] = [.. PublicBrowse],
 

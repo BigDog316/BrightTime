@@ -299,6 +299,7 @@ begin
       ('community', 'message'),
       ('community', 'report'),
       ('community', 'screening_result'),
+      ('community', 'person_restriction'),
       ('landscape', 'survey_response'),
       ('landscape', 'field_observation'),
       ('landscape', 'field_assignment'),

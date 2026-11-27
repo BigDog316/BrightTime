@@ -143,6 +143,16 @@ note, and how an escalation ended. **Recent decisions and each message's history
 **Moderation**, lists the county's latest decisions. You can't see the history of a message from
 your own organisation.
 
+When an adult wrote the message, **The sender** shows anything already done to them, and lets you
+act on them for 24 hours, 7 days or 30 days, with a reason:
+
+- **Mute** them: they can't write in any conversation with a young person until it ends.
+- **Suspend** them: their account can't sign in or do anything, and they're signed out within
+  minutes.
+
+Either ends by itself; **Lift it now**, with a reason, ends it sooner. Young people's accounts
+aren't muted or suspended here.
+
 ## Taxonomy
 
 **Taxonomy** holds the words providers tag listings with and families filter by, in four

@@ -50,7 +50,7 @@ public sealed class ReportQueueTests(ConsoleFixture db)
         await db.ScalarAsync<int>("update identity.youth_capability set can_be_messaged_by_org = true where user_id = @u; select 1;", ("u", youth));
         Guid enrolment = await YouthEnrolment.EnrolAsync(db, youth, owner, provider, listing, "Kojo", linked: true);
 
-        string suffix = Guid.NewGuid().ToString("N")[..8];
+        string suffix = YouthEnrolment.Letters();
         Guid conversation;
         Guid secret, spam, rude, other;
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, staff))

@@ -31,13 +31,19 @@ public static class HistoryKinds
 
     /// <summary>An escalation's outcome, recorded.</summary>
     public const string EscalationClosed = "escalation_closed";
+
+    /// <summary>The sender muted or suspended from this message (D119; <see cref="HistoryEvent.Codes"/>: mute or suspend; <see cref="HistoryEvent.Until"/>).</summary>
+    public const string Restricted = "restricted";
+
+    /// <summary>That mute or suspension lifted early.</summary>
+    public const string RestrictionLifted = "restriction_lifted";
 }
 
 /// <summary>
 /// One thing that happened to a message. <see cref="Actor"/> is a moderator's address, or the
 /// role of whoever reported it; never a family's or young person's name.
 /// </summary>
-public sealed record HistoryEvent(DateTimeOffset? At, string Kind, string? Actor, string? Note, IReadOnlyList<string> Codes, Guid? ReportId);
+public sealed record HistoryEvent(DateTimeOffset? At, string Kind, string? Actor, string? Note, IReadOnlyList<string> Codes, Guid? ReportId, DateTimeOffset? Until = null);
 
 /// <summary>
 /// A message's moderation story (D116): the message as it stands, and everything screening,
@@ -53,7 +59,8 @@ public sealed record MessageHistory(
     string Body,
     string State,
     DateTimeOffset SentAt,
-    IReadOnlyList<HistoryEvent> Events);
+    IReadOnlyList<HistoryEvent> Events,
+    bool SenderIsAdult = false);
 
 /// <summary>A moderator's decision, for the list of recent ones (D116).</summary>
 public sealed record RecentDecision(DateTimeOffset At, string Action, string Moderator, string Reason, Guid MessageId, string OrgName, Guid? ReportId);
@@ -115,8 +122,11 @@ public sealed class ModerationHistory(
                 .Where(r => r.TargetKind == MessageTarget && r.TargetId == messageId).OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync(ct).ConfigureAwait(false);
             List<ModerationActionRecord> actions = await db.ModerationActions.AsNoTracking()
                 .Where(a => a.TargetKind == MessageTarget && a.TargetId == messageId).OrderBy(a => a.OccurredAt).ToListAsync(ct).ConfigureAwait(false);
+            List<PersonRestrictionRecord> restrictions = await db.PersonRestrictions.AsNoTracking()
+                .Where(r => r.SourceMessageId == messageId).OrderBy(r => r.StartsAt).ToListAsync(ct).ConfigureAwait(false);
             IReadOnlyDictionary<Guid, string> names = await identity.GetAdultEmailsAsync(
-                [.. actions.Select(a => a.ActorUserId), .. reports.Where(r => r.AssignedTo is not null).Select(r => r.AssignedTo!.Value)], ct).ConfigureAwait(false);
+                [.. actions.Select(a => a.ActorUserId), .. reports.Where(r => r.AssignedTo is not null).Select(r => r.AssignedTo!.Value),
+                 .. restrictions.Select(r => r.ImposedBy), .. restrictions.Where(r => r.LiftedBy is not null).Select(r => r.LiftedBy!.Value)], ct).ConfigureAwait(false);
             string Name(Guid? user) => user is { } u && names.TryGetValue(u, out string? n) ? n : "";
 
             List<HistoryEvent> events = [];
@@ -150,6 +160,15 @@ public sealed class ModerationHistory(
 
             // Two decisions in one moment (an escalation and the removal with it) by what they mean:
             // ids are no help, as UUIDv7 is random within a millisecond.
+            foreach (PersonRestrictionRecord r in restrictions)
+            {
+                events.Add(new HistoryEvent(r.StartsAt, HistoryKinds.Restricted, Name(r.ImposedBy), r.Reason, [r.Kind], null, r.EndsAt));
+                if (r.LiftedAt is { } lifted)
+                {
+                    events.Add(new HistoryEvent(lifted, HistoryKinds.RestrictionLifted, Name(r.LiftedBy), r.LiftReason, [r.Kind], null));
+                }
+            }
+
             List<HistoryEvent> ordered = [.. events.OrderBy(e => e.At ?? DateTimeOffset.MinValue).ThenBy(e => Order(e.Kind))
                 .ThenBy(e => e.Kind == HistoryKinds.Decided ? ActionOrder(e.Codes[0]) : 0)];
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = MessageTarget, SubjectIds = [messageId] }, ct).ConfigureAwait(false);
@@ -161,7 +180,8 @@ public sealed class ModerationHistory(
                 message.Body,
                 message.State,
                 message.SentAt,
-                ordered));
+                ordered,
+                !await identity.IsMinorAsync(new UserId(message.SenderUserId), ct).ConfigureAwait(false)));
         }, cancellationToken);
 
     /// <summary>The county's most recent decisions on messages, newest first, leaving out the moderator's own organisations'.</summary>
@@ -207,7 +227,8 @@ public sealed class ModerationHistory(
         HistoryKinds.Reported => 1,
         HistoryKinds.TakenOn => 2,
         HistoryKinds.Decided => 3,
-        _ => 4,
+        HistoryKinds.Restricted => 4,
+        _ => 5,
     };
 
     /// <summary>Within one moment: released, escalated, then removed, then anything else.</summary>

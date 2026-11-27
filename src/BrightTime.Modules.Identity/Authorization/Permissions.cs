@@ -170,6 +170,9 @@ public static class Permissions
 
         /// <summary>Removing held content, so that nobody but its author sees it.</summary>
         public const string Remove = "moderation.remove";
+
+        /// <summary>Muting an adult from writing to young people, or suspending their account, for a time (D119).</summary>
+        public const string SuspendUser = "moderation.suspend_user";
     }
 
     public static class Taxonomy
@@ -212,7 +215,7 @@ public static class Permissions
         Applications.View, Applications.Decide,
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Messages.SendToFamily,
-        Moderation.Triage, Moderation.Remove,
+        Moderation.Triage, Moderation.Remove, Moderation.SuspendUser,
         Payments.Waive,
         Reports.RunProvider,
         Badges.Define, Badges.Issue, Badges.Revoke,

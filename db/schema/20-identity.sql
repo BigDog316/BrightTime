@@ -50,6 +50,8 @@ create table app_user (
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   deleted_at            timestamptz,
+  -- When a moderator's suspension ends (D119): a job booked for then makes the account active again.
+  suspended_until       timestamptz,
   constraint ux_app_user_name unique (tenant_id, normalized_user_name),
   constraint ux_app_user_email unique (tenant_id, normalized_email),
   constraint ck_app_user_kind check (account_kind in ('adult','youth','child')),
@@ -65,7 +67,9 @@ create table app_user (
   constraint ck_app_user_phone_pair
     check ((phone_enc is null) = (phone_blind_index is null)),
   constraint ck_app_user_deleted
-    check ((status = 'deleted') = (deleted_at is not null))
+    check ((status = 'deleted') = (deleted_at is not null)),
+  constraint ck_app_user_suspended_until
+    check (suspended_until is null or status = 'suspended')
 );
 create index ix_app_user_tenant_status on app_user (tenant_id, status);
 create index ix_app_user_phone_bi on app_user (tenant_id, phone_blind_index)

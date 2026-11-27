@@ -1,5 +1,6 @@
 @page "/organiser/moderation/history"
 @using BrightTime.Modules.Community.Moderation
+@using BrightTime.Modules.Identity.Authorization
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.SharedKernel.Privacy
 @using BrightTime.Web.Auth
@@ -18,6 +19,11 @@
 
 <p class="eyebrow"><a href="/organiser/moderation">@T["site.nav.moderation"]</a></p>
 <h1>@T["moderation.history.title"]</h1>
+
+@if (Done is { Length: > 0 } && T.Has("moderation.done." + Done))
+{
+    <p class="notice success" role="status">@T["moderation.done." + Done]</p>
+}
 
 @if (_problem is not null)
 {
@@ -43,6 +49,76 @@ else if (_history is { } h)
         </dl>
         <blockquote class="held-body" dir="auto">@h.Body</blockquote>
     </section>
+
+    @* D119: what's been done to the sender, and muting or suspending them, an adult, for a time. *@
+    @if (h.SenderIsAdult && _restrictions is { } restrictions)
+    {
+        <section aria-labelledby="sender-heading">
+            <h2 id="sender-heading">@T["moderation.restrict.heading"]</h2>
+            @if (_actionProblem is not null)
+            {
+                <p class="notice error" role="alert">@_actionProblem</p>
+            }
+            @if (restrictions.Count == 0)
+            {
+                <p>@T["moderation.restrict.none"]</p>
+            }
+            else
+            {
+                <ul class="history">
+                    @foreach (RestrictionView r in restrictions)
+                    {
+                        string rid = r.Id.ToString("N");
+                        <li>
+                            <p>@T.Format("moderation.restrict.item." + r.Kind, ("moderator", r.ImposedBy), ("until", T.DateTime(r.EndsAt)))</p>
+                            <p><span class="note">@T["moderation.history.note"]:</span> <q dir="auto">@r.Reason</q></p>
+                            @if (r.LiftedAt is { } lifted)
+                            {
+                                <p class="note">@T.Format("moderation.restrict.lifted", ("moderator", r.LiftedBy ?? ""), ("date", T.DateTime(lifted)))</p>
+                            }
+                            else if (r.InForce && CanRestrict)
+                            {
+                                <form method="post" class="reason-form" @formname="@("lift-" + rid)" @onsubmit="() => LiftAsync(r.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="lift-@rid">@T["moderation.restrict.lift_reason"]</label>
+                                        <textarea id="lift-@rid" name="reason" rows="2" maxlength="@Restrictions.MaxReason" dir="auto"></textarea>
+                                    </div>
+                                    <button type="submit" class="secondary-button">@T["moderation.restrict.lift"]</button>
+                                </form>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (CanRestrict)
+            {
+                <form method="post" class="reason-form" @formname="restrict" @onsubmit="RestrictAsync">
+                    <AntiforgeryToken />
+                    <fieldset>
+                        <legend>@T["moderation.restrict.what"]</legend>
+                        <label class="check"><input type="radio" name="kind" value="@Restrictions.Mute" checked /> @T["moderation.restrict.kind.mute"]</label>
+                        <label class="check"><input type="radio" name="kind" value="@Restrictions.Suspend" /> @T["moderation.restrict.kind.suspend"]</label>
+                    </fieldset>
+                    <div class="field">
+                        <label for="restrict-length">@T["moderation.restrict.length"]</label>
+                        <select id="restrict-length" name="length">
+                            @foreach (string length in Restrictions.Lengths.Keys)
+                            {
+                                <option value="@length">@T["moderation.restrict.length." + length]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="restrict-reason">@T["moderation.restrict.reason"]</label>
+                        <textarea id="restrict-reason" name="reason" rows="2" maxlength="@Restrictions.MaxReason" dir="auto"></textarea>
+                    </div>
+                    <button type="submit">@T["moderation.restrict.submit"]</button>
+                </form>
+            }
+        </section>
+    }
 
     <section aria-labelledby="events-heading">
         <h2 id="events-heading">@T["moderation.history.events"]</h2>
@@ -103,6 +179,13 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "message")] public Guid? MessageId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private IReadOnlyList<RestrictionView>? _restrictions;
+    private string? _actionProblem;
+
+    private bool CanRestrict => User.HasPermission(Permissions.Moderation.SuspendUser);
+
     private MessageHistory? _history;
     private IReadOnlyList<RecentDecision> _recent = [];
     private string? _problem;
@@ -125,6 +208,7 @@ else
         if (found.IsSuccess)
         {
             _history = found.Value;
+            _restrictions = found.Value.SenderIsAdult ? await Get<Restrictions>().OfSenderAsync(Actor, id) : null;
             return;
         }
 
@@ -138,11 +222,49 @@ else
         _problem = T.Error(found.Error);
     }
 
+    private async Task RestrictAsync()
+    {
+        if (!CanRestrict || MessageId is not { } id)
+        {
+            Forbid();
+            return;
+        }
+
+        Result result = await Get<Restrictions>().ImposeAsync(Actor, id, FormValue("kind"), FormValue("length"), FormValue("reason"));
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/moderation/history?message={id:D}&done=restricted");
+            return;
+        }
+
+        _actionProblem = T.Error(result.Error!);
+    }
+
+    private async Task LiftAsync(Guid restriction)
+    {
+        if (!CanRestrict || MessageId is not { } id)
+        {
+            Forbid();
+            return;
+        }
+
+        Result result = await Get<Restrictions>().LiftAsync(Actor, restriction, FormValue("reason"));
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/moderation/history?message={id:D}&done=restriction_lifted");
+            return;
+        }
+
+        _actionProblem = T.Error(result.Error!);
+    }
+
     private string Describe(HistoryEvent e)
     {
         string who = e.Actor ?? "";
         return e.Kind switch
         {
+            HistoryKinds.Restricted => T.Format("moderation.history.event.restricted." + e.Codes[0], ("moderator", who), ("until", e.Until is { } until ? T.DateTime(until) : "")),
+            HistoryKinds.RestrictionLifted => T.Format("moderation.history.event.restriction_lifted." + e.Codes[0], ("moderator", who)),
             HistoryKinds.Held => T.Format("moderation.history.event.screened_held", ("reasons", string.Join(", ", e.Codes.Select(Reason)))),
             HistoryKinds.Passed => T["moderation.history.event.screened_passed"],
             HistoryKinds.Reported => T.Format("moderation.history.event.reported", ("role", Role(who)),

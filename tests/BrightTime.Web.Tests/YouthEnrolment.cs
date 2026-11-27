@@ -27,6 +27,12 @@ internal static class YouthEnrolment
         return (provider, db.Data.Listings.Where(l => l.OrgId == provider.Id && l.Status == "published" && l.RegistrationMode == "builtin").Skip(1).First());
     }
 
+    /// <summary>
+    /// Eight random lower-case letters, to tell a test's messages apart: hex sometimes gives seven
+    /// digits in a row, which the screens rightly take for a phone number and hold (D117, D118).
+    /// </summary>
+    public static string Letters() => string.Concat(Guid.NewGuid().ToString("N")[..8].Select(c => (char)('a' + (c % 26))));
+
     public static AsyncServiceScope As(ConsoleFixture db, Guid user)
     {
         AsyncServiceScope scope = db.Factory.Services.CreateAsyncScope();

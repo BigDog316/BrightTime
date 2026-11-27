@@ -3925,7 +3925,7 @@ No schema change: `community.report` was in `70-community.sql` from the start. T
 removing with every report of the message settled, the records, the organisation refused, a
 decided report), `CriticalReportMailTests` (the email).
 
-### D116 — Moderation history, and closing escalations (**proposed 2026-11-27**)
+### D116 — Moderation history, and closing escalations (**accepted 2026-11-27**)
 
 M5's acceptance asks that the moderation audit trail reconstruct every decision, and that a
 mandated-reporter escalation be a documented, testable workflow. D114 and D115 recorded the

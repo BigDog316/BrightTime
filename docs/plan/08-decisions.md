@@ -3829,7 +3829,7 @@ No schema change. Tests: `QueryBuilderTests` (each arm alone, the probe, the map
 as before), `FinderPlanTests` (05 is chosen as typos, the probe uses an index; the recorded
 plans for 02, 05, 06 and the new 08 refreshed).
 
-### D114 — Held messages: the county's moderation queue (**proposed 2026-11-27**)
+### D114 — Held messages: the county's moderation queue (**accepted 2026-11-27**)
 
 D53 holds an adult's message to a young person when it looks like an attempt to take the
 conversation off the platform, and nothing let a held message out or took it away: it stayed held

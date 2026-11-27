@@ -310,6 +310,11 @@ at the top of your **Inbox**. Tapping a new-message notification opens the conve
 A young person who has their own account sees the conversations they are in. Programs can only
 message a young person once their consent allows it; until then, **Messages** says so.
 
+Everything a young person writes is checked before anyone else sees it. A message that seems to
+share a phone number, an email or home address, a social media handle or a link is held for a
+moderator from the county, and says why; only they can see it. To send it at once, they write it
+again without that part.
+
 ## Check-in and attendance (app)
 
 Find **Check-in** under **Account**. It lists each activity your child has a place in, with its

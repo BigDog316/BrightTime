@@ -3966,6 +3966,41 @@ escalated with its removal and closed, rebuilt in order with each moderator and 
 screening let through; the recent decisions; closing needs an outcome and leaves the list; the
 organisation refused; an unknown message).
 
+### D117 — Screening what young people write (**proposed 2026-11-27**)
+
+M5's first acceptance criterion is that nothing youth-authored reaches another user before
+screening. A young person's own messages went straight through; only adults' messages to them
+were screened (D53). Sam chose on 2026-11-27: screen every message a young person writes; hold
+one that shares personal information for a moderator, telling them why; and, answering Q8 in
+part, local screening only for now.
+- **The screen** (`LocalPiiScreen`, the first `IScreeningService`): rules on our own servers find
+  a phone number (7 to 15 digits, a leading bracket allowed; a year range like "2025-2026" isn't
+  one), an email address (spelt-out "(at)" and "(dot)" too), a street address (a house number and
+  a street word within three words, English only), a social handle and a link, each with its
+  offsets and kind; overlaps go to the first found. Any of them holds; nothing else does. No
+  model reads the text and nothing leaves. It errs towards holding: "4 on Main St" is held.
+- **Every message a young person writes** goes through it before it's stored as sent, whoever
+  it's to (`MessageScreen.YouthPii`); an adult's message to a young person still goes through
+  D53's contact-exchange screen. Anything but a pass is held, a redaction or a block too, so the
+  moderator decides. A screen that throws holds the message (`screening_error`): fail closed.
+- **Recorded:** a `screening_result` row for each, provider `local_pii`, the decision, the kinds
+  as labels, the spans (`pii_spans`: start, length, kind), the rules' version (`local-pii-1`)
+  and how long it took. D116's history shows it.
+- **Told why:** the sender's own held message carries its reasons (`MessageView.HeldFor`,
+  `ConversationMessage.HeldFor` in the app), and the app says "Held for a moderator because it
+  seems to share a phone number. Only you can see it. To send it now, write it again without
+  that." Others never see it.
+- **The queue:** D114's held messages now hold young people's too; the moderator sees who wrote it
+  by role, and "a home address" among the reasons. Release and removal are as D114.
+- **Q8, in part:** local PII detection is built and always on. Abuse classification waits for a
+  hosted provider and a data-processing agreement; nothing is built for it yet.
+- **Not in this:** names, schools and ages (no rule finds them well); other languages' street
+  addresses; screening the reporter's own words in a report (only moderators read them).
+
+No schema change. Tests: `LocalPiiScreenTests` (each kind and where, ordinary writing passes,
+the outcome), `MessagingApiTests` (a young person's number held, them told why, staff not
+seeing it, both messages recorded with the screen's decision and the span).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming
@@ -4037,6 +4072,9 @@ but youth-authored text leaves the perimeter), or a local model plus
 regex/NER for PII (nothing leaves, weaker on abuse detection). I lean local
 PII detection always, plus a hosted abuse classifier behind a tenant feature
 flag that is **off** until a DPA exists. Your call.
+
+*Answered in part (2026-11-27, D117):* local PII detection is built and always on for what young
+people write. The hosted abuse classifier, and who provides it, is still open.
 
 **Q9 — SMS provider and A2P registration.** US A2P 10DLC registration takes
 weeks and requires a brand and campaign. If SMS is in scope for M3 this needs

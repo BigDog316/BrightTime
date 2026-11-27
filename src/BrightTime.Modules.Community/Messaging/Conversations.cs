@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json;
+using BrightTime.Abstractions.Screening;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
@@ -22,11 +24,25 @@ namespace BrightTime.Modules.Community.Messaging;
 public sealed record ConversationSummary(Guid Id, Guid OrgId, string OrgName, string Kind, string? Subject, bool IsOrgVisible, bool IncludesMinor, DateTimeOffset? LastMessageAt, int Unread, DateTimeOffset? ClosedAt);
 
 /// <summary>
-/// A message as one participant sees it. A held message is shown only to its sender, marked so;
-/// so is one a moderator removed (D114).
+/// A message as one participant sees it. A held message is shown only to its sender, marked so,
+/// with <see cref="HeldFor"/> the screen's reasons, so they can rewrite it (D117); so is one a
+/// moderator removed (D114).
 /// </summary>
 [YouthData]
-public sealed record MessageView(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt);
+public sealed record MessageView(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt, IReadOnlyList<string>? HeldFor = null);
+
+/// <summary>Which screen a message passes before anyone else sees it.</summary>
+internal enum MessageScreen
+{
+    /// <summary>Between adults: none.</summary>
+    None,
+
+    /// <summary>An adult's message to a young person: an attempt to take it off the platform (D53).</summary>
+    ContactExchange,
+
+    /// <summary>A young person's own message: personal information (D117).</summary>
+    YouthPii,
+}
 
 /// <summary>
 /// A thread as a participant sees it. <see cref="ReadByOrganisation"/> is what the screen tells
@@ -71,13 +87,17 @@ public sealed class Conversations(
     IIdentityQueries identity,
     IDirectoryQueries directory,
     IEnrolmentQueries enrolments,
-    IListingDetails listings)
+    IListingDetails listings,
+    IScreeningService screener)
 {
     public const string Read = "messaging.read";
     public const string Sent = "messaging.sent";
 
     public const int MaxBody = 8000;
     public const int MaxSubject = 200;
+
+    /// <summary>The reason a message is held when its screen failed (D117): it fails closed.</summary>
+    public const string ScreeningError = "screening_error";
 
     public const string NewMessageKind = "new_message";
     public const string NewMessageTitle = "notify.message.new";
@@ -163,7 +183,7 @@ public sealed class Conversations(
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-            await WriteAsync(conversation, staff, text, ownerIsMinor, ct).ConfigureAwait(false);
+            await WriteAsync(conversation, staff, text, ownerIsMinor ? MessageScreen.ContactExchange : MessageScreen.None, ct).ConfigureAwait(false);
             await AuditAsync(Sent, conversation, [conversation.Id], ct, org).ConfigureAwait(false);
             return Result<ConversationView>.Success(await ViewAsync(conversation, staff, ct).ConfigureAwait(false));
         }, cancellationToken);
@@ -259,7 +279,7 @@ public sealed class Conversations(
             }
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await WriteAsync(conversation, staff, text, recipients.Any(r => r.Minor), ct).ConfigureAwait(false);
+            await WriteAsync(conversation, staff, text, recipients.Any(r => r.Minor) ? MessageScreen.ContactExchange : MessageScreen.None, ct).ConfigureAwait(false);
             await AuditAsync(Sent, conversation, [conversation.Id], ct, org).ConfigureAwait(false);
             return Result<BroadcastResult>.Success(new BroadcastResult(await ViewAsync(conversation, staff, ct).ConfigureAwait(false), recipients.Count, skipped));
         }, cancellationToken);
@@ -330,20 +350,59 @@ public sealed class Conversations(
                 return Result<MessageView>.Failure(Error.Forbidden("messaging.broadcast", "This is an announcement; it takes no replies."));
             }
 
-            bool screen = conversation.IncludesMinor && !me.IsMinor;
+            // Everything a young person writes is screened (D117); an adult's message to one, for contact exchange (D53).
+            MessageScreen screen = me.IsMinor ? MessageScreen.YouthPii : conversation.IncludesMinor ? MessageScreen.ContactExchange : MessageScreen.None;
             MessageRecord message = await WriteAsync(conversation, user, text, screen, ct).ConfigureAwait(false);
             me.LastReadAt = message.SentAt;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Sent, conversation, [conversation.Id], ct).ConfigureAwait(false);
-            return Result<MessageView>.Success(new MessageView(message.Id, true, me.ParticipantRole, message.Body, message.State, message.SentAt));
+            return Result<MessageView>.Success(new MessageView(message.Id, true, me.ParticipantRole, message.Body, message.State, message.SentAt,
+                message.State == MessageStates.Held ? Moderation.HeldMessages.Reasons(message.ScreenResult) : null));
         }, cancellationToken);
 
     // ---- helpers -----------------------------------------------------------------------------
 
     /// <summary>Writes a message (held when screening flags it) and tells the other participants of a sent one.</summary>
-    internal async Task<MessageRecord> WriteAsync(ConversationRecord conversation, UserId sender, string text, bool screen, CancellationToken ct)
+    internal async Task<MessageRecord> WriteAsync(ConversationRecord conversation, UserId sender, string text, MessageScreen screen, CancellationToken ct)
     {
-        IReadOnlyList<string> reasons = screen ? ContactExchangeScreen.Reasons(text) : [];
+        // Each screen's verdict: held or not, why, where in the text, and how long it took.
+        string decision = "pass";
+        IReadOnlyList<string> reasons = [];
+        IReadOnlyList<PiiSpan> spans = [];
+        string? version = null;
+        int? latency = null;
+        if (screen == MessageScreen.ContactExchange)
+        {
+            reasons = ContactExchangeScreen.Reasons(text);
+            decision = reasons.Count > 0 ? "hold" : "pass";
+        }
+        else if (screen == MessageScreen.YouthPii)
+        {
+            long started = Stopwatch.GetTimestamp();
+            ScreeningOutcome outcome;
+            try
+            {
+                outcome = await screener.ScreenTextAsync(text, new ScreeningContext(
+                    AuthorIsMinor: true, AudienceIncludesMinor: conversation.IncludesMinor, AuthorIsAdultAddressingMinor: false, Surface: "message"), ct).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // Fails closed: a screen that breaks holds the message.
+                outcome = new ScreeningOutcome(ScreeningDecision.Error, [], new Dictionary<string, double>(StringComparer.Ordinal), null, e.GetType().Name);
+            }
+
+            latency = (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            version = outcome.ModelVersion;
+            spans = outcome.PiiSpans;
+            decision = outcome.Decision.ToString().ToLowerInvariant();
+            reasons = outcome.Decision switch
+            {
+                ScreeningDecision.Pass => [],
+                ScreeningDecision.Error => [ScreeningError],
+                _ => outcome.Labels.Count > 0 ? [.. outcome.Labels.Keys] : [ScreeningError],
+            };
+        }
+
         MessageRecord message = new()
         {
             Id = UuidV7.NewId(),
@@ -351,12 +410,13 @@ public sealed class Conversations(
             ConversationId = conversation.Id,
             SenderUserId = sender.Value,
             Body = text,
-            State = reasons.Count > 0 ? MessageStates.Held : MessageStates.Sent,
-            ScreenResult = screen ? JsonSerializer.Serialize(new { reasons }) : null,
+            // Whatever isn't a pass is held for a moderator: a redaction or a block too (D117).
+            State = decision == "pass" ? MessageStates.Sent : MessageStates.Held,
+            ScreenResult = screen == MessageScreen.None ? null : JsonSerializer.Serialize(new { reasons }),
             SentAt = clock.StoredNow(),
         };
         db.Messages.Add(message);
-        if (screen)
+        if (screen != MessageScreen.None)
         {
             // When and why, as its own record (D116): the moderation history reads the hold from here.
             db.ScreeningResults.Add(new ScreeningResultRecord
@@ -365,10 +425,12 @@ public sealed class Conversations(
                 TenantId = conversation.TenantId,
                 TargetKind = "message",
                 TargetId = message.Id,
-                Provider = ContactExchangeScreen.Provider,
-                Decision = reasons.Count > 0 ? "hold" : "pass",
+                Provider = screen == MessageScreen.YouthPii ? Screening.LocalPiiScreen.Provider : ContactExchangeScreen.Provider,
+                Decision = decision,
                 Labels = JsonSerializer.Serialize(reasons.ToDictionary(r => r, _ => 1.0)),
-                PiiSpans = "[]",
+                PiiSpans = JsonSerializer.Serialize(spans.Select(s => new { start = s.Start, length = s.Length, kind = s.Kind })),
+                ModelVersion = version,
+                LatencyMs = latency,
                 CreatedAt = message.SentAt,
             });
         }
@@ -462,7 +524,8 @@ public sealed class Conversations(
         string org = await directory.GetOrganisationNameAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false) ?? "";
         return new ConversationView(conversation.Id, conversation.OrgId, org, conversation.ConversationKind, conversation.Subject, readByOrganisation,
             [.. people.Select(p => p.ParticipantRole).Distinct().Order(StringComparer.Ordinal)],
-            [.. messages.Select(m => new MessageView(m.Id, m.SenderUserId == viewer.Value, roles.GetValueOrDefault(m.SenderUserId, ""), m.Body, m.State, m.SentAt))]);
+            [.. messages.Select(m => new MessageView(m.Id, m.SenderUserId == viewer.Value, roles.GetValueOrDefault(m.SenderUserId, ""), m.Body, m.State, m.SentAt,
+                m.State == MessageStates.Held && m.SenderUserId == viewer.Value ? Moderation.HeldMessages.Reasons(m.ScreenResult) : null))]);
     }
 
     private async Task<string> NameAsync(Guid org, Dictionary<Guid, string> names, CancellationToken ct)
@@ -499,6 +562,7 @@ public static class CommunityModule
     public static IServiceCollection AddCommunity(this IServiceCollection services)
     {
         services.AddScoped<Conversations>();
+        services.AddSingleton<IScreeningService, Screening.LocalPiiScreen>();
         services.AddScoped<Moderation.HeldMessages>();
         services.AddScoped<Moderation.Reports>();
         services.AddScoped<Moderation.ModerationHistory>();

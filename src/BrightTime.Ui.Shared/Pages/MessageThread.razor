@@ -60,6 +60,10 @@ else
                     }
                 </p>
                 <p class="body" dir="auto">@m.Body</p>
+                @if (m.FromMe && m.IsHeld && HeldFor(m) is { } why)
+                {
+                    <p class="hint">@why</p>
+                }
                 @if (!m.FromMe && !m.IsHeld && !m.IsRemoved)
                 {
                     @if (_reported.Contains(m.Id))
@@ -171,13 +175,19 @@ else
 
             _conversation = c with { Messages = [.. c.Messages, message] };
             _draft = string.Empty;
-            _sendNote = message.IsHeld ? T["app.messages.sent_held"] : T["app.messages.sent"];
+            _sendNote = message.IsHeld ? HeldFor(message) ?? T["app.messages.sent_held"] : T["app.messages.sent"];
         }
         finally
         {
             _busy = false;
         }
     }
+
+    /// <summary>Why one of the person's own messages is held, in words, so they can rewrite it (D117).</summary>
+    private string? HeldFor(ConversationMessage m) =>
+        m.HeldFor is { Count: > 0 } reasons
+            ? T.Format("app.messages.held_for", ("what", string.Join(", ", reasons.Select(r => T.Has("app.messages.held_reason." + r) ? T["app.messages.held_reason." + r] : r))))
+            : null;
 
     private void StartReport(Guid message)
     {

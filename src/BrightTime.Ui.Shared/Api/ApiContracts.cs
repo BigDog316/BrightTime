@@ -436,10 +436,10 @@ public sealed record Conversation(
 }
 
 /// <summary>
-/// A message; a held one is shown only to its sender, until a moderator lets it through, and so is
-/// one a moderator removed (D114).
+/// A message; a held one is shown only to its sender, until a moderator lets it through, with
+/// <see cref="HeldFor"/> the screen's reasons (D117); and so is one a moderator removed (D114).
 /// </summary>
-public sealed record ConversationMessage(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt)
+public sealed record ConversationMessage(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt, IReadOnlyList<string>? HeldFor = null)
 {
     public bool IsHeld => State == "held";
 

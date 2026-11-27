@@ -116,8 +116,10 @@ close**.
 
 When an organisation's staff write to a young person, BrightTime holds any message that looks like
 an attempt to move the conversation elsewhere: a phone number, an email address, a link, a social
-media handle, another messaging app, or a request to talk privately. Until a moderator decides,
-only the sender sees it.
+media handle, another messaging app, or a request to talk privately. It also holds any message a
+young person writes that seems to share their personal information: a phone number, an email
+address, a home address, a social media handle or a link. Until a moderator decides, only the
+sender sees it, and a young person is told why.
 
 **Moderation** lists them under **Held messages**, oldest first. Each shows the organisation, the conversation's
 subject, who wrote it (by role, such as staff), why it was held, and the messages just before it.

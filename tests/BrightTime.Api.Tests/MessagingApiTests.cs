@@ -256,6 +256,51 @@ public sealed class MessagingApiTests(ApiFixture api)
     }
 
     /// <summary>
+    /// What a young person writes is screened before anyone else sees it (D117): a message sharing
+    /// their phone number is held, shown only to them with why, and recorded with where in the
+    /// text; an ordinary one is screened and sent.
+    /// </summary>
+    [Fact]
+    public async Task A_young_persons_message_sharing_their_number_is_held_and_they_are_told_why()
+    {
+        RequireDatabase();
+        (Guid listing, Guid org, string staffEmail) = StaffedListing();
+        (string teenEmail, Guid teenId) = await NewTeenAsync();
+        using HttpClient staff = await SignedInAsync(staffEmail);
+        using HttpClient teen = await SignedInAsync(teenEmail);
+        Guid application = await ApplyAsync(teen, listing, "Yaa", 15);
+        await api.ExecuteAsync("insert into identity.youth_capability (user_id, tenant_id, is_under_13, has_account_consent, can_be_messaged_by_org) values (@u, @t, false, true, true)",
+            ("u", teenId), ("t", api.Data.TenantId));
+        Guid conversation = (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/conversations",
+            new { applicationId = application, body = "Welcome, Yaa." }, Ct), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+
+        // Held, and the young person is told why.
+        JsonElement held = await JsonAsync(await teen.PostAsJsonAsync($"api/v1/conversations/{conversation}/messages",
+            new { body = "Thanks! My number is 914-555-0104 if you need me." }, Ct), HttpStatusCode.Created);
+        held.GetProperty("state").GetString().ShouldBe("held");
+        held.GetProperty("heldFor").EnumerateArray().Select(r => r.GetString()).ShouldBe(["phone"]);
+        JsonElement sent = await JsonAsync(await teen.PostAsJsonAsync($"api/v1/conversations/{conversation}/messages",
+            new { body = "See you Tuesday." }, Ct), HttpStatusCode.Created);
+        sent.GetProperty("state").GetString().ShouldBe("sent");
+
+        // Staff see only the ordinary one; the young person sees both, the held one with why.
+        string[] staffSee = [.. (await JsonAsync(await staff.GetAsync(new Uri($"api/v1/conversations/{conversation}", UriKind.Relative), Ct))).GetProperty("messages")
+            .EnumerateArray().Select(m => m.GetProperty("body").GetString()!)];
+        staffSee.ShouldBe(["Welcome, Yaa.", "See you Tuesday."]);
+        JsonElement mine = (await JsonAsync(await teen.GetAsync(new Uri($"api/v1/conversations/{conversation}", UriKind.Relative), Ct))).GetProperty("messages")
+            .EnumerateArray().Single(m => m.GetProperty("state").GetString() == "held");
+        mine.GetProperty("heldFor").EnumerateArray().Select(r => r.GetString()).ShouldBe(["phone"]);
+
+        // Each screened, with the decision, the kind and where it is.
+        Guid heldId = held.GetProperty("id").GetGuid();
+        (await api.ScalarAsync<string>(
+            "select provider || '/' || decision || '/' || (pii_spans->0->>'kind') || '/' || (pii_spans->0->>'start') || '/' || model_version from community.screening_result where target_id = @m",
+            ("m", heldId))).ShouldBe("local_pii/hold/phone/21/local-pii-1");
+        (await api.ScalarAsync<string>("select provider || '/' || decision from community.screening_result where target_id = @m", ("m", sent.GetProperty("id").GetGuid())))
+            .ShouldBe("local_pii/pass");
+    }
+
+    /// <summary>
     /// Reporting a message (D115): a young person reports staff's message; grooming is critical
     /// whoever says so, and the county's moderators, none of the organisation's, are emailed; a
     /// second report of it returns the first; their own message, one in someone else's

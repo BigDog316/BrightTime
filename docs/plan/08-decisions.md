@@ -4072,7 +4072,7 @@ a mute stopping a message and a new conversation, lifting it, a suspension's sta
 booked end, lifting it, the history in order, a young person and the organisation refused),
 `SuspensionEndsTests` (an ended suspension, a longer one, one with no end), `RolePermissionTests`.
 
-### D120 — Spaces and posts (**proposed 2026-11-27**)
+### D120 — Spaces and posts (**accepted 2026-11-27**)
 
 M5's social learning space had a schema and no code. Sam chose on 2026-11-27: spaces and posts
 first; the activity's enrolled young people join by themselves and staff are chosen; a held post

@@ -76,7 +76,7 @@ migrations-history table name). Other modules see it only through its `.Contract
 | Enrollment | `enrollment` | Family profile, shares, forms, eligibility, applications, waivers and signatures, seats and waitlists, enrolments, fees and payments | Built |
 | Attendance | `attendance` | Attendance records, sync batches, check-in tokens, devices | Built |
 | Notifications | `notify` | Push devices, preferences, the inbox, deliveries | Built |
-| Community | `community` | Conversations, messages, broadcasts, screening holds (M3); the moderation queue for held messages (D114). Spaces and posts are M5 | Messaging and held-message moderation built |
+| Community | `community` | Conversations, messages, broadcasts, screening holds (M3); the moderation queue for held messages (D114) and reported messages (D115). Spaces and posts are M5 | Messaging, reports and moderation of messages built |
 | Learning | `learning` | Learner profiles, participation, issuers and keys, badge classes and assertions, playlists and progress, unlock rules (D65 to D67). Goals, skills, projects and exports to come | Partly built |
 | Workforce, Landscape, Analytics, Integrations | `workforce`, `landscape`, `analytics`, `integration` | Mentors and gigs; asset mapping and surveys; suppressed rollups; external systems | Schema only |
 

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Modules.Community.Messaging;
+using BrightTime.Modules.Community.Moderation;
 using BrightTime.Modules.Identity.Authorization;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -14,6 +15,9 @@ public sealed record StartConversationRequest(Guid? EnrollmentId, Guid? Applicat
 public sealed record MessageRequest(string? Body);
 
 public sealed record BroadcastRequest(Guid ListingId, string? Subject, string? Body);
+
+/// <summary>A report (D115): of a <c>message</c>, so far, with one of its reasons and what happened, if the reporter says.</summary>
+public sealed record ReportRequest(string? TargetKind, Guid TargetId, string? Reason, string? Details);
 
 /// <summary>
 /// Messaging (M3b, D53): an organisation's staff open conversations with families; everyone in a
@@ -35,7 +39,28 @@ public static class MessagingEndpoints
             .WithMetadata(new YouthRecordAttribute(Conversations.Sent)).Produces<ConversationView>(StatusCodes.Status201Created);
         api.MapPost("/org/{orgId:guid}/broadcasts", BroadcastAsync).RequireAuthorization()
             .WithMetadata(new YouthRecordAttribute(Conversations.Sent)).Produces<BroadcastResult>(StatusCodes.Status201Created);
+
+        // plan/05's "report anything"; a message someone else wrote in your conversation, so far (D115).
+        api.MapPost("/reports", ReportAsync).RequireAuthorization().Produces<ReportReceipt>(StatusCodes.Status201Created);
         return api;
+    }
+
+    private static async Task<IResult> ReportAsync(ReportRequest body, ClaimsPrincipal user, BrightTime.Modules.Community.Moderation.Reports reports, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (body.TargetKind != "message")
+        {
+            return ApiProblems.From(Error.Validation("reports.target", "Only a message can be reported here, so far."));
+        }
+
+        Result<ReportReceipt> made = await reports.ReportMessageAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct);
+        if (made.IsSuccess)
+        {
+            return Results.Created($"/api/v1/reports/{made.Value.Id}", made.Value);
+        }
+
+        audit.Record(new AuditAccess { Action = BrightTime.Modules.Community.Moderation.Reports.Made, Outcome = AuditOutcome.Deny, SubjectKind = "message", SubjectIds = [body.TargetId], Reason = made.Error.Code });
+        return ApiProblems.From(made.Error);
     }
 
     private static async Task<IResult> ListAsync(ClaimsPrincipal user, Conversations conversations, CancellationToken ct) =>

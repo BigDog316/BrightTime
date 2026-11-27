@@ -301,6 +301,11 @@ at the top of your **Inbox**. Tapping a new-message notification opens the conve
   see anything that has arrived since you opened it.
 - **Announcements** go to every family in an activity. You can't reply to one, and nobody sees who
   else got it.
+- **Report** a message that worries you: tap **Report** under it, choose what's wrong, and say what
+  happened if you like. A moderator from the county looks at it, within the hour if it's about
+  someone asking to keep secrets or meet up, or someone who might hurt themselves. The message
+  stays until they decide. If someone is in danger right now, call 911; if you're thinking about
+  hurting yourself, call or text 988.
 
 A young person who has their own account sees the conversations they are in. Programs can only
 message a young person once their consent allows it; until then, **Messages** says so.

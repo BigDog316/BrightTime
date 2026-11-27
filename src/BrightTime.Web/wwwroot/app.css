@@ -446,6 +446,18 @@ a.secondary {
     padding-block: 1rem;
 }
 
+/* D115: a report's severity, and the critical ones marked down the side. */
+.report .severity {
+    color: var(--bt-muted);
+    font-size: 0.95rem;
+    font-weight: normal;
+}
+
+.report-critical {
+    border-inline-start: 0.25rem solid var(--bt-error);
+    padding-inline-start: 0.75rem;
+}
+
 .held-body {
     background: var(--bt-tint);
     border-inline-start: 0.25rem solid var(--bt-muted);

@@ -60,6 +60,12 @@ public interface IIdentityQueries
 
     /// <summary>The addresses of these adult accounts, for a notice by email (D98). Young people and children are left out.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetAdultEmailsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The tenant's live accounts whose roles grant <paramref name="permission"/>, such as the
+    /// moderators to tell of a critical report (D115). By role, as the sign-in claims are built.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetUsersWithPermissionAsync(string permission, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

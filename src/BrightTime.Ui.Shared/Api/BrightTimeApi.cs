@@ -260,6 +260,10 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<ConversationMessage>> SendMessageAsync(Guid id, string body, CancellationToken ct = default) =>
         SendAsync<ConversationMessage>(HttpMethod.Post, $"conversations/{id:D}/messages", new { body }, signedIn: true, ct);
 
+    /// <summary>Reports a message someone else wrote in one of the person's conversations (D115).</summary>
+    public Task<ApiResult<ReportReceipt>> ReportMessageAsync(Guid messageId, string reason, string? details, CancellationToken ct = default) =>
+        SendAsync<ReportReceipt>(HttpMethod.Post, "reports", new { targetKind = "message", targetId = messageId, reason, details }, signedIn: true, ct);
+
     // ---- guardians, children and consent (D31, D34, D35) -------------------------------------
 
     public Task<ApiResult<IReadOnlyList<Child>>> ChildrenAsync(CancellationToken ct = default) =>

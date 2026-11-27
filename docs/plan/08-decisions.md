@@ -3874,6 +3874,57 @@ the sender's view, no reason, twice, the sender and the admin reading along refu
 conversation, a provider kept out, a moderator kept out of the organisers' other pages),
 `RolePermissionTests`, `KettleSeedTests`, and the route matrix covers the new page.
 
+### D115 — Reporting a message (**proposed 2026-11-27**)
+
+D114 gave moderators what screening held; nothing let a person report what got through. Sam chose
+on 2026-11-27: reporting a message next; a message, by the people in its conversation; a moderator
+dismisses, removes or escalates, each with a note, and moderators are told of a critical report
+at once.
+- **Making a report:** `POST /api/v1/reports {targetKind: "message", targetId, reason, details?}`
+  (plan/05's "report anything", messages only so far: `reports.target` otherwise). Anyone still in
+  the conversation reports a sent message someone else wrote: a young person, a family, staff, or
+  the admin reading along. Anything else is `reports.not_found`, as for a message they can't see.
+  The reasons are `ck_report_reason`'s nine that fit a message; the app words them for a young
+  reader ("Asking to keep secrets, meet up, or talk somewhere else" for `grooming_concern`) and,
+  in the form, says to call 911 if someone is in danger now and 988 for thoughts of self-harm.
+  Reporting the same message again while the first waits returns the first. The message stays
+  until a moderator decides; the app marks it reported for the rest of that visit.
+- **Severity is the reason's, not the reporter's:** `grooming_concern` and `self_harm` critical
+  (the schema's comment on `ck_report_reason`); sexual content, violence, harassment and hate
+  high; the rest normal (`ReportReasons.SeverityOf`). The queue sorts by that rank:
+  `ix_report_queue`'s `severity desc` would sort the text, putting normal first, so the order is
+  the application's, not the index's.
+- **Told at once:** a critical report books one email per moderator (`moderation.triage`, by role:
+  `IIdentityQueries.GetUsersWithPermissionAsync`), none to anyone of the conversation's
+  organisation, the reporter or the sender (`CriticalReportNotice`, `CriticalReportMailHandler`).
+  The email gives the reason in words and a link to the queue, and nothing of the message.
+- **The queue:** `/organiser/moderation` is now **Moderation**, reports first, then D114's held
+  messages. Each report shows its reason and severity, who reported it by role and what they
+  said, the organisation, the message with the three before it, and, for a critical report not
+  acknowledged within the hour, that it's overdue.
+- **Deciding:** **Take this on** acknowledges a report and assigns it (`triaged`). Then, with a
+  note of 1 to 1,000 characters: **Remove the message** (state `removed`, as D114's removal, and
+  every report of that message waiting is `actioned` with the note); **Dismiss the report**
+  (`dismissed`, the message stays); or **Escalate**, the mandated-reporter hand-off: `escalated`
+  with the note of what was done and who was told, the message removed too if the moderator ticks
+  it. Escalation is offered on every report, not only critical ones: a moderator may find
+  grooming behind a "spam" report. Each decision acknowledges the report if nobody had, is a
+  `moderation_action` row with its `report_id` (`remove`, `no_action`, `escalate_external`), and
+  an audit event (`reports.acknowledged`, `.dismissed`, `.message_removed`, `.escalated`; reading
+  the queue is `reports.read`). Nobody decides a report of their own organisation's conversation,
+  their own report or their own message (`reports.own_organisation`); a decided report isn't
+  decided again (`reports.not_waiting`).
+- **Not in this:** reports of listings, users or spaces; telling the reporter the outcome;
+  a report button in the provider console (staff report through the app or the API); a list of
+  escalated reports to follow up; and a second email if a critical report is still waiting after
+  the hour.
+
+No schema change: `community.report` was in `70-community.sql` from the start. Tests:
+`MessagingApiTests` (reporting, severity, the emails booked, once, refusals),
+`ReportQueueTests` (the order and overdue mark, taking on, escalating with removal, dismissing,
+removing with every report of the message settled, the records, the organisation refused, a
+decided report), `CriticalReportMailTests` (the email).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

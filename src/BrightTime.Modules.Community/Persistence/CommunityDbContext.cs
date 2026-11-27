@@ -110,7 +110,50 @@ public sealed class ModerationActionRecord
     public DateTimeOffset OccurredAt { get; init; }
 }
 
-/// <summary>The Community module's context (M3b): messaging, and the moderation of what screening holds (D114).</summary>
+/// <summary>A report of something someone saw (D115, <c>community.report</c>): so far, a message.</summary>
+public sealed class ReportRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public required string TargetKind { get; init; }
+
+    public Guid TargetId { get; init; }
+
+    public Guid? TargetSpaceId { get; init; }
+
+    public Guid? ReporterUserId { get; init; }
+
+    public bool ReporterIsMinor { get; init; }
+
+    public required string ReasonCode { get; init; }
+
+    public string? Details { get; init; }
+
+    public required string Severity { get; init; }
+
+    public required string State { get; set; }
+
+    public Guid? AssignedTo { get; set; }
+
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+
+    public DateTimeOffset? ResolvedAt { get; set; }
+
+    public string? Resolution { get; set; }
+
+    public DateTimeOffset? EscalatedAt { get; set; }
+
+    public string? EscalationNote { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>
+/// The Community module's context (M3b): messaging, the moderation of what screening holds (D114),
+/// and reports (D115).
+/// </summary>
 public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -126,6 +169,8 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
     public DbSet<MessageRecord> Messages => Set<MessageRecord>();
 
     public DbSet<ModerationActionRecord> ModerationActions => Set<ModerationActionRecord>();
+
+    public DbSet<ReportRecord> Reports => Set<ReportRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -165,6 +210,15 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.TargetKind, x.TargetId, x.OccurredAt }).IsDescending(false, false, true);
             b.HasIndex(x => new { x.ActorUserId, x.OccurredAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<ReportRecord>(b =>
+        {
+            b.ToTable("report");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.TenantId, x.Severity, x.CreatedAt }).IsDescending(false, true, false).HasFilter("state in ('open','triaged')");
+            b.HasIndex(x => new { x.TargetKind, x.TargetId });
         });
 
         modelBuilder.ApplySnakeCaseNames();

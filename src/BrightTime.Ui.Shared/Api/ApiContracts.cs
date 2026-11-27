@@ -446,6 +446,12 @@ public sealed record ConversationMessage(Guid Id, bool FromMe, string SenderRole
     public bool IsRemoved => State == "removed";
 }
 
+/// <summary>A report taken (D115): a critical one is looked at within the hour.</summary>
+public sealed record ReportReceipt(Guid Id, string Reason, string Severity)
+{
+    public bool IsCritical => Severity == "critical";
+}
+
 /// <summary>A waiver an application asks for (D47), signed against its exact text's <see cref="Hash"/>.</summary>
 public sealed record ApplicationWaiver(Guid WaiverId, string Title, int Version, string BodyMarkdown, string Hash, bool IsRequired, DateTimeOffset? SignedAt);
 

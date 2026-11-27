@@ -483,6 +483,7 @@ public static class CommunityModule
     {
         services.AddScoped<Conversations>();
         services.AddScoped<Moderation.HeldMessages>();
+        services.AddScoped<Moderation.Reports>();
         return services;
     }
 }

@@ -254,4 +254,67 @@ public sealed class MessagingApiTests(ApiFixture api)
         await ProblemAsync(await lonelyAdmin.PostAsJsonAsync($"api/v1/org/{lonelyOrg}/broadcasts", new { listingId = lonely, body = "Hello all." }, Ct),
             HttpStatusCode.Conflict, "messaging.no_recipients");
     }
+
+    /// <summary>
+    /// Reporting a message (D115): a young person reports staff's message; grooming is critical
+    /// whoever says so, and the county's moderators, none of the organisation's, are emailed; a
+    /// second report of it returns the first; their own message, one in someone else's
+    /// conversation, a reason that isn't one, or anything but a message is refused.
+    /// </summary>
+    [Fact]
+    public async Task A_young_person_reports_a_message_and_a_critical_report_tells_the_countys_moderators()
+    {
+        RequireDatabase();
+        (Guid listing, Guid org, string staffEmail) = StaffedListing();
+        (string teenEmail, Guid teenId) = await NewTeenAsync();
+        using HttpClient staff = await SignedInAsync(staffEmail);
+        using HttpClient teen = await SignedInAsync(teenEmail);
+        Guid application = await ApplyAsync(teen, listing, "Ama", 15);
+        await api.ExecuteAsync("insert into identity.youth_capability (user_id, tenant_id, is_under_13, has_account_consent, can_be_messaged_by_org) values (@u, @t, false, true, true)",
+            ("u", teenId), ("t", api.Data.TenantId));
+        Guid conversation = (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/org/{org}/conversations",
+            new { applicationId = application, body = "You're doing great. Keep this between us." }, Ct), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+        Guid message = await api.ScalarAsync<Guid>("select id from community.message where conversation_id = @c", ("c", conversation));
+        Guid own = (await JsonAsync(await teen.PostAsJsonAsync($"api/v1/conversations/{conversation}/messages", new { body = "OK." }, Ct), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+
+        // Critical whoever reports it, and every moderator not of the organisation is emailed.
+        JsonElement made = await JsonAsync(await teen.PostAsJsonAsync("api/v1/reports",
+            new { targetKind = "message", targetId = message, reason = "grooming_concern", details = "Asked me to keep a secret." }, Ct), HttpStatusCode.Created);
+        made.GetProperty("severity").GetString().ShouldBe("critical");
+        Guid report = made.GetProperty("id").GetGuid();
+        (await api.ScalarAsync<string>("select state || '/' || reporter_is_minor::text || '/' || details from community.report where id = @r", ("r", report)))
+            .ShouldBe("open/true/Asked me to keep a secret.");
+        Guid[] members = [.. api.Data.Users.Where(u => u.Memberships.Any(m => m.OrgId == org)).Select(u => u.Id)];
+        List<Guid> told = [];
+        foreach (string payload in await api.ScalarAsync<string[]>(
+                     "select coalesce(array_agg(payload::text), '{}') from platform.job where job_type = 'community.critical_report_email' and payload->>'reportId' = @r", ("r", report.ToString())))
+        {
+            told.Add(JsonDocument.Parse(payload).RootElement.GetProperty("recipientUserId").GetGuid());
+        }
+
+        told.ShouldContain(api.Data.Users.Single(u => u.Email == "moderator@kettle.example.org").Id);
+        told.ShouldContain(api.Data.Users.Single(u => u.Email == "organiser@kettle.example.org").Id, "network organisers moderate too");
+        told.ShouldNotContain(t => members.Contains(t), "nobody of the organisation");
+
+        // Once: a second report of it while the first waits is the first.
+        (await JsonAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "message", targetId = message, reason = "harassment" }, Ct), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid().ShouldBe(report);
+
+        // Refused: their own message, one they can't see, a reason that isn't one, and anything but a message.
+        await ProblemAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "message", targetId = own, reason = "spam" }, Ct), HttpStatusCode.NotFound, "reports.not_found");
+        using (HttpClient stranger = await SignedInAsync(await api.NewAdultAsync()))
+        {
+            await ProblemAsync(await stranger.PostAsJsonAsync("api/v1/reports", new { targetKind = "message", targetId = message, reason = "spam" }, Ct), HttpStatusCode.NotFound, "reports.not_found");
+        }
+
+        await ProblemAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "message", targetId = message, reason = "boring" }, Ct), HttpStatusCode.BadRequest, "reports.reason");
+        await ProblemAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "listing", targetId = listing, reason = "spam" }, Ct), HttpStatusCode.BadRequest, "reports.target");
+
+        // A normal report books no email.
+        JsonElement spam = await JsonAsync(await staff.PostAsJsonAsync("api/v1/reports", new { targetKind = "message", targetId = own, reason = "spam" }, Ct), HttpStatusCode.Created);
+        spam.GetProperty("severity").GetString().ShouldBe("normal");
+        (await api.ScalarAsync<long>("select count(*) from platform.job where job_type = 'community.critical_report_email' and payload->>'reportId' = @r",
+            ("r", spam.GetProperty("id").GetGuid().ToString()))).ShouldBe(0);
+        (await api.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'reports.made' and @m = any(subject_ids)", ("m", message))).ShouldBeGreaterThan(0);
+    }
 }

@@ -1,0 +1,313 @@
+@page "/organiser/moderation"
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Moderation
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.ModerationPolicy)]
+@attribute [YouthRecord(HeldMessages.Read)]
+@inherits ConsoleComponent
+
+@*
+    The county's moderation queue. Reports first (D115), critical ones at the top and marked when
+    they've waited an hour unacknowledged: a moderator takes one on, then dismisses it, removes the
+    message or escalates it, with a note. Then the messages screening held (D114), oldest first: a
+    moderator releases one or removes it, with a reason. Nobody of the conversation's organisation
+    decides either.
+*@
+<PageTitle>@T["site.nav.moderation"] · BrightTime</PageTitle>
+
+<h1>@T["site.nav.moderation"]</h1>
+
+@if (Done is { Length: > 0 } && T.Has("moderation.done." + Done))
+{
+    <p class="notice success" role="status">@T["moderation.done." + Done]</p>
+}
+
+@if (_problem is not null)
+{
+    <p class="notice error" role="alert">@_problem</p>
+}
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["moderation.no_database"]</p>
+}
+else
+{
+    <section aria-labelledby="reports-heading">
+        <h2 id="reports-heading">@T["moderation.reports.heading"] <span class="count">(@_reports.Count)</span></h2>
+        <p class="hint">@T["moderation.reports.intro"]</p>
+        @if (_reports.Count == 0)
+        {
+            <p>@T["moderation.reports.none"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (QueuedReport r in _reports)
+                {
+                    string id = r.Id.ToString("N");
+                    bool invalid = _noteErrors.ContainsKey(r.Id);
+                    <li class="report report-@r.Severity">
+                        <article aria-labelledby="report-@id">
+                            <h3 id="report-@id">@T["moderation.report_reason." + r.Reason] <span class="severity">@T["moderation.severity." + r.Severity]</span></h3>
+                            @if (r.Overdue)
+                            {
+                                <p class="notice error">@T["moderation.reports.overdue"]</p>
+                            }
+                            <dl class="facts">
+                                <dt>@T["moderation.reports.reported"]</dt>
+                                <dd>@T.Format("moderation.reports.reported_by", ("role", Role(r.ReporterRole)), ("date", T.DateTime(r.ReportedAt)))</dd>
+                                @if (r.Details is { Length: > 0 } said)
+                                {
+                                    <dt>@T["moderation.reports.details"]</dt>
+                                    <dd dir="auto">@said</dd>
+                                }
+                                <dt>@T["moderation.reports.organisation"]</dt>
+                                <dd><bdi>@r.OrgName</bdi></dd>
+                                <dt>@T["moderation.held.conversation"]</dt>
+                                <dd dir="auto">@(r.Subject ?? T["provider.messages.no_subject"])</dd>
+                                <dt>@T["moderation.held.sender"]</dt>
+                                <dd>@Role(r.SenderRole) · @T.DateTime(r.SentAt)</dd>
+                                @if (r.AcknowledgedAt is { } taken)
+                                {
+                                    <dt>@T["moderation.reports.taken_on"]</dt>
+                                    <dd>@T.DateTime(taken)</dd>
+                                }
+                            </dl>
+
+                            @Earlier(r.Earlier)
+
+                            <h4>@T["moderation.reports.message"]</h4>
+                            <blockquote class="held-body" dir="auto">@r.Body</blockquote>
+                            @if (r.MessageState == "removed")
+                            {
+                                <p class="note">@T["moderation.reports.already_removed"]</p>
+                            }
+
+                            @if (r.OwnOrganisation)
+                            {
+                                <p class="notice">@T["moderation.reports.own"]</p>
+                            }
+                            else
+                            {
+                                @if (r.State == ReportStates.Open)
+                                {
+                                    <form method="post" @formname="@("take-" + id)" @onsubmit="() => AcknowledgeAsync(r.Id)">
+                                        <AntiforgeryToken />
+                                        <button type="submit">@T["moderation.reports.take_on"]</button>
+                                    </form>
+                                }
+                                <form method="post" class="reason-form" @formname="@("report-" + id)" @onsubmit="() => DecideReportAsync(r.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="note-@id">@T["moderation.reports.note"]</label>
+                                        <textarea id="note-@id" name="note" rows="3" maxlength="@Reports.MaxNote" dir="auto"
+                                                  aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? "note-" + id + "-error" : null)"></textarea>
+                                        @if (invalid)
+                                        {
+                                            <p class="field-error" id="note-@id-error">@_noteErrors[r.Id]</p>
+                                        }
+                                    </div>
+                                    <p class="hint">@T["moderation.reports.escalate_hint"]</p>
+                                    <label class="check"><input type="checkbox" name="remove_too" value="true" /> @T["moderation.reports.remove_too"]</label>
+                                    <div class="actions">
+                                        @if (CanRemove)
+                                        {
+                                            <button type="submit" name="decision" value="remove">@T["moderation.reports.remove"]</button>
+                                        }
+                                        <button type="submit" name="decision" value="dismiss" class="secondary-button">@T["moderation.reports.dismiss"]</button>
+                                        <button type="submit" name="decision" value="escalate" class="secondary-button">@T["moderation.reports.escalate"]</button>
+                                    </div>
+                                </form>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+
+    <section aria-labelledby="held-heading">
+        <h2 id="held-heading">@T["moderation.held.heading_section"] <span class="count">(@_held.Count)</span></h2>
+        <p class="hint">@T["moderation.held.intro"]</p>
+        @if (_held.Count == 0)
+        {
+            <p>@T["moderation.held.none"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (HeldMessage m in _held)
+                {
+                    string id = m.Id.ToString("N");
+                    bool invalid = _reasonErrors.ContainsKey(m.Id);
+                    <li>
+                        <article aria-labelledby="held-@id">
+                            <h3 id="held-@id">@T.Format("moderation.held.heading", ("org", Text.Name(m.OrgName)), ("date", T.DateTime(m.SentAt)))</h3>
+                            <dl class="facts">
+                                <dt>@T["moderation.held.conversation"]</dt>
+                                <dd dir="auto">@(m.Subject ?? T["provider.messages.no_subject"])</dd>
+                                <dt>@T["moderation.held.sender"]</dt>
+                                <dd>@Role(m.SenderRole)</dd>
+                                <dt>@T["moderation.held.why"]</dt>
+                                <dd>@string.Join(", ", m.Reasons.Select(Reason))</dd>
+                            </dl>
+
+                            @Earlier(m.Earlier)
+
+                            <h4>@T["moderation.held.message"]</h4>
+                            <blockquote class="held-body" dir="auto">@m.Body</blockquote>
+
+                            @if (m.OwnOrganisation)
+                            {
+                                <p class="notice">@T["moderation.held.own_org"]</p>
+                            }
+                            else
+                            {
+                                <form method="post" class="reason-form" @formname="@("decide-" + id)" @onsubmit="() => DecideAsync(m.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="reason-@id">@T["moderation.held.reason"]</label>
+                                        <textarea id="reason-@id" name="reason" rows="2" maxlength="@HeldMessages.MaxReason" dir="auto"
+                                                  aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? "reason-" + id + "-error" : null)"></textarea>
+                                        @if (invalid)
+                                        {
+                                            <p class="field-error" id="reason-@id-error">@_reasonErrors[m.Id]</p>
+                                        }
+                                    </div>
+                                    <button type="submit" name="decision" value="release">@T["moderation.held.release"]</button>
+                                    @if (CanRemove)
+                                    {
+                                        <button type="submit" name="decision" value="remove" class="secondary-button">@T["moderation.held.remove"]</button>
+                                    }
+                                </form>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private IReadOnlyList<QueuedReport> _reports = [];
+    private IReadOnlyList<HeldMessage> _held = [];
+    private string? _problem;
+    private readonly Dictionary<Guid, string> _reasonErrors = [];
+    private readonly Dictionary<Guid, string> _noteErrors = [];
+
+    private bool CanRemove => User.HasPermission(Permissions.Moderation.Remove);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.IsAvailable)
+        {
+            _reports = await Get<Reports>().ListAsync(Actor);
+            _held = await Get<HeldMessages>().ListAsync(Actor);
+        }
+    }
+
+    private async Task DecideAsync(Guid message)
+    {
+        string decision = FormValue("decision");
+        if (decision == "remove" && !CanRemove)
+        {
+            Forbid();
+            return;
+        }
+
+        HeldMessages held = Get<HeldMessages>();
+        Result result = decision == "remove"
+            ? await held.RemoveAsync(Actor, message, FormValue("reason"))
+            : await held.ReleaseAsync(Actor, message, FormValue("reason"));
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/moderation?done={(decision == "remove" ? "removed" : "released")}");
+            return;
+        }
+
+        if (result.Error!.Code == "moderation.reason")
+        {
+            _reasonErrors[message] = T.Error(result.Error);
+        }
+        else
+        {
+            _problem = T.Error(result.Error);
+        }
+    }
+
+    private async Task AcknowledgeAsync(Guid report)
+    {
+        Result result = await Get<Reports>().AcknowledgeAsync(Actor, report);
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo("/organiser/moderation?done=taken_on");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+
+    private async Task DecideReportAsync(Guid report)
+    {
+        string decision = FormValue("decision");
+        bool removeToo = FormValue("remove_too") == "true";
+        if ((decision == "remove" || removeToo) && !CanRemove)
+        {
+            Forbid();
+            return;
+        }
+
+        Reports reports = Get<Reports>();
+        string note = FormValue("note");
+        (Result result, string done) = decision switch
+        {
+            "remove" => (await reports.RemoveMessageAsync(Actor, report, note), "report_removed"),
+            "escalate" => (await reports.EscalateAsync(Actor, report, note, removeToo), "escalated"),
+            _ => (await reports.DismissAsync(Actor, report, note), "dismissed"),
+        };
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/moderation?done={done}");
+            return;
+        }
+
+        if (result.Error!.Code == "reports.note")
+        {
+            _noteErrors[report] = T.Error(result.Error);
+        }
+        else
+        {
+            _problem = T.Error(result.Error);
+        }
+    }
+
+    /// <summary>The messages before one, for context, every person by role.</summary>
+    private RenderFragment Earlier(IReadOnlyList<EarlierMessage> earlier) => __builder =>
+    {
+        if (earlier.Count > 0)
+        {
+            <h4>@T["moderation.held.earlier"]</h4>
+            <ol class="messages">
+                @foreach (EarlierMessage e in earlier)
+                {
+                    <li>
+                        <p class="note">@Role(e.SenderRole) · @T.DateTime(e.SentAt)</p>
+                        <p class="body" dir="auto">@e.Body</p>
+                    </li>
+                }
+            </ol>
+        }
+    };
+
+    private string Role(string role) => T.Has("provider.messages.role." + role) ? T["provider.messages.role." + role] : role;
+
+    private string Reason(string reason) => T.Has("moderation.reason." + reason) ? T["moderation.reason." + reason] : reason;
+}

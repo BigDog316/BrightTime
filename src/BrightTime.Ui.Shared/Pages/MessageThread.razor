@@ -60,9 +60,29 @@ else
                     }
                 </p>
                 <p class="body" dir="auto">@m.Body</p>
+                @if (!m.FromMe && !m.IsHeld && !m.IsRemoved)
+                {
+                    @if (_reported.Contains(m.Id))
+                    {
+                        <p class="hint">@T["app.messages.report.reported"]</p>
+                    }
+                    else if (_reporting == m.Id)
+                    {
+                        @ReportForm(c, m)
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="() => StartReport(m.Id)"
+                                aria-label="@T.Format("app.messages.report.label", ("sender", Sender(c, m)), ("time", T.DayTime(m.SentAt)))">@T["app.messages.report"]</button>
+                    }
+                }
             </li>
         }
     </ol>
+    @if (_reportNote is not null)
+    {
+        <p class="notice" role="status">@_reportNote</p>
+    }
 
     @* An announcement takes no reply: the hint above already says so. *@
     @if (!c.IsAnnouncement)
@@ -104,6 +124,20 @@ else
     private string _draft = string.Empty;
     private bool _busy;
 
+    // Reporting a message (D115): one form open at a time; what was reported this visit.
+    private static readonly string[] ReportReasons =
+        ["grooming_concern", "self_harm", "sexual_content", "violence", "harassment", "hate_speech", "personal_information", "spam", "safety_other"];
+
+    /// <summary>The server's limit (Reports.MaxDetails).</summary>
+    private const int MaxDetails = 2000;
+
+    private Guid? _reporting;
+    private string? _reportReason;
+    private string _reportDetails = string.Empty;
+    private ApiProblem? _reportProblem;
+    private string? _reportNote;
+    private readonly HashSet<Guid> _reported = [];
+
     protected override Task OnParametersSetAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
 
     private async Task LoadAsync()
@@ -144,6 +178,71 @@ else
             _busy = false;
         }
     }
+
+    private void StartReport(Guid message)
+    {
+        _reporting = message;
+        _reportReason = null;
+        _reportDetails = string.Empty;
+        _reportProblem = null;
+        _reportNote = null;
+    }
+
+    private async Task SendReportAsync(Guid message)
+    {
+        if (_reportReason is not { } reason)
+        {
+            return;
+        }
+
+        _busy = true;
+        _reportProblem = null;
+        try
+        {
+            ApiResult<ReportReceipt> made = await Api.ReportMessageAsync(message, reason, string.IsNullOrWhiteSpace(_reportDetails) ? null : _reportDetails);
+            if (made.Value is not { } receipt)
+            {
+                _reportProblem = made.Problem;
+                return;
+            }
+
+            _reported.Add(message);
+            _reporting = null;
+            _reportNote = T[receipt.IsCritical ? "app.messages.report.done_critical" : "app.messages.report.done"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>What's wrong, in the reporter's words if they like; who to call if someone is in danger now.</summary>
+    private RenderFragment ReportForm(Conversation c, ConversationMessage m) => __builder =>
+    {
+        string id = m.Id.ToString("N");
+        <div class="report-form">
+            <fieldset>
+                <legend>@T["app.messages.report.why"]</legend>
+                @foreach (string reason in ReportReasons)
+                {
+                    <label class="check">
+                        <input type="radio" name="report-@id" value="@reason" checked="@(_reportReason == reason)" @onchange="() => _reportReason = reason" />
+                        @T["app.messages.report.reason." + reason]
+                    </label>
+                }
+            </fieldset>
+            <p class="notice">@T["app.messages.report.danger"]</p>
+            <div class="field">
+                <label for="report-details-@id">@T["app.messages.report.details"]</label>
+                <textarea id="report-details-@id" rows="3" maxlength="@MaxDetails" dir="auto" @bind="_reportDetails" @bind:event="oninput"></textarea>
+            </div>
+            <ProblemNotice Problem="_reportProblem" />
+            <div class="actions">
+                <button type="button" class="primary" @onclick="() => SendReportAsync(m.Id)" disabled="@(_busy || _reportReason is null)">@T["app.messages.report.send"]</button>
+                <button type="button" @onclick="() => _reporting = null">@T["app.messages.report.cancel"]</button>
+            </div>
+        </div>
+    };
 
     /// <summary>Who wrote it: the person themself, or the organisation's staff, never by name.</summary>
     private string Sender(Conversation c, ConversationMessage m) =>

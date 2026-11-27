@@ -1,3 +1,4 @@
+using BrightTime.Modules.Identity.Authorization;
 using BrightTime.Modules.Identity.Consent;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Identity.Domain;
@@ -55,6 +56,21 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
                     .Select(u => new { u.Id, u.Email })
                     .ToListAsync(ct).ConfigureAwait(false))
                 .ToDictionary(u => u.Id, u => u.Email!), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<Guid>> GetUsersWithPermissionAsync(string permission, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(permission);
+        return db.InTransactionAsync<IReadOnlyList<Guid>>(async ct => await db.Database.SqlQuery<Guid>(
+                $"""
+                select distinct ur.user_id as "Value"
+                from identity.app_user_role ur
+                join identity.app_role r on r.id = ur.role_id and r.tenant_id = platform.current_tenant_id()
+                join identity.app_role_claim rc on rc.role_id = r.id and rc.claim_type = {BrightTimeClaims.Permission} and rc.claim_value = {permission}
+                join identity.app_user u on u.id = ur.user_id and u.deleted_at is null and u.status = 'active'
+                order by 1
+                """)
+            .ToListAsync(ct).ConfigureAwait(false), cancellationToken);
     }
 
     private async Task<YouthCapabilities> GetCapabilitiesCoreAsync(

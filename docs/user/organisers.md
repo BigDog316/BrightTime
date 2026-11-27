@@ -2,13 +2,14 @@
 
 This guide is for the county's network organisers: the people who decide which organisations and
 listings appear on BrightTime, and who run the site itself. Sign in, then use the links at the top
-of the console: **Review queue**, **Held messages**, **Taxonomy**, **Collections**, **Neighbourhood pages**, **Wording** and **Audit log**.
-The county's moderators see **Held messages** alone.
+of the console: **Review queue**, **Moderation**, **Taxonomy**, **Collections**, **Neighbourhood pages**, **Wording** and **Audit log**.
+The county's moderators see **Moderation** alone.
 
 - [The review queue](#the-review-queue)
 - [Reviewing an organisation](#reviewing-an-organisation)
 - [Reviewing a listing](#reviewing-a-listing)
-- [Held messages](#held-messages)
+- [Moderation: reports](#moderation-reports)
+- [Moderation: held messages](#moderation-held-messages)
 - [Taxonomy](#taxonomy)
 - [Collections](#collections)
 - [Neighbourhood pages](#neighbourhood-pages)
@@ -86,14 +87,34 @@ For a published listing that changed since review:
 Each of these decisions is emailed to whoever sent the listing in and the organisation's owners
 and admins, with your note or reason. Write it for them: it's quoted as you typed it.
 
-## Held messages
+## Moderation: reports
+
+**Moderation** starts with what people reported in their conversations, the most urgent first.
+A report of grooming or self-harm is critical, and every moderator is emailed when one comes in:
+take it on within the hour. One that has waited longer is marked so.
+
+Each report shows its reason, who reported it (by role, such as young person) and what they said,
+the organisation, the message, and the messages just before it. **Take this on** to make it yours.
+Then write a note and:
+
+- **Remove the message** to keep it from everyone but its sender. Every other report of the same
+  message is settled with it.
+- **Dismiss the report** when there's nothing to do. The message stays.
+- **Escalate** when a young person may be at risk. Follow the county's mandated-reporter
+  procedure first, then note what you did and who you told. Tick **When escalating, remove the
+  message too** to take the message away as well.
+
+As with held messages, your note and decision can't be changed, and you can't decide a report from
+your own organisation's conversation, or your own report or message.
+
+## Moderation: held messages
 
 When an organisation's staff write to a young person, BrightTime holds any message that looks like
 an attempt to move the conversation elsewhere: a phone number, an email address, a link, a social
 media handle, another messaging app, or a request to talk privately. Until a moderator decides,
 only the sender sees it.
 
-**Held messages** lists them, oldest first. Each shows the organisation, the conversation's
+**Moderation** lists them under **Held messages**, oldest first. Each shows the organisation, the conversation's
 subject, who wrote it (by role, such as staff), why it was held, and the messages just before it.
 Write a reason, then:
 
@@ -235,6 +256,6 @@ the scenes; its screen in the console is still to come.
 ## What you can't see
 
 Being a network organiser doesn't give you young people's records. You see organisations,
-listings and the audit log, and, in **Held messages**, only the messages waiting for a moderator
-and the few before each. A family's details are seen only by the organisations the family
+listings and the audit log, and, in **Moderation**, only the messages reported or waiting for a
+moderator and the few before each. A family's details are seen only by the organisations the family
 shares them with. Platform administrators, who run the servers, can't see them either.

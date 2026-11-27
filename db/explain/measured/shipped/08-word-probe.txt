@@ -1,0 +1,20 @@
+select exists (
+  select 1 from opportunity.listing_search ls
+  where ls.tenant_id = @tenant_id and ls.is_published
+    and ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)
+)
+
+Result  (cost=26.00..26.01 rows=1 width=1) (actual time=0.032..0.032 rows=1.00 loops=1)
+  Buffers: shared hit=7
+  InitPlan 1
+    ->  Bitmap Heap Scan on listing_search ls  (cost=21.85..63.28 rows=10 width=0) (actual time=0.031..0.032 rows=0.00 loops=1)
+          Recheck Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)) AND is_published)
+          Buffers: shared hit=7
+          ->  Bitmap Index Scan on ix_ls_fts  (cost=0.00..21.85 rows=10 width=0) (actual time=0.028..0.028 rows=0.00 loops=1)
+                Index Cond: ((tenant_id = '0196c3e8-0000-7000-8000-00000000e001'::uuid) AND (search_vector @@ websearch_to_tsquery(('platform.ts_en'::cstring)::regconfig, 'robtics'::text)))
+                Index Searches: 1
+                Buffers: shared hit=7
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.124 ms
+Execution Time: 0.046 ms

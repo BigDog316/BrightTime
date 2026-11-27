@@ -21,6 +21,11 @@ namespace BrightTime.Modules.Opportunities.Search;
 /// difference was 12–65 ms against 0.1–0.2 ms.
 /// </para>
 /// <para>
+/// A text search first asks whether its words, as written, match anything with its filters
+/// (<see cref="SearchQueryBuilder.BuildWordProbe"/>), in the same transaction; typo tolerance
+/// runs only when they don't (D113).
+/// </para>
+/// <para>
 /// Isolation on this path therefore rests on the tenant predicate the builder always
 /// emits. Two guards back it: this class refuses an empty tenant before connecting,
 /// and the migration fails if <c>brighttime_finder</c> ever gains a privilege on any
@@ -48,7 +53,6 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) 
 
         // Fixed on the first page and carried in the cursor, so later pages score as the first did.
         DateTimeOffset asOf = Cursor.Precision(query.After?.AsOf ?? query.AsOf ?? clock.UtcNow);
-        BuiltQuery built = SearchQueryBuilder.Build(query with { AsOf = asOf });
 
         await using NpgsqlConnection connection = await dataSource
             .OpenConnectionAsync(cancellationToken)
@@ -59,6 +63,8 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) 
             .ConfigureAwait(false);
 
         await EnterFinderRoleAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+        TextMatch match = await MatchAsync(query, connection, transaction, cancellationToken).ConfigureAwait(false);
+        BuiltQuery built = SearchQueryBuilder.Build(query with { AsOf = asOf }, match);
 
         List<FinderItem> rows = [];
         await using (NpgsqlCommand command = new(built.Sql, connection, transaction))
@@ -102,11 +108,14 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) 
             throw new ArgumentException("A finder query must name its tenant.", nameof(query));
         }
 
-        BuiltQuery built = SearchQueryBuilder.BuildNeighbourhoodCounts(query);
         await using NpgsqlConnection connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using NpgsqlTransaction transaction = await connection
             .BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
         await EnterFinderRoleAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+
+        // The same choice as the search's, so the map counts what the list shows.
+        TextMatch match = await MatchAsync(query, connection, transaction, cancellationToken).ConfigureAwait(false);
+        BuiltQuery built = SearchQueryBuilder.BuildNeighbourhoodCounts(query, match);
 
         Dictionary<Guid, int> counts = [];
         int online = 0;
@@ -134,6 +143,30 @@ public sealed class SqlListingFinder(NpgsqlDataSource dataSource, IClock clock) 
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new NeighbourhoodCounts(counts, online);
+    }
+
+    /// <summary>
+    /// How a search matches its text (D113): by its words when, as written, they match any listing
+    /// with its filters; by typo tolerance when they match none. A search without text has none to match.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Composed by SearchQueryBuilder from fixed fragments; every caller value is a bound parameter.")]
+    private static async Task<TextMatch> MatchAsync(SearchQuery query, NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(query.Text))
+        {
+            return TextMatch.Words;
+        }
+
+        BuiltQuery probe = SearchQueryBuilder.BuildWordProbe(query);
+        await using NpgsqlCommand command = new(probe.Sql, connection, transaction);
+        foreach ((string name, object? value) in probe.Parameters)
+        {
+            command.Parameters.Add(new NpgsqlParameter(name, value ?? DBNull.Value));
+        }
+
+        return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is true ? TextMatch.Words : TextMatch.Typos;
     }
 
     /// <summary>The role that may bypass RLS on the search table, and only that table.</summary>

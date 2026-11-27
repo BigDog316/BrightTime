@@ -10,6 +10,19 @@ namespace BrightTime.Modules.Opportunities.Search;
 public sealed record BuiltQuery(string Sql, IReadOnlyDictionary<string, object?> Parameters);
 
 /// <summary>
+/// How a text search matches listings (D113): by its words, through full text, or, only when its
+/// words as written match nothing with the same filters, by typo tolerance. Never both at once.
+/// </summary>
+public enum TextMatch
+{
+    /// <summary>Full text: the words, stemmed, as <c>websearch_to_tsquery</c> reads them.</summary>
+    Words,
+
+    /// <summary>Typo tolerance: strict word similarity (<c>&lt;&lt;%</c>) against the fuzzy text.</summary>
+    Typos,
+}
+
+/// <summary>
 /// Composes the finder's SQL from only the filters a caller supplied.
 /// </summary>
 /// <remarks>
@@ -20,6 +33,11 @@ public sealed record BuiltQuery(string Sql, IReadOnlyDictionary<string, object?>
 /// predicate at all, rather than a <c>(:origin is null or …)</c> guard, which
 /// keeps the planner from costing a dead branch and keeps each filter shape
 /// with its own cached plan.
+/// </para>
+/// <para>
+/// A text search is one of two statements, never both arms at once (D113): full text, or, when
+/// <see cref="BuildWordProbe"/> finds that the words as written match nothing, typo tolerance.
+/// So a correctly spelt search costs what full text costs, and a misspelt one scans one index.
 /// </para>
 /// <para>
 /// Keyset pagination only. The comparison and the id direction always agree
@@ -46,7 +64,7 @@ public static class SearchQueryBuilder
     /// </summary>
     public const double FuzzyThreshold = 0.5;
 
-    public static BuiltQuery Build(SearchQuery query)
+    public static BuiltQuery Build(SearchQuery query, TextMatch match = TextMatch.Words)
     {
         ArgumentNullException.ThrowIfNull(query);
 
@@ -62,7 +80,7 @@ public static class SearchQueryBuilder
         };
 
         var predicates = new StringBuilder();
-        AddFilterPredicates(query, predicates, parameters);
+        AddFilterPredicates(query, predicates, parameters, match);
 
         bool hasText = !string.IsNullOrWhiteSpace(query.Text);
         bool hasOrigin = query.Origin is not null;
@@ -77,7 +95,8 @@ public static class SearchQueryBuilder
         sql.Append(hasOrigin
             ? "         st_distance(ls.location, " + OriginExpression + ") as distance_m,\n"
             : "         null::double precision as distance_m,\n");
-        sql.Append(hasText
+        // A typo match has no full-text rank: its words, as written, matched nothing.
+        sql.Append(hasText && match == TextMatch.Words
             ? "         ts_rank_cd(ls.search_vector, websearch_to_tsquery(@ts_config::regconfig, @text), 32) as text_rank,\n"
             : "         0::real as text_rank,\n");
         sql.Append(query.InterestTokens is { Count: > 0 }
@@ -132,8 +151,7 @@ public static class SearchQueryBuilder
 
         if (hasText)
         {
-            parameters["text"] = query.Text!.Trim();
-            parameters["ts_config"] = query.TextSearchConfig;
+            BindText(query, parameters, match);
         }
 
         if (query.InterestTokens is { Count: > 0 } interests)
@@ -154,25 +172,11 @@ public static class SearchQueryBuilder
     /// The neighbourhood counts for the map: the search's filters, grouped by neighbourhood, with
     /// online-only rows (no site) apart.
     /// </summary>
-    public static BuiltQuery BuildNeighbourhoodCounts(SearchQuery query)
+    public static BuiltQuery BuildNeighbourhoodCounts(SearchQuery query, TextMatch match = TextMatch.Words)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var parameters = new Dictionary<string, object?>(StringComparer.Ordinal) { ["tenant_id"] = query.TenantId };
-        var predicates = new StringBuilder();
-        AddFilterPredicates(query, predicates, parameters);
-        if (!string.IsNullOrWhiteSpace(query.Text))
-        {
-            parameters["text"] = query.Text!.Trim();
-            parameters["ts_config"] = query.TextSearchConfig;
-        }
-
-        if (query.Origin is not null)
-        {
-            parameters["origin_lat"] = query.Origin!.Value.Latitude;
-            parameters["origin_lon"] = query.Origin!.Value.Longitude;
-        }
-
+        (StringBuilder predicates, Dictionary<string, object?> parameters) = Filters(query, match);
         var sql = new StringBuilder();
         sql.Append("select ls.site_id is null as online, ls.neighbourhood_id,\n");
         sql.Append("       count(distinct ls.listing_id)::int as listings\n");
@@ -183,7 +187,61 @@ public static class SearchQueryBuilder
         return new BuiltQuery(sql.ToString(), parameters);
     }
 
-    private static void AddFilterPredicates(SearchQuery query, StringBuilder predicates, Dictionary<string, object?> parameters)
+    /// <summary>
+    /// Whether the search's words, as written, match any listing with the same filters (D113): if
+    /// so, the search is by its words alone; if not, by typo tolerance. Asked of every listing, not
+    /// a page, so the answer doesn't depend on the page size, and the map counts agree with the
+    /// results. A probe of a search without text is meaningless, and refused.
+    /// </summary>
+    public static BuiltQuery BuildWordProbe(SearchQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (string.IsNullOrWhiteSpace(query.Text))
+        {
+            throw new ArgumentException("Only a text search has words to probe.", nameof(query));
+        }
+
+        (StringBuilder predicates, Dictionary<string, object?> parameters) = Filters(query, TextMatch.Words);
+        var sql = new StringBuilder();
+        sql.Append("select exists (\n");
+        sql.Append("  select 1 from opportunity.listing_search ls\n");
+        sql.Append("  where ls.tenant_id = @tenant_id and ls.is_published\n");
+        sql.Append(predicates);
+        sql.Append(')');
+        return new BuiltQuery(sql.ToString(), parameters);
+    }
+
+    /// <summary>The filters' predicates and every value they bind, for a statement over the search table.</summary>
+    private static (StringBuilder Predicates, Dictionary<string, object?> Parameters) Filters(SearchQuery query, TextMatch match)
+    {
+        var parameters = new Dictionary<string, object?>(StringComparer.Ordinal) { ["tenant_id"] = query.TenantId };
+        var predicates = new StringBuilder();
+        AddFilterPredicates(query, predicates, parameters, match);
+        if (!string.IsNullOrWhiteSpace(query.Text))
+        {
+            BindText(query, parameters, match);
+        }
+
+        if (query.Origin is not null)
+        {
+            parameters["origin_lat"] = query.Origin!.Value.Latitude;
+            parameters["origin_lon"] = query.Origin!.Value.Longitude;
+        }
+
+        return (predicates, parameters);
+    }
+
+    /// <summary>The text, and for full text its configuration: a typo match reads no configuration.</summary>
+    private static void BindText(SearchQuery query, Dictionary<string, object?> parameters, TextMatch match)
+    {
+        parameters["text"] = query.Text!.Trim();
+        if (match == TextMatch.Words)
+        {
+            parameters["ts_config"] = query.TextSearchConfig;
+        }
+    }
+
+    private static void AddFilterPredicates(SearchQuery query, StringBuilder predicates, Dictionary<string, object?> parameters, TextMatch match)
     {
         if (query.Kinds is { Count: > 0 } kinds)
         {
@@ -251,12 +309,15 @@ public static class SearchQueryBuilder
 
         if (!string.IsNullOrWhiteSpace(query.Text))
         {
-            // Typo tolerance compares the query with whole words of the fuzzy text, not with
-            // the whole string: fuzzy_text is title, organisation and categories, so a one-word
-            // query's plain similarity to it is far below any usable threshold. ix_ls_fuzzy
-            // serves <<%; its threshold is FuzzyThreshold, pinned per transaction by the finder.
-            predicates.Append("    and (ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)\n");
-            predicates.Append("         or @text <<% ls.fuzzy_text)\n");
+            // One arm or the other, never an OR of both (D113): the operator then runs once per
+            // candidate, from one index. Typo tolerance compares the query with whole words of
+            // the fuzzy text, not with the whole string: fuzzy_text is title, organisation and
+            // categories, so a one-word query's plain similarity to it is far below any usable
+            // threshold. ix_ls_fuzzy serves <<%; its threshold is FuzzyThreshold, pinned per
+            // transaction by the finder.
+            predicates.Append(match == TextMatch.Words
+                ? "    and ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)\n"
+                : "    and @text <<% ls.fuzzy_text\n");
         }
     }
 

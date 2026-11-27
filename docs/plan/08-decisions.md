@@ -3803,6 +3803,32 @@ copy; removed, bytes and all), `PortfolioPageTests` (the check page shows the co
 `BadgeImageFileTests` is gone (`ImageCleanerTests` covers the cleaning); its PNG maker is
 `BadgeTestImages`.
 
+### D113 — Typo tolerance as a fallback (**proposed 2026-11-26**)
+
+plan/03 named the next step after D6's typo tolerance: run the trigram arm only when full text
+finds too little. Sam chose on 2026-11-26: this next; typo tolerance only when the words, as
+written, match nothing (pushing back on plan/03's "less than a page", under which the result set
+would depend on the page size); verified by tests and a re-measure of the plans.
+- **How:** every text search first asks whether its words match any listing with its filters
+  (`SearchQueryBuilder.BuildWordProbe`: `select exists (…)`, every listing, not a page), in the
+  finder's own transaction. If so, the search, its pages and its map counts are by full text
+  alone; if not, by `<<%` alone (`TextMatch.Words` or `.Typos`). Never an OR. A typo match has no
+  full-text rank, as before (it was 0 for those rows then too).
+- **Measured** (synthetic load v4, medians): "robotics" 30 → 23 ms; "robtics" 45 → 47 ms, the
+  same, as the operator's cost is on the candidates, not the OR; the probe under 0.1 ms. plan/03
+  has the plans and why the misspelt query didn't gain.
+- **Precision:** a correctly spelt word no longer gathers near misses ("readiness" found 54
+  listings, 48 of them "reading"; now its 6).
+- **Pages:** each page asks again. A listing published or withdrawn between pages could, in
+  principle, switch a search between the two; the cursor doesn't carry the choice.
+- The reference query (`db/queries/search-listings.sql`) gains `$17 text_match`. The sample
+  finder (no database) never had a typo arm, and is unchanged.
+
+No schema change. Tests: `QueryBuilderTests` (each arm alone, the probe, the map counts),
+`KettleSeedDatabaseTests` (a word spelt right finds only what its words find; the typo cases
+as before), `FinderPlanTests` (05 is chosen as typos, the probe uses an index; the recorded
+plans for 02, 05, 06 and the new 08 refreshed).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

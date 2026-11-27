@@ -136,6 +136,31 @@ public sealed class KettleSeedDatabaseTests(DatabaseFixture database)
         (await SlugsAsync(s, misspelt)).ShouldBe(expected, ignoreOrder: true);
     }
 
+    /// <summary>
+    /// A correctly spelt word finds what its words find, and nothing typo tolerance would add
+    /// (D113): "readiness" is within a typo of "reading", whose 41 listings it once picked up.
+    /// </summary>
+    [Fact]
+    public async Task A_word_spelt_right_finds_only_what_its_words_find()
+    {
+        Assert.SkipUnless(database.IsAvailable, database.SkipReason ?? "No database.");
+        Seeded s = await SeedOnceAsync();
+
+        List<string> byWords;
+        await using (NpgsqlConnection connection = await Sql.OpenAsync(s.ConnectionString, Ct))
+        {
+            const string words = "is_published and is_primary and search_vector @@ websearch_to_tsquery('platform.ts_en', 'readiness')";
+            byWords = [.. (await Sql.ScalarAsync<string>(connection, null,
+                $"select coalesce(string_agg(slug::text, ' '), '') from opportunity.listing_search where {words}", [])).Split(' ', StringSplitOptions.RemoveEmptyEntries)];
+            (await Sql.ScalarAsync<long>(connection, null,
+                $"select count(*) from opportunity.listing_search where is_published and is_primary and strict_word_similarity('readiness', fuzzy_text) >= {SearchQueryBuilder.FuzzyThreshold} and not ({words})",
+                [])).ShouldBeGreaterThan(0, "typo tolerance alone would add listings");
+        }
+
+        byWords.ShouldNotBeEmpty();
+        (await SlugsAsync(s, "readiness")).ShouldBe(byWords, ignoreOrder: true);
+    }
+
     [Theory]
     [InlineData("socer skils", "Soccer skills clinic")]
     [InlineData("robtics club", "Robotics club")]

@@ -81,14 +81,54 @@ public sealed class QueryBuilderTests
     }
 
     [Fact]
-    public void A_text_search_adds_the_text_predicate_and_binds_the_text()
+    public void A_text_search_by_its_words_adds_full_text_alone_and_binds_the_text()
     {
         BuiltQuery query = SearchQueryBuilder.Build(Browse() with { Text = "robotics", TextSearchConfig = "platform.ts_en" });
 
-        query.Sql.ShouldContain("websearch_to_tsquery(@ts_config::regconfig, @text)");
-        query.Sql.ShouldContain("@text <<% ls.fuzzy_text");
+        query.Sql.ShouldContain("and ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)");
+        query.Sql.ShouldContain("ts_rank_cd(ls.search_vector");
+        query.Sql.ShouldNotContain("<<%", Case.Sensitive, "typo tolerance only when the words match nothing (D113)");
         query.Parameters["text"].ShouldBe("robotics");
         query.Parameters["ts_config"].ShouldBe("platform.ts_en");
+    }
+
+    [Fact]
+    public void A_text_search_by_typos_adds_the_trigram_arm_alone()
+    {
+        BuiltQuery query = SearchQueryBuilder.Build(Browse() with { Text = "robtics", TextSearchConfig = "platform.ts_en" }, TextMatch.Typos);
+
+        query.Sql.ShouldContain("and @text <<% ls.fuzzy_text");
+        query.Sql.ShouldNotContain("websearch_to_tsquery", Case.Sensitive, "one index, no OR, and no full-text rank");
+        query.Sql.ShouldContain("0::real as text_rank");
+        query.Parameters["text"].ShouldBe("robtics");
+        query.Parameters.ShouldNotContainKey("ts_config");
+    }
+
+    [Fact]
+    public void The_word_probe_asks_whether_the_words_match_anything_with_the_same_filters()
+    {
+        SearchQuery search = Browse() with { Text = "robotics", TextSearchConfig = "platform.ts_en", FreeOnly = true, Kinds = ["program"] };
+        BuiltQuery probe = SearchQueryBuilder.BuildWordProbe(search);
+
+        probe.Sql.ShouldStartWith("select exists (");
+        probe.Sql.ShouldContain("ls.tenant_id = @tenant_id and ls.is_published");
+        probe.Sql.ShouldContain("and ls.search_vector @@ websearch_to_tsquery(@ts_config::regconfig, @text)");
+        probe.Sql.ShouldContain("and ls.is_free");
+        probe.Sql.ShouldContain("and ls.kind = any(@kinds)");
+        probe.Sql.ShouldNotContain("<<%");
+        probe.Sql.ShouldNotContain("limit", Case.Sensitive, "every listing, not a page: the answer can't depend on the page size");
+        probe.Parameters["text"].ShouldBe("robotics");
+        Should.Throw<ArgumentException>(() => SearchQueryBuilder.BuildWordProbe(Browse()));
+    }
+
+    [Fact]
+    public void The_map_counts_match_text_as_the_search_does()
+    {
+        SearchQuery search = Browse() with { Text = "robtics", TextSearchConfig = "platform.ts_en" };
+        SearchQueryBuilder.BuildNeighbourhoodCounts(search).Sql.ShouldNotContain("<<%");
+        BuiltQuery typos = SearchQueryBuilder.BuildNeighbourhoodCounts(search, TextMatch.Typos);
+        typos.Sql.ShouldContain("and @text <<% ls.fuzzy_text");
+        typos.Sql.ShouldNotContain("websearch_to_tsquery");
     }
 
     [Fact]

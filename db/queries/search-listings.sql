@@ -33,6 +33,8 @@
 --   $14 cursor_sort_value    numeric     keyset cursor, null on first page
 --   $15 cursor_listing_id    uuid
 --   $16 page_size            int
+--   $17 text_match           text        'words' | 'typos': typo tolerance only when the words
+--                                         as written match nothing with the same filters (D113)
 --
 -- Ranking inputs are, deliberately and exhaustively: text match, distance
 -- from a user-chosen anchor, how soon it starts, declared-interest overlap,
@@ -80,8 +82,8 @@ with matched as (
       and ($6::int       is null or ls.cost_cents <= $6::int)
       and ($8::geography is null or st_dwithin(ls.location, $8::geography, $9::int))
       and ($2::text is null or $2 = ''
-           or ls.search_vector @@ websearch_to_tsquery($11::regconfig, $2)
-           or $2::text <<% ls.fuzzy_text)
+           or ($17::text = 'words' and ls.search_vector @@ websearch_to_tsquery($11::regconfig, $2))
+           or ($17::text = 'typos' and $2::text <<% ls.fuzzy_text))
 ),
 -- One row per listing: a listing with four sites must not appear four
 -- times. Keep the nearest site when a location anchor was given.

@@ -40,7 +40,7 @@ public sealed class FinderPlanTests(DatabaseFixture database)
 
     public static TheoryData<string> Scenarios() => [.. Queries.Keys];
 
-    /// <summary>The seven scenarios of docs/plan/03, as the finder's own query objects.</summary>
+    /// <summary>The scenarios of docs/plan/03, as the finder's own query objects, and the word probe every text search runs first (D113).</summary>
     private static readonly Dictionary<string, Func<DateTimeOffset, (SearchQuery Query, bool Counts)>> Queries = new(StringComparer.Ordinal)
     {
         ["01-browse-soonest"] = _ => (Query() with { Sort = SearchSort.Soonest }, false),
@@ -69,7 +69,11 @@ public sealed class FinderPlanTests(DatabaseFixture database)
         // A filtered map. An unfiltered one counts the whole catalogue by neighbourhood, which is
         // a read of every row whatever the plan; on a one-tenant table that is rightly a scan.
         ["07-map-counts"] = _ => (Query() with { AllFacets = ["cat:stem", "age:12"] }, true),
+        // What every text search asks first (D113): do its words, as written, match anything?
+        [WordProbe] = _ => (Query() with { Text = "robtics", TextSearchConfig = Locale.TextSearchEnglish }, false),
     };
+
+    private const string WordProbe = "08-word-probe";
 
     private static SearchQuery Query() => new() { TenantId = SyntheticTenant, PageSize = new PageSize(PageSize.Default) };
 
@@ -82,7 +86,15 @@ public sealed class FinderPlanTests(DatabaseFixture database)
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
         (SearchQuery query, bool counts) = Queries[scenario](now);
-        BuiltQuery built = counts ? SearchQueryBuilder.BuildNeighbourhoodCounts(query) : SearchQueryBuilder.Build(query with { AsOf = now });
+        // The statement the finder would run: by the words, or, when they match nothing, by typos (D113).
+        TextMatch match = await MatchAsync(query);
+        BuiltQuery built = scenario == WordProbe ? SearchQueryBuilder.BuildWordProbe(query)
+            : counts ? SearchQueryBuilder.BuildNeighbourhoodCounts(query, match)
+            : SearchQueryBuilder.Build(query with { AsOf = now }, match);
+        if (scenario == "05-fuzzy")
+        {
+            match.ShouldBe(TextMatch.Typos, "the misspelling matches nothing by its words");
+        }
 
         string json = await ExplainAsync(built, "analyze, buffers, format json");
         JsonElement plan = JsonDocument.Parse(json).RootElement[0].GetProperty("Plan");
@@ -113,6 +125,36 @@ public sealed class FinderPlanTests(DatabaseFixture database)
                         && Math.Max(x.Plan, x.Actual) / Math.Max(Math.Min(x.Plan, x.Actual), 1) > EstimateTolerance)
             .Select(x => $"{x.Node.GetProperty("Node Type").GetString()} {Label(x.Node)}: estimated {x.Plan}, found {x.Actual}")];
         misestimates.ShouldBeEmpty($"{scenario} misestimates the search table:\n{Summary(nodes)}");
+    }
+
+    /// <summary>The finder's choice for a text search (D113), asked as the finder asks it.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The builder's own probe; values are bound parameters.")]
+    private async Task<TextMatch> MatchAsync(SearchQuery query)
+    {
+        if (string.IsNullOrWhiteSpace(query.Text))
+        {
+            return TextMatch.Words;
+        }
+
+        BuiltQuery probe = SearchQueryBuilder.BuildWordProbe(query);
+        await using NpgsqlConnection connection = await Sql.OpenAsync(TestHost.As(database.ConnectionString, TestHost.FinderLogin), Ct);
+        await using NpgsqlTransaction tx = await connection.BeginTransactionAsync(Ct);
+        await using (NpgsqlCommand role = new(SqlListingFinder.TransactionSetup, connection, tx))
+        {
+            await role.ExecuteNonQueryAsync(Ct);
+        }
+
+        await using NpgsqlCommand command = new(probe.Sql, connection, tx);
+        foreach ((string name, object? value) in probe.Parameters)
+        {
+            command.Parameters.Add(new NpgsqlParameter(name, value ?? DBNull.Value));
+        }
+
+        bool found = await command.ExecuteScalarAsync(Ct) is true;
+        await tx.RollbackAsync(Ct);
+        return found ? TextMatch.Words : TextMatch.Typos;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(

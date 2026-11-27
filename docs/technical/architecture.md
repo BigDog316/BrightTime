@@ -193,7 +193,8 @@ antiforgery, and Blazor's static server rendering.
   `brighttime_finder` role (`BYPASSRLS`, select on that one table, D13), entered with
   `SET LOCAL ROLE`. The query is `db/queries/search-listings.sql`.
 - Text search uses English and Spanish stemming, a trigram arm for the other four languages, and
-  typo tolerance by strict word similarity (D6).
+  typo tolerance by strict word similarity (D6), used only when the words as written match
+  nothing (D113).
 - The map is a server-drawn SVG of the tenant's neighbourhoods: no tiles, no coordinates (D21).
 - Paging is by cursor, and every page of one search is computed at the same instant
   (`SearchQuery.AsOf`), so relevance can't drift between pages.

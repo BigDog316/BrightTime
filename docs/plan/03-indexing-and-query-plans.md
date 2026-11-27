@@ -353,6 +353,46 @@ Next step: make the trigram arm a fallback, used only when full text finds less 
 page. Typo tolerance would then cost nothing for a correctly spelt query. A misspelt query
 would scan one index, with no OR, so the operator would run once.
 
+### Typo tolerance as a fallback (2026-11-26, D113)
+
+**Built, with one change to the plan above:** the trigram arm runs only when full text finds
+*nothing*, not less than a page. With "less than a page" the same search at page size 10 and
+50 would return different sets of listings, and the map's counts (which have no page) couldn't
+agree with either. So every text search first asks `select exists (…)` of its words with its
+filters (`SearchQueryBuilder.BuildWordProbe`, in the finder's own transaction), then runs one
+statement: full text alone, or `<<%` alone. Never an OR.
+
+Measured on synthetic load v4, as `brighttime_finder`, vacuumed, on the Windows/Docker scratch
+database; medians of seven runs after a warm-up:
+
+| Query | OR of both arms (before) | One arm (now) |
+|---|---|---|
+| 02 "robotics" (words) | 30.1 ms | 23.4 ms |
+| 05 "robtics" (typos) | 45.0 ms | 46.9 ms |
+| 08 the word probe, either | — | under 0.1 ms (`ix_ls_fts`, nothing or one row) |
+
+The gate's single runs (`db/explain/measured/shipped/`): 02 went from 44 to 23 ms, 06 "art"
+with everything from 4.4 to 2.0 ms, and 05 stayed at 57 ms.
+
+**A misspelt query didn't get faster**, against the reasoning above. Alone, the trigram arm's
+plan is a bitmap heap scan from `ix_ls_fuzzy` whose recheck is only `is_published` (the
+index's partial predicate); `<<%` is the filter, evaluated once per candidate, 5,474 of them
+for 4,935 matches. That *is* the cost: GIN can't tell adjacency within a word, so every
+candidate must be scored, and in this load a tenth of the table is a candidate. The OR's
+second evaluation, put at about 23 ms in October, doesn't show in today's timings: the two
+forms cost the same. The gain is for correctly spelt queries, which are most of them, and in
+precision.
+
+**Precision.** A correctly spelt word no longer picks up its near neighbours: on the seed,
+"readiness" found its 6 listings and 48 "reading" ones; now its 6 (`KettleSeedDatabaseTests`).
+"socer" still finds exactly what "soccer" finds.
+
+**Other languages' configurations.** A search under `ts_es` or `ts_simple` for an English word
+often matches nothing by its words (the stems differ), so it falls back to typo tolerance and
+finds what it found before: on the seed, "robotics", "soccer", "swimming" and "coding" under
+`ts_es` and `ts_simple` give the same listings as the old OR. No word tried matched some
+listings by its words and others only by typos.
+
 **Chinese is not helped, by this or by `%`.** Chinese has no spaces, so a whole title such as
 课后艺术工作室 is one "word".
 - A two-character query (艺术, "art") contains no trigram that occurs inside a longer run.

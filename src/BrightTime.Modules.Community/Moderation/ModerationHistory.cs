@@ -110,11 +110,11 @@ public sealed class ModerationHistory(
                 .Where(p => p.ConversationId == conversation.Id)
                 .ToDictionaryAsync(p => p.UserId, p => p.ParticipantRole, ct).ConfigureAwait(false);
             List<ScreeningResultRecord> screened = await db.ScreeningResults.AsNoTracking()
-                .Where(s => s.TargetKind == MessageTarget && s.TargetId == messageId).ToListAsync(ct).ConfigureAwait(false);
+                .Where(s => s.TargetKind == MessageTarget && s.TargetId == messageId).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).ToListAsync(ct).ConfigureAwait(false);
             List<ReportRecord> reports = await db.Reports.AsNoTracking()
-                .Where(r => r.TargetKind == MessageTarget && r.TargetId == messageId).ToListAsync(ct).ConfigureAwait(false);
+                .Where(r => r.TargetKind == MessageTarget && r.TargetId == messageId).OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync(ct).ConfigureAwait(false);
             List<ModerationActionRecord> actions = await db.ModerationActions.AsNoTracking()
-                .Where(a => a.TargetKind == MessageTarget && a.TargetId == messageId).ToListAsync(ct).ConfigureAwait(false);
+                .Where(a => a.TargetKind == MessageTarget && a.TargetId == messageId).OrderBy(a => a.OccurredAt).ToListAsync(ct).ConfigureAwait(false);
             IReadOnlyDictionary<Guid, string> names = await identity.GetAdultEmailsAsync(
                 [.. actions.Select(a => a.ActorUserId), .. reports.Where(r => r.AssignedTo is not null).Select(r => r.AssignedTo!.Value)], ct).ConfigureAwait(false);
             string Name(Guid? user) => user is { } u && names.TryGetValue(u, out string? n) ? n : "";
@@ -148,7 +148,10 @@ public sealed class ModerationHistory(
                 events.Add(new HistoryEvent(a.OccurredAt, closes ? HistoryKinds.EscalationClosed : HistoryKinds.Decided, Name(a.ActorUserId), a.Reason, [a.Action], a.ReportId));
             }
 
-            List<HistoryEvent> ordered = [.. events.OrderBy(e => e.At ?? DateTimeOffset.MinValue).ThenBy(e => Order(e.Kind))];
+            // Two decisions in one moment (an escalation and the removal with it) by what they mean:
+            // ids are no help, as UUIDv7 is random within a millisecond.
+            List<HistoryEvent> ordered = [.. events.OrderBy(e => e.At ?? DateTimeOffset.MinValue).ThenBy(e => Order(e.Kind))
+                .ThenBy(e => e.Kind == HistoryKinds.Decided ? ActionOrder(e.Codes[0]) : 0)];
             await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = MessageTarget, SubjectIds = [messageId] }, ct).ConfigureAwait(false);
             return Result<MessageHistory>.Success(new MessageHistory(
                 message.Id,
@@ -205,6 +208,15 @@ public sealed class ModerationHistory(
         HistoryKinds.TakenOn => 2,
         HistoryKinds.Decided => 3,
         _ => 4,
+    };
+
+    /// <summary>Within one moment: released, escalated, then removed, then anything else.</summary>
+    private static int ActionOrder(string action) => action switch
+    {
+        "publish" => 0,
+        "escalate_external" => 1,
+        "remove" => 2,
+        _ => 3,
     };
 
     private static IReadOnlyList<string> Labels(string labels)

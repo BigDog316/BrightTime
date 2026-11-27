@@ -104,6 +104,18 @@ public static class Permissions
         public const string SendToFamily = "messages.send_to_family";
     }
 
+    public static class Spaces
+    {
+        /// <summary>Reading the organisation's spaces and their posts (D120): staff for their organisation; a young person is a member of their activity's.</summary>
+        public const string View = "spaces.view";
+
+        /// <summary>Posting and replying in a space one is a member of.</summary>
+        public const string Post = "spaces.post";
+
+        /// <summary>Opening and archiving the organisation's spaces, and choosing their staff.</summary>
+        public const string ManageMembership = "spaces.manage_membership";
+    }
+
     public static class Badges
     {
         /// <summary>Writing and publishing the organisation's badges (D66).</summary>
@@ -215,6 +227,7 @@ public static class Permissions
         Applications.View, Applications.Decide,
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Messages.SendToFamily,
+        Spaces.View, Spaces.Post, Spaces.ManageMembership,
         Moderation.Triage, Moderation.Remove, Moderation.SuspendUser,
         Payments.Waive,
         Reports.RunProvider,

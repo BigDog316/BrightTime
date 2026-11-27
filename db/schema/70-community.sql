@@ -33,7 +33,8 @@ create table space (
   constraint ck_space_status check (status in ('active','archived','suspended'))
 );
 create index ix_space_org on space (org_id) where status = 'active';
-create index ix_space_listing on space (listing_id) where listing_id is not null;
+-- One open space per activity (D120): archive it to open another.
+create unique index ux_space_listing_active on space (listing_id) where listing_id is not null and status = 'active';
 
 create table space_member (
   id          uuid primary key,
@@ -56,6 +57,61 @@ create index ix_space_member_user on space_member (user_id) where left_at is nul
 -- module on add/remove, with this index to make the check a single lookup.
 create index ix_space_member_adults on space_member (space_id)
   where left_at is null and not is_minor;
+
+-- is_minor is the account's, never the caller's to say; and a child's account (under 13) is
+-- never an active member: plan/04 gives C12 no spaces.post or spaces.view (D120).
+create or replace function community.set_space_member_minor() returns trigger
+  language plpgsql as $fn$
+declare
+  v_kind text;
+begin
+  select account_kind into v_kind from identity.app_user where id = new.user_id;
+  if v_kind is null then
+    raise exception 'space member % is not a known account', new.user_id
+      using errcode = '23503';
+  end if;
+  if v_kind = 'child' and new.left_at is null then
+    raise exception 'a child''s account cannot be a member of a space'
+      using errcode = '23514';
+  end if;
+  new.is_minor := v_kind in ('youth', 'child');
+  return new;
+end
+$fn$;
+create trigger space_member_minor
+  before insert or update of user_id, is_minor, left_at on space_member
+  for each row execute function community.set_space_member_minor();
+
+-- A space with a minor in it has at least two adults who aren't there as young people: staff,
+-- mentors or admins (D120). Checked at commit, as enforce_safe_conversation() is, so a change
+-- that adds a second adult and a young person together passes; the module checks first.
+create or replace function community.enforce_safe_space() returns trigger
+  language plpgsql as $fn$
+declare
+  v_space_id uuid := coalesce(new.space_id, old.space_id);
+  v_minors int;
+  v_adults int;
+begin
+  select count(*) filter (where is_minor),
+         count(*) filter (where not is_minor and member_role <> 'youth')
+    into v_minors, v_adults
+  from community.space_member
+  where space_id = v_space_id
+    and left_at is null;
+
+  if v_minors > 0 and v_adults < 2 then
+    raise exception
+      'a space with a minor in it requires at least two adult members who are not youth (found %)', v_adults
+      using errcode = '23514',
+            hint = 'add a second member of staff before the young people';
+  end if;
+  return null;
+end
+$fn$;
+create constraint trigger space_member_safety
+  after insert or update or delete on space_member
+  deferrable initially deferred
+  for each row execute function community.enforce_safe_space();
 
 create table post (
   id            uuid primary key,

@@ -104,6 +104,31 @@ public sealed class RolePermissionTests
     }
 
     [Fact]
+    public void Spaces_are_for_young_people_over_13_and_providers_staff_and_never_the_platform_admin()
+    {
+        // docs/plan/04 (D120): Y13 views and posts as a member; C12 neither; PS and PA for their
+        // organisation; membership is managed by the organisation's staff. Under-13s are refused by
+        // the schema too (set_space_member_minor, ck_youth_capability_under13).
+        (string Permission, string[] Roles)[] expected =
+        [
+            (Permissions.Spaces.View, [BrightTimeRoles.Youth, BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
+            (Permissions.Spaces.Post, [BrightTimeRoles.Youth, BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
+            (Permissions.Spaces.ManageMembership, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
+        ];
+        foreach ((string permission, string[] roles) in expected)
+        {
+            string[] holders =
+            [
+                .. BrightTimeRoles.DefaultPermissions
+                    .Where(kv => kv.Value.Contains(permission, StringComparer.Ordinal))
+                    .Select(kv => kv.Key),
+            ];
+
+            holders.ShouldBe(roles, ignoreOrder: true, $"for '{permission}'");
+        }
+    }
+
+    [Fact]
     public void A_civic_viewer_and_a_researcher_get_no_write_permission_at_all()
     {
         string[] readOnly =

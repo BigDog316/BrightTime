@@ -1,0 +1,251 @@
+@page "/spaces/{Id:guid}"
+@* One space (D120): who is in it, always, and that the organisation reads it; its posts, newest
+   first, with their replies; a post, a reply, and taking down one's own. What a young person
+   writes is checked first, and a post held for a moderator shows only to them, with why. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+@if (!Session.IsSignedIn)
+{
+    <h1>@T["app.spaces.title"]</h1>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (_space is not { } s)
+{
+    <h1>@T["app.spaces.title"]</h1>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_problem is null)
+    {
+        <Busy />
+    }
+}
+else
+{
+    <h1 dir="auto">@s.Name</h1>
+    <p>@T.Format("app.spaces.from", ("org", Text.Name(s.OrgName)))</p>
+    @if (s.Description is { Length: > 0 } about)
+    {
+        <p dir="auto">@about</p>
+    }
+
+    <section aria-labelledby="who">
+        <h2 id="who">@T["app.spaces.who"]</h2>
+        <ul>
+            <li>@T.Format("app.spaces.who.staff", ("count", s.Members.Count(m => !m.IsYouth)), ("org", Text.Name(s.OrgName)))</li>
+            @foreach (SpaceMember m in s.Members.Where(m => m.IsYouth))
+            {
+                <li>@(m.IsMe ? T["app.spaces.you"] : m.Name is { } name ? Text.Name(name) : T["app.spaces.someone"])</li>
+            }
+        </ul>
+        <p class="notice">@T.Format("app.spaces.read_by_org", ("org", Text.Name(s.OrgName)))</p>
+        @if (s.IsArchived)
+        {
+            <p class="hint">@T["app.spaces.archived_hint"]</p>
+        }
+    </section>
+
+    @if (s.CanPost)
+    {
+        <div class="field">
+            <label for="new-post">@T["app.spaces.new_post"]</label>
+            <textarea id="new-post" rows="4" maxlength="@MaxBody" dir="auto" @bind="_draft" @bind:event="oninput"></textarea>
+        </div>
+        <p class="hint">@T["app.spaces.post_hint"]</p>
+        @if (_replyingTo is null)
+        {
+            <ProblemNotice Problem="_sendProblem" />
+        }
+        <div class="actions">
+            <button type="button" class="primary" @onclick="() => PostAsync(null)" disabled="@(_busy || string.IsNullOrWhiteSpace(_draft))">@T["app.spaces.post"]</button>
+        </div>
+    }
+    @if (_sendNote is not null)
+    {
+        <p class="notice" role="status">@_sendNote</p>
+    }
+
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (s.Posts.Count == 0)
+    {
+        <p>@T["app.spaces.no_posts"]</p>
+    }
+    else
+    {
+        <ol class="messages posts">
+            @foreach (SpacePost p in s.Posts)
+            {
+                <li class="@(p.FromMe ? "mine" : null)" @key="p.Id">
+                    @Post(p)
+                    @if (p.Replies.Count > 0)
+                    {
+                        <ol class="messages replies">
+                            @foreach (SpacePost r in p.Replies)
+                            {
+                                <li class="@(r.FromMe ? "mine" : null)" @key="r.Id">@Post(r)</li>
+                            }
+                        </ol>
+                    }
+                    @if (s.CanPost && p.IsPublished)
+                    {
+                        @if (_replyingTo == p.Id)
+                        {
+                            string id = p.Id.ToString("N");
+                            <div class="field">
+                                <label for="reply-@id">@T["app.spaces.reply"]</label>
+                                <textarea id="reply-@id" rows="3" maxlength="@MaxBody" dir="auto" @bind="_reply" @bind:event="oninput"></textarea>
+                            </div>
+                            <ProblemNotice Problem="_sendProblem" />
+                            <div class="actions">
+                                <button type="button" class="primary" @onclick="() => PostAsync(p.Id)" disabled="@(_busy || string.IsNullOrWhiteSpace(_reply))">@T["app.spaces.reply_send"]</button>
+                                <button type="button" @onclick="() => _replyingTo = null">@T["app.spaces.cancel"]</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" @onclick="() => StartReply(p.Id)"
+                                    aria-label="@T.Format("app.spaces.reply_label", ("author", Author(p)), ("time", T.DayTime(p.At)))">@T["app.spaces.reply"]</button>
+                        }
+                    }
+                </li>
+            }
+        </ol>
+    }
+    <div class="actions">
+        <button type="button" @onclick="LoadAsync" disabled="@_busy">@T["app.spaces.check"]</button>
+        <a class="button" href="spaces">@T["app.spaces.back"]</a>
+    </div>
+}
+
+@code {
+    /// <summary>The server's limit (Spaces.MaxBody).</summary>
+    private const int MaxBody = 4000;
+
+    [Parameter] public Guid Id { get; set; }
+
+    private Space? _space;
+    private ApiProblem? _problem;
+    private ApiProblem? _sendProblem;
+    private string? _sendNote;
+    private string _draft = string.Empty;
+    private string _reply = string.Empty;
+    private Guid? _replyingTo;
+    private bool _busy;
+
+    protected override Task OnParametersSetAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<Space> found = await Api.SpaceAsync(Id);
+        _problem = found.Problem;
+        _space = found.Value ?? _space;
+    }
+
+    private void StartReply(Guid post)
+    {
+        _replyingTo = post;
+        _reply = string.Empty;
+        _sendProblem = null;
+        _sendNote = null;
+    }
+
+    private async Task PostAsync(Guid? replyTo)
+    {
+        string text = replyTo is null ? _draft : _reply;
+        if (_space is null || string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        _busy = true;
+        _sendProblem = null;
+        _sendNote = null;
+        try
+        {
+            ApiResult<SpacePost> sent = await Api.PostInSpaceAsync(_space.Id, text, replyTo);
+            if (sent.Value is not { } post)
+            {
+                _sendProblem = sent.Problem;
+                return;
+            }
+
+            if (replyTo is null)
+            {
+                _draft = string.Empty;
+            }
+            else
+            {
+                _reply = string.Empty;
+                _replyingTo = null;
+            }
+
+            _sendNote = post.IsHeld ? HeldFor(post) ?? T["app.spaces.posted_held"] : T["app.spaces.posted"];
+            await LoadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(SpacePost post)
+    {
+        if (_space is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            ApiResult deleted = await Api.DeletePostAsync(_space.Id, post.Id);
+            _problem = deleted.Problem;
+            if (deleted.Problem is null)
+            {
+                _sendNote = T["app.spaces.deleted"];
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private RenderFragment Post(SpacePost p) => __builder =>
+    {
+        <p class="hint">
+            @Author(p) · @T.DayTime(p.At)
+            @if (p.IsHeld)
+            {
+                <strong>@(" · " + T["app.spaces.held"])</strong>
+            }
+            else if (p.IsRemoved)
+            {
+                <strong>@(" · " + T["app.spaces.removed"])</strong>
+            }
+        </p>
+        <p class="body" dir="auto">@p.Body</p>
+        @if (p.FromMe && p.IsHeld && HeldFor(p) is { } why)
+        {
+            <p class="hint">@why</p>
+        }
+        @if (p.FromMe && (p.IsPublished || p.IsHeld))
+        {
+            <button type="button" @onclick="() => DeleteAsync(p)" disabled="@_busy"
+                    aria-label="@T.Format("app.spaces.delete_label", ("time", T.DayTime(p.At)))">@T["app.spaces.delete"]</button>
+        }
+    };
+
+    /// <summary>Why one of the person's own posts is held, in words, so they can rewrite it (D117).</summary>
+    private string? HeldFor(SpacePost p) =>
+        p.HeldFor is { Count: > 0 } reasons
+            ? T.Format("app.messages.held_for", ("what", string.Join(", ", reasons.Select(r => T.Has("app.messages.held_reason." + r) ? T["app.messages.held_reason." + r] : r))))
+            : null;
+
+    /// <summary>Who wrote it: the person themself, a young person as the roster names them, or the organisation's staff, never by name.</summary>
+    private string Author(SpacePost p) =>
+        p.FromMe ? T["app.spaces.you"]
+        : p.AuthorRole == "youth" ? p.AuthorName is { } name ? Text.Name(name) : T["app.spaces.someone"]
+        : T.Format("app.spaces.staff_of", ("org", Text.Name(_space?.OrgName ?? "")));
+}

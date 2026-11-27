@@ -1,0 +1,327 @@
+@page "/provider/orgs/{OrgId:guid}/spaces/{SpaceId:guid}"
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Groups
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Identity.Contracts
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Spaces.Read)]
+@inherits ConsoleComponent
+
+@*
+    One of the organisation's spaces (D120), for its staff: who is in it, its posts and replies,
+    and, for its members, a post or a reply. Those who manage membership choose its staff and
+    archive it. Its young people aren't chosen: those enrolled in the activity whose consent allows
+    it join once two staff are in it. A post held for a moderator shows only to its author.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.spaces.denied"]</h1>
+    <p>@T["provider.spaces.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_space is { } s)
+{
+    <PageTitle>@s.Name · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/spaces">@T["provider.nav.spaces"]</a></p>
+    <h1 dir="auto">@s.Name</h1>
+    <OrgNav OrgId="@OrgId" Current="spaces" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is { Length: > 0 } && T.Has("provider.spaces.done." + Done))
+    {
+        <p class="notice success" role="status">@T["provider.spaces.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (s.Description is { Length: > 0 } about)
+    {
+        <p dir="auto">@about</p>
+    }
+    @if (s.Status == SpaceStatuses.Archived)
+    {
+        <p class="notice">@T["provider.spaces.archived_notice"]</p>
+    }
+    <p class="notice">@T["provider.spaces.who_reads"]</p>
+
+    <section aria-labelledby="people">
+        <h2 id="people">@T["provider.spaces.people"]</h2>
+        <h3>@T["provider.spaces.staff"]</h3>
+        <ul class="card-list">
+            @foreach (SpaceMemberView m in s.Members.Where(m => m.Role != SpaceRoles.Youth))
+            {
+                <li>
+                    <bdi>@(m.Name ?? T["provider.spaces.staff_member"])</bdi>
+                    @if (m.IsMe)
+                    {
+                        <span class="note">@(" · " + T["provider.spaces.me"])</span>
+                    }
+                    @if (_canManage && s.Status == SpaceStatuses.Active)
+                    {
+                        <form method="post" class="inline-form" @formname="@("remove-" + m.UserId.ToString("N"))" @onsubmit="() => RemoveStaffAsync(m.UserId)">
+                            <AntiforgeryToken />
+                            <button type="submit" class="secondary-button" aria-label="@T.Format("provider.spaces.remove_label", ("name", m.Name ?? ""))">@T["provider.spaces.remove"]</button>
+                        </form>
+                    }
+                </li>
+            }
+        </ul>
+        @if (s.Members.Count(m => m.Role != SpaceRoles.Youth) < Spaces.MinimumStaff)
+        {
+            <p class="hint">@T.Format("provider.spaces.needs_staff", ("count", Spaces.MinimumStaff))</p>
+        }
+
+        <h3>@T["provider.spaces.youth"]</h3>
+        @if (!s.Members.Any(m => m.Role == SpaceRoles.Youth))
+        {
+            <p>@T["provider.spaces.no_youth"]</p>
+        }
+        else
+        {
+            <ul class="card-list">
+                @foreach (SpaceMemberView m in s.Members.Where(m => m.Role == SpaceRoles.Youth))
+                {
+                    <li><bdi>@(m.Name ?? T["provider.spaces.unnamed"])</bdi> <span class="note">@T.Format("provider.spaces.joined", ("date", T.DateTime(m.JoinedAt)))</span></li>
+                }
+            </ul>
+        }
+        <p class="hint">@T["provider.spaces.youth_hint"]</p>
+
+        @if (_canManage && s.Status == SpaceStatuses.Active && _candidates.Count > 0)
+        {
+            <form method="post" @formname="add" @onsubmit="AddStaffAsync" class="message-form">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="add-staff">@T["provider.spaces.add"]</label>
+                    <select id="add-staff" name="person">
+                        @foreach ((Guid id, string email) in _candidates)
+                        {
+                            <option value="@id">@email</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit">@T["provider.spaces.add_button"]</button>
+            </form>
+        }
+    </section>
+
+    <section aria-labelledby="posts">
+        <h2 id="posts">@T["provider.spaces.posts"]</h2>
+        @if (s.CanPost)
+        {
+            <form method="post" @formname="post" @onsubmit="() => PostAsync(null)" class="message-form">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="post-body">@T["provider.spaces.new_post"]</label>
+                    <textarea id="post-body" name="body" rows="4" maxlength="@Spaces.MaxBody" required dir="auto"></textarea>
+                </div>
+                <button type="submit">@T["provider.spaces.post_button"]</button>
+            </form>
+        }
+        else if (!s.IsMember && s.Status == SpaceStatuses.Active)
+        {
+            <p class="hint">@T["provider.spaces.not_member"]</p>
+        }
+
+        @if (s.Posts.Count == 0)
+        {
+            <p>@T["provider.spaces.no_posts"]</p>
+        }
+        else
+        {
+            <ol class="messages posts">
+                @foreach (PostView p in s.Posts)
+                {
+                    <li class="@(p.FromMe ? "mine" : null)">
+                        @Post(p)
+                        @if (p.Replies.Count > 0)
+                        {
+                            <ol class="messages replies">
+                                @foreach (PostView r in p.Replies)
+                                {
+                                    <li class="@(r.FromMe ? "mine" : null)">@Post(r)</li>
+                                }
+                            </ol>
+                        }
+                        @if (s.CanPost && p.State == PostStates.Published)
+                        {
+                            string id = p.Id.ToString("N");
+                            <form method="post" @formname="@("reply-" + id)" @onsubmit="() => PostAsync(p.Id)" class="message-form reply-form">
+                                <AntiforgeryToken />
+                                <div class="field">
+                                    <label for="reply-@id">@T["provider.spaces.reply"]</label>
+                                    <textarea id="reply-@id" name="body" rows="2" maxlength="@Spaces.MaxBody" required dir="auto"></textarea>
+                                </div>
+                                <button type="submit">@T["provider.spaces.reply_button"]</button>
+                            </form>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+
+    @if (_canManage && s.Status == SpaceStatuses.Active)
+    {
+        <form method="post" @formname="archive" @onsubmit="ArchiveAsync">
+            <AntiforgeryToken />
+            <p class="hint">@T["provider.spaces.archive_hint"]</p>
+            <button type="submit" class="secondary-button">@T["provider.spaces.archive"]</button>
+        </form>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid SpaceId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private SpaceView? _space;
+    private string? _problem;
+    private bool _canManage;
+
+    /// <summary>Adult members of the organisation's staff not yet in the space, by email.</summary>
+    private IReadOnlyList<(Guid Id, string Email)> _candidates = [];
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Spaces.View))
+        {
+            Forbid();
+            return;
+        }
+
+        Result<SpaceView> found = await Get<Spaces>().GetForOrganisationAsync(Org, Actor, SpaceId);
+        if (!found.IsSuccess)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _space = found.Value;
+        _canManage = await CanActForAsync(Org, Permissions.Spaces.ManageMembership);
+        if (_canManage)
+        {
+            HashSet<Guid> inIt = [.. _space.Members.Select(m => m.UserId)];
+            List<Guid> others = [.. (await Get<IDirectoryQueries>().GetOrganisationMembersAsync(Org)).Select(m => m.UserId.Value).Where(u => !inIt.Contains(u))];
+            IReadOnlyDictionary<Guid, string> emails = await Get<IIdentityQueries>().GetAdultEmailsAsync(others);
+            _candidates = [.. emails.OrderBy(e => e.Value, StringComparer.OrdinalIgnoreCase).Select(e => (e.Key, e.Value))];
+        }
+    }
+
+    private RenderFragment Post(PostView p) => __builder =>
+    {
+        <p class="note">
+            @Author(p) · @T.DateTime(p.At)
+            @if (p.State == PostStates.Held)
+            {
+                <strong>@(" · " + T["provider.spaces.held"])</strong>
+            }
+            else if (p.State == PostStates.Removed)
+            {
+                <strong>@(" · " + T["provider.spaces.removed"])</strong>
+            }
+        </p>
+        <p class="body" dir="auto">@p.Body</p>
+        @if (p.FromMe && p.State is PostStates.Published or PostStates.Held)
+        {
+            <form method="post" class="inline-form" @formname="@("delete-" + p.Id.ToString("N"))" @onsubmit="() => DeleteAsync(p.Id)">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary-button">@T["provider.spaces.delete"]</button>
+            </form>
+        }
+    };
+
+    private string Author(PostView p) =>
+        p.FromMe ? T["provider.spaces.me"]
+        : p.AuthorRole == SpaceRoles.Youth ? p.AuthorName ?? T["provider.spaces.unnamed"]
+        : p.AuthorName ?? T["provider.spaces.staff_member"];
+
+    private async Task PostAsync(Guid? replyTo)
+    {
+        Result<PostView> posted = await Get<Spaces>().PostAsync(Actor, SpaceId, FormValue("body"), replyTo);
+        if (!posted.IsSuccess)
+        {
+            _problem = T.Error(posted.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/spaces/{SpaceId}?done={(posted.Value.State == PostStates.Held ? "held" : "posted")}");
+    }
+
+    private async Task DeleteAsync(Guid post) => Finish(await Get<Spaces>().DeleteAsync(Actor, SpaceId, post), "deleted");
+
+    private async Task AddStaffAsync()
+    {
+        if (!_canManage)
+        {
+            Forbid();
+            return;
+        }
+
+        if (!Guid.TryParse(FormValue("person"), out Guid person))
+        {
+            return;
+        }
+
+        Finish(await Get<Spaces>().AddStaffAsync(Org, Actor, SpaceId, new UserId(person)), "added");
+    }
+
+    private async Task RemoveStaffAsync(Guid person)
+    {
+        if (!_canManage)
+        {
+            Forbid();
+            return;
+        }
+
+        Finish(await Get<Spaces>().RemoveStaffAsync(Org, Actor, SpaceId, new UserId(person)), "removed");
+    }
+
+    private async Task ArchiveAsync()
+    {
+        if (!_canManage)
+        {
+            Forbid();
+            return;
+        }
+
+        Result archived = await Get<Spaces>().ArchiveAsync(Org, Actor, SpaceId);
+        if (archived.IsSuccess)
+        {
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/spaces?done=archived");
+            return;
+        }
+
+        _problem = T.Error(archived.Error!);
+    }
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/spaces/{SpaceId}?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

@@ -15,8 +15,8 @@
     they've waited an hour unacknowledged: a moderator takes one on, then dismisses it, removes the
     message or escalates it, with a note. Then escalations waiting for their outcome (D116), then
     the messages screening held (D114), oldest first: a moderator releases one or removes it, with
-    a reason. Nobody of the conversation's organisation decides any. Each links to its message's
-    history (D116).
+    a reason. Then the posts in spaces screening held (D120), decided the same way. Nobody of the
+    conversation's or space's organisation decides any. Each message links to its history (D116).
 *@
 <PageTitle>@T["site.nav.moderation"] · BrightTime</PageTitle>
 
@@ -253,6 +253,78 @@ else
             </ol>
         }
     </section>
+
+    @* D120: posts in spaces that screening held, decided as messages are. *@
+    <section aria-labelledby="held-posts-heading">
+        <h2 id="held-posts-heading">@T["moderation.posts.heading"] <span class="count">(@_posts.Count)</span></h2>
+        <p class="hint">@T["moderation.posts.intro"]</p>
+        @if (_posts.Count == 0)
+        {
+            <p>@T["moderation.posts.none"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (HeldPost p in _posts)
+                {
+                    string id = p.Id.ToString("N");
+                    bool invalid = _postErrors.ContainsKey(p.Id);
+                    <li>
+                        <article aria-labelledby="post-@id">
+                            <h3 id="post-@id">@T.Format("moderation.held.heading", ("org", Text.Name(p.OrgName)), ("date", T.DateTime(p.WrittenAt)))</h3>
+                            <dl class="facts">
+                                <dt>@T["moderation.posts.space"]</dt>
+                                <dd dir="auto">@p.SpaceName</dd>
+                                <dt>@T["moderation.posts.author"]</dt>
+                                <dd>@SpaceRole(p.AuthorRole)</dd>
+                                <dt>@T["moderation.held.why"]</dt>
+                                <dd>@string.Join(", ", p.Reasons.Select(Reason))</dd>
+                            </dl>
+
+                            @if (p.Answering is { } answering)
+                            {
+                                <h4>@T["moderation.posts.answering"]</h4>
+                                <ol class="messages">
+                                    <li>
+                                        <p class="note">@SpaceRole(answering.SenderRole) · @T.DateTime(answering.SentAt)</p>
+                                        <p class="body" dir="auto">@answering.Body</p>
+                                    </li>
+                                </ol>
+                            }
+
+                            <h4>@T["moderation.posts.post"]</h4>
+                            <blockquote class="held-body" dir="auto">@p.Body</blockquote>
+
+                            @if (p.OwnOrganisation)
+                            {
+                                <p class="notice">@T["moderation.posts.own"]</p>
+                            }
+                            else
+                            {
+                                <form method="post" class="reason-form" @formname="@("post-" + id)" @onsubmit="() => DecidePostAsync(p.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="post-reason-@id">@T["moderation.held.reason"]</label>
+                                        <textarea id="post-reason-@id" name="reason" rows="2" maxlength="@HeldMessages.MaxReason" dir="auto"
+                                                  aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(invalid ? "post-reason-" + id + "-error" : null)"></textarea>
+                                        @if (invalid)
+                                        {
+                                            <p class="field-error" id="post-reason-@id-error">@_postErrors[p.Id]</p>
+                                        }
+                                    </div>
+                                    <button type="submit" name="decision" value="release">@T["moderation.posts.release"]</button>
+                                    @if (CanRemove)
+                                    {
+                                        <button type="submit" name="decision" value="remove" class="secondary-button">@T["moderation.held.remove"]</button>
+                                    }
+                                </form>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
 }
 
 @code {
@@ -260,6 +332,8 @@ else
 
     private IReadOnlyList<QueuedReport> _reports = [];
     private IReadOnlyList<HeldMessage> _held = [];
+    private IReadOnlyList<HeldPost> _posts = [];
+    private readonly Dictionary<Guid, string> _postErrors = [];
     private IReadOnlyList<EscalatedReport> _escalated = [];
     private readonly Dictionary<Guid, string> _outcomeErrors = [];
     private string? _problem;
@@ -275,6 +349,7 @@ else
             _reports = await Get<Reports>().ListAsync(Actor);
             _escalated = await Get<Reports>().EscalatedAsync(Actor);
             _held = await Get<HeldMessages>().ListAsync(Actor);
+            _posts = await Get<HeldPosts>().ListAsync(Actor);
         }
     }
 
@@ -300,6 +375,35 @@ else
         if (result.Error!.Code == "moderation.reason")
         {
             _reasonErrors[message] = T.Error(result.Error);
+        }
+        else
+        {
+            _problem = T.Error(result.Error);
+        }
+    }
+
+    private async Task DecidePostAsync(Guid post)
+    {
+        string decision = FormValue("decision");
+        if (decision == "remove" && !CanRemove)
+        {
+            Forbid();
+            return;
+        }
+
+        HeldPosts held = Get<HeldPosts>();
+        Result result = decision == "remove"
+            ? await held.RemoveAsync(Actor, post, FormValue("reason"))
+            : await held.ReleaseAsync(Actor, post, FormValue("reason"));
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/moderation?done={(decision == "remove" ? "post_removed" : "post_released")}");
+            return;
+        }
+
+        if (result.Error!.Code == "moderation.reason")
+        {
+            _postErrors[post] = T.Error(result.Error);
         }
         else
         {
@@ -393,6 +497,8 @@ else
     };
 
     private string Role(string role) => T.Has("provider.messages.role." + role) ? T["provider.messages.role." + role] : role;
+
+    private string SpaceRole(string role) => T.Has("moderation.posts.role." + role) ? T["moderation.posts.role." + role] : role;
 
     private string Reason(string reason) => T.Has("moderation.reason." + reason) ? T["moderation.reason." + reason] : reason;
 }

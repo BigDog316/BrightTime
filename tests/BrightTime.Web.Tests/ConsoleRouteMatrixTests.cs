@@ -64,7 +64,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
     }
 
     /// <summary>Route parameters for records the seed has none of: families and staff make them.</summary>
-    private static readonly string[] Unseeded = ["ApplicationId", "FormId", "WaiverId", "ConversationId", "BadgeId", "PlaylistId", "MediaId"];
+    private static readonly string[] Unseeded = ["ApplicationId", "FormId", "WaiverId", "ConversationId", "BadgeId", "PlaylistId", "MediaId", "SpaceId"];
 
     [Fact]
     public async Task The_organisers_pages_refuse_providers_and_open_for_organisers()
@@ -121,7 +121,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
             "OrgId" => Victim.Id.ToString(),
             "ListingId" => listing.ToString(),
             "SiteId" => site.ToString(),
-            "ApplicationId" or "FormId" or "WaiverId" or "ConversationId" or "BadgeId" or "PlaylistId" or "MediaId" => Guid.Empty.ToString(),
+            "ApplicationId" or "FormId" or "WaiverId" or "ConversationId" or "BadgeId" or "PlaylistId" or "MediaId" or "SpaceId" => Guid.Empty.ToString(),
             "Vocabulary" => "category",
             "TermId" => KettleTaxonomy.TermId("category", "stem").ToString(),
             "CollectionId" => db.Data.Collections![0].Id.ToString(),

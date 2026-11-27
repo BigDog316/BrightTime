@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Text.Json;
 using BrightTime.Abstractions.Screening;
 using BrightTime.Infrastructure.Auditing;
 using BrightTime.Infrastructure.Outbox;
@@ -30,19 +28,6 @@ public sealed record ConversationSummary(Guid Id, Guid OrgId, string OrgName, st
 /// </summary>
 [YouthData]
 public sealed record MessageView(Guid Id, bool FromMe, string SenderRole, string Body, string State, DateTimeOffset SentAt, IReadOnlyList<string>? HeldFor = null);
-
-/// <summary>Which screen a message passes before anyone else sees it.</summary>
-internal enum MessageScreen
-{
-    /// <summary>Between adults: none.</summary>
-    None,
-
-    /// <summary>An adult's message to a young person: an attempt to take it off the platform (D53).</summary>
-    ContactExchange,
-
-    /// <summary>A young person's own message: personal information (D117).</summary>
-    YouthPii,
-}
 
 /// <summary>
 /// A thread as a participant sees it. <see cref="ReadByOrganisation"/> is what the screen tells
@@ -97,7 +82,7 @@ public sealed class Conversations(
     public const int MaxSubject = 200;
 
     /// <summary>The reason a message is held when its screen failed (D117): it fails closed.</summary>
-    public const string ScreeningError = "screening_error";
+    public const string ScreeningError = ContentScreening.ScreeningError;
 
     public const string NewMessageKind = "new_message";
     public const string NewMessageTitle = "notify.message.new";
@@ -381,44 +366,7 @@ public sealed class Conversations(
     /// <summary>Writes a message (held when screening flags it) and tells the other participants of a sent one.</summary>
     internal async Task<MessageRecord> WriteAsync(ConversationRecord conversation, UserId sender, string text, MessageScreen screen, CancellationToken ct)
     {
-        // Each screen's verdict: held or not, why, where in the text, and how long it took.
-        string decision = "pass";
-        IReadOnlyList<string> reasons = [];
-        IReadOnlyList<PiiSpan> spans = [];
-        string? version = null;
-        int? latency = null;
-        if (screen == MessageScreen.ContactExchange)
-        {
-            reasons = ContactExchangeScreen.Reasons(text);
-            decision = reasons.Count > 0 ? "hold" : "pass";
-        }
-        else if (screen == MessageScreen.YouthPii)
-        {
-            long started = Stopwatch.GetTimestamp();
-            ScreeningOutcome outcome;
-            try
-            {
-                outcome = await screener.ScreenTextAsync(text, new ScreeningContext(
-                    AuthorIsMinor: true, AudienceIncludesMinor: conversation.IncludesMinor, AuthorIsAdultAddressingMinor: false, Surface: "message"), ct).ConfigureAwait(false);
-            }
-            catch (Exception e) when (e is not OperationCanceledException)
-            {
-                // Fails closed: a screen that breaks holds the message.
-                outcome = new ScreeningOutcome(ScreeningDecision.Error, [], new Dictionary<string, double>(StringComparer.Ordinal), null, e.GetType().Name);
-            }
-
-            latency = (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-            version = outcome.ModelVersion;
-            spans = outcome.PiiSpans;
-            decision = outcome.Decision.ToString().ToLowerInvariant();
-            reasons = outcome.Decision switch
-            {
-                ScreeningDecision.Pass => [],
-                ScreeningDecision.Error => [ScreeningError],
-                _ => outcome.Labels.Count > 0 ? [.. outcome.Labels.Keys] : [ScreeningError],
-            };
-        }
-
+        ScreenVerdict? verdict = await ContentScreening.ScreenAsync(screener, text, screen, conversation.IncludesMinor, "message", ct).ConfigureAwait(false);
         MessageRecord message = new()
         {
             Id = UuidV7.NewId(),
@@ -427,28 +375,14 @@ public sealed class Conversations(
             SenderUserId = sender.Value,
             Body = text,
             // Whatever isn't a pass is held for a moderator: a redaction or a block too (D117).
-            State = decision == "pass" ? MessageStates.Sent : MessageStates.Held,
-            ScreenResult = screen == MessageScreen.None ? null : JsonSerializer.Serialize(new { reasons }),
+            State = verdict is null || verdict.Passed ? MessageStates.Sent : MessageStates.Held,
+            ScreenResult = verdict?.ScreenResult,
             SentAt = clock.StoredNow(),
         };
         db.Messages.Add(message);
-        if (screen != MessageScreen.None)
+        if (verdict is not null)
         {
-            // When and why, as its own record (D116): the moderation history reads the hold from here.
-            db.ScreeningResults.Add(new ScreeningResultRecord
-            {
-                Id = UuidV7.NewId(),
-                TenantId = conversation.TenantId,
-                TargetKind = "message",
-                TargetId = message.Id,
-                Provider = screen == MessageScreen.YouthPii ? Infrastructure.Screening.LocalPiiScreen.Provider : ContactExchangeScreen.Provider,
-                Decision = decision,
-                Labels = JsonSerializer.Serialize(reasons.ToDictionary(r => r, _ => 1.0)),
-                PiiSpans = JsonSerializer.Serialize(spans.Select(s => new { start = s.Start, length = s.Length, kind = s.Kind })),
-                ModelVersion = version,
-                LatencyMs = latency,
-                CreatedAt = message.SentAt,
-            });
+            db.ScreeningResults.Add(verdict.Record(conversation.TenantId, "message", message.Id, message.SentAt));
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -586,6 +520,8 @@ public static class CommunityModule
         services.AddScoped<Moderation.Reports>();
         services.AddScoped<Moderation.ModerationHistory>();
         services.AddScoped<Moderation.Restrictions>();
+        services.AddScoped<Moderation.HeldPosts>();
+        services.AddScoped<Groups.Spaces>();
         return services;
     }
 }

@@ -1,0 +1,67 @@
+@page "/spaces"
+@* The spaces a young person is in (D120): one for each activity they're enrolled in whose space is
+   open, once two of its staff are in it and their consent allows posting. Newest activity first. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+<h1>@T["app.spaces.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p class="hint">@T["app.spaces.intro"]</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_spaces is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_spaces is { Count: 0 })
+    {
+        <p>@T["app.spaces.none"]</p>
+        @if (Session.Me?.IsYouth == true && Session.Capabilities is { CanPostInCommunity: false })
+        {
+            <p class="hint">@T["app.spaces.cannot_post"]</p>
+        }
+    }
+    else if (_spaces is not null)
+    {
+        <ul class="cards">
+            @foreach (SpaceSummary s in _spaces)
+            {
+                <li class="card" @key="s.Id">
+                    <h2><a href="spaces/@s.Id.ToString("D")" dir="auto">@s.Name</a></h2>
+                    <p>@T.Format("app.spaces.from", ("org", Text.Name(s.OrgName)))</p>
+                    <p class="hint">
+                        @T.Format("app.spaces.counts", ("youth", s.YouthCount), ("staff", s.StaffCount))
+                        @if (s.LastPostAt is { } last)
+                        {
+                            @(" · " + T.DayTime(last))
+                        }
+                        @if (s.IsArchived)
+                        {
+                            @(" · " + T["app.spaces.archived"])
+                        }
+                    </p>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<SpaceSummary>? _spaces;
+    private ApiProblem? _problem;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<SpaceSummary>> found = await Api.SpacesAsync();
+        _problem = found.Problem;
+        _spaces = found.Value;
+    }
+}

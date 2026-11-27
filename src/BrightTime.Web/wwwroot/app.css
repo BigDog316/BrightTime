@@ -458,6 +458,13 @@ a.secondary {
     padding-inline-start: 0.75rem;
 }
 
+/* D120: a space's replies, set in beneath the post they answer. */
+.posts .replies {
+    border-inline-start: 2px solid var(--bt-muted);
+    margin-inline-start: 0.5rem;
+    padding-inline-start: 1rem;
+}
+
 /* D116: a message's moderation history, one thing after another. */
 .history {
     border-inline-start: 2px solid var(--bt-muted);

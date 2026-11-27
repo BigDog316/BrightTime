@@ -37,6 +37,8 @@ public static class BrightTimeRoles
                 .. PublicBrowse,
                 Permissions.Listings.Save,
                 Permissions.Audit.Read,
+                Permissions.Spaces.View,
+                Permissions.Spaces.Post,
             ],
 
             // A child account browses and nothing else. Everything it can do
@@ -66,6 +68,9 @@ public static class BrightTimeRoles
                 Permissions.Attendance.ViewRoster,
                 Permissions.Attendance.OfflineSync,
                 Permissions.Messages.SendToFamily,
+                Permissions.Spaces.View,
+                Permissions.Spaces.Post,
+                Permissions.Spaces.ManageMembership,
                 Permissions.Reports.RunProvider,
                 Permissions.Badges.Issue,
                 Permissions.Playlists.Author,
@@ -95,6 +100,9 @@ public static class BrightTimeRoles
                 Permissions.Attendance.ViewRoster,
                 Permissions.Attendance.OfflineSync,
                 Permissions.Messages.SendToFamily,
+                Permissions.Spaces.View,
+                Permissions.Spaces.Post,
+                Permissions.Spaces.ManageMembership,
                 Permissions.Reports.RunProvider,
                 Permissions.Badges.Define,
                 Permissions.Badges.Issue,

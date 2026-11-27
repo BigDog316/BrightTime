@@ -13,6 +13,7 @@ of it happens in the **console** on the website. Taking attendance on a phone ha
 - [Fees and payments](#fees-and-payments)
 - [Attendance](#attendance)
 - [Messages](#messages)
+- [Spaces](#spaces)
 - [Reports](#reports)
 - [Badges](#badges)
 - [Playlists](#playlists)
@@ -315,6 +316,30 @@ and the kiosk screen, are still to come: until then, mark the young person on yo
 
 Families read and answer in the app, under **Messages**. They see your organisation's name, not yours,
 and each conversation lists who is in it.
+
+## Spaces
+
+A **space** is an activity's own place for its young people and the staff you choose to post and
+reply. Each activity can have one. **Spaces** lists your organisation's; anyone on your staff can
+read them.
+
+- **Open one** for a published activity (owners, admins and staff). You're its first member of
+  staff; add a second, because **no young person joins a space with fewer than two staff**. You
+  can't take someone out if that would leave young people with fewer than two.
+- **Young people join by themselves.** Everyone enrolled in the activity with their own sign-in,
+  whose consent allows posting, is in it, and leaves when their enrolment ends. Nobody under 13
+  is ever in a space. Someone a contact restriction keeps from one of its staff doesn't join.
+- **Staff you add** must be adults on your staff, with the county's clearances if it requires them,
+  and kept from none of its young people.
+- **Posting:** only members post or reply. What a young person writes is checked first, and so is
+  what an adult writes where young people read. A post that might share personal information or
+  take someone off the platform waits for a county moderator, and only its author sees it until
+  then. A moderator who has paused your messages to young people also stops you posting in a space
+  they're in.
+- Young people see each other as the activity's roster names them, and see you only as your
+  organisation's staff. Everyone in a space is told your organisation can read it.
+- **Archive** a space to keep it as it is, to read, and stop new posts. The activity can then have
+  a new one.
 
 ## Reports
 

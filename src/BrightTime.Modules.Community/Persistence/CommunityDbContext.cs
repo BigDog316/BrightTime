@@ -208,8 +208,109 @@ public sealed class ReportRecord
 }
 
 /// <summary>
+/// A space (D120, <c>community.space</c>): an activity's own place for its young people and staff to
+/// post. One open space per activity.
+/// </summary>
+public sealed class SpaceRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid OrgId { get; init; }
+
+    public Guid? ListingId { get; init; }
+
+    public required string SpaceKind { get; init; }
+
+    public required string Name { get; set; }
+
+    public string? Description { get; set; }
+
+    public string Visibility { get; init; } = "members";
+
+    public required string Status { get; set; }
+
+    /// <summary>The schema's, unused: an activity's own ages decide who's in its space (D120).</summary>
+    public short? MinAge { get; init; }
+
+    public Guid? CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset? ArchivedAt { get; set; }
+}
+
+/// <summary>
+/// Someone in a space (<c>community.space_member</c>). <c>is_minor</c> is the database's to set from
+/// the account, and <c>enforce_safe_space()</c> refuses a minor in a space with fewer than two adult
+/// members of staff.
+/// </summary>
+public sealed class SpaceMemberRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid SpaceId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public required string MemberRole { get; init; }
+
+    public bool IsMinor { get; init; }
+
+    public DateTimeOffset JoinedAt { get; init; }
+
+    public DateTimeOffset? LeftAt { get; set; }
+
+    /// <summary>The schema's, unused so far: a mute is a person's (D119), across every space.</summary>
+    public DateTimeOffset? MutedUntil { get; init; }
+}
+
+/// <summary>A post in a space, or a reply to one (<c>community.post</c>).</summary>
+public sealed class PostRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid SpaceId { get; init; }
+
+    public Guid AuthorUserId { get; init; }
+
+    public bool AuthorIsMinor { get; init; }
+
+    public string? Body { get; init; }
+
+    public required string State { get; set; }
+
+    public string? ScreenResult { get; set; }
+
+    public DateTimeOffset? ScreenedAt { get; set; }
+
+    /// <summary>When it was published; for a held post a moderator released, when it was released.</summary>
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    public string? HeldReason { get; set; }
+
+    public DateTimeOffset? RemovedAt { get; set; }
+
+    public Guid? RemovedBy { get; set; }
+
+    public Guid? ReplyToId { get; init; }
+
+    public int ReplyCount { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>The schema's, unused so far: posts aren't edited (D120).</summary>
+    public DateTimeOffset? EditedAt { get; init; }
+}
+
+/// <summary>
 /// The Community module's context (M3b): messaging, the moderation of what screening holds (D114),
-/// and reports (D115).
+/// reports (D115), and spaces with their posts (D120).
 /// </summary>
 public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
@@ -232,6 +333,12 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
     public DbSet<ScreeningResultRecord> ScreeningResults => Set<ScreeningResultRecord>();
 
     public DbSet<PersonRestrictionRecord> PersonRestrictions => Set<PersonRestrictionRecord>();
+
+    public DbSet<SpaceRecord> Spaces => Set<SpaceRecord>();
+
+    public DbSet<SpaceMemberRecord> SpaceMembers => Set<SpaceMemberRecord>();
+
+    public DbSet<PostRecord> Posts => Set<PostRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -290,6 +397,35 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.Property(x => x.Labels).HasColumnType("jsonb");
             b.Property(x => x.PiiSpans).HasColumnType("jsonb");
             b.HasIndex(x => new { x.TargetKind, x.TargetId });
+        });
+
+        modelBuilder.Entity<SpaceRecord>(b =>
+        {
+            b.ToTable("space");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.OrgId).HasFilter("status = 'active'");
+            b.HasIndex(x => x.ListingId).IsUnique().HasFilter("listing_id is not null and status = 'active'");
+        });
+
+        modelBuilder.Entity<SpaceMemberRecord>(b =>
+        {
+            b.ToTable("space_member");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.SpaceId, x.UserId }).IsUnique().HasFilter("left_at is null");
+            b.HasIndex(x => x.UserId).HasFilter("left_at is null");
+        });
+
+        modelBuilder.Entity<PostRecord>(b =>
+        {
+            b.ToTable("post");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.ScreenResult).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.SpaceId, x.PublishedAt }).IsDescending(false, true).HasFilter("state = 'published'");
+            b.HasIndex(x => new { x.TenantId, x.CreatedAt }).HasFilter("state in ('screening','held')");
+            b.HasIndex(x => x.AuthorUserId);
         });
 
         modelBuilder.Entity<ReportRecord>(b =>

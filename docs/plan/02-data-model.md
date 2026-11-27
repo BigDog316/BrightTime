@@ -14,7 +14,7 @@ configuration at all.
 | `50-enrollment.sql` | family profile and members, support needs, contacts, profile shares, form definitions, eligibility rules, seat pools, applications and answers, enrollments, waivers and signatures, fees and payment intents |
 | `55-attendance.sql` | attendance records, offline sync batches, rotating check-in tokens, kiosk devices |
 | `60-learning.sql` | learner profile, goals, participation, skills, projects, Open Badges issuers/keys/classes/assertions, playlists and progress, unlock rules, exports |
-| `70-community.sql` | spaces and members, posts, challenges, rubrics, submissions, feedback, **conversations with the safety invariant**, messages, screening, reports, moderation actions, restrictions on a person (D119), showcase |
+| `70-community.sql` | spaces and members, posts, challenges, rubrics, submissions, feedback, **conversations with the safety invariant**, messages, screening, reports, moderation actions, restrictions on a person (D119), showcase; spaces' safety invariant (D120) |
 | `80-workforce.sql` | mentor profiles and availability, courses and completions, training requirements, curriculum library, gigs, applications, assignments, hours |
 | `90-landscape.sql` | assets, features, photos, merges, field campaigns/assignments/observations, surveys and responses, barriers, census denominators, transit feeds and stops, travel times, supply metrics, desert scores |
 | `95-analytics.sql` | pseudonyms, daily rollups, utilisation, demand gaps, retention, suppression policy and functions, **suppressed views**, research exports, report runs |

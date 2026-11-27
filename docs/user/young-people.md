@@ -7,6 +7,7 @@ or guardian adds you to their account; their guide is [here](families.md).
 - [Finding things to do](#finding-things-to-do)
 - [What your account can do](#what-your-account-can-do)
 - [Messages](#messages)
+- [Groups (app)](#groups-app)
 - [Staying safe](#staying-safe)
 - [Your portfolio and badges (app)](#your-portfolio-and-badges-app)
 - [Your skills, projects and goals (app)](#your-skills-projects-and-goals-app)
@@ -68,6 +69,20 @@ puts them in your phone's calendar with reminders. The file has no names in it.
 When a program writes to you, it shows under **Messages**, in **Account** or at the top of your
 **Inbox**. Each conversation says who is in it. You can reply, except to an announcement. A
 program can only message you once your consent allows it.
+
+## Groups (app)
+
+When an activity you're enrolled in opens a group, you're in it under **Groups** in the app, as
+long as your consent allows posting and you're 13 or over. It has the other young people in the
+activity and some of its staff, and always says who is in it and that the organisation can read it.
+
+- Write a post, or reply to one. Keep your phone number, address, email and other apps out of it:
+  a post with any of them waits for a moderator, and only you see it until then, with what to take
+  out.
+- Others see you by your first name and the first letter of your family name, as the activity
+  knows you. Staff are shown as the organisation's staff.
+- **Take it down** removes a post of yours for everyone.
+- You leave the group when your place in the activity ends.
 
 ## Staying safe
 

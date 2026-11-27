@@ -1,0 +1,173 @@
+@page "/provider/orgs/{OrgId:guid}/spaces"
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Groups
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Opportunities.Contracts
+@using BrightTime.Modules.Opportunities.Editing
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    The organisation's spaces (D120): one per activity, where its young people and the staff chosen
+    for it post and reply. Staff see every one of the organisation's; those who manage membership
+    open one for a published activity.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.spaces.denied"]</h1>
+    <p>@T["provider.spaces.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_name is not null)
+{
+    <PageTitle>@T.Format("provider.spaces.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider">@T["site.nav.organisations"]</a></p>
+    <h1>@_name</h1>
+    <OrgNav OrgId="@OrgId" Current="spaces" Role="@(RoleIn(Org) ?? "")" />
+
+    <h2>@T["provider.nav.spaces"]</h2>
+    <p class="hint">@T["provider.spaces.intro"]</p>
+    @if (Done is "archived")
+    {
+        <p class="notice success" role="status">@T["provider.spaces.archived_done"]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_spaces.Count == 0)
+    {
+        <p>@T["provider.spaces.none"]</p>
+    }
+    else
+    {
+        <ul class="card-list spaces">
+            @foreach (SpaceSummary s in _spaces)
+            {
+                <li>
+                    <a href="/provider/orgs/@OrgId/spaces/@s.Id" dir="auto">@s.Name</a>
+                    <span class="note">
+                        @T.Format("provider.spaces.counts", ("youth", s.YouthCount), ("staff", s.StaffCount))
+                        @if (s.LastPostAt is { } last)
+                        {
+                            @(" · " + T.Format("provider.spaces.last_post", ("date", T.DateTime(last))))
+                        }
+                        @if (s.Status == SpaceStatuses.Archived)
+                        {
+                            @(" · " + T["provider.spaces.archived"])
+                        }
+                        @if (s.IsMember)
+                        {
+                            @(" · " + T["provider.spaces.you_are_in"])
+                        }
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (_canManage && _open.Count > 0)
+    {
+        <form method="post" @formname="open" @onsubmit="OpenAsync" class="message-form">
+            <AntiforgeryToken />
+            <fieldset>
+                <legend>@T["provider.spaces.open"]</legend>
+                <p class="hint">@T["provider.spaces.open_hint"]</p>
+                <div class="field">
+                    <label for="open-listing">@T["provider.spaces.listing"]</label>
+                    <select id="open-listing" name="listing">
+                        @foreach ((Guid id, string title) in _open)
+                        {
+                            <option value="@id" dir="auto">@title</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="open-name">@T["provider.spaces.name"]</label>
+                    <input id="open-name" name="name" maxlength="@Spaces.MaxName" dir="auto" aria-describedby="open-name-hint" />
+                    <p class="hint" id="open-name-hint">@T["provider.spaces.name_hint"]</p>
+                </div>
+                <div class="field">
+                    <label for="open-description">@T["provider.spaces.description"]</label>
+                    <textarea id="open-description" name="description" rows="3" maxlength="@Spaces.MaxDescription" dir="auto"></textarea>
+                </div>
+                <button type="submit">@T["provider.spaces.open_button"]</button>
+            </fieldset>
+        </form>
+    }
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private string? _name;
+    private IReadOnlyList<SpaceSummary> _spaces = [];
+
+    /// <summary>Published activities without an open space.</summary>
+    private IReadOnlyList<(Guid Id, string Title)> _open = [];
+    private string? _problem;
+    private bool _canManage;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Spaces.View))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org);
+        if (_name is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _canManage = await CanActForAsync(Org, Permissions.Spaces.ManageMembership);
+        _spaces = await Get<Spaces>().ForOrganisationAsync(Org, Actor);
+        HashSet<Guid> taken = [.. _spaces.Where(s => s.Status == SpaceStatuses.Active && s.ListingId is not null).Select(s => s.ListingId!.Value)];
+        _open = [.. (await Get<ListingEditor>().ListForOrganisationAsync(Org))
+            .Where(l => l.Status == ListingStatus.Published && !taken.Contains(l.Id))
+            .OrderBy(l => l.Title, StringComparer.CurrentCulture).Select(l => (l.Id, l.Title))];
+    }
+
+    private async Task OpenAsync()
+    {
+        if (!_canManage)
+        {
+            Forbid();
+            return;
+        }
+
+        if (!Guid.TryParse(FormValue("listing"), out Guid listing) || _open.All(l => l.Id != listing))
+        {
+            return;
+        }
+
+        Result<Guid> opened = await Get<Spaces>().OpenAsync(Org, Actor, listing, FormValue("name"), FormValue("description"));
+        if (!opened.IsSuccess)
+        {
+            _problem = T.Error(opened.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/spaces/{opened.Value}?done=opened");
+    }
+}

@@ -497,6 +497,17 @@ dl.facts dd {
     overflow-wrap: anywhere;
 }
 
+/* D120: a space's posts, newest first, each with its replies set in beneath it. A post of your
+   own isn't pushed aside as a message is: it's still in the one feed. */
+.posts li.mine {
+    margin-inline-start: 0;
+}
+
+.posts .replies {
+    margin-block-start: var(--bt-space-3);
+    margin-inline-start: var(--bt-space-4);
+}
+
 /* A check-in code (D76): black on white in either theme, as wide as a phone allows but no wider
    than a scanner needs, and centred so a staff member can aim at it. */
 .qr-frame {

@@ -35,6 +35,10 @@ else
         <ul class="menu">
             <li><a href="schedule">@T["app.schedule.title"]</a></li>
             <li><a href="messages">@T["app.messages.title"]</a></li>
+            @if (me.IsYouth)
+            {
+                <li><a href="spaces">@T["app.spaces.title"]</a></li>
+            }
             @if (Portfolio.HasPortfolio(me))
             {
                 <li><a href="portfolio">@T["app.portfolio.title"]</a></li>

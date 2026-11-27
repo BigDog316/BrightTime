@@ -260,6 +260,24 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<ConversationMessage>> SendMessageAsync(Guid id, string body, CancellationToken ct = default) =>
         SendAsync<ConversationMessage>(HttpMethod.Post, $"conversations/{id:D}/messages", new { body }, signedIn: true, ct);
 
+    // ---- spaces (D120) -----------------------------------------------------------------------
+
+    /// <summary>The spaces the person is in, newest activity first.</summary>
+    public Task<ApiResult<IReadOnlyList<SpaceSummary>>> SpacesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<SpaceSummary>>("spaces", signedIn: true, ct);
+
+    /// <summary>A space with its people and posts.</summary>
+    public Task<ApiResult<Space>> SpaceAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<Space>($"spaces/{id:D}", signedIn: true, ct);
+
+    /// <summary>A post in a space, or a reply to one of its posts; screened first, so it may come back held.</summary>
+    public Task<ApiResult<SpacePost>> PostInSpaceAsync(Guid space, string body, Guid? replyTo, CancellationToken ct = default) =>
+        SendAsync<SpacePost>(HttpMethod.Post, $"spaces/{space:D}/posts", new { body, replyTo }, signedIn: true, ct);
+
+    /// <summary>Takes down a post of the person's own.</summary>
+    public Task<ApiResult> DeletePostAsync(Guid space, Guid post, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"spaces/{space:D}/posts/{post:D}", null, signedIn: true, ct);
+
     /// <summary>Reports a message someone else wrote in one of the person's conversations (D115).</summary>
     public Task<ApiResult<ReportReceipt>> ReportMessageAsync(Guid messageId, string reason, string? details, CancellationToken ct = default) =>
         SendAsync<ReportReceipt>(HttpMethod.Post, "reports", new { targetKind = "message", targetId = messageId, reason, details }, signedIn: true, ct);

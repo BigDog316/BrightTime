@@ -4072,6 +4072,68 @@ a mute stopping a message and a new conversation, lifting it, a suspension's sta
 booked end, lifting it, the history in order, a young person and the organisation refused),
 `SuspensionEndsTests` (an ended suspension, a longer one, one with no end), `RolePermissionTests`.
 
+### D120 — Spaces and posts (**proposed 2026-11-27**)
+
+M5's social learning space had a schema and no code. Sam chose on 2026-11-27: spaces and posts
+first; the activity's enrolled young people join by themselves and staff are chosen; a held post
+goes to the moderation queue; 13 and over only, as plan/04 has it.
+- **A space** belongs to one activity: one open space per listing (`ux_space_listing_active`), a
+  `cohort`, visible to its members. An organisation's staff with `spaces.manage_membership` open
+  it for a published activity (the opener is its first member of staff), choose its other staff,
+  and archive it; an archived space reads as it was, takes no posts, and lets the activity have a
+  new one. `spaces.view` lets the organisation's staff read any of its spaces, member or not
+  (T1's organisation visibility, as with conversations); only members post.
+- **Its staff** are adults on the organisation's staff, with the county's clearances where it
+  requires them (D99), and nobody a contact restriction keeps from a young person in it. Nobody is
+  taken out if that would leave young people with fewer than two staff (`spaces.unsafe_shape`).
+  Someone who leaves the organisation leaves its spaces.
+- **Its young people** aren't chosen. Everyone with their own account, a live enrolment in the
+  activity, and consent that allows posting in a community (`can_post_in_community`: so 13 and
+  over, vouched for by an organisation, with a guardian's consent where it's needed) is a member,
+  once the space has two staff and while no restriction keeps a member of staff from them; they
+  leave when that stops being so. Membership is brought up to date whenever anyone opens the space
+  or a list of spaces, before anything is read or written (there's no enrolment event to follow),
+  and each change is audited as `spaces.membership_changed`. That reads the activity's roster on
+  every open, which a cohort's size makes cheap; an enrolment event would let it stop. Two opens at
+  once give way to each other (`on conflict do nothing` on the active-member index), and a reply
+  is counted in its post in one statement.
+- **The database's guarantee:** `set_space_member_minor()` sets `is_minor` from the account and
+  refuses a child's account outright; the deferred constraint trigger `enforce_safe_space()`
+  refuses a minor in a space with fewer than two adult members who aren't there as young people,
+  at commit, as `enforce_safe_conversation()` does for conversations.
+- **Posts and replies:** a member posts up to 4,000 characters, or replies to a published post
+  (one level). Everything a young person writes is screened by `LocalPiiScreen` (D117), and an
+  adult's post in a space with young people by the contact-exchange screen (D53); each is a
+  `screening_result` row on the post. One that doesn't pass is `held`, with `held_reason`, shown
+  only to its author with why. A muted adult (D119) can't post where young people are
+  (`spaces.muted`). An author takes down their own post, published or held
+  (`deleted_by_author`). Screening is shared with messages now (`ContentScreening`).
+- **Names:** a young person is shown as the activity's roster names them (first name and last
+  initial, when the family's share names them; D44), to everyone in the space, or as "a young
+  person"; staff appear to young people only as the organisation's staff, and to their colleagues
+  by email. Account ids never leave the server.
+- **Held posts** join the moderation queue (**Posts held**, `HeldPosts`): the space, who wrote it
+  by role, why, and the post it answers. A moderator publishes it (as of then) or removes it, with
+  a reason, as a `moderation_action` on the post (`publish`, `remove`) and an audit event; never
+  someone of the space's organisation (`moderation.own_space`). Publishing is refused once the
+  space is archived, its author has left, or the post it answers is gone.
+- **Where:** the console's **Spaces** tab (`/provider/orgs/{org}/spaces`, a space's page with its
+  people, posts and forms); the app's **Groups** (young people only), from `GET /spaces`,
+  `GET /spaces/{id}`, `POST /spaces/{id}/posts` and `DELETE /spaces/{id}/posts/{post}`. New
+  permissions `spaces.view` and `spaces.post` (young people, programme staff, provider admins) and
+  `spaces.manage_membership` (programme staff, provider admins), all behind the clearance gate.
+- **Not in this:** notifications of new posts, pictures in posts, reporting a post (plan/05's
+  "report anything"), a post's moderation history page, guardians' view of their children's
+  spaces, challenges, submissions, rubrics, feedback and the showcase, mentors (M6), and live
+  updates (`/hubs/space/{id}`).
+
+Schema: `ux_space_listing_active` replaces `ix_space_listing`; `set_space_member_minor()` and
+`enforce_safe_space()` with their triggers. Rebuild the compose volume. Tests: `SpacesTests`
+(opening, joining with two staff and consent, a held post published by a moderator, the second
+member of staff kept while young people are in it, a muted adult, leaving with the enrolment,
+archiving; the database refusing one adult), `SpacesApiTests` (the app's side), `RolePermissionTests`,
+and `ConsoleRouteMatrixTests` (a space's page refuses another organisation's owner).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

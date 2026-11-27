@@ -446,6 +446,41 @@ public sealed record ConversationMessage(Guid Id, bool FromMe, string SenderRole
     public bool IsRemoved => State == "removed";
 }
 
+/// <summary>A space the person is in (D120): their activity's, with its young people and the staff chosen for it.</summary>
+public sealed record SpaceSummary(
+    Guid Id, Guid OrgId, string OrgName, Guid? ListingId, string Name, string? Description, string Status, int YouthCount, int StaffCount, DateTimeOffset? LastPostAt, bool IsMember)
+{
+    /// <summary>Archived: it reads as it was and takes no more posts.</summary>
+    public bool IsArchived => Status == "archived";
+}
+
+/// <summary>Someone in a space: a young person as the activity's roster names them, or not at all; staff never by name.</summary>
+public sealed record SpaceMember(string Role, string? Name, DateTimeOffset JoinedAt, bool IsMe)
+{
+    public bool IsYouth => Role == "youth";
+}
+
+/// <summary>
+/// A post, or a reply. A held one shows only to its author, until a moderator lets it through,
+/// with <see cref="HeldFor"/> the screen's reasons; so does one a moderator removed.
+/// </summary>
+public sealed record SpacePost(
+    Guid Id, bool FromMe, string AuthorRole, string? AuthorName, string Body, string State, DateTimeOffset At, IReadOnlyList<string>? HeldFor, IReadOnlyList<SpacePost> Replies)
+{
+    public bool IsHeld => State == "held";
+
+    public bool IsRemoved => State == "removed";
+
+    public bool IsPublished => State == "published";
+}
+
+/// <summary>A space with its people and its posts, newest first, each with its replies oldest first.</summary>
+public sealed record Space(
+    Guid Id, Guid OrgId, string OrgName, Guid? ListingId, string Name, string? Description, string Status, bool IsMember, bool CanPost, IReadOnlyList<SpaceMember> Members, IReadOnlyList<SpacePost> Posts)
+{
+    public bool IsArchived => Status == "archived";
+}
+
 /// <summary>A report taken (D115): a critical one is looked at within the hour.</summary>
 public sealed record ReportReceipt(Guid Id, string Reason, string Severity)
 {

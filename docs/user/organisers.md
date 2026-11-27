@@ -10,6 +10,7 @@ The county's moderators see **Moderation** alone.
 - [Reviewing a listing](#reviewing-a-listing)
 - [Moderation: reports](#moderation-reports)
 - [Moderation: held messages](#moderation-held-messages)
+- [Moderation: held posts](#moderation-held-posts)
 - [Moderation history](#moderation-history)
 - [Taxonomy](#taxonomy)
 - [Collections](#collections)
@@ -133,6 +134,19 @@ Write a reason, then:
 
 Your reason and decision are kept in the moderation record and the audit log, and can't be changed.
 If you're a member of the organisation that wrote a message, another moderator decides it.
+
+## Moderation: held posts
+
+Activities' spaces are checked the same way: a young person's post that seems to share their
+personal information, and a post by staff where young people read that looks like an attempt to
+move them elsewhere, wait under **Posts held**. Each shows the organisation, the space, who wrote
+it (by role), why it was held, and the post it answers if it's a reply. Write a reason, then:
+
+- **Publish it**: the space's members see it now. You can't publish a post once the space is
+  archived, its author has left the space, or the post it answers is no longer there.
+- **Remove it**: only its author sees it, marked as removed.
+
+If you wrote it, or you're a member of the organisation whose space it is, another moderator decides it.
 
 ## Moderation history
 

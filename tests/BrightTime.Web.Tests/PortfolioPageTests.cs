@@ -216,8 +216,8 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
     }
 
     /// <summary>
-    /// The badge's picture, described, and the issuer's logo beside its name, as decoration (D111);
-    /// both greyed once the badge no longer stands. Gives Hollis Bend Community Garden a logo straight
+    /// The badge's picture, described, and the issuer's logo beside its name, as decoration (D111),
+    /// its own picture from the media store's copy (D112); both greyed once the badge no longer stands. Gives Hollis Bend Community Garden a logo straight
     /// in the tables, and takes it away again.
     /// </summary>
     [Fact]
@@ -258,6 +258,11 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
             browser.Html.ShouldContain("alt=\"The Pond Keeper badge\"");
             browser.Html.ShouldContain($"src=\"/media/{logo:D}/480\"");
 
+            // A badge with its own picture (D112) shows its smaller copy from the media store. (The logo's bytes stand in for one.)
+            await db.ScalarAsync<int>("update learning.badge_class set image_media_id = @m where id = @c; select 1;", ("m", logo), ("c", badgeClass));
+            await browser.GetAsync($"/badges/{valid}");
+            browser.Html.ShouldContain($"<img class=\"badge-picture\" src=\"/media/{logo:D}/480\" alt=\"The Tree Warden badge\"");
+
             // An issuer with no logo, or no organisation, shows only its name.
             await browser.GetAsync($"/badges/{plain}");
             browser.Html.ShouldContain("alt=\"The Seed Saver badge\"");
@@ -271,6 +276,7 @@ public sealed class PortfolioPageTests(ConsoleFixture db)
             await db.ScalarAsync<int>(
                 """
                 update directory.organisation set logo_media_id = null where id = @o;
+                update learning.badge_class set image_media_id = null where image_media_id = @m;
                 delete from platform.media_blob where tenant_id = @t and object_key = @k;
                 delete from platform.media_object where id = @m;
                 select 1;

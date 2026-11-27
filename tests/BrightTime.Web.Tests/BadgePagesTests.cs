@@ -113,10 +113,15 @@ public sealed class BadgePagesTests(ConsoleFixture db)
         (await staff.PostFileAsync(page, "image", ("image", "lights.png", Png(120, "Drawn at 4 Mill Lane"), "image/png"))).Headers.Location!.PathAndQuery.ShouldBe($"{page}?done=image");
         await staff.GetAsync(page);
         WebUtility.HtmlDecode(staff.Html).ShouldContain("It has its own image.");
-        WebUtility.HtmlDecode(staff.Html).ShouldContain("src=\"data:image/png;base64,");
-        (await db.ScalarAsync<bool>("select position('Mill Lane'::bytea in bytes) = 0 from learning.badge_image where badge_class_id = @b", ("b", badge))).ShouldBeTrue();
+        const string ownImage = "select coalesce(image_media_id::text, '') from learning.badge_class where id = @b";
+        Guid image = Guid.Parse(await db.ScalarAsync<string>(ownImage, ("b", badge)));
+        staff.Html.ShouldContain($"<img class=\"badge-picture\" src=\"/media/{image:D}/480\"", Case.Sensitive, "its own picture is the media store's (D112)");
+        (await db.ScalarAsync<bool>(
+            "select position('Mill Lane'::bytea in b.bytes) = 0 from platform.media_blob b join platform.media_object m on m.object_key = b.object_key where m.id = @m",
+            ("m", image))).ShouldBeTrue();
         (await staff.PostAsync(page, "image-remove")).Headers.Location!.PathAndQuery.ShouldBe($"{page}?done=image_removed");
-        (await db.ScalarAsync<long>("select count(*) from learning.badge_image where badge_class_id = @b", ("b", badge))).ShouldBe(0);
+        (await db.ScalarAsync<string>(ownImage, ("b", badge))).ShouldBeEmpty();
+        (await db.ScalarAsync<long>("select count(*) from platform.media_object where id = @m", ("m", image))).ShouldBe(0, "removed, bytes and all");
         await staff.GetAsync(page);
         await staff.PostFileAsync(page, "image", ("image", "lights.png", Png(120, "again"), "image/png"));
 
@@ -133,7 +138,7 @@ public sealed class BadgePagesTests(ConsoleFixture db)
         html.ShouldContain("Lasts 24 months");
         html.ShouldNotContain("formname=\"save\"", Case.Sensitive, "a published badge has no form to change it");
         html.ShouldNotContain("formname=\"image\"", Case.Sensitive, "nor its picture");
-        html.ShouldContain("src=\"data:image/png;base64,");
+        html.ShouldContain("<img class=\"badge-picture\" src=\"/media/");
         html.ShouldContain($"value=\"{enrolled}\"");
         html.ShouldContain("Yaw M");
 

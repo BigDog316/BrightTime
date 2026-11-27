@@ -127,13 +127,31 @@ public sealed class BadgeApiTests(ApiFixture api)
                 await ProblemAsync(await admin.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), svg, Ct), HttpStatusCode.BadRequest, "badges.image");
             }
 
-            using (ByteArrayContent png = new(BadgeImageFileTests.Png(128, "Drawn at 4 Mill Lane")))
+            using (ByteArrayContent png = new(BadgeTestImages.Png(128, "Drawn at 4 Mill Lane")))
             {
                 await ProblemAsync(await outsider.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), png, Ct), HttpStatusCode.Forbidden, "badges.forbidden");
                 (await JsonAsync(await admin.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), png, Ct))).GetProperty("hasImage").GetBoolean().ShouldBeTrue();
             }
 
-            (await api.ScalarAsync<int>("select width from learning.badge_image where badge_class_id = @c", ("c", classId))).ShouldBe(128);
+            // Kept as a public media object (D112); a refused one leaves it be; a new one replaces it, bytes and all.
+            const string ownImage = "select image_media_id from learning.badge_class where id = @c";
+            Guid first = await api.ScalarAsync<Guid>(ownImage, ("c", classId));
+            (await api.ScalarAsync<int>("select width from platform.media_object where id = @m and visibility = 'public'", ("m", first))).ShouldBe(128);
+            using (ByteArrayContent tiny = new(BadgeTestImages.Png(32)))
+            {
+                await ProblemAsync(await admin.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), tiny, Ct), HttpStatusCode.BadRequest, "badges.image");
+            }
+
+            (await api.ScalarAsync<Guid>(ownImage, ("c", classId))).ShouldBe(first, "a refused picture leaves the one it had");
+            Guid second;
+            using (ByteArrayContent again = new(BadgeTestImages.Png(128, "Drawn at 4 Mill Lane")))
+            {
+                second = (await JsonAsync(await admin.PutAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/image"), again, Ct))).GetProperty("image").GetGuid();
+            }
+
+            second.ShouldNotBe(first);
+            (await api.ScalarAsync<Guid>(ownImage, ("c", classId))).ShouldBe(second);
+            (await api.ScalarAsync<long>("select count(*) from platform.media_object where id = @m", ("m", first))).ShouldBe(0, "the picture it replaced is gone");
             (await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}/image"), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound, "a draft's picture isn't public");
             (await JsonAsync(await admin.PostAsync(Relative($"api/v1/org/{org}/badge-classes/{classId}/publish"), null, Ct))).GetProperty("status").GetString().ShouldBe("published");
             await ProblemAsync(await admin.PutAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}", badge, Ct), HttpStatusCode.Conflict, "badges.not_draft");
@@ -141,7 +159,7 @@ public sealed class BadgeApiTests(ApiFixture api)
             HttpResponseMessage picture = await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}/image"), Ct);
             picture.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
             byte[] served = await picture.Content.ReadAsByteArrayAsync(Ct);
-            served.ShouldBe(BadgeImageFileTests.Png(128), "the picture without its text chunk");
+            served.ShouldBe(BadgeTestImages.Png(128), "the picture without its text chunk");
 
             // Awarded once, to someone enrolled with the organisation; another organisation can't award it.
             await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}/awards", new { enrollmentId = Guid.NewGuid() }, Ct), HttpStatusCode.BadRequest, "badges.recipient");

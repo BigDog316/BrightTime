@@ -3772,6 +3772,37 @@ picture described and the logo not read out; both kept, greyed, once the badge n
 No schema change. Tests: `PortfolioPageTests` (the picture and its description, the logo's empty
 `alt`, the revoked state, an issuer with no organisation or no logo).
 
+### D112 — Badge pictures in the media store (**proposed 2026-11-26**)
+
+D87 kept a badge's own picture in `learning.badge_image` "until media storage is decided"; D103
+decided it, and `badge_class.image_media_id` was in the schema from the start, unused. Sam chose
+on 2026-11-26: move them now; public at once, as D105's waiting pictures and D109's logos; D87's
+limits kept.
+- **Kept:** a draft's picture is a public media object (`IMediaLibrary.AddImageAsync` with
+  `BadgeImageRules.Image`: PNG or JPEG of up to 512 KB, 64 to 2,048 pixels each side), cleaned,
+  decoded and given its smaller copies (D106) like any picture, and `badge_class.image_media_id`
+  points at it. `BadgeImageFile` is gone: one cleaning path, not two. The messages are D87's.
+- **Replaced or removed:** the update names the picture it replaces, so two changes at once can't
+  both let go of one and leave the other's bytes with nothing pointing at them; the later one
+  looks again. The picture let go is removed, bytes and all. A picture the badge refuses (it was
+  published meanwhile) is removed again.
+- **Shown:** nothing changes where a badge's picture is fetched by badge
+  (`/api/v1/public/badges/classes/{id}/image` serves the original, PNG or JPEG, only once it's
+  published; credentials name that). The console's badge page and the badge check page (D111)
+  now show the 480-wide copy from `/media/{id}/480`, where they had the bytes inline or the
+  original; the generated picture is as before. A draft's picture, like a listing's waiting one,
+  is at `/media/{id}` for anyone with the id, which only its organisation's staff see.
+- **API:** `BadgeClassView` gains `image` (the media id, or null) beside `hasImage`.
+- **Schema:** `learning.badge_image` is dropped. Nothing is deployed, so there's no data to move;
+  rebuild the compose volume. The worker registers `IMediaLibrary` too, as it awards playlists'
+  badges through `Badges`.
+
+Tests: `BadgeApiTests` (kept public, a refused picture leaves the one it had, a new one replaces
+it and the old is gone, served without its text chunk), `BadgePagesTests` (the console shows the
+copy; removed, bytes and all), `PortfolioPageTests` (the check page shows the copy).
+`BadgeImageFileTests` is gone (`ImageCleanerTests` covers the cleaning); its PNG maker is
+`BadgeTestImages`.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

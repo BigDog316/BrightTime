@@ -10,6 +10,7 @@
 @using BrightTime.SharedKernel.Primitives
 @using BrightTime.SharedKernel.Privacy
 @using BrightTime.Web.Components.Console.Forms
+@using BrightTime.Web.Composition
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @attribute [YouthRecord(Badges.Read)]
@@ -37,7 +38,12 @@ else if (_badge is { } badge)
     <OrgNav OrgId="@OrgId" Current="badges" Role="@(RoleIn(Org) ?? "")" />
     <p class="note">@T["provider.badges.status." + badge.Status]@(badge.Status == Badges.Draft ? "" : " · " + T.Format("provider.badges.held_by", ("count", badge.Awarded)))</p>
 
-    @if (_picture is { } picture)
+    @if (badge.Image is { } image)
+    {
+        @* Its own picture (D112): the smaller copy, as on its check page. *@
+        <img class="badge-picture" src="@MediaEndpoints.Card(image)" alt="@T.Format("provider.badges.image_alt", ("badge", badge.Name))" width="96" height="96" />
+    }
+    else if (_picture is { } picture)
     {
         <img class="badge-picture" src="@($"data:{picture.ContentType};base64,{Convert.ToBase64String(picture.Bytes)}")" alt="@T.Format("provider.badges.image_alt", ("badge", badge.Name))" width="96" height="96" />
     }
@@ -253,7 +259,8 @@ else if (_badge is { } badge)
             return;
         }
 
-        _picture = await badges.OwnPictureAsync(Org, BadgeId);
+        // The generated picture, made here; its own is the media store's (D112).
+        _picture = _badge.Image is null ? await badges.OwnPictureAsync(Org, BadgeId) : null;
         if (_canIssue || _canRevoke)
         {
             Result<IReadOnlyList<AwardView>> awards = await badges.AwardsAsync(Org, BadgeId);
@@ -313,9 +320,9 @@ else if (_badge is { } badge)
         }
 
         IFormFile? file = HttpContext.Request.Form.Files["image"];
-        if (file is null || file.Length is 0 or > BadgeImageFile.MaxBytes)
+        if (file is null || file.Length is 0 or > BadgeImageRules.MaxBytes)
         {
-            _problem = T.Error(Error.Validation("badges.image", "Choose a PNG or JPEG of up to 512 KB, from 64 to 2,048 pixels on each side."));
+            _problem = T.Error(BadgeImageRules.NotAnImage);
             return;
         }
 
@@ -328,7 +335,7 @@ else if (_badge is { } badge)
     {
         if (_canDefine)
         {
-            Answer(await Get<Badges>().RemoveImageAsync(Org, BadgeId), "image_removed");
+            Answer(await Get<Badges>().RemoveImageAsync(Org, Actor, BadgeId), "image_removed");
         }
     }
 

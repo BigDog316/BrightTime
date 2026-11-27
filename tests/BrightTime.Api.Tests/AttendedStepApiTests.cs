@@ -24,6 +24,7 @@ using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Platform.Contracts;
+using BrightTime.Modules.Platform.Media;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -124,6 +125,8 @@ public sealed class AttendedStepApiTests(ApiFixture api)
         services.AddScoped<IGeographyQueries>(sp => sp.GetRequiredService<PlatformQueries>());
         services.AddScoped(sp => new AuditTrail(sp.GetRequiredService<ITenantContext>(), NoAuditRequestInfo.Instance, sp.GetRequiredService<IClock>()));
         services.AddScoped<ISiteAddress, FixedSite>();
+        services.AddScoped<IAuditWriter>(sp => sp.GetRequiredService<AuditTrail>());
+        services.AddMediaLibrary(); // badges take it (D112), as the worker registers it
         services.AddScoped<ParticipationProjector>();
         services.AddScoped<Badges>();
         services.AddScoped<Playlists>();

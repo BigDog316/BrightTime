@@ -99,9 +99,9 @@ public static class BadgeEndpoints
         int read;
         while ((read = await request.Body.ReadAsync(buffer, ct)) > 0)
         {
-            if (file.Length + read > BadgeImageFile.MaxBytes)
+            if (file.Length + read > BadgeImageRules.MaxBytes)
             {
-                return ApiProblems.From(Error.Validation("badges.image", "Choose a PNG or JPEG of up to 512 KB, from 64 to 2,048 pixels on each side."));
+                return ApiProblems.From(BadgeImageRules.NotAnImage);
             }
 
             await file.WriteAsync(buffer.AsMemory(0, read), ct);
@@ -112,7 +112,7 @@ public static class BadgeEndpoints
 
     private static async Task<IResult> RemoveImageAsync(Guid orgId, Guid id, ClaimsPrincipal user, IAuthorizationService authorization, Badges badges, CancellationToken ct) =>
         await RefusedAsync(user, orgId, authorization, Permissions.Badges.Define, OrganisationRoles.Admin)
-            ?? Answer(await badges.RemoveImageAsync(new OrganisationId(orgId), id, ct));
+            ?? Answer(await badges.RemoveImageAsync(new OrganisationId(orgId), Actor(user), id, ct));
 
     private static async Task<IResult> RetireAsync(Guid orgId, Guid id, ClaimsPrincipal user, IAuthorizationService authorization, Badges badges, CancellationToken ct) =>
         await RefusedAsync(user, orgId, authorization, Permissions.Badges.Define, OrganisationRoles.Admin)

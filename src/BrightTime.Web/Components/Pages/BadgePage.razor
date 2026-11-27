@@ -18,7 +18,7 @@
 
     <article class="badge-check @b.Status" aria-labelledby="badge-title">
         <header class="badge-head">
-            <img class="badge-picture" src="@BadgeDocuments.ImagePath(b.BadgeClassId)" alt="@T.Format("badge.page.picture_alt", ("badge", b.Name))" width="96" height="96" />
+            <img class="badge-picture" src="@(b.Image is { } own ? MediaEndpoints.Card(own) : BadgeDocuments.ImagePath(b.BadgeClassId))" alt="@T.Format("badge.page.picture_alt", ("badge", b.Name))" width="96" height="96" />
             <div>
                 <p class="eyebrow">@T["badge.page.eyebrow"]</p>
                 <h1 id="badge-title" dir="auto">@b.Name</h1>

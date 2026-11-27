@@ -1,6 +1,7 @@
 using BrightTime.Abstractions.Storage;
 using BrightTime.Infrastructure.Jobs;
 using BrightTime.Infrastructure.Tenancy;
+using BrightTime.Modules.Platform.Contracts;
 using BrightTime.Modules.Platform.Persistence;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
@@ -144,6 +145,9 @@ public static class MediaSizeJobs
     {
         services.AddScoped<IObjectStore, DatabaseObjectStore>();
         services.AddScoped<MediaLibrary>();
+
+        // Learning's badges (D112) take the library by its contract; the worker awards playlists' badges.
+        services.AddScoped<IMediaLibrary>(sp => sp.GetRequiredService<MediaLibrary>());
         services.AddJobHandler<MediaSizesHandler>();
         services.AddHostedService<MediaSizesScheduler>();
         return services;

@@ -3749,7 +3749,7 @@ organisation's, so it's read where it lives). Tests: `BadgeApiTests` (none named
 logo; named on the credential, achievement and OB 2.0 issuer after; served, replaced through the
 same address, then 404 and no longer named once removed; the county's issuer and a stranger 404).
 
-### D111 — Pictures on the badge check page (**proposed 2026-11-26**)
+### D111 — Pictures on the badge check page (**accepted 2026-11-26**)
 
 The page anyone opens to check a badge (`/badges/{slug}`, D77) said everything in words and
 showed no picture. Sam chose on 2026-11-26: the badge's picture and the issuer's logo; the

@@ -1,7 +1,9 @@
 @page "/spaces/{Id:guid}"
 @* One space (D120): who is in it, always, and that the organisation reads it; its posts, newest
    first, with their replies; a post, a reply, and taking down one's own. What a young person
-   writes is checked first, and a post held for a moderator shows only to them, with why. *@
+   writes is checked first, and a post held for a moderator shows only to them, with why.
+   Reporting someone else's post (D121); a post taken down that has replies stays as a line saying
+   so, with its replies under it. *@
 @inject BrightTimeApi Api
 @inject AppSession Session
 
@@ -110,6 +112,10 @@ else
             }
         </ol>
     }
+    @if (_reportNote is not null)
+    {
+        <p class="notice" role="status">@_reportNote</p>
+    }
     <div class="actions">
         <button type="button" @onclick="LoadAsync" disabled="@_busy">@T["app.spaces.check"]</button>
         <a class="button" href="spaces">@T["app.spaces.back"]</a>
@@ -130,6 +136,17 @@ else
     private string _reply = string.Empty;
     private Guid? _replyingTo;
     private bool _busy;
+
+    // Reporting a post (D121), as a message is (D115): one form open at a time; what was reported this visit.
+    /// <summary>The server's limit (Reports.MaxDetails).</summary>
+    private const int MaxDetails = 2000;
+
+    private Guid? _reporting;
+    private string? _reportReason;
+    private string _reportDetails = string.Empty;
+    private ApiProblem? _reportProblem;
+    private string? _reportNote;
+    private readonly HashSet<Guid> _reported = [];
 
     protected override Task OnParametersSetAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
 
@@ -214,6 +231,13 @@ else
 
     private RenderFragment Post(SpacePost p) => __builder =>
     {
+        @* Taken down, but its replies are still here: say so, and nothing of what it said. *@
+        if (p.IsTakenDown || (p.IsRemoved && !p.FromMe))
+        {
+            <p class="hint">@T[p.IsTakenDown ? "app.spaces.taken_down_placeholder" : "app.spaces.removed_placeholder"]</p>
+            return;
+        }
+
         <p class="hint">
             @Author(p) · @T.DayTime(p.At)
             @if (p.IsHeld)
@@ -235,6 +259,87 @@ else
             <button type="button" @onclick="() => DeleteAsync(p)" disabled="@_busy"
                     aria-label="@T.Format("app.spaces.delete_label", ("time", T.DayTime(p.At)))">@T["app.spaces.delete"]</button>
         }
+        @if (!p.FromMe && p.IsPublished && _space is { IsMember: true })
+        {
+            @if (_reported.Contains(p.Id))
+            {
+                <p class="hint">@T["app.spaces.report.reported"]</p>
+            }
+            else if (_reporting == p.Id)
+            {
+                @ReportForm(p)
+            }
+            else
+            {
+                <button type="button" @onclick="() => StartReport(p.Id)"
+                        aria-label="@T.Format("app.spaces.report.label", ("author", Author(p)), ("time", T.DayTime(p.At)))">@T["app.spaces.report"]</button>
+            }
+        }
+    };
+
+    private void StartReport(Guid post)
+    {
+        _reporting = post;
+        _reportReason = null;
+        _reportDetails = string.Empty;
+        _reportProblem = null;
+        _reportNote = null;
+    }
+
+    private async Task SendReportAsync(Guid post)
+    {
+        if (_reportReason is not { } reason)
+        {
+            return;
+        }
+
+        _busy = true;
+        _reportProblem = null;
+        try
+        {
+            ApiResult<ReportReceipt> made = await Api.ReportPostAsync(post, reason, string.IsNullOrWhiteSpace(_reportDetails) ? null : _reportDetails);
+            if (made.Value is not { } receipt)
+            {
+                _reportProblem = made.Problem;
+                return;
+            }
+
+            _reported.Add(post);
+            _reporting = null;
+            _reportNote = T[receipt.IsCritical ? "app.messages.report.done_critical" : "app.spaces.report.done"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>What's wrong, in the reporter's words if they like; who to call if someone is in danger now.</summary>
+    private RenderFragment ReportForm(SpacePost p) => __builder =>
+    {
+        string id = p.Id.ToString("N");
+        <div class="report-form">
+            <fieldset>
+                <legend>@T["app.spaces.report.why"]</legend>
+                @foreach (string reason in MessageThread.ReportReasons)
+                {
+                    <label class="check">
+                        <input type="radio" name="report-@id" value="@reason" checked="@(_reportReason == reason)" @onchange="() => _reportReason = reason" />
+                        @T["app.messages.report.reason." + reason]
+                    </label>
+                }
+            </fieldset>
+            <p class="notice">@T["app.messages.report.danger"]</p>
+            <div class="field">
+                <label for="report-details-@id">@T["app.messages.report.details"]</label>
+                <textarea id="report-details-@id" rows="3" maxlength="@MaxDetails" dir="auto" @bind="_reportDetails" @bind:event="oninput"></textarea>
+            </div>
+            <ProblemNotice Problem="_reportProblem" />
+            <div class="actions">
+                <button type="button" class="primary" @onclick="() => SendReportAsync(p.Id)" disabled="@(_busy || _reportReason is null)">@T["app.messages.report.send"]</button>
+                <button type="button" @onclick="() => _reporting = null">@T["app.messages.report.cancel"]</button>
+            </div>
+        </div>
     };
 
     /// <summary>Why one of the person's own posts is held, in words, so they can rewrite it (D117).</summary>

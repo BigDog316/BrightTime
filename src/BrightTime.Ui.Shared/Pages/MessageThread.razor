@@ -129,7 +129,7 @@ else
     private bool _busy;
 
     // Reporting a message (D115): one form open at a time; what was reported this visit.
-    private static readonly string[] ReportReasons =
+    internal static readonly string[] ReportReasons =
         ["grooming_concern", "self_harm", "sexual_content", "violence", "harassment", "hate_speech", "personal_information", "spam", "safety_other"];
 
     /// <summary>The server's limit (Reports.MaxDetails).</summary>

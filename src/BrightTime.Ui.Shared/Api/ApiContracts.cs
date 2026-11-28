@@ -472,6 +472,9 @@ public sealed record SpacePost(
     public bool IsRemoved => State == "removed";
 
     public bool IsPublished => State == "published";
+
+    /// <summary>Its author took it down; it shows only while it has replies, without its words (D121).</summary>
+    public bool IsTakenDown => State == "deleted_by_author";
 }
 
 /// <summary>A space with its people and its posts, newest first, each with its replies oldest first.</summary>

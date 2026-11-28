@@ -278,6 +278,10 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> DeletePostAsync(Guid space, Guid post, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"spaces/{space:D}/posts/{post:D}", null, signedIn: true, ct);
 
+    /// <summary>Reports a post someone else wrote in one of the person's spaces (D121).</summary>
+    public Task<ApiResult<ReportReceipt>> ReportPostAsync(Guid postId, string reason, string? details, CancellationToken ct = default) =>
+        SendAsync<ReportReceipt>(HttpMethod.Post, "reports", new { targetKind = "post", targetId = postId, reason, details }, signedIn: true, ct);
+
     /// <summary>Reports a message someone else wrote in one of the person's conversations (D115).</summary>
     public Task<ApiResult<ReportReceipt>> ReportMessageAsync(Guid messageId, string reason, string? details, CancellationToken ct = default) =>
         SendAsync<ReportReceipt>(HttpMethod.Post, "reports", new { targetKind = "message", targetId = messageId, reason, details }, signedIn: true, ct);

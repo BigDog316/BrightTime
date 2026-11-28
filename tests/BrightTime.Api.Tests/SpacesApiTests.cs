@@ -141,11 +141,23 @@ public sealed class SpacesApiTests(ApiFixture api)
 
         // Staff reply to her post; the held one is nowhere in their view.
         Guid helloId = hello.GetProperty("id").GetGuid();
-        await JsonAsync(await staff.PostAsJsonAsync($"api/v1/spaces/{space}/posts", new { body = $"Welcome, Abena ({suffix}).", replyTo = helloId }, Ct), HttpStatusCode.Created);
+        Guid welcome = (await JsonAsync(await staff.PostAsJsonAsync($"api/v1/spaces/{space}/posts", new { body = $"Welcome, Abena ({suffix}).", replyTo = helloId }, Ct), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid();
         string staffView = await (await staff.GetAsync(Relative($"api/v1/spaces/{space}"), Ct)).Content.ReadAsStringAsync(Ct);
         staffView.ShouldNotContain("914-555-0177");
         await ProblemAsync(await teen.PostAsJsonAsync($"api/v1/spaces/{space}/posts", new { body = "A reply to a reply.", replyTo = held.GetProperty("id").GetGuid() }, Ct),
             HttpStatusCode.NotFound, "spaces.reply_not_found");
+
+        // She reports the staff reply (D121); again, and she's given the first; never her own post, and
+        // nobody outside the space reports in it.
+        JsonElement report = await JsonAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "post", targetId = welcome, reason = "harassment" }, Ct), HttpStatusCode.Created);
+        report.GetProperty("severity").GetString().ShouldBe("high");
+        (await JsonAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "post", targetId = welcome, reason = "spam" }, Ct), HttpStatusCode.Created))
+            .GetProperty("id").GetGuid().ShouldBe(report.GetProperty("id").GetGuid());
+        await ProblemAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "post", targetId = helloId, reason = "spam" }, Ct), HttpStatusCode.NotFound, "reports.post_not_found");
+        await ProblemAsync(await stranger.PostAsJsonAsync("api/v1/reports", new { targetKind = "post", targetId = welcome, reason = "spam" }, Ct), HttpStatusCode.NotFound, "reports.post_not_found");
+        await ProblemAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "space", targetId = space, reason = "spam" }, Ct), HttpStatusCode.BadRequest, "reports.target");
+        (await api.ScalarAsync<string>("select target_kind || '/' || state from community.report where id = @r", ("r", report.GetProperty("id").GetGuid()))).ShouldBe("post/open");
 
         // Nobody else reads it or writes in it.
         await ProblemAsync(await stranger.GetAsync(Relative($"api/v1/spaces/{space}"), Ct), HttpStatusCode.NotFound, "spaces.not_found");
@@ -171,5 +183,6 @@ public sealed class SpacesApiTests(ApiFixture api)
         (post.Id, post.FromMe, post.IsPublished, post.Replies.Single().AuthorRole, post.Replies.Single().AuthorName).ShouldBe((helloId, true, true, "staff", (string?)null));
         feed.Members.Count(m => !m.IsYouth).ShouldBe(2);
         (await client.PostInSpaceAsync(space, $"Thanks ({suffix})!", helloId, Ct)).Value!.IsPublished.ShouldBeTrue();
+        (await client.ReportPostAsync(welcome, "spam", null, Ct)).Value!.Id.ShouldBe(report.GetProperty("id").GetGuid());
     }
 }

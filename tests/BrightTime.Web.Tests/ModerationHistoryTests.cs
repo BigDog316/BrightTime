@@ -76,7 +76,7 @@ public sealed class ModerationHistoryTests(ConsoleFixture db)
         {
             Reports reports = scope.ServiceProvider.GetRequiredService<Reports>();
             (await reports.AcknowledgeAsync(new UserId(moderatorId), report, Ct)).IsSuccess.ShouldBeTrue();
-            (await reports.EscalateAsync(new UserId(moderatorId), report, "Called the county's child protection line.", removeMessage: true, Ct)).IsSuccess.ShouldBeTrue();
+            (await reports.EscalateAsync(new UserId(moderatorId), report, "Called the county's child protection line.", removeIt: true, Ct)).IsSuccess.ShouldBeTrue();
         }
 
         // The escalation waits in the queue for its outcome; not closed without one.

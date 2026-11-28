@@ -17,10 +17,12 @@ namespace BrightTime.Modules.Community.Moderation;
 public sealed record ReportReceipt(Guid Id, string Reason, string Severity);
 
 /// <summary>
-/// A report in the county's queue (D115), as a moderator reads it: the reason, the reporter's
-/// role and words, and the message with the few before it, every person by role, never by name.
-/// <see cref="Overdue"/> is a critical report not acknowledged within the hour;
-/// <see cref="OwnOrganisation"/> is set when the moderator may not decide it.
+/// A report in the county's queue (D115, D121), as a moderator reads it: the reason, the
+/// reporter's role and words, and what was reported (<see cref="TargetKind"/>: a <c>message</c> or
+/// a <c>post</c>) with what came before it, every person by role, never by name.
+/// <see cref="Where"/> is the conversation's subject or the space's name. <see cref="Overdue"/> is
+/// a critical report not acknowledged within the hour; <see cref="OwnOrganisation"/> is set when
+/// the moderator may not decide it.
 /// </summary>
 [YouthData]
 public sealed record QueuedReport(
@@ -34,18 +36,19 @@ public sealed record QueuedReport(
     DateTimeOffset? AcknowledgedAt,
     bool Overdue,
     bool OwnOrganisation,
-    Guid MessageId,
+    string TargetKind,
+    Guid TargetId,
     string OrgName,
-    string? Subject,
-    string SenderRole,
+    string? Where,
+    string AuthorRole,
     string Body,
-    string MessageState,
-    DateTimeOffset SentAt,
+    string TargetState,
+    DateTimeOffset WrittenAt,
     IReadOnlyList<EarlierMessage> Earlier);
 
 /// <summary>
 /// An escalated report waiting for its outcome (D116): what was escalated, when, the moderator's
-/// note of what they did and who they told, and the message's history to open.
+/// note of what they did and who they told, and what was reported, to open its history.
 /// </summary>
 [YouthData]
 public sealed record EscalatedReport(
@@ -54,27 +57,30 @@ public sealed record EscalatedReport(
     string Severity,
     DateTimeOffset EscalatedAt,
     string? EscalationNote,
-    Guid MessageId,
+    string TargetKind,
+    Guid TargetId,
     string OrgName,
     bool OwnOrganisation);
 
 /// <summary>
-/// Reporting a message (D115): someone in a conversation reports a message another person wrote
-/// in it, with a reason, and it joins the county's moderation queue. A report of grooming or
-/// self-harm is critical whoever makes it, goes to the top, is to be acknowledged within the hour,
-/// and books an email to every moderator who may decide it.
+/// Reporting (D115, D121): someone in a conversation reports a message another person wrote in
+/// it, or a member of a space a post another member wrote there, with a reason, and it joins the
+/// county's moderation queue. A report of grooming or self-harm is critical whoever makes it, goes
+/// to the top, is to be acknowledged within the hour, and books an email to every moderator who
+/// may decide it.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A moderator acknowledges a report, and then dismisses it, removes the message (as D114 removes
-/// a held one, settling every open report of it), or escalates it: the mandated-reporter hand-off,
-/// recorded with a note, the message removed too if the moderator says so. Each needs a note, is
-/// decided once, and is a <c>moderation_action</c> row and an audit event. Nobody decides a report
-/// of their own organisation's conversation, their own report or their own message.
+/// A moderator acknowledges a report, and then dismisses it, removes what was reported (settling
+/// every open report of it), or escalates it: the mandated-reporter hand-off, recorded with a
+/// note, what was reported removed too if the moderator says so. Each needs a note, is decided
+/// once, and is a <c>moderation_action</c> row and an audit event. Nobody decides a report of
+/// their own organisation's conversation or space, their own report, or what they wrote.
 /// </para>
 /// <para>
-/// A person reports a message once: reporting it again while the first is waiting returns the
-/// first. The reported message stays where it is until a moderator decides.
+/// A person reports a thing once: reporting it again while the first is waiting returns the
+/// first. What was reported stays where it is until a moderator decides. A removed post's replies
+/// stay; each is reported on its own.
 /// </para>
 /// </remarks>
 public sealed class Reports(
@@ -90,6 +96,7 @@ public sealed class Reports(
     public const string Acknowledged = "reports.acknowledged";
     public const string Dismissed = "reports.dismissed";
     public const string Removed = "reports.message_removed";
+    public const string PostRemoved = "reports.post_removed";
     public const string Escalated = "reports.escalated";
     public const string EscalationsRead = "reports.escalated_read";
     public const string EscalationClosed = "reports.escalation_closed";
@@ -104,81 +111,111 @@ public sealed class Reports(
     /// </summary>
     public const string ModeratorPermission = "moderation.triage";
 
-    private const string MessageTarget = "message";
-
     /// <summary>A person in the conversation reports a message someone else wrote in it.</summary>
     public Task<Result<ReportReceipt>> ReportMessageAsync(UserId reporter, Guid messageId, string? reason, string? details, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
-            if (reason is null || !ReportReasons.ForMessages.Contains(reason))
+            if (Invalid(reason, details, "message") is { } invalid)
             {
-                return Result<ReportReceipt>.Failure(Error.Validation("reports.reason", "Choose what's wrong with the message."));
-            }
-
-            string? said = details?.Trim() is { Length: > 0 } d ? d : null;
-            if (said is { Length: > MaxDetails })
-            {
-                return Result<ReportReceipt>.Failure(Error.Validation("reports.details", $"Say what happened in up to {MaxDetails} characters."));
+                return Result<ReportReceipt>.Failure(invalid);
             }
 
             // Only a message the reporter can see: sent, someone else's, in a conversation they're in.
-            MessageRecord? message = await db.Messages.AsNoTracking()
-                .FirstOrDefaultAsync(m => m.Id == messageId && m.State == MessageStates.Sent && m.SenderUserId != reporter.Value, ct).ConfigureAwait(false);
-            if (message is null || !await db.Participants.AsNoTracking()
-                    .AnyAsync(p => p.ConversationId == message.ConversationId && p.UserId == reporter.Value && p.RemovedAt == null, ct).ConfigureAwait(false))
+            ReportedItem? message = await ReportTargets.FindAsync(db, ReportTargets.Message, messageId, ct).ConfigureAwait(false);
+            if (message is null || !ReportTargets.IsUp(message) || message.AuthorUserId == reporter.Value
+                || !await db.Participants.AsNoTracking()
+                    .AnyAsync(p => p.ConversationId == message.Container && p.UserId == reporter.Value && p.RemovedAt == null, ct).ConfigureAwait(false))
             {
                 return Result<ReportReceipt>.Failure(Error.NotFound("reports.not_found", "There's no message like that in your conversations."));
             }
 
-            if (await db.Reports.AsNoTracking()
-                    .FirstOrDefaultAsync(r => r.TargetKind == MessageTarget && r.TargetId == messageId && r.ReporterUserId == reporter.Value
-                        && (r.State == ReportStates.Open || r.State == ReportStates.Triaged), ct).ConfigureAwait(false) is { } waiting)
-            {
-                return Result<ReportReceipt>.Success(new ReportReceipt(waiting.Id, waiting.ReasonCode, waiting.Severity));
-            }
-
-            ReportRecord report = new()
-            {
-                Id = UuidV7.NewId(),
-                TenantId = tenant.TenantId.Value,
-                TargetKind = MessageTarget,
-                TargetId = messageId,
-                ReporterUserId = reporter.Value,
-                ReporterIsMinor = await identity.IsMinorAsync(reporter, ct).ConfigureAwait(false),
-                ReasonCode = reason,
-                Details = said,
-                Severity = ReportReasons.SeverityOf(reason),
-                State = ReportStates.Open,
-                CreatedAt = clock.StoredNow(),
-            };
-            db.Reports.Add(report);
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-            if (report.Severity == ReportSeverities.Critical)
-            {
-                ConversationRecord conversation = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId, ct).ConfigureAwait(false);
-                IReadOnlyList<OrganisationMembership> members = await directory.GetOrganisationMembersAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false);
-                foreach (Guid moderator in await identity.GetUsersWithPermissionAsync(ModeratorPermission, ct).ConfigureAwait(false))
-                {
-                    if (moderator == reporter.Value || moderator == message.SenderUserId || members.Any(m => m.UserId.Value == moderator))
-                    {
-                        continue;
-                    }
-
-                    CriticalReportNotice notice = new(moderator, report.Id, reason);
-                    await db.EnqueueJobAsync(new JobRequest
-                    {
-                        JobType = CriticalReportNotice.JobType,
-                        TenantId = tenant.TenantId,
-                        Payload = notice,
-                        UniqueKey = notice.UniqueKey,
-                    }, ct).ConfigureAwait(false);
-                }
-            }
-
-            await AuditAsync(Made, MessageTarget, [messageId], ct).ConfigureAwait(false);
-            return Result<ReportReceipt>.Success(new ReportReceipt(report.Id, report.ReasonCode, report.Severity));
+            return Result<ReportReceipt>.Success(await MakeAsync(reporter, message, reason!, details, ct).ConfigureAwait(false));
         }, cancellationToken);
+
+    /// <summary>A member of a space reports a published post someone else wrote in it (D121).</summary>
+    public Task<Result<ReportReceipt>> ReportPostAsync(UserId reporter, Guid postId, string? reason, string? details, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (Invalid(reason, details, "post") is { } invalid)
+            {
+                return Result<ReportReceipt>.Failure(invalid);
+            }
+
+            // Only a post the reporter can see: published, someone else's, in a space they're in.
+            ReportedItem? post = await ReportTargets.FindAsync(db, ReportTargets.Post, postId, ct).ConfigureAwait(false);
+            if (post is null || !ReportTargets.IsUp(post) || post.AuthorUserId == reporter.Value
+                || !await db.SpaceMembers.AsNoTracking()
+                    .AnyAsync(m => m.SpaceId == post.Container && m.UserId == reporter.Value && m.LeftAt == null, ct).ConfigureAwait(false))
+            {
+                return Result<ReportReceipt>.Failure(Error.NotFound("reports.post_not_found", "There's no post like that in your spaces."));
+            }
+
+            return Result<ReportReceipt>.Success(await MakeAsync(reporter, post, reason!, details, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    private static Error? Invalid(string? reason, string? details, string what)
+    {
+        if (reason is null || !ReportReasons.ForMessages.Contains(reason))
+        {
+            return Error.Validation("reports.reason", $"Choose what's wrong with the {what}.");
+        }
+
+        return details?.Trim() is { Length: > MaxDetails }
+            ? Error.Validation("reports.details", $"Say what happened in up to {MaxDetails} characters.")
+            : null;
+    }
+
+    /// <summary>Files the report, or finds the reporter's own still waiting; a critical one emails the moderators who may decide it.</summary>
+    private async Task<ReportReceipt> MakeAsync(UserId reporter, ReportedItem item, string reason, string? details, CancellationToken ct)
+    {
+        if (await db.Reports.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.TargetKind == item.Kind && r.TargetId == item.Id && r.ReporterUserId == reporter.Value
+                    && (r.State == ReportStates.Open || r.State == ReportStates.Triaged), ct).ConfigureAwait(false) is { } waiting)
+        {
+            return new ReportReceipt(waiting.Id, waiting.ReasonCode, waiting.Severity);
+        }
+
+        ReportRecord report = new()
+        {
+            Id = UuidV7.NewId(),
+            TenantId = tenant.TenantId.Value,
+            TargetKind = item.Kind,
+            TargetId = item.Id,
+            ReporterUserId = reporter.Value,
+            ReporterIsMinor = await identity.IsMinorAsync(reporter, ct).ConfigureAwait(false),
+            ReasonCode = reason,
+            Details = details?.Trim() is { Length: > 0 } said ? said : null,
+            Severity = ReportReasons.SeverityOf(reason),
+            State = ReportStates.Open,
+            CreatedAt = clock.StoredNow(),
+        };
+        db.Reports.Add(report);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        if (report.Severity == ReportSeverities.Critical)
+        {
+            IReadOnlyList<OrganisationMembership> members = await directory.GetOrganisationMembersAsync(new OrganisationId(item.OrgId), ct).ConfigureAwait(false);
+            foreach (Guid moderator in await identity.GetUsersWithPermissionAsync(ModeratorPermission, ct).ConfigureAwait(false))
+            {
+                if (moderator == reporter.Value || moderator == item.AuthorUserId || members.Any(m => m.UserId.Value == moderator))
+                {
+                    continue;
+                }
+
+                CriticalReportNotice notice = new(moderator, report.Id, reason);
+                await db.EnqueueJobAsync(new JobRequest
+                {
+                    JobType = CriticalReportNotice.JobType,
+                    TenantId = tenant.TenantId,
+                    Payload = notice,
+                    UniqueKey = notice.UniqueKey,
+                }, ct).ConfigureAwait(false);
+            }
+        }
+
+        await AuditAsync(Made, item.Kind, [item.Id], ct).ConfigureAwait(false);
+        return new ReportReceipt(report.Id, report.ReasonCode, report.Severity);
+    }
 
     /// <summary>The reports waiting, critical first, then oldest; reading them is audited.</summary>
     public Task<IReadOnlyList<QueuedReport>> ListAsync(UserId moderator, CancellationToken cancellationToken = default) =>
@@ -195,49 +232,32 @@ public sealed class Reports(
             List<QueuedReport> list = [];
             foreach (ReportRecord report in waiting)
             {
-                MessageRecord? message = await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == report.TargetId, ct).ConfigureAwait(false);
-                if (message is null)
+                if (await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false) is not { } item)
                 {
                     continue;
                 }
 
-                ConversationRecord conversation = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId, ct).ConfigureAwait(false);
-                if (!orgs.TryGetValue(conversation.OrgId, out (string Name, bool Mine) org))
-                {
-                    OrganisationId id = new(conversation.OrgId);
-                    org = (await directory.GetOrganisationNameAsync(id, ct).ConfigureAwait(false) ?? "",
-                        (await directory.GetOrganisationMembersAsync(id, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
-                    orgs[conversation.OrgId] = org;
-                }
-
-                Dictionary<Guid, string> roles = await db.Participants.AsNoTracking()
-                    .Where(p => p.ConversationId == conversation.Id)
-                    .ToDictionaryAsync(p => p.UserId, p => p.ParticipantRole, ct).ConfigureAwait(false);
-                List<MessageRecord> earlier = await db.Messages.AsNoTracking()
-                    .Where(m => m.ConversationId == conversation.Id && m.State == MessageStates.Sent && m.SentAt < message.SentAt)
-                    .OrderByDescending(m => m.SentAt).Take(HeldMessages.EarlierCount).ToListAsync(ct).ConfigureAwait(false);
-                earlier.Reverse();
-
-                bool mine = org.Mine || report.ReporterUserId == moderator.Value || message.SenderUserId == moderator.Value;
+                (string Name, bool Mine) org = await OrganisationAsync(orgs, item.OrgId, moderator, ct).ConfigureAwait(false);
                 list.Add(new QueuedReport(
                     report.Id,
                     report.ReasonCode,
                     report.Severity,
                     report.State,
-                    report.ReporterUserId is { } who ? roles.GetValueOrDefault(who, "") : "",
+                    item.RoleOf(report.ReporterUserId),
                     report.Details,
                     report.CreatedAt,
                     report.AcknowledgedAt,
                     report.Severity == ReportSeverities.Critical && report.AcknowledgedAt is null && now - report.CreatedAt > ReportSeverities.CriticalAcknowledgement,
-                    mine,
-                    message.Id,
+                    org.Mine || report.ReporterUserId == moderator.Value || item.AuthorUserId == moderator.Value,
+                    item.Kind,
+                    item.Id,
                     org.Name,
-                    conversation.Subject,
-                    roles.GetValueOrDefault(message.SenderUserId, ""),
-                    message.Body,
-                    message.State,
-                    message.SentAt,
-                    [.. earlier.Select(m => new EarlierMessage(roles.GetValueOrDefault(m.SenderUserId, ""), m.Body, m.SentAt))]));
+                    item.Where,
+                    item.AuthorRole,
+                    item.Body,
+                    item.State,
+                    item.At,
+                    await ReportTargets.EarlierAsync(db, item, ct).ConfigureAwait(false)));
             }
 
             await AuditAsync(Read, "report", [.. list.Select(r => r.Id)], ct).ConfigureAwait(false);
@@ -259,22 +279,14 @@ public sealed class Reports(
             List<EscalatedReport> list = [];
             foreach (ReportRecord report in escalated)
             {
-                if (await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == report.TargetId, ct).ConfigureAwait(false) is not { } message)
+                if (await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false) is not { } item)
                 {
                     continue;
                 }
 
-                Guid orgId = await db.Conversations.AsNoTracking().Where(c => c.Id == message.ConversationId).Select(c => c.OrgId).FirstAsync(ct).ConfigureAwait(false);
-                if (!orgs.TryGetValue(orgId, out (string Name, bool Mine) org))
-                {
-                    OrganisationId id = new(orgId);
-                    org = (await directory.GetOrganisationNameAsync(id, ct).ConfigureAwait(false) ?? "",
-                        (await directory.GetOrganisationMembersAsync(id, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
-                    orgs[orgId] = org;
-                }
-
+                (string Name, bool Mine) org = await OrganisationAsync(orgs, item.OrgId, moderator, ct).ConfigureAwait(false);
                 list.Add(new EscalatedReport(report.Id, report.ReasonCode, report.Severity, report.EscalatedAt ?? report.CreatedAt, report.EscalationNote,
-                    message.Id, org.Name, org.Mine || report.ReporterUserId == moderator.Value || message.SenderUserId == moderator.Value));
+                    item.Kind, item.Id, org.Name, org.Mine || report.ReporterUserId == moderator.Value || item.AuthorUserId == moderator.Value));
             }
 
             await AuditAsync(EscalationsRead, "report", [.. list.Select(r => r.Id)], ct).ConfigureAwait(false);
@@ -295,12 +307,13 @@ public sealed class Reports(
             }
 
             ReportRecord? report = await db.Reports.AsNoTracking().FirstOrDefaultAsync(r => r.Id == reportId && r.State == ReportStates.Escalated, ct).ConfigureAwait(false);
-            if (report is null || await OwnAsync(moderator, report, ct).ConfigureAwait(false) is not { } own)
+            ReportedItem? item = report is null ? null : await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false);
+            if (report is null || item is null)
             {
                 return Result.Failure(Error.NotFound("reports.not_escalated", "That report isn't waiting for its outcome any more."));
             }
 
-            if (own)
+            if (await OwnAsync(moderator, report, item, ct).ConfigureAwait(false))
             {
                 return Result.Failure(OwnOrganisation());
             }
@@ -342,26 +355,26 @@ public sealed class Reports(
             return Result.Success();
         }, cancellationToken);
 
-    /// <summary>Nothing to do: the report is closed with the moderator's note, and the message stays.</summary>
+    /// <summary>Nothing to do: the report is closed with the moderator's note, and what was reported stays.</summary>
     public Task<Result> DismissAsync(UserId moderator, Guid reportId, string? note, CancellationToken cancellationToken = default) =>
-        DecideAsync(moderator, reportId, note, Dismissed, removeMessage: false, cancellationToken);
+        DecideAsync(moderator, reportId, note, Dismissed, removeIt: false, cancellationToken);
 
-    /// <summary>The message is removed, and every report of it waiting is settled with the note.</summary>
-    public Task<Result> RemoveMessageAsync(UserId moderator, Guid reportId, string? note, CancellationToken cancellationToken = default) =>
-        DecideAsync(moderator, reportId, note, Removed, removeMessage: true, cancellationToken);
+    /// <summary>What was reported is removed, and every report of it waiting is settled with the note.</summary>
+    public Task<Result> RemoveAsync(UserId moderator, Guid reportId, string? note, CancellationToken cancellationToken = default) =>
+        DecideAsync(moderator, reportId, note, Removed, removeIt: true, cancellationToken);
 
     /// <summary>
     /// The mandated-reporter hand-off: the report is escalated with the moderator's note of what was
-    /// done and who was told, and the message is removed too when <paramref name="removeMessage"/>.
+    /// done and who was told, and what was reported is removed too when <paramref name="removeIt"/>.
     /// </summary>
-    public Task<Result> EscalateAsync(UserId moderator, Guid reportId, string? note, bool removeMessage, CancellationToken cancellationToken = default) =>
-        DecideAsync(moderator, reportId, note, Escalated, removeMessage, cancellationToken);
+    public Task<Result> EscalateAsync(UserId moderator, Guid reportId, string? note, bool removeIt, CancellationToken cancellationToken = default) =>
+        DecideAsync(moderator, reportId, note, Escalated, removeIt, cancellationToken);
 
     /// <summary>
     /// A decision on a waiting report: <see cref="Dismissed"/>, <see cref="Removed"/> or
-    /// <see cref="Escalated"/>, which is also the audit action; the message removed when asked.
+    /// <see cref="Escalated"/>; what was reported taken down when asked.
     /// </summary>
-    private Task<Result> DecideAsync(UserId moderator, Guid reportId, string? note, string decision, bool removeMessage, CancellationToken cancellationToken) =>
+    private Task<Result> DecideAsync(UserId moderator, Guid reportId, string? note, string decision, bool removeIt, CancellationToken cancellationToken) =>
         db.InTransactionAsync(async ct =>
         {
             if (note?.Trim() is not { Length: > 0 and <= MaxNote } why)
@@ -369,7 +382,7 @@ public sealed class Reports(
                 return Result.Failure(Error.Validation("reports.note", $"Write a note of up to {MaxNote} characters; it's kept in the moderation record."));
             }
 
-            (ReportRecord? report, Error? refused) = await DecidableAsync(moderator, reportId, ct).ConfigureAwait(false);
+            (ReportRecord? report, ReportedItem? item, Error? refused) = await DecidableAsync(moderator, reportId, ct).ConfigureAwait(false);
             if (refused is not null)
             {
                 return Result.Failure(refused);
@@ -386,8 +399,8 @@ public sealed class Reports(
                         .SetProperty(r => r.AcknowledgedAt, r => r.AcknowledgedAt ?? now)
                         .SetProperty(r => r.AssignedTo, r => r.AssignedTo ?? moderator.Value), ct).ConfigureAwait(false),
 
-                // The message goes, so every report of it waiting is settled with it.
-                Removed => await waiting.Where(r => r.TargetKind == MessageTarget && r.TargetId == decided.TargetId)
+                // It goes, so every report of it waiting is settled with it.
+                Removed => await waiting.Where(r => r.TargetKind == decided.TargetKind && r.TargetId == decided.TargetId)
                     .ExecuteUpdateAsync(s => s.SetProperty(r => r.State, ReportStates.Actioned)
                         .SetProperty(r => r.ResolvedAt, now).SetProperty(r => r.Resolution, why)
                         .SetProperty(r => r.AcknowledgedAt, r => r.AcknowledgedAt ?? now)
@@ -405,11 +418,9 @@ public sealed class Reports(
             }
 
             Act(decided, decision switch { Escalated => "escalate_external", Removed => "remove", _ => "no_action" }, moderator, why, now);
-            if (removeMessage)
+            if (removeIt)
             {
-                await db.Messages.Where(m => m.Id == decided.TargetId && m.State == MessageStates.Sent)
-                    .ExecuteUpdateAsync(s => s.SetProperty(m => m.State, MessageStates.Removed)
-                        .SetProperty(m => m.RemovedAt, now).SetProperty(m => m.RemovedBy, moderator.Value), ct).ConfigureAwait(false);
+                await ReportTargets.TakeDownAsync(db, item!, moderator.Value, now, ct).ConfigureAwait(false);
                 if (decision == Escalated)
                 {
                     Act(decided, "remove", moderator, why, now);
@@ -417,43 +428,47 @@ public sealed class Reports(
             }
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await AuditAsync(decision, "report", [reportId], ct).ConfigureAwait(false);
+            await AuditAsync(decision == Removed && item!.Kind == ReportTargets.Post ? PostRemoved : decision, "report", [reportId], ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 
-    /// <summary>The report, if it's waiting and this moderator may decide it.</summary>
-    private async Task<(ReportRecord? Report, Error? Refused)> DecidableAsync(UserId moderator, Guid reportId, CancellationToken ct)
+    /// <summary>The report and what it's about, if it's waiting and this moderator may decide it.</summary>
+    private async Task<(ReportRecord? Report, ReportedItem? Item, Error? Refused)> DecidableAsync(UserId moderator, Guid reportId, CancellationToken ct)
     {
         ReportRecord? report = await db.Reports.AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == reportId && (r.State == ReportStates.Open || r.State == ReportStates.Triaged), ct).ConfigureAwait(false);
-        MessageRecord? message = report is null ? null
-            : await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == report.TargetId, ct).ConfigureAwait(false);
-        if (report is null || message is null)
+        ReportedItem? item = report is null ? null : await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false);
+        if (report is null || item is null)
         {
-            return (null, NotWaiting());
+            return (null, null, NotWaiting());
         }
 
-        return await OwnAsync(moderator, report, ct).ConfigureAwait(false) is true ? (null, OwnOrganisation()) : (report, null);
+        return await OwnAsync(moderator, report, item, ct).ConfigureAwait(false) ? (null, null, OwnOrganisation()) : (report, item, null);
     }
 
     /// <summary>
-    /// Whether the report is the moderator's own business: their organisation's conversation, their
-    /// report, or their message. Null when the message is gone.
+    /// Whether the report is the moderator's own business: their organisation's conversation or
+    /// space, their report, or what they wrote.
     /// </summary>
-    private async Task<bool?> OwnAsync(UserId moderator, ReportRecord report, CancellationToken ct)
+    private async Task<bool> OwnAsync(UserId moderator, ReportRecord report, ReportedItem item, CancellationToken ct) =>
+        report.ReporterUserId == moderator.Value || item.AuthorUserId == moderator.Value
+        || (await directory.GetOrganisationMembersAsync(new OrganisationId(item.OrgId), ct).ConfigureAwait(false)).Any(m => m.UserId == moderator);
+
+    private async Task<(string Name, bool Mine)> OrganisationAsync(Dictionary<Guid, (string Name, bool Mine)> seen, Guid orgId, UserId moderator, CancellationToken ct)
     {
-        if (await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == report.TargetId, ct).ConfigureAwait(false) is not { } message)
+        if (!seen.TryGetValue(orgId, out (string Name, bool Mine) org))
         {
-            return null;
+            OrganisationId id = new(orgId);
+            org = (await directory.GetOrganisationNameAsync(id, ct).ConfigureAwait(false) ?? "",
+                (await directory.GetOrganisationMembersAsync(id, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
+            seen[orgId] = org;
         }
 
-        ConversationRecord conversation = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId, ct).ConfigureAwait(false);
-        bool member = (await directory.GetOrganisationMembersAsync(new OrganisationId(conversation.OrgId), ct).ConfigureAwait(false)).Any(m => m.UserId == moderator);
-        return member || report.ReporterUserId == moderator.Value || message.SenderUserId == moderator.Value;
+        return org;
     }
 
     private static Error OwnOrganisation() => Error.Forbidden("reports.own_organisation",
-        "You're in this conversation's organisation, or it's your own report or message, so another moderator decides it.");
+        "You're in the organisation it was written in, or it's your own report or what you wrote, so another moderator decides it.");
 
     private void Act(ReportRecord report, string action, UserId moderator, string reason, DateTimeOffset at) =>
         db.ModerationActions.Add(new ModerationActionRecord
@@ -461,7 +476,7 @@ public sealed class Reports(
             Id = UuidV7.NewId(),
             TenantId = tenant.TenantId.Value,
             ReportId = report.Id,
-            TargetKind = MessageTarget,
+            TargetKind = report.TargetKind,
             TargetId = report.TargetId,
             Action = action,
             ActorUserId = moderator.Value,

@@ -82,7 +82,7 @@ public sealed class CriticalReportMailTests(DatabaseFixture database)
         EmailMessage sent = mail.Sent.ShouldHaveSingleItem();
         sent.To.ShouldBe(email);
         sent.Subject.ShouldBe("A report needs a moderator within the hour");
-        sent.TextBody.ShouldContain("reported a message: Grooming concern.");
+        sent.TextBody.ShouldContain("made a report: Grooming concern.");
         sent.TextBody.ShouldContain("https://kettle.test/organiser/moderation");
         sent.TextBody.ShouldNotContain("email.critical_report");
         sent.HtmlBody.ShouldContain("<a href=\"https://kettle.test/organiser/moderation\">Open the moderation queue</a>");

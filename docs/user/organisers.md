@@ -91,23 +91,25 @@ and admins, with your note or reason. Write it for them: it's quoted as you type
 
 ## Moderation: reports
 
-**Moderation** starts with what people reported in their conversations, the most urgent first.
+**Moderation** starts with what people reported in their conversations and in activities'
+spaces, the most urgent first.
 A report of grooming or self-harm is critical, and every moderator is emailed when one comes in:
 take it on within the hour. One that has waited longer is marked so.
 
 Each report shows its reason, who reported it (by role, such as young person) and what they said,
-the organisation, the message, and the messages just before it. **Take this on** to make it yours.
-Then write a note and:
+the organisation, the message and the messages just before it, or the post, its space, and the
+post it answers if it's a reply. **Take this on** to make it yours. Then write a note and:
 
-- **Remove the message** to keep it from everyone but its sender. Every other report of the same
-  message is settled with it.
-- **Dismiss the report** when there's nothing to do. The message stays.
+- **Remove the message** (or **Remove the post**) to keep it from everyone but whoever wrote it.
+  Every other report of the same message or post is settled with it. A removed post's replies
+  stay, under a line saying a moderator removed it; each can be reported on its own.
+- **Dismiss the report** when there's nothing to do. The message or post stays.
 - **Escalate** when a young person may be at risk. Follow the county's mandated-reporter
   procedure first, then note what you did and who you told. Tick **When escalating, remove the
   message too** to take the message away as well.
 
 As with held messages, your note and decision can't be changed, and you can't decide a report from
-your own organisation's conversation, or your own report or message.
+your own organisation's conversation or space, or your own report, message or post.
 
 An escalated report waits under **Escalated, waiting for the outcome** until someone records how it
 ended, such as the agency's reference and what they said. Write it and **Record the outcome and
@@ -150,14 +152,14 @@ If you wrote it, or you're a member of the organisation whose space it is, anoth
 
 ## Moderation history
 
-Every report and held message has a **History** link. It shows the message as it is now, then
-everything that happened to it, in order: whether screening held it or let it through and why,
-each report and what the reporter said, who took it on, each decision with who made it and their
-note, and how an escalation ended. **Recent decisions and each message's history**, at the top of
-**Moderation**, lists the county's latest decisions. You can't see the history of a message from
-your own organisation.
+Every report, held message and held post has a **History** link. It shows the message or post as
+it is now, then everything that happened to it, in order: whether screening held it or let it
+through and why, each report and what the reporter said, who took it on, each decision with who
+made it and their note, and how an escalation ended. **Recent decisions and the history of each
+message and post**, at the top of **Moderation**, lists the county's latest decisions. You can't
+see the history of anything from your own organisation.
 
-When an adult wrote the message, **The sender** shows anything already done to them, and lets you
+When an adult wrote a message, **The sender** shows anything already done to them, and lets you
 act on them for 24 hours, 7 days or 30 days, with a reason:
 
 - **Mute** them: they can't write in any conversation with a young person until it ends.
@@ -165,7 +167,8 @@ act on them for 24 hours, 7 days or 30 days, with a reason:
   minutes.
 
 Either ends by itself; **Lift it now**, with a reason, ends it sooner. Young people's accounts
-aren't muted or suspended here.
+aren't muted or suspended here, and a post's history doesn't offer it yet: mute or suspend from
+one of the person's messages.
 
 ## Taxonomy
 

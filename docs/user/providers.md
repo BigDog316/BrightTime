@@ -338,6 +338,10 @@ read them.
   they're in.
 - Young people see each other as the activity's roster names them, and see you only as your
   organisation's staff. Everyone in a space is told your organisation can read it.
+- **Report this post**, under someone else's post, sends it to the county's moderators with
+  what's wrong (members of the space only). Follow your organisation's safeguarding procedure as
+  well. Young people can report posts too, yours included. A post a moderator removes, or its
+  author takes down, stays as a line saying so while it has replies.
 - **Archive** a space to keep it as it is, to read, and stop new posts. The activity can then have
   a new one.
 

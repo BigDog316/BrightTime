@@ -15,8 +15,9 @@
     they've waited an hour unacknowledged: a moderator takes one on, then dismisses it, removes the
     message or escalates it, with a note. Then escalations waiting for their outcome (D116), then
     the messages screening held (D114), oldest first: a moderator releases one or removes it, with
-    a reason. Then the posts in spaces screening held (D120), decided the same way. Nobody of the
-    conversation's or space's organisation decides any. Each message links to its history (D116).
+    a reason. Then the posts in spaces screening held (D120), decided the same way. A report is of
+    a message or, since D121, a post in a space. Nobody of the conversation's or space's
+    organisation decides any. Each message and post links to its history (D116, D121).
 *@
 <PageTitle>@T["site.nav.moderation"] · BrightTime</PageTitle>
 
@@ -53,6 +54,7 @@ else
                 {
                     string id = r.Id.ToString("N");
                     bool invalid = _noteErrors.ContainsKey(r.Id);
+                    bool post = r.TargetKind == "post";
                     <li class="report report-@r.Severity">
                         <article aria-labelledby="report-@id">
                             <h3 id="report-@id">@T["moderation.report_reason." + r.Reason] <span class="severity">@T["moderation.severity." + r.Severity]</span></h3>
@@ -62,7 +64,7 @@ else
                             }
                             <dl class="facts">
                                 <dt>@T["moderation.reports.reported"]</dt>
-                                <dd>@T.Format("moderation.reports.reported_by", ("role", Role(r.ReporterRole)), ("date", T.DateTime(r.ReportedAt)))</dd>
+                                <dd>@T.Format("moderation.reports.reported_by", ("role", post ? SpaceRole(r.ReporterRole) : Role(r.ReporterRole)), ("date", T.DateTime(r.ReportedAt)))</dd>
                                 @if (r.Details is { Length: > 0 } said)
                                 {
                                     <dt>@T["moderation.reports.details"]</dt>
@@ -70,10 +72,20 @@ else
                                 }
                                 <dt>@T["moderation.reports.organisation"]</dt>
                                 <dd><bdi>@r.OrgName</bdi></dd>
-                                <dt>@T["moderation.held.conversation"]</dt>
-                                <dd dir="auto">@(r.Subject ?? T["provider.messages.no_subject"])</dd>
-                                <dt>@T["moderation.held.sender"]</dt>
-                                <dd>@Role(r.SenderRole) · @T.DateTime(r.SentAt)</dd>
+                                @if (post)
+                                {
+                                    <dt>@T["moderation.posts.space"]</dt>
+                                    <dd dir="auto">@r.Where</dd>
+                                    <dt>@T["moderation.posts.author"]</dt>
+                                    <dd>@SpaceRole(r.AuthorRole) · @T.DateTime(r.WrittenAt)</dd>
+                                }
+                                else
+                                {
+                                    <dt>@T["moderation.held.conversation"]</dt>
+                                    <dd dir="auto">@(r.Where ?? T["provider.messages.no_subject"])</dd>
+                                    <dt>@T["moderation.held.sender"]</dt>
+                                    <dd>@Role(r.AuthorRole) · @T.DateTime(r.WrittenAt)</dd>
+                                }
                                 @if (r.AcknowledgedAt is { } taken)
                                 {
                                     <dt>@T["moderation.reports.taken_on"]</dt>
@@ -81,15 +93,22 @@ else
                                 }
                             </dl>
 
-                            @Earlier(r.Earlier)
-
-                            <h4>@T["moderation.reports.message"]</h4>
-                            <blockquote class="held-body" dir="auto">@r.Body</blockquote>
-                            @if (r.MessageState == "removed")
+                            @if (post)
                             {
-                                <p class="note">@T["moderation.reports.already_removed"]</p>
+                                @Answering(r.Earlier.FirstOrDefault())
                             }
-                            <p><a href="@HistoryOf(r.MessageId)">@T["moderation.history.link"]</a></p>
+                            else
+                            {
+                                @Earlier(r.Earlier)
+                            }
+
+                            <h4>@T[post ? "moderation.reports.post" : "moderation.reports.message"]</h4>
+                            <blockquote class="held-body" dir="auto">@r.Body</blockquote>
+                            @if (r.TargetState is "removed" or "deleted_by_author")
+                            {
+                                <p class="note">@T[post ? "moderation.reports.post_already_removed" : "moderation.reports.already_removed"]</p>
+                            }
+                            <p><a href="@HistoryOf(r.TargetKind, r.TargetId)">@T["moderation.history.link"]</a></p>
 
                             @if (r.OwnOrganisation)
                             {
@@ -116,11 +135,11 @@ else
                                         }
                                     </div>
                                     <p class="hint">@T["moderation.reports.escalate_hint"]</p>
-                                    <label class="check"><input type="checkbox" name="remove_too" value="true" /> @T["moderation.reports.remove_too"]</label>
+                                    <label class="check"><input type="checkbox" name="remove_too" value="true" /> @T[post ? "moderation.reports.remove_post_too" : "moderation.reports.remove_too"]</label>
                                     <div class="actions">
                                         @if (CanRemove)
                                         {
-                                            <button type="submit" name="decision" value="remove">@T["moderation.reports.remove"]</button>
+                                            <button type="submit" name="decision" value="remove">@T[post ? "moderation.reports.remove_post" : "moderation.reports.remove"]</button>
                                         }
                                         <button type="submit" name="decision" value="dismiss" class="secondary-button">@T["moderation.reports.dismiss"]</button>
                                         <button type="submit" name="decision" value="escalate" class="secondary-button">@T["moderation.reports.escalate"]</button>
@@ -163,7 +182,7 @@ else
                                     <dd dir="auto">@note</dd>
                                 }
                             </dl>
-                            <p><a href="@HistoryOf(e.MessageId)">@T["moderation.history.link"]</a></p>
+                            <p><a href="@HistoryOf(e.TargetKind, e.TargetId)">@T["moderation.history.link"]</a></p>
                             @if (e.OwnOrganisation)
                             {
                                 <p class="notice">@T["moderation.reports.own"]</p>
@@ -221,7 +240,7 @@ else
 
                             <h4>@T["moderation.held.message"]</h4>
                             <blockquote class="held-body" dir="auto">@m.Body</blockquote>
-                            <p><a href="@HistoryOf(m.Id)">@T["moderation.history.link"]</a></p>
+                            <p><a href="@HistoryOf("message", m.Id)">@T["moderation.history.link"]</a></p>
 
                             @if (m.OwnOrganisation)
                             {
@@ -281,19 +300,11 @@ else
                                 <dd>@string.Join(", ", p.Reasons.Select(Reason))</dd>
                             </dl>
 
-                            @if (p.Answering is { } answering)
-                            {
-                                <h4>@T["moderation.posts.answering"]</h4>
-                                <ol class="messages">
-                                    <li>
-                                        <p class="note">@SpaceRole(answering.SenderRole) · @T.DateTime(answering.SentAt)</p>
-                                        <p class="body" dir="auto">@answering.Body</p>
-                                    </li>
-                                </ol>
-                            }
+                            @Answering(p.Answering)
 
                             <h4>@T["moderation.posts.post"]</h4>
                             <blockquote class="held-body" dir="auto">@p.Body</blockquote>
+                            <p><a href="@HistoryOf("post", p.Id)">@T["moderation.history.link"]</a></p>
 
                             @if (p.OwnOrganisation)
                             {
@@ -437,7 +448,7 @@ else
         string note = FormValue("note");
         (Result result, string done) = decision switch
         {
-            "remove" => (await reports.RemoveMessageAsync(Actor, report, note), "report_removed"),
+            "remove" => (await reports.RemoveAsync(Actor, report, note), "report_removed"),
             "escalate" => (await reports.EscalateAsync(Actor, report, note, removeToo), "escalated"),
             _ => (await reports.DismissAsync(Actor, report, note), "dismissed"),
         };
@@ -476,7 +487,22 @@ else
         }
     }
 
-    private static string HistoryOf(Guid message) => $"/organiser/moderation/history?message={message:D}";
+    private static string HistoryOf(string kind, Guid id) => $"/organiser/moderation/history?{(kind == "post" ? "post" : "message")}={id:D}";
+
+    /// <summary>The post a reply answers, for context, by role.</summary>
+    private RenderFragment Answering(EarlierMessage? answering) => __builder =>
+    {
+        if (answering is not null)
+        {
+            <h4>@T["moderation.posts.answering"]</h4>
+            <ol class="messages">
+                <li>
+                    <p class="note">@SpaceRole(answering.SenderRole) · @T.DateTime(answering.SentAt)</p>
+                    <p class="body" dir="auto">@answering.Body</p>
+                </li>
+            </ol>
+        }
+    };
 
     /// <summary>The messages before one, for context, every person by role.</summary>
     private RenderFragment Earlier(IReadOnlyList<EarlierMessage> earlier) => __builder =>

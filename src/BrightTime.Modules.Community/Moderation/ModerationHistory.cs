@@ -46,29 +46,32 @@ public static class HistoryKinds
 public sealed record HistoryEvent(DateTimeOffset? At, string Kind, string? Actor, string? Note, IReadOnlyList<string> Codes, Guid? ReportId, DateTimeOffset? Until = null);
 
 /// <summary>
-/// A message's moderation story (D116): the message as it stands, and everything screening,
-/// reporters and moderators did to it, in order, rebuilt from <c>screening_result</c>,
-/// <c>report</c> and the append-only <c>moderation_action</c>.
+/// A message's or post's moderation story (D116, D121): it as it stands, and everything
+/// screening, reporters and moderators did to it, in order, rebuilt from <c>screening_result</c>,
+/// <c>report</c> and the append-only <c>moderation_action</c>. <see cref="Kind"/> is
+/// <c>message</c> or <c>post</c>; <see cref="Where"/> the conversation's subject or the space's
+/// name; roles are participant roles or space roles to match.
 /// </summary>
 [YouthData]
-public sealed record MessageHistory(
-    Guid MessageId,
+public sealed record ItemHistory(
+    string Kind,
+    Guid Id,
     string OrgName,
-    string? Subject,
-    string SenderRole,
+    string? Where,
+    string AuthorRole,
     string Body,
     string State,
-    DateTimeOffset SentAt,
+    DateTimeOffset WrittenAt,
     IReadOnlyList<HistoryEvent> Events,
-    bool SenderIsAdult = false);
+    bool AuthorIsAdult = false);
 
-/// <summary>A moderator's decision, for the list of recent ones (D116).</summary>
-public sealed record RecentDecision(DateTimeOffset At, string Action, string Moderator, string Reason, Guid MessageId, string OrgName, Guid? ReportId);
+/// <summary>A moderator's decision, for the list of recent ones (D116), on a message or a post.</summary>
+public sealed record RecentDecision(DateTimeOffset At, string Action, string Moderator, string Reason, string TargetKind, Guid TargetId, string OrgName, Guid? ReportId);
 
 /// <summary>
-/// The moderation trail, read back (D116): one message's whole story, and the county's recent
-/// decisions. For the queue's moderators, never of their own organisation's conversations; every
-/// read is audited.
+/// The moderation trail, read back (D116, D121): one message's or post's whole story, and the
+/// county's recent decisions. For the queue's moderators, never of their own organisation's
+/// conversations or spaces; every read is audited.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -80,7 +83,8 @@ public sealed record RecentDecision(DateTimeOffset At, string Action, string Mod
 /// </para>
 /// <para>
 /// "Taken on" is the report's acknowledgement, by whoever it was assigned to; it isn't shown
-/// apart when a decision by the same moderator acknowledged it at the same moment.
+/// apart when a decision by the same moderator acknowledged it at the same moment. Muting and
+/// suspending (D119) start from a message, so only a message's story has them.
 /// </para>
 /// </remarks>
 public sealed class ModerationHistory(
@@ -93,37 +97,41 @@ public sealed class ModerationHistory(
 
     public const int RecentCount = 50;
 
-    private const string MessageTarget = "message";
-
     /// <summary>One message's story, for a moderator who isn't of its organisation.</summary>
-    public Task<Result<MessageHistory>> ForMessageAsync(UserId moderator, Guid messageId, CancellationToken cancellationToken = default) =>
+    public Task<Result<ItemHistory>> ForMessageAsync(UserId moderator, Guid messageId, CancellationToken cancellationToken = default) =>
+        ForAsync(moderator, ReportTargets.Message, messageId, cancellationToken);
+
+    /// <summary>One post's story (D121), for a moderator who isn't of its space's organisation.</summary>
+    public Task<Result<ItemHistory>> ForPostAsync(UserId moderator, Guid postId, CancellationToken cancellationToken = default) =>
+        ForAsync(moderator, ReportTargets.Post, postId, cancellationToken);
+
+    private Task<Result<ItemHistory>> ForAsync(UserId moderator, string kind, Guid id, CancellationToken cancellationToken) =>
         db.InTransactionAsync(async ct =>
         {
-            if (await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == messageId, ct).ConfigureAwait(false) is not { } message)
+            if (await ReportTargets.FindAsync(db, kind, id, ct).ConfigureAwait(false) is not { } item)
             {
-                return Result<MessageHistory>.Failure(Error.NotFound("moderation.no_message", "There's no message like that."));
+                return Result<ItemHistory>.Failure(kind == ReportTargets.Post
+                    ? Error.NotFound("moderation.no_post", "There's no post like that.")
+                    : Error.NotFound("moderation.no_message", "There's no message like that."));
             }
 
-            ConversationRecord conversation = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId, ct).ConfigureAwait(false);
-            OrganisationId org = new(conversation.OrgId);
-            if (message.SenderUserId == moderator.Value
+            OrganisationId org = new(item.OrgId);
+            if (item.AuthorUserId == moderator.Value
                 || (await directory.GetOrganisationMembersAsync(org, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator))
             {
-                return Result<MessageHistory>.Failure(Error.Forbidden("moderation.own_organisation",
-                    "You're a member of the organisation that wrote this message, so another moderator decides it."));
+                return Result<ItemHistory>.Failure(Error.Forbidden("moderation.own_organisation",
+                    "You're a member of the organisation that wrote this, so another moderator decides it."));
             }
 
-            Dictionary<Guid, string> roles = await db.Participants.AsNoTracking()
-                .Where(p => p.ConversationId == conversation.Id)
-                .ToDictionaryAsync(p => p.UserId, p => p.ParticipantRole, ct).ConfigureAwait(false);
             List<ScreeningResultRecord> screened = await db.ScreeningResults.AsNoTracking()
-                .Where(s => s.TargetKind == MessageTarget && s.TargetId == messageId).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).ToListAsync(ct).ConfigureAwait(false);
+                .Where(s => s.TargetKind == kind && s.TargetId == id).OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).ToListAsync(ct).ConfigureAwait(false);
             List<ReportRecord> reports = await db.Reports.AsNoTracking()
-                .Where(r => r.TargetKind == MessageTarget && r.TargetId == messageId).OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync(ct).ConfigureAwait(false);
+                .Where(r => r.TargetKind == kind && r.TargetId == id).OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync(ct).ConfigureAwait(false);
             List<ModerationActionRecord> actions = await db.ModerationActions.AsNoTracking()
-                .Where(a => a.TargetKind == MessageTarget && a.TargetId == messageId).OrderBy(a => a.OccurredAt).ToListAsync(ct).ConfigureAwait(false);
-            List<PersonRestrictionRecord> restrictions = await db.PersonRestrictions.AsNoTracking()
-                .Where(r => r.SourceMessageId == messageId).OrderBy(r => r.StartsAt).ToListAsync(ct).ConfigureAwait(false);
+                .Where(a => a.TargetKind == kind && a.TargetId == id).OrderBy(a => a.OccurredAt).ToListAsync(ct).ConfigureAwait(false);
+            List<PersonRestrictionRecord> restrictions = kind == ReportTargets.Message
+                ? await db.PersonRestrictions.AsNoTracking().Where(r => r.SourceMessageId == id).OrderBy(r => r.StartsAt).ToListAsync(ct).ConfigureAwait(false)
+                : [];
             IReadOnlyDictionary<Guid, string> names = await identity.GetAdultEmailsAsync(
                 [.. actions.Select(a => a.ActorUserId), .. reports.Where(r => r.AssignedTo is not null).Select(r => r.AssignedTo!.Value),
                  .. restrictions.Select(r => r.ImposedBy), .. restrictions.Where(r => r.LiftedBy is not null).Select(r => r.LiftedBy!.Value)], ct).ConfigureAwait(false);
@@ -135,14 +143,14 @@ public sealed class ModerationHistory(
                 events.Add(new HistoryEvent(s.CreatedAt, s.Decision == "pass" ? HistoryKinds.Passed : HistoryKinds.Held, null, null, Labels(s.Labels), null));
             }
 
-            if (screened.Count == 0 && HeldMessages.Reasons(message.ScreenResult) is { Count: > 0 } before)
+            if (screened.Count == 0 && HeldMessages.Reasons(item.ScreenResult) is { Count: > 0 } before)
             {
                 events.Add(new HistoryEvent(null, HistoryKinds.Held, null, null, before, null));
             }
 
             foreach (ReportRecord r in reports)
             {
-                events.Add(new HistoryEvent(r.CreatedAt, HistoryKinds.Reported, r.ReporterUserId is { } who ? roles.GetValueOrDefault(who, "") : "", r.Details, [r.ReasonCode, r.Severity], r.Id));
+                events.Add(new HistoryEvent(r.CreatedAt, HistoryKinds.Reported, item.RoleOf(r.ReporterUserId), r.Details, [r.ReasonCode, r.Severity], r.Id));
                 bool decidedThen = actions.Any(a => a.ReportId == r.Id && a.OccurredAt == r.AcknowledgedAt && a.ActorUserId == r.AssignedTo);
                 if (r.AcknowledgedAt is { } taken && !decidedThen)
                 {
@@ -158,8 +166,6 @@ public sealed class ModerationHistory(
                 events.Add(new HistoryEvent(a.OccurredAt, closes ? HistoryKinds.EscalationClosed : HistoryKinds.Decided, Name(a.ActorUserId), a.Reason, [a.Action], a.ReportId));
             }
 
-            // Two decisions in one moment (an escalation and the removal with it) by what they mean:
-            // ids are no help, as UUIDv7 is random within a millisecond.
             foreach (PersonRestrictionRecord r in restrictions)
             {
                 events.Add(new HistoryEvent(r.StartsAt, HistoryKinds.Restricted, Name(r.ImposedBy), r.Reason, [r.Kind], null, r.EndsAt));
@@ -169,54 +175,89 @@ public sealed class ModerationHistory(
                 }
             }
 
+            // Two decisions in one moment (an escalation and the removal with it) by what they mean:
+            // ids are no help, as UUIDv7 is random within a millisecond.
             List<HistoryEvent> ordered = [.. events.OrderBy(e => e.At ?? DateTimeOffset.MinValue).ThenBy(e => Order(e.Kind))
                 .ThenBy(e => e.Kind == HistoryKinds.Decided ? ActionOrder(e.Codes[0]) : 0)];
-            await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = MessageTarget, SubjectIds = [messageId] }, ct).ConfigureAwait(false);
-            return Result<MessageHistory>.Success(new MessageHistory(
-                message.Id,
+            await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = kind, SubjectIds = [id] }, ct).ConfigureAwait(false);
+            return Result<ItemHistory>.Success(new ItemHistory(
+                kind,
+                item.Id,
                 await directory.GetOrganisationNameAsync(org, ct).ConfigureAwait(false) ?? "",
-                conversation.Subject,
-                roles.GetValueOrDefault(message.SenderUserId, ""),
-                message.Body,
-                message.State,
-                message.SentAt,
+                item.Where,
+                item.AuthorRole,
+                item.Body,
+                item.State,
+                item.At,
                 ordered,
-                !await identity.IsMinorAsync(new UserId(message.SenderUserId), ct).ConfigureAwait(false)));
+                !await identity.IsMinorAsync(new UserId(item.AuthorUserId), ct).ConfigureAwait(false)));
         }, cancellationToken);
 
-    /// <summary>The county's most recent decisions on messages, newest first, leaving out the moderator's own organisations'.</summary>
+    /// <summary>
+    /// The county's most recent decisions on messages and posts, newest first, leaving out the
+    /// moderator's own organisations' and what they wrote.
+    /// </summary>
     public Task<IReadOnlyList<RecentDecision>> RecentAsync(UserId moderator, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<IReadOnlyList<RecentDecision>>(async ct =>
         {
-            var rows = await (from a in db.ModerationActions.AsNoTracking()
-                              join m in db.Messages.AsNoTracking() on a.TargetId equals m.Id
-                              join c in db.Conversations.AsNoTracking() on m.ConversationId equals c.Id
-                              where a.TargetKind == MessageTarget
-                              orderby a.OccurredAt descending, a.Id descending
-                              select new { a, c.OrgId, m.SenderUserId })
+            List<ModerationActionRecord> actions = await db.ModerationActions.AsNoTracking()
+                .Where(a => a.TargetKind == ReportTargets.Message || a.TargetKind == ReportTargets.Post)
+                .OrderByDescending(a => a.OccurredAt).ThenByDescending(a => a.Id)
                 .Take(RecentCount * 2).ToListAsync(ct).ConfigureAwait(false);
+            List<Guid> messageIds = [.. actions.Where(a => a.TargetKind == ReportTargets.Message).Select(a => a.TargetId).Distinct()];
+            List<Guid> postIds = [.. actions.Where(a => a.TargetKind == ReportTargets.Post).Select(a => a.TargetId).Distinct()];
+            Dictionary<(string Kind, Guid Id), (Guid Org, Guid Author)> whose = [];
+            foreach (var m in await (from m in db.Messages.AsNoTracking()
+                                     join c in db.Conversations.AsNoTracking() on m.ConversationId equals c.Id
+                                     where messageIds.Contains(m.Id)
+                                     select new { m.Id, c.OrgId, m.SenderUserId }).ToListAsync(ct).ConfigureAwait(false))
+            {
+                whose[(ReportTargets.Message, m.Id)] = (m.OrgId, m.SenderUserId);
+            }
+
+            foreach (var p in await (from p in db.Posts.AsNoTracking()
+                                     join s in db.Spaces.AsNoTracking() on p.SpaceId equals s.Id
+                                     where postIds.Contains(p.Id)
+                                     select new { p.Id, s.OrgId, p.AuthorUserId }).ToListAsync(ct).ConfigureAwait(false))
+            {
+                whose[(ReportTargets.Post, p.Id)] = (p.OrgId, p.AuthorUserId);
+            }
+
             Dictionary<Guid, (string Name, bool Mine)> orgs = [];
             List<(ModerationActionRecord Action, string Org)> kept = [];
-            foreach (var row in rows)
+            foreach (ModerationActionRecord a in actions)
             {
-                if (!orgs.TryGetValue(row.OrgId, out (string Name, bool Mine) org))
+                if (kept.Count == RecentCount || !whose.TryGetValue((a.TargetKind, a.TargetId), out (Guid Org, Guid Author) of))
                 {
-                    OrganisationId id = new(row.OrgId);
-                    org = (await directory.GetOrganisationNameAsync(id, ct).ConfigureAwait(false) ?? "",
-                        (await directory.GetOrganisationMembersAsync(id, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
-                    orgs[row.OrgId] = org;
+                    continue;
                 }
 
-                if (!org.Mine && row.SenderUserId != moderator.Value && kept.Count < RecentCount)
+                if (!orgs.TryGetValue(of.Org, out (string Name, bool Mine) org))
                 {
-                    kept.Add((row.a, org.Name));
+                    OrganisationId id = new(of.Org);
+                    org = (await directory.GetOrganisationNameAsync(id, ct).ConfigureAwait(false) ?? "",
+                        (await directory.GetOrganisationMembersAsync(id, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
+                    orgs[of.Org] = org;
+                }
+
+                if (!org.Mine && of.Author != moderator.Value)
+                {
+                    kept.Add((a, org.Name));
                 }
             }
 
             IReadOnlyDictionary<Guid, string> names = await identity.GetAdultEmailsAsync([.. kept.Select(k => k.Action.ActorUserId)], ct).ConfigureAwait(false);
             List<RecentDecision> list = [.. kept.Select(k => new RecentDecision(k.Action.OccurredAt, k.Action.Action,
-                names.GetValueOrDefault(k.Action.ActorUserId, ""), k.Action.Reason, k.Action.TargetId, k.Org, k.Action.ReportId))];
-            await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = MessageTarget, SubjectIds = [.. list.Select(d => d.MessageId).Distinct()] }, ct).ConfigureAwait(false);
+                names.GetValueOrDefault(k.Action.ActorUserId, ""), k.Action.Reason, k.Action.TargetKind, k.Action.TargetId, k.Org, k.Action.ReportId))];
+            // Always the messages' read, even of none: the page is a youth record (D116).
+            List<Guid> messages = [.. list.Where(d => d.TargetKind == ReportTargets.Message).Select(d => d.TargetId).Distinct()];
+            List<Guid> posts = [.. list.Where(d => d.TargetKind == ReportTargets.Post).Select(d => d.TargetId).Distinct()];
+            await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = ReportTargets.Message, SubjectIds = messages }, ct).ConfigureAwait(false);
+            if (posts.Count > 0)
+            {
+                await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = ReportTargets.Post, SubjectIds = posts }, ct).ConfigureAwait(false);
+            }
+
             return list;
         }, cancellationToken);
 

@@ -4123,7 +4123,7 @@ goes to the moderation queue; 13 and over only, as plan/04 has it.
   permissions `spaces.view` and `spaces.post` (young people, programme staff, provider admins) and
   `spaces.manage_membership` (programme staff, provider admins), all behind the clearance gate.
 - **Not in this:** notifications of new posts, pictures in posts, reporting a post (plan/05's
-  "report anything"), a post's moderation history page, guardians' view of their children's
+  "report anything"; D121), a post's moderation history page (D121), guardians' view of their children's
   spaces, challenges, submissions, rubrics, feedback and the showcase, mentors (M6), and live
   updates (`/hubs/space/{id}`).
 
@@ -4133,6 +4133,53 @@ Schema: `ux_space_listing_active` replaces `ix_space_listing`; `set_space_member
 member of staff kept while young people are in it, a muted adult, leaving with the enrolment,
 archiving; the database refusing one adult), `SpacesApiTests` (the app's side), `RolePermissionTests`,
 and `ConsoleRouteMatrixTests` (a space's page refuses another organisation's owner).
+
+### D121 — Reporting a post, and a post's history (**proposed 2026-11-28**)
+
+D120 left posts out of plan/05's "report anything", and its moderators' decisions on held posts
+out of the history D116 reads back, so M5's "the moderation audit trail reconstructs every
+decision" no longer held for spaces. Sam chose on 2026-11-28: reporting posts and their history
+next; any member of the space reports; a removed post's replies stay.
+- **Reporting:** a member of a space (a young person from the app's **Groups**, staff from the
+  space's page in the console) reports a published post someone else wrote there, with the same
+  reasons as a message and what happened if they say; `POST /reports` takes `targetKind: "post"`.
+  Nobody reports their own post, or one in a space they aren't in (`reports.post_not_found`); a
+  second report while the first waits returns the first. Grooming and self-harm are critical
+  whoever reports them, and email the moderators who may decide them, as with messages (D115).
+- **One queue:** reports of posts wait beside reports of messages, critical first, with the space,
+  who wrote it by role, and the post a reply answers. A moderator takes one on, then removes the
+  post (settling every report of it waiting), dismisses the report, or escalates it with the post
+  removed too if they say; each with a note, as a `moderation_action` on the post and an audit
+  event (`reports.post_removed` for a removal). Nobody of the space's organisation decides, nor
+  the reporter or the author (`reports.own_organisation`). Escalations wait for their outcome as
+  before (D116). `Reports` reads what a report is about through one `ReportTargets`, a message or
+  a post, rather than twice.
+- **A removed post's replies stay.** A post taken down, by a moderator or by its author, that has
+  published replies stays in the feed as a line saying so ("A moderator removed this post", "Its
+  author took this post down"), without its words or its author's name, with the replies under
+  it; nobody replies to it. This changes D120, where a post its author took down hid its replies
+  too. A removed reply stops counting under its post. A moderator's removed post is still shown,
+  marked, to its author (as a held one removed is).
+- **A post's history:** `/organiser/moderation/history?post={id}` rebuilds a post's story as a
+  message's (D116): screening (passed or held, and why), each report and who took it on, each
+  decision with the moderator and their note, and an escalation's close. The recent decisions now
+  list decisions on posts too, each linking to its story. Held posts in the queue link to theirs.
+  Muting and suspending (D119) still start from a message: a post's history has no restriction
+  forms (it would need the post as the restriction's source).
+- **Wording:** what said "message" in the queue's intro, the "own organisation" refusals, the
+  dismissal notice, the history link and the critical-report email now covers posts too, in all
+  six languages.
+- **Not in this:** muting or suspending from a post, reporting a space, a person or a listing
+  (the other `ck_report_target` kinds), notifications to a reporter of the outcome, pictures in
+  posts, and the hosted abuse classifier (Q8).
+
+No schema change (`report.target_kind` and `moderation_action.target_kind` already allow
+`post`). Tests: `PostReportsTests` (a young person's critical report and its email, the
+duplicate, her own post and an outsider refused, staff reporting from the console, the queue's
+order, removal with the reply kept under the line, the history in order, the recent decisions,
+a dismissal, a post its author took down keeping its reply, and the organisation's own staff
+kept from the history), and `SpacesApiTests` (reporting from the app: the receipt, the duplicate,
+her own post, an outsider, an unknown kind).
 
 ## Open questions
 

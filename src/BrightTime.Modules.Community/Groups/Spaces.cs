@@ -560,26 +560,31 @@ public sealed class Spaces(
         List<SpaceMemberRecord> current = [.. everyone.Where(m => m.LeftAt == null)
             .OrderBy(m => m.MemberRole == SpaceRoles.Youth ? 1 : 0).ThenBy(m => NameOf(m.UserId) ?? "￿", StringComparer.CurrentCulture)];
         Guid me = viewer.Value;
+        // A post taken down (by a moderator or its author) that has replies stays as a placeholder,
+        // without its words, so that the replies keep their place (D121).
         List<PostRecord> top = await db.Posts.AsNoTracking()
             .Where(p => p.SpaceId == space.Id && p.ReplyToId == null
-                && (p.State == PostStates.Published || (p.AuthorUserId == me && (p.State == PostStates.Held || p.State == PostStates.Removed))))
+                && (p.State == PostStates.Published || (p.AuthorUserId == me && (p.State == PostStates.Held || p.State == PostStates.Removed))
+                    || ((p.State == PostStates.Removed || p.State == PostStates.DeletedByAuthor) && p.ReplyCount > 0)))
             .OrderByDescending(p => p.PublishedAt ?? p.CreatedAt).ThenByDescending(p => p.Id).Take(PageSize).ToListAsync(ct).ConfigureAwait(false);
-        List<Guid> shown = [.. top.Where(p => p.State == PostStates.Published).Select(p => p.Id)];
+        List<Guid> shown = [.. top.Where(p => p.State != PostStates.Held).Select(p => p.Id)];
         List<PostRecord> replies = await db.Posts.AsNoTracking()
             .Where(p => p.ReplyToId != null && shown.Contains(p.ReplyToId.Value)
                 && (p.State == PostStates.Published || (p.AuthorUserId == me && (p.State == PostStates.Held || p.State == PostStates.Removed))))
             .OrderBy(p => p.PublishedAt ?? p.CreatedAt).ThenBy(p => p.Id).ToListAsync(ct).ConfigureAwait(false);
         ILookup<Guid, PostRecord> byParent = replies.ToLookup(r => r.ReplyToId!.Value);
 
-        PostView View(PostRecord p, IReadOnlyList<PostView> under) => new(p.Id, p.AuthorUserId == me, roles.GetValueOrDefault(p.AuthorUserId, ""), NameOf(p.AuthorUserId),
-            p.Body ?? "", p.State, p.PublishedAt ?? p.CreatedAt, p.State == PostStates.Held && p.AuthorUserId == me ? Moderation.HeldMessages.Reasons(p.ScreenResult) : null, under);
+        // Only its author reads a removed post's words, and nobody a post its author took down.
+        bool Withheld(PostRecord p) => p.State == PostStates.DeletedByAuthor || (p.State == PostStates.Removed && p.AuthorUserId != me);
+        PostView View(PostRecord p, IReadOnlyList<PostView> under) => new(p.Id, p.AuthorUserId == me, roles.GetValueOrDefault(p.AuthorUserId, ""), Withheld(p) ? null : NameOf(p.AuthorUserId),
+            Withheld(p) ? "" : p.Body ?? "", p.State, p.PublishedAt ?? p.CreatedAt, p.State == PostStates.Held && p.AuthorUserId == me ? Moderation.HeldMessages.Reasons(p.ScreenResult) : null, under);
 
         bool isMember = current.Any(m => m.UserId == me);
         string org = await directory.GetOrganisationNameAsync(new OrganisationId(space.OrgId), ct).ConfigureAwait(false) ?? "";
         return new SpaceView(space.Id, space.OrgId, org, space.ListingId, space.Name, space.Description, space.Status, isMember,
             isMember && space.Status == SpaceStatuses.Active,
             [.. current.Select(m => new SpaceMemberView(m.UserId, m.MemberRole, NameOf(m.UserId), m.JoinedAt, m.UserId == me))],
-            [.. top.Select(p => View(p, p.State == PostStates.Published ? [.. byParent[p.Id].Select(r => View(r, []))] : []))]);
+            [.. top.Select(p => View(p, [.. byParent[p.Id].Select(r => View(r, []))]))]);
     }
 
     // ---- helpers -----------------------------------------------------------------------------

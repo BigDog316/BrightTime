@@ -81,7 +81,12 @@ activity and some of its staff, and always says who is in it and that the organi
   out.
 - Others see you by your first name and the first letter of your family name, as the activity
   knows you. Staff are shown as the organisation's staff.
-- **Take it down** removes a post of yours for everyone.
+- **Take it down** removes a post of yours for everyone. If someone has replied, the replies
+  stay, under a line saying you took it down.
+- **Report** someone else's post if it worries you: choose what's wrong, and say what happened if
+  you like. A moderator from the county looks at it, within the hour if someone might be hurt or
+  is asking you to keep secrets or talk somewhere else. If someone is in danger right now, call
+  911; if you're thinking about hurting yourself, call or text 988.
 - You leave the group when your place in the activity ends.
 
 ## Staying safe

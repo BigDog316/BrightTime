@@ -16,7 +16,7 @@ public sealed record MessageRequest(string? Body);
 
 public sealed record BroadcastRequest(Guid ListingId, string? Subject, string? Body);
 
-/// <summary>A report (D115): of a <c>message</c>, so far, with one of its reasons and what happened, if the reporter says.</summary>
+/// <summary>A report (D115, D121): of a <c>message</c> or a <c>post</c>, with one of its reasons and what happened, if the reporter says.</summary>
 public sealed record ReportRequest(string? TargetKind, Guid TargetId, string? Reason, string? Details);
 
 /// <summary>
@@ -40,7 +40,8 @@ public static class MessagingEndpoints
         api.MapPost("/org/{orgId:guid}/broadcasts", BroadcastAsync).RequireAuthorization()
             .WithMetadata(new YouthRecordAttribute(Conversations.Sent)).Produces<BroadcastResult>(StatusCodes.Status201Created);
 
-        // plan/05's "report anything"; a message someone else wrote in your conversation, so far (D115).
+        // plan/05's "report anything": a message someone else wrote in your conversation (D115), or a
+        // post someone else wrote in your space (D121), so far.
         api.MapPost("/reports", ReportAsync).RequireAuthorization().Produces<ReportReceipt>(StatusCodes.Status201Created);
         return api;
     }
@@ -48,18 +49,23 @@ public static class MessagingEndpoints
     private static async Task<IResult> ReportAsync(ReportRequest body, ClaimsPrincipal user, BrightTime.Modules.Community.Moderation.Reports reports, AuditTrail audit, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
-        if (body.TargetKind != "message")
+        Result<ReportReceipt> made = body.TargetKind switch
         {
-            return ApiProblems.From(Error.Validation("reports.target", "Only a message can be reported here, so far."));
-        }
-
-        Result<ReportReceipt> made = await reports.ReportMessageAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct);
+            "message" => await reports.ReportMessageAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct),
+            "post" => await reports.ReportPostAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct),
+            _ => Result<ReportReceipt>.Failure(Error.Validation("reports.target", "Only a message or a post can be reported here, so far.")),
+        };
         if (made.IsSuccess)
         {
             return Results.Created($"/api/v1/reports/{made.Value.Id}", made.Value);
         }
 
-        audit.Record(new AuditAccess { Action = BrightTime.Modules.Community.Moderation.Reports.Made, Outcome = AuditOutcome.Deny, SubjectKind = "message", SubjectIds = [body.TargetId], Reason = made.Error.Code });
+        if (made.Error.Code == "reports.target")
+        {
+            return ApiProblems.From(made.Error);
+        }
+
+        audit.Record(new AuditAccess { Action = BrightTime.Modules.Community.Moderation.Reports.Made, Outcome = AuditOutcome.Deny, SubjectKind = body.TargetKind, SubjectIds = [body.TargetId], Reason = made.Error.Code });
         return ApiProblems.From(made.Error);
     }
 

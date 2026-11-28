@@ -10,10 +10,10 @@
 @inherits ConsoleComponent
 
 @*
-    The moderation trail, read back (D116). With ?message=, one message's whole story: as it is now,
-    then what screening, reporters and moderators did, in order, each decision with who made it and
-    their note. Without, the county's recent decisions, each linking to its message's story. Never
-    of the moderator's own organisation's conversations.
+    The moderation trail, read back (D116). With ?message=, or ?post= for a post in a space (D121),
+    one item's whole story: as it is now, then what screening, reporters and moderators did, in
+    order, each decision with who made it and their note. Without, the county's recent decisions,
+    each linking to its story. Never of the moderator's own organisation's conversations or spaces.
 *@
 <PageTitle>@T["moderation.history.title"] · BrightTime</PageTitle>
 
@@ -36,14 +36,24 @@ else if (!Availability.IsAvailable)
 else if (_history is { } h)
 {
     <section aria-labelledby="message-heading">
-        <h2 id="message-heading">@T["moderation.history.message"]</h2>
+        <h2 id="message-heading">@T[IsAPost ? "moderation.history.post" : "moderation.history.message"]</h2>
         <dl class="facts">
             <dt>@T["moderation.reports.organisation"]</dt>
             <dd><bdi>@h.OrgName</bdi></dd>
-            <dt>@T["moderation.held.conversation"]</dt>
-            <dd dir="auto">@(h.Subject ?? T["provider.messages.no_subject"])</dd>
-            <dt>@T["moderation.held.sender"]</dt>
-            <dd>@Role(h.SenderRole)</dd>
+            @if (IsAPost)
+            {
+                <dt>@T["moderation.posts.space"]</dt>
+                <dd dir="auto">@h.Where</dd>
+                <dt>@T["moderation.posts.author"]</dt>
+                <dd>@Role(h.AuthorRole)</dd>
+            }
+            else
+            {
+                <dt>@T["moderation.held.conversation"]</dt>
+                <dd dir="auto">@(h.Where ?? T["provider.messages.no_subject"])</dd>
+                <dt>@T["moderation.held.sender"]</dt>
+                <dd>@Role(h.AuthorRole)</dd>
+            }
             <dt>@T["moderation.history.state"]</dt>
             <dd>@(T.Has("moderation.history.state." + h.State) ? T["moderation.history.state." + h.State] : h.State)</dd>
         </dl>
@@ -51,7 +61,7 @@ else if (_history is { } h)
     </section>
 
     @* D119: what's been done to the sender, and muting or suspending them, an adult, for a time. *@
-    @if (h.SenderIsAdult && _restrictions is { } restrictions)
+    @if (!IsAPost && h.AuthorIsAdult && _restrictions is { } restrictions)
     {
         <section aria-labelledby="sender-heading">
             <h2 id="sender-heading">@T["moderation.restrict.heading"]</h2>
@@ -162,7 +172,7 @@ else
                         @foreach (RecentDecision d in _recent)
                         {
                             <tr>
-                                <td><a href="@($"/organiser/moderation/history?message={d.MessageId:D}")">@T.DateTime(d.At)</a></td>
+                                <td><a href="@($"/organiser/moderation/history?{(d.TargetKind == "post" ? "post" : "message")}={d.TargetId:D}")">@T.DateTime(d.At)</a></td>
                                 <td>@Action(d.Action)</td>
                                 <td>@d.Moderator</td>
                                 <td><bdi>@d.OrgName</bdi></td>
@@ -179,6 +189,8 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "message")] public Guid? MessageId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "post")] public Guid? PostId { get; set; }
+
     [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
 
     private IReadOnlyList<RestrictionView>? _restrictions;
@@ -186,7 +198,9 @@ else
 
     private bool CanRestrict => User.HasPermission(Permissions.Moderation.SuspendUser);
 
-    private MessageHistory? _history;
+    private ItemHistory? _history;
+
+    private bool IsAPost => _history?.Kind == "post";
     private IReadOnlyList<RecentDecision> _recent = [];
     private string? _problem;
 
@@ -198,17 +212,25 @@ else
         }
 
         ModerationHistory history = Get<ModerationHistory>();
-        if (MessageId is not { } id)
+        Result<ItemHistory> found;
+        if (PostId is { } post)
+        {
+            found = await history.ForPostAsync(Actor, post);
+        }
+        else if (MessageId is { } message)
+        {
+            found = await history.ForMessageAsync(Actor, message);
+        }
+        else
         {
             _recent = await history.RecentAsync(Actor);
             return;
         }
 
-        Result<MessageHistory> found = await history.ForMessageAsync(Actor, id);
         if (found.IsSuccess)
         {
             _history = found.Value;
-            _restrictions = found.Value.SenderIsAdult ? await Get<Restrictions>().OfSenderAsync(Actor, id) : null;
+            _restrictions = found.Value.Kind == "message" && found.Value.AuthorIsAdult ? await Get<Restrictions>().OfSenderAsync(Actor, found.Value.Id) : null;
             return;
         }
 
@@ -279,6 +301,7 @@ else
 
     private string Action(string action) => T.Has("moderation.history.action." + action) ? T["moderation.history.action." + action] : action;
 
+    /// <summary>A participant's role in a conversation, or a member's in a space (D121: youth or staff, the same words).</summary>
     private string Role(string role) => T.Has("provider.messages.role." + role) ? T["provider.messages.role." + role] : role;
 
     private string Reason(string reason) => T.Has("moderation.reason." + reason) ? T["moderation.reason." + reason] : reason;

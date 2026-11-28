@@ -4232,7 +4232,7 @@ back with why and its `screening_result`, sent; another young person and the con
 a draft; sent back, changed, sent again, accepted, with the feedback rows and audit; closing),
 `SpacesApiTests` (the app's side), `RolePermissionTests`, and `ConsoleRouteMatrixTests`.
 
-### D123 — Media safety: virus scanning and re-encoding (**proposed 2026-11-28**)
+### D123 — Media safety: virus scanning and re-encoding (**accepted 2026-11-28**)
 
 M5's media safety (T19) had D103's checks and D106's decode behind it, but a picture was kept as
 it was uploaded, less its metadata, and never virus-scanned. Sam chose on 2026-11-28: media

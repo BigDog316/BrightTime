@@ -4181,7 +4181,7 @@ a dismissal, a post its author took down keeping its reply, and the organisation
 kept from the history), and `SpacesApiTests` (reporting from the app: the receipt, the duplicate,
 her own post, an outsider, an unknown kind).
 
-### D122 — Challenges and submissions (**proposed 2026-11-28**)
+### D122 — Challenges and submissions (**accepted 2026-11-28**)
 
 M5's challenges, submissions and feedback had tables and no code. Sam chose on 2026-11-28:
 challenges and submissions next; a young person's work is seen by its author and the space's

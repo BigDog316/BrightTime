@@ -4388,7 +4388,7 @@ one from the console and staff refused, the refusals, an archived one not offere
 challenge with one, a partial and an out-of-range score refused, a full score and its total, a
 comment alone, what the young person sees, fixed once used).
 
-### D126 — Telling a young person when staff ask to show their work (**proposed 2026-11-28**)
+### D126 — Telling a young person when staff ask to show their work (**accepted 2026-11-28**)
 
 D124 left the young person to find a showcase proposal by opening **Showcase**. Sam chose on
 2026-11-28: a notice for the proposal, by the same channels as D83's work notices.

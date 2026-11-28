@@ -242,10 +242,13 @@ public sealed class Projects(
             return Result<ProjectView>.Failure(refused);
         }
 
-        if (await media.AddImageAsync(file, ProjectPictures.Rules, MediaVisibility.Private, user, cancellationToken).ConfigureAwait(false) is not { } image)
+        Result<StoredImage> addedImage = await media.AddImageAsync(file, ProjectPictures.Rules, MediaVisibility.Private, user, cancellationToken).ConfigureAwait(false);
+        if (!addedImage.IsSuccess)
         {
-            return Result<ProjectView>.Failure(ProjectPictures.NotAPicture);
+            return Result<ProjectView>.Failure(MediaRefusals.Or(addedImage.Error, ProjectPictures.NotAPicture));
         }
+
+        StoredImage image = addedImage.Value;
 
         Result<ProjectView> added = await db.InTransactionAsync(async ct =>
         {

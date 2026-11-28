@@ -137,7 +137,7 @@ public sealed class WorkReviewPageTests(ConsoleFixture db)
         html.ShouldContain("With a key");
         HttpResponseMessage fetched = await staff.GetAsync(picture);
         fetched.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await fetched.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(TestImages.Png(640, 480));
+        TestImages.Pixels(await fetched.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(TestImages.Pixels(TestImages.Png(640, 480)));
         fetched.Headers.CacheControl!.NoStore.ShouldBeTrue();
         await staff.GetAsync(work);
 

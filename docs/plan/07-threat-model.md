@@ -312,6 +312,11 @@ client; images re-encoded (which also destroys embedded payloads); SVG upload
 disallowed; CSAM detection and the legal reporting path are an M5 requirement
 with a named responsible person at the tenant, not a technical control we can
 claim to have solved.
+**Built (D123):** every upload is virus-scanned by clamd as it came, before it's kept, and refused
+(and audited) if the scan finds something or can't be done; a picture that passes is decoded and
+encoded again, so none of the uploaded file's bytes are kept; a host outside Development without a
+scanner doesn't start. Pictures kept before are scanned by the worker. CSAM detection and the
+reporting path remain open.
 
 ### T20 — Payment data scope creep
 **Controls:** no cardholder data anywhere. `payment_intent` holds amount,

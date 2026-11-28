@@ -159,7 +159,8 @@ public sealed class BadgeApiTests(ApiFixture api)
             HttpResponseMessage picture = await anonymous.GetAsync(Relative($"api/v1/public/badges/classes/{classId}/image"), Ct);
             picture.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
             byte[] served = await picture.Content.ReadAsByteArrayAsync(Ct);
-            served.ShouldBe(BadgeTestImages.Png(128), "the picture without its text chunk");
+            TestImages.Pixels(served).ShouldBe(TestImages.Pixels(BadgeTestImages.Png(128)), "the same picture, made again (D123)");
+            Encoding.Latin1.GetString(served).ShouldNotContain("tEXt", customMessage: "without its text chunk");
 
             // Awarded once, to someone enrolled with the organisation; another organisation can't award it.
             await ProblemAsync(await admin.PostAsJsonAsync($"api/v1/org/{org}/badge-classes/{classId}/awards", new { enrollmentId = Guid.NewGuid() }, Ct), HttpStatusCode.BadRequest, "badges.recipient");

@@ -1,3 +1,5 @@
+using BrightTime.Abstractions.Storage;
+using BrightTime.Infrastructure.Media;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Opportunities.Contracts;
 using BrightTime.Modules.Opportunities.Details;
@@ -28,7 +30,19 @@ public sealed class SqlModeCompositionTests : IClassFixture<WebApplicationFactor
             builder.UseSetting("Finder:Mode", "Sql");
             builder.UseSetting("Audit:ClientHashKey", "YnJpZ2h0dGltZS10ZXN0LW9ubHktYXVkaXQtaGFzaC1rZXkhIQ==");
             builder.UseSetting("Finder:ConnectionString", "Host=127.0.0.1;Port=1;Database=none;Username=none");
+
+            // Production needs a virus scanner (D123); nothing connects to it until an upload.
+            builder.UseSetting("Media:Clamd:Host", "127.0.0.1");
         });
+    }
+
+    [Fact]
+    public void Outside_development_the_host_does_not_start_without_a_virus_scanner()
+    {
+        using WebApplicationFactory<Program> unscanned = _factory.WithWebHostBuilder(builder => builder.UseSetting("Media:Clamd:Host", ""));
+        // The host resolves its scanner as it starts, so it stops there, not at the first upload.
+        Exception refused = Should.Throw<Exception>(() => unscanned.Services.GetRequiredService<IVirusScanner>());
+        refused.ToString().ShouldContain("Media:Clamd:Host is required outside Development");
     }
 
     [Fact]
@@ -42,5 +56,6 @@ public sealed class SqlModeCompositionTests : IClassFixture<WebApplicationFactor
 
         sp.GetRequiredService<IListingFinder>().ShouldBeOfType<SqlListingFinder>();
         sp.GetRequiredService<IListingDetails>().ShouldBeOfType<SqlListingDetails>();
+        sp.GetRequiredService<IVirusScanner>().ShouldBeOfType<ClamdScanner>();
     }
 }

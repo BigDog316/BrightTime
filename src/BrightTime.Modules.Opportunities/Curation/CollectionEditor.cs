@@ -294,10 +294,13 @@ public sealed partial class CollectionEditor(OpportunitiesDbContext db, ITenantC
             return Result.Failure(Error.NotFound("collections.not_found", "There's no collection like that."));
         }
 
-        if (await media.AddImageAsync(file, CurationImages.Hero, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false) is not { } image)
+        Result<StoredImage> addedImage = await media.AddImageAsync(file, CurationImages.Hero, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false);
+        if (!addedImage.IsSuccess)
         {
-            return Result.Failure(CurationImages.NotAnImage);
+            return Result.Failure(MediaRefusals.Or(addedImage.Error, CurationImages.NotAnImage));
         }
+
+        StoredImage image = addedImage.Value;
 
         Guid? before = null;
         Result set = await WithAsync(id, async (c, ct) =>

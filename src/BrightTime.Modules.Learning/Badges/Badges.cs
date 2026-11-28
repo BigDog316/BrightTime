@@ -457,10 +457,13 @@ public sealed partial class Badges(
             return refused;
         }
 
-        if (await media.AddImageAsync(file, BadgeImageRules.Image, MediaVisibility.Public, staff, cancellationToken).ConfigureAwait(false) is not { } image)
+        Result<StoredImage> addedImage = await media.AddImageAsync(file, BadgeImageRules.Image, MediaVisibility.Public, staff, cancellationToken).ConfigureAwait(false);
+        if (!addedImage.IsSuccess)
         {
-            return Result<BadgeClassView>.Failure(BadgeImageRules.NotAnImage);
+            return Result<BadgeClassView>.Failure(MediaRefusals.Or(addedImage.Error, BadgeImageRules.NotAnImage));
         }
+
+        StoredImage image = addedImage.Value;
 
         Result<(BadgeClassView View, Guid? Previous)> pointed;
         try

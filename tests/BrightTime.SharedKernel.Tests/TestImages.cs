@@ -13,6 +13,18 @@ namespace BrightTime.SharedKernel.Tests;
 /// </summary>
 internal static class TestImages
 {
+    /// <summary>
+    /// What a picture shows, to compare a kept one with what was uploaded now that it's made again
+    /// from its pixels (D123): its size and a hash of its pixels, decoded by Skia.
+    /// </summary>
+    public static string Pixels(byte[] image)
+    {
+        using SKBitmap decoded = SKBitmap.Decode(image) ?? throw new InvalidOperationException("Not a picture Skia can decode.");
+        using SKBitmap rgba = new(decoded.Width, decoded.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        decoded.CopyTo(rgba, SKColorType.Rgba8888).ShouldBeTrue();
+        return $"{rgba.Width}x{rgba.Height}:{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(rgba.Bytes))}";
+    }
+
     public static byte[] Png(int width, int height, string? text = null)
     {
         using MemoryStream png = new();

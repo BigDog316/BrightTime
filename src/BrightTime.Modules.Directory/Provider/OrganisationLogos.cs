@@ -62,10 +62,13 @@ public sealed class OrganisationLogos(DirectoryDbContext db, IMediaLibrary media
             return Result.Failure(OrganisationLogoRules.NotFound);
         }
 
-        if (await media.AddImageAsync(file, OrganisationLogoRules.Image, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false) is not { } image)
+        Result<StoredImage> addedImage = await media.AddImageAsync(file, OrganisationLogoRules.Image, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false);
+        if (!addedImage.IsSuccess)
         {
-            return Result.Failure(OrganisationLogoRules.NotAnImage);
+            return Result.Failure(MediaRefusals.Or(addedImage.Error, OrganisationLogoRules.NotAnImage));
         }
+
+        StoredImage image = addedImage.Value;
 
         Result<Guid?> replaced;
         try

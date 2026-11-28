@@ -6,6 +6,12 @@ namespace BrightTime.Modules.Platform.Media;
 public sealed record ImageCopy(int Size, byte[] Bytes, int Width, int Height);
 
 /// <summary>
+/// An image made again from its pixels (D123): what's kept in place of the upload, its type (the
+/// upload's), its size in pixels, upright, and its smaller copies.
+/// </summary>
+public sealed record ReencodedImage(string ContentType, byte[] Bytes, int Width, int Height, IReadOnlyList<ImageCopy> Copies);
+
+/// <summary>
 /// Decodes a cleaned PNG or JPEG with Skia and makes its smaller copies (D106). The decode is also
 /// the check that the file is a picture at all: one that doesn't decode whole, or decodes to
 /// another size than <see cref="BrightTime.SharedKernel.Media.ImageCleaner"/> read from its header,
@@ -32,6 +38,12 @@ public static class ImageSizer
     /// <summary>A print copy's JPEG quality (D107).</summary>
     public const int PrintQuality = 85;
 
+    /// <summary>The longest side an image is kept at (D123): a larger one is made smaller as it's re-encoded.</summary>
+    public const int MaxKeptSide = 4096;
+
+    /// <summary>A kept JPEG's quality (D123).</summary>
+    public const int KeptQuality = 90;
+
     private static readonly SemaphoreSlim Decoding = new(2, 2);
 
     /// <summary>
@@ -47,6 +59,33 @@ public static class ImageSizer
         try
         {
             return Copies(image.Span, shownWidth, shownHeight, sizes);
+        }
+        finally
+        {
+            Decoding.Release();
+        }
+    }
+
+    /// <summary>
+    /// The image made again from its pixels (D123), so none of the uploaded file's bytes are kept:
+    /// a PNG as a PNG and a JPEG as a JPEG at <see cref="KeptQuality"/>, turned as it's shown (so it
+    /// carries no orientation), no more than <see cref="MaxKeptSide"/> on its longest side; and its
+    /// copies at each of <paramref name="sizes"/> it's then wider than. Null when it isn't a picture
+    /// of <paramref name="shownWidth"/> by <paramref name="shownHeight"/>.
+    /// </summary>
+    public static async Task<ReencodedImage?> ReencodeAsync(
+        ReadOnlyMemory<byte> image, string contentType, int shownWidth, int shownHeight, IReadOnlyList<int> sizes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sizes);
+        if (contentType is not ("image/png" or "image/jpeg"))
+        {
+            throw new ArgumentOutOfRangeException(nameof(contentType), contentType, "Only a PNG or a JPEG is re-encoded.");
+        }
+
+        await Decoding.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return Reencode(image.Span, contentType, shownWidth, shownHeight, sizes);
         }
         finally
         {
@@ -108,6 +147,38 @@ public static class ImageSizer
         return jpeg.ToArray();
     }
 
+    private static ReencodedImage? Reencode(ReadOnlySpan<byte> image, string contentType, int shownWidth, int shownHeight, IReadOnlyList<int> sizes)
+    {
+        if (shownWidth <= 0 || shownHeight <= 0)
+        {
+            return null;
+        }
+
+        double fit = Math.Min(1d, (double)MaxKeptSide / Math.Max(shownWidth, shownHeight));
+        int width = Math.Max(1, (int)Math.Round(shownWidth * fit, MidpointRounding.AwayFromZero));
+        int height = Math.Max(1, (int)Math.Round(shownHeight * fit, MidpointRounding.AwayFromZero));
+        if (Decode(image, shownWidth, shownHeight, width) is not { } decoded)
+        {
+            return null;
+        }
+
+        using SKBitmap stored = decoded.Bitmap;
+        using SKBitmap shown = Orient(stored, decoded.Origin);
+        using SKBitmap? smaller = shown.Width == width && shown.Height == height ? null : Shrink(shown, width, height);
+        SKBitmap kept = smaller ?? shown;
+        byte[] bytes;
+        using (SKPixmap pixels = kept.PeekPixels())
+        {
+            using SKData encoded = (contentType == "image/png"
+                    ? pixels.Encode(SKPngEncoderOptions.Default)
+                    : pixels.Encode(new SKJpegEncoderOptions(KeptQuality, SKJpegEncoderDownsample.Downsample420, SKJpegEncoderAlphaOption.Ignore)))
+                ?? throw new InvalidOperationException("Skia couldn't encode the image again.");
+            bytes = encoded.ToArray();
+        }
+
+        return new ReencodedImage(contentType, bytes, width, height, MakeCopies(kept, width, height, sizes));
+    }
+
     private static List<ImageCopy>? Copies(ReadOnlySpan<byte> image, int shownWidth, int shownHeight, IReadOnlyList<int> sizes)
     {
         int[] wanted = [.. sizes.Where(s => s > 0 && s < shownWidth).Distinct().Order()];
@@ -125,8 +196,14 @@ public static class ImageSizer
         }
 
         using SKBitmap shown = Orient(stored, decoded.Origin);
+        return MakeCopies(shown, shownWidth, shownHeight, wanted);
+    }
+
+    /// <summary>The copies of <paramref name="shown"/>, an image of <paramref name="shownWidth"/> by <paramref name="shownHeight"/> as it's shown, at each of <paramref name="sizes"/> it's wider than.</summary>
+    private static List<ImageCopy> MakeCopies(SKBitmap shown, int shownWidth, int shownHeight, IReadOnlyList<int> sizes)
+    {
         List<ImageCopy> copies = [];
-        foreach (int size in wanted)
+        foreach (int size in sizes.Where(s => s > 0 && s < shownWidth).Distinct().Order())
         {
             // As tall as the original makes it: a scaled decode rounds its sides.
             int height = Math.Max(1, (int)Math.Round((double)shownHeight * size / shownWidth, MidpointRounding.AwayFromZero));

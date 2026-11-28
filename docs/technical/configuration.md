@@ -94,6 +94,13 @@ Generate a symmetric key with `openssl rand -base64 32`, and an RSA key with
 | `Payments:Stripe:ApiBase`, `:ApiVersion`, `:WebhookTolerance` | | ● | | `https://api.stripe.com/`, `2024-06-20`, `00:05:00` | |
 | `Reports:QuestPdfLicence` | ● | ● | | Community | QuestPDF's licence type. Community is free only under US$1M revenue (D57) |
 
+## Media
+
+| Setting | W | A | J | Default | |
+|---|:-:|:-:|:-:|---|---|
+| `Media:Clamd:Host` | ● | ● | ● | | **Required outside Development** (D123): the clamd every upload is virus-scanned by before it's kept; the worker scans pictures kept before. Without it the host doesn't start. In Development without it, a test pattern stands in, finding only the EICAR test file |
+| `Media:Clamd:Port`, `:TimeoutSeconds` | ● | ● | ● | `3310`, `30` | A scan that takes longer, or can't connect, refuses the upload as unchecked |
+
 ## The finder
 
 | Setting | W | Default | |
@@ -134,5 +141,6 @@ Before a host serves real people:
 7. `Email:*` for a real relay, with a real `Email:From`.
 8. `Auth:CheckBreachedPasswords=true`.
 9. `Auth:DevelopmentSignIn` unset.
-10. Optional: `Payments:Stripe:*`, `Push:Fcm:*`, `Auth:External:*`, `AppLinks:*`,
+10. `Media:Clamd:Host` in all three hosts, naming a clamd they can reach (D123).
+11. Optional: `Payments:Stripe:*`, `Push:Fcm:*`, `Auth:External:*`, `AppLinks:*`,
     `Passkeys:AppOrigins`, `Reports:QuestPdfLicence`.

@@ -92,6 +92,9 @@ There is no production deployment yet. What one needs, from what is built:
 - **One host name per tenant**, each with a row in `platform.tenant_domain`. The primary domain is
   the tenant's address in every link.
 - **One or more workers.** Jobs are claimed with `SKIP LOCKED`, so workers can run side by side.
+- **A clamd** (ClamAV's daemon, D123) that Web, Api and the worker can reach, with its signatures
+  kept up to date (the `clamav/clamav` image runs freshclam). While it's down, uploads are refused
+  as unchecked, and the log says `clamd couldn't scan an upload`.
 - **Configuration** per [configuration.md](configuration.md#a-production-checklist).
 
 ## Health and the worker
@@ -199,8 +202,8 @@ the inbox and push only.
 - An upgrade path for a database holding data (above).
 - Backups, restores and retention. Retention periods are open question Q4; deletion versus audit is
   Q5.
-- Object storage for media and generated files: undecided, so reports are made on request and
-  listings have no images.
+- Object storage for media: undecided. Media bytes are kept in the database (D103), and reports
+  are made on request.
 - Geocoding (Q7): new sites sit at their neighbourhood's centre.
 - SMS (Q9).
 - A tenant-provisioning tool.

@@ -125,7 +125,9 @@ public sealed class ProjectPictureApiTests(ApiFixture api)
             HttpResponseMessage own = await learner.GetAsync(Relative($"{pictures}/{media}"), Ct);
             own.StatusCode.ShouldBe(HttpStatusCode.OK);
             (own.Content.Headers.ContentType!.MediaType, own.Headers.CacheControl!.NoStore).ShouldBe(("image/png", true));
-            (await own.Content.ReadAsByteArrayAsync(Ct)).ShouldBe(TestImages.Png(800, 600), "the same picture, without its text");
+            byte[] ownPicture = await own.Content.ReadAsByteArrayAsync(Ct);
+            TestImages.Pixels(ownPicture).ShouldBe(TestImages.Pixels(TestImages.Png(800, 600)), "the same picture, made again (D123)");
+            Encoding.Latin1.GetString(ownPicture).ShouldNotContain("tEXt", customMessage: "without its text");
             (await someoneElse.GetAsync(Relative($"api/v1/me/projects/{projectId}/pictures/{media}"), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
             (await anonymous.GetAsync(Relative($"api/v1/me/projects/{projectId}/pictures/{media}"), Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 

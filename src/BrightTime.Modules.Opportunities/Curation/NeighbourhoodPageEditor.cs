@@ -266,10 +266,13 @@ public sealed class NeighbourhoodPageEditor(
             return Result.Failure(NotFound());
         }
 
-        if (await media.AddImageAsync(file, CurationImages.Hero, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false) is not { } image)
+        Result<StoredImage> addedImage = await media.AddImageAsync(file, CurationImages.Hero, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false);
+        if (!addedImage.IsSuccess)
         {
-            return Result.Failure(CurationImages.NotAnImage);
+            return Result.Failure(MediaRefusals.Or(addedImage.Error, CurationImages.NotAnImage));
         }
+
+        StoredImage image = addedImage.Value;
 
         Guid? before = null;
         Result set = await WithAsync(neighbourhoodId, (page, ct) =>

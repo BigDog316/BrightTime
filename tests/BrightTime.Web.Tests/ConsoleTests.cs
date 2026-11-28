@@ -366,7 +366,11 @@ public sealed class ConsoleTests(ConsoleFixture db)
     public async Task Development_sign_in_does_not_exist_outside_development()
     {
         RequireDatabase();
-        await using WebApplicationFactory<Program> production = db.Factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        await using WebApplicationFactory<Program> production = db.Factory.WithWebHostBuilder(b =>
+        {
+            b.UseEnvironment("Production");
+            b.UseSetting("Media:Clamd:Host", "127.0.0.1"); // required outside Development (D123), and never reached here
+        });
         using HttpClient client = production.CreateClient(ConsoleFixture.ClientOptions(cookies: false));
 
         HttpResponseMessage page = await client.GetAsync(new Uri("/dev/sign-in", UriKind.Relative), TestContext.Current.CancellationToken);

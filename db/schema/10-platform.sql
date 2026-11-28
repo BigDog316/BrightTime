@@ -205,6 +205,8 @@ create table media_object (
   visibility    text not null default 'private',
   -- When a public image's smaller copies were made (D106); null until then, and for the rest.
   sized_at      timestamptz,
+  -- When it was virus-scanned (D123): as it was added, or by the jobs worker for one kept before.
+  scanned_at    timestamptz,
   created_at    timestamptz not null default now(),
   constraint ux_media_object_key unique (tenant_id, object_key),
   constraint ck_media_size check (byte_size > 0 and byte_size <= 536870912),
@@ -257,6 +259,9 @@ create table media_variant (
 );
 create index ix_media_object_unsized on media_object (tenant_id, id)
   where visibility = 'public' and scan_state = 'clean' and sized_at is null;
+-- What the jobs worker has still to virus-scan: objects kept before D123.
+create index ix_media_object_unscanned on media_object (tenant_id, id)
+  where scan_state = 'clean' and scanned_at is null;
 
 -- ---------------------------------------------------------------------
 -- Audit log.

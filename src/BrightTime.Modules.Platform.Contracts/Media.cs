@@ -1,4 +1,5 @@
 using BrightTime.SharedKernel.Ids;
+using BrightTime.SharedKernel.Primitives;
 
 namespace BrightTime.Modules.Platform.Contracts;
 
@@ -20,6 +21,31 @@ public sealed record ImageRules(int MaxBytes, int MinWidth, int MinHeight, int M
 
 /// <summary>An image kept as a media object.</summary>
 public sealed record StoredImage(Guid MediaId, int Width, int Height);
+
+/// <summary>
+/// Why the library didn't keep a file (D123). <see cref="NotAPicture"/> is for the feature to say
+/// in its own words (<see cref="Or"/>); the others are said the same everywhere.
+/// </summary>
+public static class MediaRefusals
+{
+    /// <summary>Not a whole PNG or JPEG that meets the feature's rules and decodes.</summary>
+    public static readonly Error NotAPicture = Error.Validation("media.not_a_picture", "The file isn't a picture this accepts.");
+
+    /// <summary>The virus scan found something: the file isn't kept, and the refusal is audited.</summary>
+    public static readonly Error Infected = Error.Validation(
+        "media.infected", "The virus check found something in this file, so it wasn't kept. Try another copy of the picture.");
+
+    /// <summary>The virus scan couldn't be done: the file isn't kept unchecked.</summary>
+    public static readonly Error Unchecked = new(
+        ErrorKind.Unavailable, "media.unchecked", "The picture couldn't be checked just now, so it wasn't kept. Try again in a few minutes.");
+
+    /// <summary><paramref name="refusal"/>, with <see cref="NotAPicture"/> said as the feature says it.</summary>
+    public static Error Or(Error refusal, Error notAPicture)
+    {
+        ArgumentNullException.ThrowIfNull(refusal);
+        return refusal.Code == NotAPicture.Code ? notAPicture : refusal;
+    }
+}
 
 /// <summary>A media object's bytes, ready to send, with a tag that changes only with the bytes.</summary>
 public sealed record MediaFile(string ContentType, byte[] Bytes, string ETag);
@@ -53,11 +79,12 @@ public sealed record SizedMedia(MediaFile? File, bool Settled);
 public interface IMediaLibrary
 {
     /// <summary>
-    /// Keeps a PNG or JPEG that meets <paramref name="rules"/> and decodes whole, with its metadata
-    /// stripped, and a public one's smaller copies (D106). Null when the file isn't one: the caller
-    /// says why, in its own words.
+    /// Keeps a PNG or JPEG that meets <paramref name="rules"/>, has passed the virus scan and
+    /// decodes whole, made again from its pixels so nothing else of the upload is kept (D123), and a
+    /// public one's smaller copies (D106). A failure is one of <see cref="MediaRefusals"/>: the
+    /// caller says <see cref="MediaRefusals.NotAPicture"/> in its own words.
     /// </summary>
-    Task<StoredImage?> AddImageAsync(
+    Task<Result<StoredImage>> AddImageAsync(
         ReadOnlyMemory<byte> file, ImageRules rules, string visibility, UserId uploadedBy, CancellationToken cancellationToken = default);
 
     /// <summary>A clean, public media object's bytes; null for anything else, so an id alone gives nothing away.</summary>

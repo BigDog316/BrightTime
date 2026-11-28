@@ -104,10 +104,13 @@ public sealed partial class ListingEditor
             return open;
         }
 
-        if (await media.AddImageAsync(file, ListingPictureRules.Image, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false) is not { } image)
+        Result<StoredImage> addedImage = await media.AddImageAsync(file, ListingPictureRules.Image, MediaVisibility.Public, actor, cancellationToken).ConfigureAwait(false);
+        if (!addedImage.IsSuccess)
         {
-            return Result.Failure(ListingPictureRules.NotAnImage);
+            return Result.Failure(MediaRefusals.Or(addedImage.Error, ListingPictureRules.NotAnImage));
         }
+
+        StoredImage image = addedImage.Value;
 
         Result added;
         try

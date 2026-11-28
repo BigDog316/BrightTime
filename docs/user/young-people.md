@@ -169,9 +169,10 @@ in.
   before you show it.
 - **Pictures**: once a project is saved, add up to 6 photos of what you made, each a PNG or JPEG
   of up to 5 MB. Say what each one shows, for someone who can't see it, and add a caption if you
-  like. Leave out other people's faces unless they say yes. Anything else in the file, like where
-  a photo was taken, is removed. Only you see a picture until you send the project, and nobody
-  else sees it until it's approved and shown.
+  like. Leave out other people's faces unless they say yes. Every picture is checked for viruses,
+  and kept as a fresh copy, so anything else in the file, like where a photo was taken, is gone.
+  Only you see a picture until you send the project, and nobody else sees it until it's approved
+  and shown.
 - Adding a picture to an approved project makes it a draft again, like any change. **Remove this
   picture** takes one away at once, and the project stays approved.
 

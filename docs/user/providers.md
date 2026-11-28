@@ -165,7 +165,9 @@ are reviewed when you submit it again.
 **Pictures.** Open **Pictures** from the listing to add up to 5 photos of the activity: the
 place, and what people make or do there. Each is a PNG or JPEG of up to 3 MB, at least 640 by 360
 pixels, and you say what it shows for someone who can't see it. Anything else in the file, like
-where a photo was taken, is removed, and a file that isn't really a picture is refused. Families
+where a photo was taken, is removed, and a file that isn't really a picture is refused. Every
+picture is checked for viruses first; if the check can't be done just then, try again in a few
+minutes. Families
 see a smaller copy beside the listing, so a large photo doesn't slow their phone down. Only show children whose families have agreed to their photo
 being used. The first picture is the **main picture**, shown beside the listing in search results
 and across the top of its page; choose another with **Make this the main picture**. On a

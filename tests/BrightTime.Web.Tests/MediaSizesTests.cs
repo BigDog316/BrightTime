@@ -44,7 +44,8 @@ public sealed class MediaSizesTests(ConsoleFixture db)
     {
         UserId uploader = new(await SomeoneAsync());
         await using AsyncServiceScope scope = Scope();
-        return await scope.ServiceProvider.GetRequiredService<IMediaLibrary>().AddImageAsync(file, Rules, visibility, uploader, Ct);
+        Result<StoredImage> added = await scope.ServiceProvider.GetRequiredService<IMediaLibrary>().AddImageAsync(file, Rules, visibility, uploader, Ct);
+        return added.IsSuccess ? added.Value : null;
     }
 
     private async Task RemoveAsync(params Guid[] media)

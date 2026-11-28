@@ -108,6 +108,20 @@ services:
   # No object storage: media bytes live in the database, in platform.media_blob (D103), so they
   # are in the db volume and its backups. An S3-compatible store can replace it behind IObjectStore.
 
+  # Every upload is virus-scanned before it's kept (D123), by clamd's INSTREAM over TCP. The first
+  # start downloads the signatures, which takes a minute or two; until clamd answers, uploads are
+  # refused as unchecked rather than kept unscanned. The signatures are kept in a volume.
+  clamav:
+    image: clamav/clamav:1.4
+    volumes:
+      - clamav-data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
   api:
     build:
       context: ..
@@ -128,6 +142,8 @@ services:
       Tenancy__PublicPort: 8000
       Network__TrustedNetworks__0: 172.16.0.0/12
       OTEL_EXPORTER_OTLP_ENDPOINT: ""
+      # Pictures added from the app (D104) are scanned (D123).
+      Media__Clamd__Host: clamav
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -146,6 +162,8 @@ services:
       # Badges the worker awards (D91) name the site, as the other hosts build its address.
       Tenancy__PublicScheme: http
       Tenancy__PublicPort: 8000
+      # Scans the pictures kept before D123.
+      Media__Clamd__Host: clamav
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -172,6 +190,8 @@ services:
       # nginx has no fixed address on the compose network, so trust the network. In
       # production, list the proxy's address in Network__TrustedProxies__0 instead.
       Network__TrustedNetworks__0: 172.16.0.0/12
+      # Pictures added in the console are scanned (D123).
+      Media__Clamd__Host: clamav
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -190,3 +210,4 @@ services:
 volumes:
   postgres-data:
   nominatim-data:
+  clamav-data:

@@ -37,6 +37,9 @@ public sealed class MediaObject
     /// <summary>When a public image's smaller copies were made (D106); null until then.</summary>
     public DateTimeOffset? SizedAt { get; set; }
 
+    /// <summary>When it was virus-scanned (D123): as it's added, or by the jobs worker for one kept before.</summary>
+    public DateTimeOffset? ScannedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; init; }
 }
 

@@ -4232,6 +4232,56 @@ back with why and its `screening_result`, sent; another young person and the con
 a draft; sent back, changed, sent again, accepted, with the feedback rows and audit; closing),
 `SpacesApiTests` (the app's side), `RolePermissionTests`, and `ConsoleRouteMatrixTests`.
 
+### D123 — Media safety: virus scanning and re-encoding (**proposed 2026-11-28**)
+
+M5's media safety (T19) had D103's checks and D106's decode behind it, but a picture was kept as
+it was uploaded, less its metadata, and never virus-scanned. Sam chose on 2026-11-28: media
+safety next; clamd over TCP; the scan inline at upload, so every feature still sees only clean
+pictures.
+- **Scanned as it came:** a file that passes `ImageCleaner`'s type and size checks goes to the
+  virus scanner as it was uploaded, before anything is kept, since that's what a scanner's
+  signatures are written for. The scanner is clamd (ClamAV's daemon), by its `INSTREAM` command
+  over TCP, in 64 KB chunks: no package, and nothing written to disk on our side. `Media:Clamd:Host`
+  (with `:Port`, 3310, and `:TimeoutSeconds`, 30) in all three hosts. Compose runs
+  `clamav/clamav:1.4`, its signatures in a volume.
+- **Fails closed:** a file the scan finds something in isn't kept (`media.infected`), and the
+  refusal is audited as `media.infected`, a deny, with the uploader, the signature's name, the
+  engine, and the file's SHA-256 and size, but not the file. When the scan can't be done (clamd
+  down, a timeout, a dropped stream, an answer it doesn't know), the file isn't kept either
+  (`media.unchecked`, 503, "try again in a few minutes"). Outside Development a host without
+  `Media:Clamd:Host` doesn't start. In Development without it, a test-pattern scanner finds the
+  EICAR test file and nothing else, and `scan_detail` says it isn't a virus scan.
+- **Made again:** a picture that passes is decoded and encoded again with Skia (D106's package):
+  a PNG as a PNG, without loss; a JPEG as a JPEG at quality 90; turned as it's shown, so it
+  carries no orientation; and no more than 4,096 pixels on its longest side, which also bounds the
+  memory a decode takes. What's kept is that, never the upload: no metadata, no text chunks,
+  nothing after the picture's end and nothing a decoder skips over. Its smaller copies are made
+  from it in the same decode, and the width and height recorded are what's kept. `scan_detail`
+  says how it was checked, and `scanned_at` when.
+- **Kept before:** a picture from before D123 has no `scanned_at`. The jobs worker scans them
+  (`platform.media_scan`, booked at start beside D106's sizing, 20 at a time, each scanned outside
+  a transaction). One the scan finds something in becomes `infected`, so it's served nowhere, and
+  is audited and logged as an error for someone to look at; while the scanner's down the run fails
+  and the job runner tries again. They aren't made again: a media object's bytes never change,
+  and they're cached as immutable.
+- **Where:** every picture goes through `IMediaLibrary`: collection and neighbourhood heroes,
+  listing pictures, organisation logos, badge pictures and young people's project pictures. Each
+  feature says "not a picture" in its own words; the scan's two refusals are said the same
+  everywhere (`MediaRefusals`). `AddImageAsync` returns a `Result<StoredImage>`.
+- **Not in this:** CSAM detection (hash matching, such as PhotoDNA, needs a provider and an
+  agreement) and the legal reporting path with a named person at the tenant, which T19 calls a
+  process rather than a control; moderation of pictures; young people's pictures in posts,
+  messages or challenge work (`post_media`, `message_media`), which this makes safe to build; a
+  readiness check for clamd; files other than pictures, since nothing else is uploaded.
+
+Schema: `media_object.scanned_at` and `ix_media_object_unscanned`. Rebuild the compose volume. The
+unused `IMediaSanitiser` scaffold is gone, and `IVirusScanner` scans bytes. Tests:
+`ClamdScannerTests` (what goes on the wire, OK, FOUND, errors, nothing listening, a hang-up, a
+timeout, Development's scanner), `MediaSafetyTests` (made again, upright, with nothing else of the
+file kept; the 4,096 limit; an infected upload refused and audited; a scanner that's down; the
+worker's scan of pictures kept before), and `SqlModeCompositionTests` (Production needs clamd).
+The picture tests that compared bytes with the upload now compare pixels.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

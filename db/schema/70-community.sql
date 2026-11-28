@@ -168,15 +168,23 @@ create table challenge (
 );
 create index ix_challenge_space on challenge (space_id, created_at desc);
 
+-- An organisation's rubric (D125): criteria scored 0 to scale_max, each with a weight. Written by
+-- its admins, chosen for a challenge as it's set, and fixed once a score uses it; archived, it's
+-- no longer offered, and challenges that have it keep it.
 create table rubric (
   id         uuid primary key,
   tenant_id  uuid not null references platform.tenant(id) on delete cascade,
   org_id     uuid references directory.organisation(id) on delete cascade,
   name       text not null,
   scale_max  smallint not null default 4,
+  created_by uuid references identity.app_user(id) on delete set null,
   created_at timestamptz not null default now(),
-  constraint ck_rubric_scale check (scale_max between 2 and 10)
+  updated_at timestamptz not null default now(),
+  archived_at timestamptz,
+  constraint ck_rubric_scale check (scale_max between 2 and 10),
+  constraint ck_rubric_name check (length(btrim(name)) between 1 and 120)
 );
+create index ix_rubric_org on rubric (org_id, name);
 alter table challenge
   add constraint fk_challenge_rubric foreign key (rubric_id) references rubric(id) on delete set null;
 
@@ -189,7 +197,9 @@ create table rubric_criterion (
   weight     numeric(5,2) not null default 1,
   sort_order smallint not null default 0,
   constraint ux_rubric_criterion unique (rubric_id, code),
-  constraint ck_rubric_weight check (weight > 0)
+  constraint ck_rubric_weight check (weight > 0 and weight <= 10),
+  constraint ck_rubric_criterion_text check (length(btrim(label)) between 1 and 120
+    and (descriptor_md is null or length(descriptor_md) <= 500))
 );
 
 create table submission (
@@ -234,8 +244,9 @@ create table feedback_score (
   score        smallint not null,
   note         text,
   constraint pk_feedback_score primary key (feedback_id, criterion_id),
-  constraint ck_feedback_score check (score >= 0)
+  constraint ck_feedback_score check (score between 0 and 10)
 );
+create index ix_feedback_score_criterion on feedback_score (criterion_id);
 
 -- ---------------------------------------------------------------------
 -- Messaging. Group- or org-scoped only.

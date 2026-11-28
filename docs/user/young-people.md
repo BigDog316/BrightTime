@@ -93,6 +93,8 @@ activity and some of its staff, and always says who is in it and that the organi
   number, address, email or other apps isn't sent, and you're told what to take out. The staff's
   feedback shows under your work: they may accept it, or send it back for you to change and send
   again.
+- Some challenges say **How it's scored**: the things staff look at, each scored from 0 up to a top
+  score. If they score your work, their feedback shows each score and an overall percentage.
 - You leave the group when your place in the activity ends.
 
 ## Staying safe

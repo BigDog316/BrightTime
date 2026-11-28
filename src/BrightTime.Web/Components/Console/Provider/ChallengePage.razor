@@ -52,6 +52,29 @@ else if (_challenge is { } c)
         }
     </dl>
     <div class="brief" dir="auto">@c.Brief</div>
+    @if (c.Rubric is { } rubric)
+    {
+        <section aria-labelledby="rubric">
+            <h2 id="rubric">@T.Format("provider.challenges.rubric_heading", ("name", rubric.Name))</h2>
+            <p class="hint">@T.Format("provider.rubrics.scale", ("max", rubric.ScaleMax))</p>
+            <ul class="criteria">
+                @foreach (RubricCriterionView k in rubric.Criteria)
+                {
+                    <li>
+                        <strong dir="auto">@k.Label</strong>
+                        @if (k.Weight != 1m)
+                        {
+                            <span class="note"> · @T.Format("provider.rubrics.weight_of", ("weight", T.Number(k.Weight)))</span>
+                        }
+                        @if (k.Descriptor is { Length: > 0 } descriptor)
+                        {
+                            <p class="hint" dir="auto">@descriptor</p>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
     <p class="notice">@T["provider.challenges.who_sees"]</p>
 
     @if (_canReview && c.Status == ChallengeStatuses.Open)
@@ -99,6 +122,19 @@ else if (_challenge is { } c)
                                                 }
                                             </p>
                                             <p class="body" dir="auto">@f.Comment</p>
+                                            @if (f.Scores.Count > 0)
+                                            {
+                                                <ul class="scores">
+                                                    @foreach (ScoreView s in f.Scores)
+                                                    {
+                                                        <li><bdi>@s.Label</bdi>: @T.Format("provider.challenges.score_of", ("score", s.Score), ("max", s.ScaleMax))</li>
+                                                    }
+                                                </ul>
+                                                @if (f.Percent is { } percent)
+                                                {
+                                                    <p><strong>@T.Format("provider.challenges.total", ("percent", percent))</strong></p>
+                                                }
+                                            }
                                         </li>
                                     }
                                 </ol>
@@ -112,6 +148,27 @@ else if (_challenge is { } c)
                                         <label for="comment-@id">@T["provider.challenges.comment"]</label>
                                         <textarea id="comment-@id" name="comment" rows="3" maxlength="@Challenges.MaxComment" required dir="auto"></textarea>
                                     </div>
+                                    @if (c.Rubric is { } scoring)
+                                    {
+                                        <fieldset>
+                                            <legend>@T["provider.challenges.scores"]</legend>
+                                            <p class="hint">@T.Format("provider.challenges.scores_hint", ("max", scoring.ScaleMax))</p>
+                                            @foreach (RubricCriterionView k in scoring.Criteria)
+                                            {
+                                                string field = "score-" + k.Id.ToString("N");
+                                                <div class="field">
+                                                    <label for="@(field + "-" + id)" dir="auto">@k.Label</label>
+                                                    <select id="@(field + "-" + id)" name="@field">
+                                                        <option value="">@T["provider.challenges.not_scored"]</option>
+                                                        @for (int n = 0; n <= scoring.ScaleMax; n++)
+                                                        {
+                                                            <option value="@n">@n</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                            }
+                                        </fieldset>
+                                    }
                                     @if (w.State != SubmissionStates.NeedsRework)
                                     {
                                         <fieldset>
@@ -192,7 +249,18 @@ else if (_challenge is { } c)
         }
 
         string outcome = FormValue("outcome");
-        Result result = await Get<Challenges>().GiveFeedbackAsync(Actor, SpaceId, ChallengeId, submission, FormValue("comment"), outcome);
+
+        // Every criterion's select is sent, scored or not; the service holds to all or none.
+        Dictionary<Guid, int> scores = [];
+        foreach (RubricCriterionView k in _challenge?.Rubric?.Criteria ?? [])
+        {
+            if (int.TryParse(FormValue("score-" + k.Id.ToString("N")), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int score))
+            {
+                scores[k.Id] = score;
+            }
+        }
+
+        Result result = await Get<Challenges>().GiveFeedbackAsync(Actor, SpaceId, ChallengeId, submission, FormValue("comment"), outcome, scores);
         Finish(result, outcome switch { FeedbackOutcomes.Accepted => "accepted", FeedbackOutcomes.NeedsRework => "sent_back", _ => "commented" });
     }
 

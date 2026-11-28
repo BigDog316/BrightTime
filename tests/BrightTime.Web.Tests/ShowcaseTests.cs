@@ -208,7 +208,7 @@ public sealed class ShowcaseTests(ConsoleFixture db)
 
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, staff))
         {
-            challenge = (await scope.ServiceProvider.GetRequiredService<Challenges>().SetAsync(new UserId(staff), space, $"Bridge ({suffix})", "Out of paper.", null, Ct)).Value;
+            challenge = (await scope.ServiceProvider.GetRequiredService<Challenges>().SetAsync(new UserId(staff), space, $"Bridge ({suffix})", "Out of paper.", null, null, Ct)).Value;
         }
 
         foreach ((Guid youth, string body) in new[] { (ama, $"Mine held 2 m ({suffix})."), (kofi, $"Kofi's bridge ({suffix}).") })
@@ -223,7 +223,7 @@ public sealed class ShowcaseTests(ConsoleFixture db)
             foreach (Guid youth in new[] { ama, kofi })
             {
                 Guid work = await db.ScalarAsync<Guid>("select id from community.submission where challenge_id = @c and author_user_id = @u", ("c", challenge), ("u", youth));
-                (await challenges.GiveFeedbackAsync(new UserId(staff), space, challenge, work, "Lovely.", "accepted", Ct)).IsSuccess.ShouldBeTrue();
+                (await challenges.GiveFeedbackAsync(new UserId(staff), space, challenge, work, "Lovely.", "accepted", null, Ct)).IsSuccess.ShouldBeTrue();
             }
         }
 

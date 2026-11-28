@@ -351,6 +351,12 @@ read them.
   for another go**, or **Just comment**; they see it from your organisation's staff. **Close the
   challenge** to stop new work; you can still give feedback. What you write where young people
   read is checked for ways to talk off BrightTime, and refused with why.
+- **Rubrics:** owners and admins write them on the **Rubrics** page: a name, a top score (2 to 10),
+  and up to 8 criteria, each with what a top score looks like and a weight if you like (a weight
+  of 2 counts twice). Choose one when you **Set a challenge**; its young people see the criteria.
+  With feedback, score every criterion or none; the work shows each score and the weighted total.
+  Once feedback is scored with a rubric it can't change, so write a new one instead. **Archive** one
+  to stop offering it; challenges that use it keep it.
 - **Archive** a space to keep it as it is, to read, and stop new posts. The activity can then have
   a new one.
 - **Showcase:** the **Showcase** page lists work you could put on the county's public showcase:

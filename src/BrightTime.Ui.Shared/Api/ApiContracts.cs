@@ -503,8 +503,20 @@ public sealed record SpaceChallenge(Guid Id, string Title, string Status, DateTi
     public bool IsOpen => Status == "open";
 }
 
-/// <summary>Feedback from the space's staff, who are never named to a young person.</summary>
-public sealed record ChallengeFeedback(Guid Id, string? From, string Comment, string? Outcome, DateTimeOffset At);
+/// <summary>A criterion's score in feedback (D125), out of the rubric's scale.</summary>
+public sealed record ChallengeScore(Guid CriterionId, string Label, int Score, int ScaleMax);
+
+/// <summary>
+/// Feedback from the space's staff, who are never named to a young person. Scored against the
+/// challenge's rubric (D125), it has every criterion's score and their weighted total.
+/// </summary>
+public sealed record ChallengeFeedback(Guid Id, string? From, string Comment, string? Outcome, DateTimeOffset At, IReadOnlyList<ChallengeScore>? Scores, int? Percent);
+
+/// <summary>One of a rubric's criteria: what's scored, what a good score looks like if it says, and how much it counts.</summary>
+public sealed record ChallengeCriterion(Guid Id, string Label, string? Descriptor, decimal Weight);
+
+/// <summary>The rubric a challenge's work is scored with (D125): each criterion from 0 to <see cref="ScaleMax"/>.</summary>
+public sealed record ChallengeRubric(Guid Id, string Name, int ScaleMax, IReadOnlyList<ChallengeCriterion> Criteria);
 
 /// <summary>A young person's work for a challenge: saved, sent, and what screening kept back the last time they tried.</summary>
 public sealed record ChallengeWork(
@@ -518,7 +530,7 @@ public sealed record ChallengeWork(
 /// <summary>A challenge with the person's own work for it.</summary>
 public sealed record Challenge(
     Guid Id, Guid SpaceId, string SpaceName, string OrgName, string Title, string Brief, string Status, DateTimeOffset? DueAt, DateTimeOffset SetAt,
-    bool CanSubmit, bool CanReview, ChallengeWork? Mine, IReadOnlyList<ChallengeWork> Submissions)
+    bool CanSubmit, bool CanReview, ChallengeWork? Mine, IReadOnlyList<ChallengeWork> Submissions, ChallengeRubric? Rubric = null)
 {
     public bool IsOpen => Status == "open";
 }

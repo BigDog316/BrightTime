@@ -68,6 +68,7 @@
         ("payments", "/payments", IsAdmin && HttpContext.User.HasPermission(Permissions.Payments.Waive)),
         ("messages", "/messages", HttpContext.User.HasPermission(Permissions.Messages.SendToFamily)),
         ("spaces", "/spaces", HttpContext.User.HasPermission(Permissions.Spaces.View)),
+        ("rubrics", "/rubrics", IsAdmin && HttpContext.User.HasPermission(Permissions.Submissions.GiveFeedback)),
         ("playlists", "/playlists", HttpContext.User.HasPermission(Permissions.Playlists.Author)),
         ("badges", "/badges", HttpContext.User.HasPermission(Permissions.Badges.Define) || HttpContext.User.HasPermission(Permissions.Badges.Issue) || HttpContext.User.HasPermission(Permissions.Badges.Revoke)),
         ("work", "/work", HttpContext.User.HasPermission(Permissions.Projects.Review) || HttpContext.User.HasPermission(Permissions.Playlists.ReviewSteps)),

@@ -67,14 +67,14 @@ public sealed class ChallengesTests(ConsoleFixture db)
         // Staff's words where young people read are screened, and young people set nothing.
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, staff))
         {
-            (await scope.ServiceProvider.GetRequiredService<Challenges>().SetAsync(new UserId(staff), space, "Ask me", "Text me on 914-555-0123 for help.", null, Ct))
+            (await scope.ServiceProvider.GetRequiredService<Challenges>().SetAsync(new UserId(staff), space, "Ask me", "Text me on 914-555-0123 for help.", null, null, Ct))
                 .Error!.Code.ShouldBe("challenges.screened");
         }
 
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, ama))
         {
             Challenges challenges = scope.ServiceProvider.GetRequiredService<Challenges>();
-            (await challenges.SetAsync(new UserId(ama), space, "Mine", "My own.", null, Ct)).Error!.Code.ShouldBe("challenges.not_staff");
+            (await challenges.SetAsync(new UserId(ama), space, "Mine", "My own.", null, null, Ct)).Error!.Code.ShouldBe("challenges.not_staff");
 
             // She sees it, saves a draft, then tries to send it with her number: it's kept back, with why.
             ChallengeSummary listed = (await challenges.ListAsync(new UserId(ama), space, Ct)).Value.Single();

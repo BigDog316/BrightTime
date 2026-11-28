@@ -36,6 +36,29 @@ else
         }
     </p>
     <div class="brief" dir="auto">@c.Brief</div>
+    @if (c.Rubric is { } rubric)
+    {
+        <section aria-labelledby="rubric">
+            <h2 id="rubric">@T["app.challenges.rubric"]</h2>
+            <p class="hint">@T.Format("app.challenges.rubric_scale", ("max", rubric.ScaleMax))</p>
+            <ul class="criteria">
+                @foreach (ChallengeCriterion k in rubric.Criteria)
+                {
+                    <li>
+                        <strong dir="auto">@k.Label</strong>
+                        @if (k.Weight != 1m)
+                        {
+                            <span class="hint"> · @T.Format("app.challenges.weight", ("weight", T.Number(k.Weight)))</span>
+                        }
+                        @if (k.Descriptor is { Length: > 0 } descriptor)
+                        {
+                            <p class="hint" dir="auto">@descriptor</p>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
 
     <section aria-labelledby="mine">
         <h2 id="mine">@T["app.challenges.your_work"]</h2>
@@ -94,6 +117,19 @@ else
                             }
                         </p>
                         <p class="body" dir="auto">@f.Comment</p>
+                        @if (f.Scores is { Count: > 0 } scores)
+                        {
+                            <ul class="scores">
+                                @foreach (ChallengeScore s in scores)
+                                {
+                                    <li><span dir="auto">@s.Label</span>: @T.Format("app.challenges.score_of", ("score", s.Score), ("max", s.ScaleMax))</li>
+                                }
+                            </ul>
+                            @if (f.Percent is { } percent)
+                            {
+                                <p><strong>@T.Format("app.challenges.total", ("percent", percent))</strong></p>
+                            }
+                        }
                     </li>
                 }
             </ol>

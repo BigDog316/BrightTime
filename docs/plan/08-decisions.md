@@ -4349,6 +4349,45 @@ project back to a draft and a withdrawn capability taking work off, the county's
 what the author and staff are told, the audit; the schema's consent check), `ShowcaseApiTests` (the
 app's side and the public API), `RolePermissionTests` and `ModuleBoundaryTests`.
 
+### D125 — Rubrics and scores on challenges (**proposed 2026-11-28**)
+
+M5's rubrics had tables (`rubric`, `rubric_criterion`, `feedback_score`) and no code. Sam chose on
+2026-11-28: rubrics and scores next; rubrics are the organisation's; scoring is optional, but all
+criteria or none.
+- **The organisation's:** on its new **Rubrics** page in the console
+  (`/provider/orgs/{org}/rubrics`), its owners and admins who give feedback
+  (`submissions.give_feedback` at the admin role; programme staff are refused) write a rubric: a
+  name, a top score from 2 to 10 (4 unless they say), and 1 to 8 criteria, each with a label, what
+  a top score looks like if they like, and a weight above 0 and up to 10 (1 unless they say). The
+  words are shown to young people, so they're screened for an attempt to take them off the platform
+  (D53) and refused, with why (`rubrics.screened`).
+- **Fixed once used:** a rubric can change until feedback is scored with it; after, it can't
+  (`rubrics.in_use`), so a score always means what it meant: write a new one. **Archive** takes one
+  out of the choice for new challenges; challenges that have it keep it, and **Offer it again**
+  brings it back.
+- **On a challenge:** staff choose one of the organisation's rubrics that isn't archived as they set
+  the challenge, or none (`challenges.rubric`). Its young people see the criteria with the brief, in
+  the app and the console.
+- **Scoring:** with feedback, staff may score each criterion from 0 to the top score; if they score
+  any, they score all (`challenges.scores`), so a partial score never reads as a total. A comment
+  alone, and a decision without scores, stay possible. Scores on a challenge without a rubric are
+  refused (`challenges.no_rubric`). Each piece of feedback shows its scores and the weighted total
+  as a percentage: the sum of score × weight over the sum of top score × weight, rounded. The young
+  person sees the same, from the organisation's staff.
+- **Audit:** `rubrics.saved` and `rubrics.archived`; scores are part of `challenges.feedback_given`.
+- **Not in this:** a rubric changed or attached after a challenge is set; per-criterion notes
+  (`feedback_score.note` stays unused: the comment says why); county-wide rubrics (`rubric.org_id`
+  null); rubrics on projects or playlist steps; scores in the portfolio or its exports; mentors (M6).
+
+Schema: `rubric.created_by`, `updated_at`, `archived_at`, `ck_rubric_name` and `ix_rubric_org`;
+`ck_rubric_weight` now caps weights at 10, and `ck_rubric_criterion_text`; `ck_feedback_score` caps a
+score at 10 (a rubric's own top score is the application's check); `ix_feedback_score_criterion`.
+Rebuild the compose volume. `Challenges.SetAsync` takes a rubric, and `GiveFeedbackAsync` scores;
+`ChallengeView.Rubric`, `FeedbackView.Scores` and `.Percent` are new. Tests: `RubricsTests` (writing
+one from the console and staff refused, the refusals, an archived one not offered, setting a
+challenge with one, a partial and an out-of-range score refused, a full score and its total, a
+comment alone, what the young person sees, fixed once used).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

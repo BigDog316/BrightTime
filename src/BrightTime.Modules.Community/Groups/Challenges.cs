@@ -21,12 +21,17 @@ namespace BrightTime.Modules.Community.Groups;
 [YouthData]
 public sealed record ChallengeSummary(Guid Id, string Title, string Status, DateTimeOffset? DueAt, DateTimeOffset SetAt, string? MyState, int Sent, int Waiting);
 
+/// <summary>A criterion's score in a piece of feedback (D125): what it scored, out of the rubric's scale.</summary>
+public sealed record ScoreView(Guid CriterionId, string Label, int Score, int ScaleMax);
+
 /// <summary>
 /// Feedback on a piece of work. <see cref="From"/> is the member of staff's email for their
-/// colleagues, and null for young people, who see the organisation's staff, never a name.
+/// colleagues, and null for young people, who see the organisation's staff, never a name. Scored
+/// against the challenge's rubric (D125), it has a score for every criterion, and
+/// <see cref="Percent"/> is their weighted total out of the most each could score.
 /// </summary>
 [YouthData]
-public sealed record FeedbackView(Guid Id, string? From, string Comment, string? Outcome, DateTimeOffset At);
+public sealed record FeedbackView(Guid Id, string? From, string Comment, string? Outcome, DateTimeOffset At, IReadOnlyList<ScoreView> Scores, int? Percent);
 
 /// <summary>
 /// A young person's work for a challenge. <see cref="AuthorName"/> is the activity roster's name,
@@ -63,7 +68,8 @@ public sealed record ChallengeView(
     bool CanSubmit,
     bool CanReview,
     SubmissionView? Mine,
-    IReadOnlyList<SubmissionView> Submissions);
+    IReadOnlyList<SubmissionView> Submissions,
+    RubricView? Rubric);
 
 /// <summary>
 /// Challenges (M5, D122): the space's staff set one, with a brief and a due date if they like; its
@@ -106,8 +112,8 @@ public sealed class Challenges(
     public const int MaxBody = 8000;
     public const int MaxComment = 2000;
 
-    /// <summary>Sets a challenge in a space, for one of its staff.</summary>
-    public Task<Result<Guid>> SetAsync(UserId staff, Guid spaceId, string? title, string? brief, DateTimeOffset? dueAt, CancellationToken cancellationToken = default) =>
+    /// <summary>Sets a challenge in a space, for one of its staff, with one of the organisation's rubrics if they like (D125).</summary>
+    public Task<Result<Guid>> SetAsync(UserId staff, Guid spaceId, string? title, string? brief, DateTimeOffset? dueAt, Guid? rubricId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             (SpaceRecord? space, SpaceMemberRecord? me, _) = await MembershipAsync(staff, spaceId, ct).ConfigureAwait(false);
@@ -137,6 +143,12 @@ public sealed class Challenges(
                 return Result<Guid>.Failure(Error.Validation("challenges.due", "A due date still to come, or none."));
             }
 
+            if (rubricId is { } rubric
+                && !await db.Rubrics.AnyAsync(r => r.Id == rubric && r.OrgId == space.OrgId && r.ArchivedAt == null, ct).ConfigureAwait(false))
+            {
+                return Result<Guid>.Failure(Error.Validation("challenges.rubric", "Choose one of your organisation's rubrics, or none."));
+            }
+
             if (await AdultWritingAsync(space, me, $"{named}\n{about}", now, ct).ConfigureAwait(false) is { } kept)
             {
                 return Result<Guid>.Failure(kept);
@@ -150,6 +162,7 @@ public sealed class Challenges(
                 Title = named,
                 BriefMd = about,
                 DueAt = dueAt,
+                RubricId = rubricId,
                 Status = ChallengeStatuses.Open,
                 CreatedBy = staff.Value,
                 CreatedAt = now,
@@ -323,14 +336,17 @@ public sealed class Challenges(
 
     /// <summary>
     /// One of the space's staff gives feedback on work that was sent: a comment, and, if they like, a
-    /// decision (accepted, or sent back for another go).
+    /// decision (accepted, or sent back for another go), and a score for every one of the challenge's
+    /// rubric's criteria (D125), or none.
     /// </summary>
-    public Task<Result> GiveFeedbackAsync(UserId staff, Guid spaceId, Guid challengeId, Guid submissionId, string? comment, string? outcome, CancellationToken cancellationToken = default) =>
+    public Task<Result> GiveFeedbackAsync(
+        UserId staff, Guid spaceId, Guid challengeId, Guid submissionId, string? comment, string? outcome, IReadOnlyDictionary<Guid, int>? scores,
+        CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(async ct =>
         {
             (SpaceRecord? space, SpaceMemberRecord? me, _) = await MembershipAsync(staff, spaceId, ct).ConfigureAwait(false);
             if (space is null || me is null
-                || !await db.Challenges.AsNoTracking().AnyAsync(c => c.Id == challengeId && c.SpaceId == spaceId, ct).ConfigureAwait(false))
+                || await db.Challenges.AsNoTracking().FirstOrDefaultAsync(c => c.Id == challengeId && c.SpaceId == spaceId, ct).ConfigureAwait(false) is not { } challenge)
             {
                 return Result.Failure(NotFound());
             }
@@ -361,15 +377,38 @@ public sealed class Challenges(
                 return Result.Failure(Error.Conflict("challenges.with_author", "It's been sent back, and waits for its author to send it again."));
             }
 
+            // All or none: a partial score would read as a total it isn't.
+            List<(Guid Criterion, short Score)> scored = [];
+            if (scores is { Count: > 0 })
+            {
+                RubricRecord? rubric = challenge.RubricId is { } rid
+                    ? await db.Rubrics.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rid, ct).ConfigureAwait(false)
+                    : null;
+                if (rubric is null)
+                {
+                    return Result.Failure(Error.Validation("challenges.no_rubric", "This challenge has no rubric to score against."));
+                }
+
+                List<Guid> criteria = await db.RubricCriteria.AsNoTracking().Where(c => c.RubricId == rubric.Id).Select(c => c.Id).ToListAsync(ct).ConfigureAwait(false);
+                if (scores.Count != criteria.Count || criteria.Any(c => !scores.TryGetValue(c, out int s) || s < 0 || s > rubric.ScaleMax))
+                {
+                    return Result.Failure(Error.Validation("challenges.scores", $"Score every criterion from 0 to {rubric.ScaleMax}, or none.",
+                        arguments: new Dictionary<string, object> { ["max"] = (int)rubric.ScaleMax }));
+                }
+
+                scored = [.. criteria.Select(c => (c, (short)scores[c]))];
+            }
+
             DateTimeOffset now = clock.StoredNow();
             if (await AdultWritingAsync(space, me, said, now, ct, toMinor: await identity.IsMinorAsync(new UserId(work.AuthorUserId), ct).ConfigureAwait(false)).ConfigureAwait(false) is { } kept)
             {
                 return Result.Failure(kept);
             }
 
+            Guid feedbackId = UuidV7.NewId();
             db.Feedback.Add(new FeedbackRecord
             {
-                Id = UuidV7.NewId(),
+                Id = feedbackId,
                 TenantId = space.TenantId,
                 SubmissionId = work.Id,
                 MentorUserId = staff.Value,
@@ -377,6 +416,7 @@ public sealed class Challenges(
                 Outcome = decided,
                 CreatedAt = now,
             });
+            db.FeedbackScores.AddRange(scored.Select(s => new FeedbackScoreRecord { FeedbackId = feedbackId, CriterionId = s.Criterion, Score = s.Score }));
             work.State = decided switch
             {
                 FeedbackOutcomes.Accepted => SubmissionStates.Accepted,
@@ -482,8 +522,12 @@ public sealed class Challenges(
             .AnyAsync(m => m.SpaceId == space.Id && m.UserId == viewer.Value && m.LeftAt == null && m.MemberRole == SpaceRoles.Youth, ct).ConfigureAwait(false);
         bool canSubmit = youthMember && space.Status == SpaceStatuses.Active && challenge.Status == ChallengeStatuses.Open
             && (mine is null || SubmissionStates.Editable(mine.State));
+        RubricView? rubric = challenge.RubricId is { } rid
+            && await db.Rubrics.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rid, ct).ConfigureAwait(false) is { } found
+                ? (await Rubrics.ViewsAsync(db, [found], ct).ConfigureAwait(false))[0]
+                : null;
         return new ChallengeView(challenge.Id, space.Id, space.Name, org, challenge.Title, challenge.BriefMd, challenge.Status, challenge.DueAt, challenge.CreatedAt,
-            canSubmit, canReview, mine, sent);
+            canSubmit, canReview, mine, sent, rubric);
     }
 
     private async Task<IReadOnlyList<FeedbackView>> FeedbackOnAsync(Guid submission, bool forStaff, CancellationToken ct)
@@ -493,7 +537,20 @@ public sealed class Challenges(
         IReadOnlyDictionary<Guid, string> emails = forStaff && feedback.Count > 0
             ? await identity.GetAdultEmailsAsync([.. feedback.Select(f => f.MentorUserId).Distinct()], ct).ConfigureAwait(false)
             : new Dictionary<Guid, string>();
-        return [.. feedback.Select(f => new FeedbackView(f.Id, forStaff ? emails.GetValueOrDefault(f.MentorUserId) : null, f.Comment ?? "", f.Outcome, f.CreatedAt))];
+        List<Guid> ids = [.. feedback.Select(f => f.Id)];
+        var scores = await (from s in db.FeedbackScores.AsNoTracking()
+                            join c in db.RubricCriteria on s.CriterionId equals c.Id
+                            join r in db.Rubrics on c.RubricId equals r.Id
+                            where ids.Contains(s.FeedbackId)
+                            orderby c.SortOrder, c.Code
+                            select new { s.FeedbackId, s.CriterionId, c.Label, c.Weight, s.Score, r.ScaleMax })
+            .ToListAsync(ct).ConfigureAwait(false);
+        ILookup<Guid, ScoreView> byFeedback = scores.ToLookup(s => s.FeedbackId, s => new ScoreView(s.CriterionId, s.Label, s.Score, s.ScaleMax));
+        Dictionary<Guid, int> percents = scores.GroupBy(s => s.FeedbackId).ToDictionary(
+            g => g.Key,
+            g => (int)Math.Round(100m * g.Sum(s => s.Score * s.Weight) / g.Sum(s => s.ScaleMax * s.Weight), MidpointRounding.AwayFromZero));
+        return [.. feedback.Select(f => new FeedbackView(f.Id, forStaff ? emails.GetValueOrDefault(f.MentorUserId) : null, f.Comment ?? "", f.Outcome, f.CreatedAt,
+            [.. byFeedback[f.Id]], percents.TryGetValue(f.Id, out int percent) ? percent : null))];
     }
 
     private Task AuditAsync(string action, string kind, IReadOnlyCollection<Guid> subjects, CancellationToken ct, OrganisationId? org = null) =>

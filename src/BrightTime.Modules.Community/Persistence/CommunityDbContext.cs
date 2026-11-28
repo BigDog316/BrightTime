@@ -370,6 +370,59 @@ public sealed class SubmissionRecord
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>An organisation's rubric (<c>community.rubric</c>, D125).</summary>
+public sealed class RubricRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid? OrgId { get; init; }
+
+    public required string Name { get; set; }
+
+    public short ScaleMax { get; set; }
+
+    public Guid? CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public DateTimeOffset? ArchivedAt { get; set; }
+}
+
+/// <summary>One of a rubric's criteria (<c>community.rubric_criterion</c>).</summary>
+public sealed class RubricCriterionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid RubricId { get; init; }
+
+    public required string Code { get; init; }
+
+    public required string Label { get; init; }
+
+    public string? DescriptorMd { get; init; }
+
+    public decimal Weight { get; init; } = 1;
+
+    public short SortOrder { get; init; }
+}
+
+/// <summary>A criterion's score in a piece of feedback (<c>community.feedback_score</c>).</summary>
+public sealed class FeedbackScoreRecord
+{
+    public Guid FeedbackId { get; init; }
+
+    public Guid CriterionId { get; init; }
+
+    public short Score { get; init; }
+
+    /// <summary>The schema's, unused: feedback's comment says why (D125).</summary>
+    public string? Note { get; init; }
+}
+
 /// <summary>Staff's feedback on a submission (<c>community.feedback</c>), with what it decided.</summary>
 public sealed class FeedbackRecord
 {
@@ -475,6 +528,12 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
     public DbSet<FeedbackRecord> Feedback => Set<FeedbackRecord>();
 
     public DbSet<ShowcaseItemRecord> ShowcaseItems => Set<ShowcaseItemRecord>();
+
+    public DbSet<RubricRecord> Rubrics => Set<RubricRecord>();
+
+    public DbSet<RubricCriterionRecord> RubricCriteria => Set<RubricCriterionRecord>();
+
+    public DbSet<FeedbackScoreRecord> FeedbackScores => Set<FeedbackScoreRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -588,6 +647,30 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => x.SubmissionId);
+        });
+
+        modelBuilder.Entity<RubricRecord>(b =>
+        {
+            b.ToTable("rubric");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.OrgId, x.Name });
+        });
+
+        modelBuilder.Entity<RubricCriterionRecord>(b =>
+        {
+            b.ToTable("rubric_criterion");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Weight).HasPrecision(5, 2);
+            b.HasIndex(x => new { x.RubricId, x.Code }).IsUnique();
+        });
+
+        modelBuilder.Entity<FeedbackScoreRecord>(b =>
+        {
+            b.ToTable("feedback_score");
+            b.HasKey(x => new { x.FeedbackId, x.CriterionId });
+            b.HasIndex(x => x.CriterionId);
         });
 
         modelBuilder.Entity<ShowcaseItemRecord>(b =>

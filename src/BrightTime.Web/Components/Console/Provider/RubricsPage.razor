@@ -1,0 +1,216 @@
+@page "/provider/orgs/{OrgId:guid}/rubrics"
+@using System.Globalization
+@using BrightTime.Modules.Community.Groups
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    The organisation's rubrics (D125), for its admins who give feedback: each with its scale and
+    criteria, changed until feedback scores with it and fixed after, archived so it's no longer
+    offered for new challenges. One form writes a new rubric, or, with ?edit=, changes one.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.rubrics.denied"]</h1>
+    <p>@T["provider.rubrics.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_rubrics is { } rubrics)
+{
+    <PageTitle>@T.Format("provider.rubrics.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <h1>@T.Format("provider.rubrics.title", ("organisation", _name))</h1>
+    <OrgNav OrgId="@OrgId" Current="rubrics" Role="@(RoleIn(Org) ?? "")" />
+    <p class="hint">@T["provider.rubrics.intro"]</p>
+
+    @if (Done is { Length: > 0 } && T.Has("provider.rubrics.done." + Done))
+    {
+        <p class="notice success" role="status">@T["provider.rubrics.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <section aria-labelledby="list">
+        <h2 id="list">@T["provider.rubrics.list"] <span class="count">(@rubrics.Count)</span></h2>
+        @if (rubrics.Count == 0)
+        {
+            <p>@T["provider.rubrics.none"]</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (RubricView r in rubrics)
+                {
+                    string id = r.Id.ToString("N");
+                    <li class="card">
+                        <h3 dir="auto">@r.Name
+                            @if (r.Archived)
+                            {
+                                <span class="note"> · @T["provider.rubrics.archived"]</span>
+                            }
+                        </h3>
+                        <p class="hint">@T.Format("provider.rubrics.scale", ("max", r.ScaleMax))@(r.InUse ? " · " + T["provider.rubrics.in_use"] : "")</p>
+                        <ul class="criteria">
+                            @foreach (RubricCriterionView k in r.Criteria)
+                            {
+                                <li>
+                                    <strong dir="auto">@k.Label</strong>
+                                    @if (k.Weight != 1m)
+                                    {
+                                        <span class="note"> · @T.Format("provider.rubrics.weight_of", ("weight", T.Number(k.Weight)))</span>
+                                    }
+                                    @if (k.Descriptor is { Length: > 0 } descriptor)
+                                    {
+                                        <p class="hint" dir="auto">@descriptor</p>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                        <div class="actions">
+                            @if (!r.InUse)
+                            {
+                                <a class="button" href="/provider/orgs/@OrgId/rubrics?edit=@r.Id">@T["provider.rubrics.edit"]</a>
+                            }
+                            <form method="post" @formname="@("archive-" + id)" @onsubmit="() => ArchiveAsync(r.Id, !r.Archived)" class="inline-form">
+                                <AntiforgeryToken />
+                                <button type="submit" class="secondary-button">@T[r.Archived ? "provider.rubrics.restore" : "provider.rubrics.archive"]</button>
+                            </form>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="write">
+        <h2 id="write">@T[_editing is null ? "provider.rubrics.new" : "provider.rubrics.change"]</h2>
+        <form method="post" @formname="rubric" @onsubmit="SaveAsync" class="message-form">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="rubric-name">@T["provider.rubrics.name"]</label>
+                <input id="rubric-name" name="name" maxlength="@Rubrics.MaxName" required dir="auto" value="@_editing?.Name" />
+            </div>
+            <div class="field">
+                <label for="rubric-scale">@T["provider.rubrics.scale_label"]</label>
+                <select id="rubric-scale" name="scale" aria-describedby="rubric-scale-hint">
+                    @for (int n = Rubrics.MinScale; n <= Rubrics.MaxScale; n++)
+                    {
+                        <option value="@n" selected="@(n == (_editing?.ScaleMax ?? Rubrics.DefaultScale))">@n</option>
+                    }
+                </select>
+                <p class="hint" id="rubric-scale-hint">@T["provider.rubrics.scale_hint"]</p>
+            </div>
+            <fieldset>
+                <legend>@T["provider.rubrics.criteria"]</legend>
+                <p class="hint">@T.Format("provider.rubrics.criteria_hint", ("count", Rubrics.MaxCriteria))</p>
+                @for (int i = 0; i < Rubrics.MaxCriteria; i++)
+                {
+                    RubricCriterionView? k = _editing is { } e && i < e.Criteria.Count ? e.Criteria[i] : null;
+                    int n = i + 1;
+                    <div class="criterion-row">
+                        <div class="field">
+                            <label for="label-@i">@T.Format("provider.rubrics.criterion", ("n", n))</label>
+                            <input id="label-@i" name="label-@i" maxlength="@Rubrics.MaxLabel" dir="auto" value="@k?.Label" />
+                        </div>
+                        <div class="field">
+                            <label for="descriptor-@i">@T.Format("provider.rubrics.descriptor", ("n", n))</label>
+                            <input id="descriptor-@i" name="descriptor-@i" maxlength="@Rubrics.MaxDescriptor" dir="auto" value="@k?.Descriptor" />
+                        </div>
+                        <div class="field">
+                            <label for="weight-@i">@T.Format("provider.rubrics.weight", ("n", n))</label>
+                            <input id="weight-@i" name="weight-@i" type="number" min="0.01" max="10" step="0.01" inputmode="decimal"
+                                   value="@(k is null ? "" : k.Weight.ToString("0.##", CultureInfo.InvariantCulture))" />
+                        </div>
+                    </div>
+                }
+            </fieldset>
+            <button type="submit">@T[_editing is null ? "provider.rubrics.save_new" : "provider.rubrics.save"]</button>
+            @if (_editing is not null)
+            {
+                <a class="button" href="/provider/orgs/@OrgId/rubrics">@T["provider.rubrics.cancel"]</a>
+            }
+        </form>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    [SupplyParameterFromQuery(Name = "edit")] public Guid? Edit { get; set; }
+
+    private IReadOnlyList<RubricView>? _rubrics;
+    private RubricView? _editing;
+    private string _name = "";
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Submissions.GiveFeedback, OrganisationRoles.Admin))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org) ?? "";
+        _rubrics = await Get<Rubrics>().ListAsync(Org, includeArchived: true);
+        _editing = Edit is { } edit ? _rubrics.FirstOrDefault(r => r.Id == edit && !r.InUse) : null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_rubrics is null)
+        {
+            return;
+        }
+
+        List<RubricCriterionInput> criteria = [];
+        for (int i = 0; i < Rubrics.MaxCriteria; i++)
+        {
+            decimal? weight = decimal.TryParse(FormValue("weight-" + i), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal w) ? w : null;
+            criteria.Add(new RubricCriterionInput(FormValue("label-" + i), FormValue("descriptor-" + i), weight));
+        }
+
+        int scale = int.TryParse(FormValue("scale"), NumberStyles.None, CultureInfo.InvariantCulture, out int s) ? s : 0;
+        Result<Guid> saved = await Get<Rubrics>().SaveAsync(Actor, Org, _editing?.Id, FormValue("name"), scale, criteria);
+        Finish(saved.IsSuccess ? Result.Success() : Result.Failure(saved.Error!), "saved");
+    }
+
+    private async Task ArchiveAsync(Guid rubric, bool archive)
+    {
+        if (_rubrics is null)
+        {
+            return;
+        }
+
+        Finish(await Get<Rubrics>().ArchiveAsync(Org, rubric, archive), archive ? "archived" : "restored");
+    }
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/rubrics?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

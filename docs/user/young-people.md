@@ -179,8 +179,9 @@ in.
   picture** takes one away at once, and the project stays approved.
 
 **The showcase** is BrightTime's public page of young people's work. Staff at your activities may
-ask to show a project they approved, or challenge work they accepted. You'll find their requests in
-**Portfolio** › **Showcase**.
+ask to show a project they approved, or challenge work they accepted. You're told when they ask,
+and you'll find their requests in **Portfolio** › **Showcase**. Turn the notice off under
+**Account → Notifications** if you like.
 - Nothing is shown unless you say **Yes, show it**. It's shown under the name your portfolio shows,
   so choose one in **Who sees your portfolio** first, without your family name. **No thanks** is for
   good: you won't be asked about that piece again.

@@ -84,6 +84,18 @@ public sealed class ShowcaseTests(ConsoleFixture db)
             (await showcase.ProposeAsync(new UserId(owner), org, ShowcaseKinds.Submission, kofiWork, null, Ct)).IsSuccess.ShouldBeTrue();
         }
 
+        // Each author is told (D126): the organisation, never the work.
+        string told = await db.ScalarAsync<string>(
+            "select string_agg(payload::text, ' ') from platform.outbox_message where message_type = 'platform.notification.requested' and payload::text like @u and payload::text like '%showcase_request%'",
+            ("u", "%" + ama + "%"));
+        told.ShouldContain("notify.showcase.proposed");
+        told.ShouldContain("/portfolio/showcase");
+        told.ShouldContain(provider.DisplayName);
+        told.ShouldNotContain("rain garden");
+        (await db.ScalarAsync<long>(
+            "select count(*) from platform.outbox_message where message_type = 'platform.notification.requested' and payload::text like @u and payload::text like '%showcase_request%'",
+            ("u", "%" + ama + "%"))).ShouldBe(2, "one for each piece");
+
         // Nothing is public yet.
         using Browser anyone = db.NewBrowser();
         (await anyone.GetAsync("/showcase")).StatusCode.ShouldBe(HttpStatusCode.OK);

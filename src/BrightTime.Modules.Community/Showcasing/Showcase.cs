@@ -1,5 +1,6 @@
 using BrightTime.Abstractions.Screening;
 using BrightTime.Infrastructure.Auditing;
+using BrightTime.Infrastructure.Outbox;
 using BrightTime.Infrastructure.Tenancy;
 using BrightTime.Modules.Community.Contracts;
 using BrightTime.Modules.Community.Messaging;
@@ -7,6 +8,7 @@ using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Identity.Contracts;
 using BrightTime.Modules.Learning.Contracts;
+using BrightTime.Modules.Platform.Contracts.Messages;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -109,6 +111,12 @@ public sealed class Showcase(
     public const string Declined = "showcase.declined";
     public const string TakenDown = "showcase.taken_down";
     public const string PublicRead = "showcase.public_read";
+
+    /// <summary>The notice's kind (<c>ck_notification_kind</c>), which the young person can switch off (D126).</summary>
+    public const string RequestKind = "showcase_request";
+
+    /// <summary>The notice's words: the organisation's name, never the work's title or words, which a locked phone would show.</summary>
+    public const string RequestTitle = "notify.showcase.proposed";
 
     public const int MaxCaption = 300;
     public const int MaxReason = 500;
@@ -225,6 +233,15 @@ public sealed class Showcase(
             db.ShowcaseItems.Add(item);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await AuditAsync(Proposed, "showcase_item", [item.Id], org, ct, (kind!, id.ToString("D"))).ConfigureAwait(false);
+
+            // Told with the proposal, through the outbox, so a proposal that fails tells nobody (D126).
+            await db.PublishAsync(tenant.TenantId, new NotificationRequested(
+                found.author,
+                RequestKind,
+                RequestTitle,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["org"] = item.OrgName },
+                "/portfolio/showcase",
+                "showcase-proposed:" + item.Id.ToString("N")), ct).ConfigureAwait(false);
             return Result<Guid>.Success(item.Id);
         }, cancellationToken);
 

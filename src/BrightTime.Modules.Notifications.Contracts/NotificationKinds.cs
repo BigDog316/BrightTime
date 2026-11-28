@@ -18,11 +18,14 @@ public static class NotificationKinds
     /// <summary>A badge awarded to a young person, by staff or for finishing a playlist (D83).</summary>
     public const string BadgeAwarded = "badge_awarded";
 
+    /// <summary>An organisation's staff asking to show a young person's work in the showcase (D124, D126).</summary>
+    public const string ShowcaseRequest = "showcase_request";
+
     /// <summary>
     /// The kinds a person can switch on or off. The rest arrive with the features that send them
     /// (applications, waitlist offers).
     /// </summary>
-    public static readonly IReadOnlyList<string> UserConfigurable = [DeadlineReminder, SessionReminder, SavedItemUpdate, NewMessage, WorkReviewed, BadgeAwarded];
+    public static readonly IReadOnlyList<string> UserConfigurable = [DeadlineReminder, SessionReminder, SavedItemUpdate, NewMessage, WorkReviewed, BadgeAwarded, ShowcaseRequest];
 }
 
 /// <summary>Delivery channels, as in <c>ck_preference_channel</c>.</summary>

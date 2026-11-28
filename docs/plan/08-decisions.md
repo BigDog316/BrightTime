@@ -4388,6 +4388,25 @@ one from the console and staff refused, the refusals, an archived one not offere
 challenge with one, a partial and an out-of-range score refused, a full score and its total, a
 comment alone, what the young person sees, fixed once used).
 
+### D126 — Telling a young person when staff ask to show their work (**proposed 2026-11-28**)
+
+D124 left the young person to find a showcase proposal by opening **Showcase**. Sam chose on
+2026-11-28: a notice for the proposal, by the same channels as D83's work notices.
+- **The notice:** when staff propose a piece of work, its author is told, with the proposal and
+  through the outbox, so a proposal that fails tells nobody: "{org} asked to show your work in the
+  showcase. Nothing is shown unless you say yes", opening **Portfolio** › **Showcase**
+  (`/portfolio/showcase`). It names the organisation, never the work's title or words, which a
+  locked phone would show. One notice per piece (`showcase-proposed:{item}`).
+- **Their own switch:** a new kind, `showcase_request` (*When staff ask to show your work*), which
+  a person turns off for the inbox or the phone under **Account → Notifications**, like the others.
+  Push follows the account's capabilities as before.
+- **Not in this:** notices for challenge feedback, a new challenge, or a take-down; a notice to
+  staff when the young person answers.
+
+Schema: `ck_notification_kind` gains `showcase_request`. Rebuild the compose volume. Tests:
+`ShowcaseTests` (each author told once per piece, with the organisation's name and the link, and
+not the work).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

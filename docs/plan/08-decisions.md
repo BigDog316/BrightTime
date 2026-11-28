@@ -4349,7 +4349,7 @@ project back to a draft and a withdrawn capability taking work off, the county's
 what the author and staff are told, the audit; the schema's consent check), `ShowcaseApiTests` (the
 app's side and the public API), `RolePermissionTests` and `ModuleBoundaryTests`.
 
-### D125 — Rubrics and scores on challenges (**proposed 2026-11-28**)
+### D125 — Rubrics and scores on challenges (**accepted 2026-11-28**)
 
 M5's rubrics had tables (`rubric`, `rubric_criterion`, `feedback_score`) and no code. Sam chose on
 2026-11-28: rubrics and scores next; rubrics are the organisation's; scoring is optional, but all

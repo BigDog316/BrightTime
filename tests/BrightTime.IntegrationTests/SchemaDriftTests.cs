@@ -10,6 +10,7 @@ using BrightTime.Modules.Learning.Persistence;
 using BrightTime.Modules.Notifications.Persistence;
 using BrightTime.Modules.Opportunities.Persistence;
 using BrightTime.Modules.Platform.Persistence;
+using BrightTime.Modules.Workforce.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -49,6 +50,7 @@ public sealed class SchemaDriftTests(DatabaseFixture database)
         nameof(AttendanceDbContext),
         nameof(CommunityDbContext),
         nameof(LearningDbContext),
+        nameof(WorkforceDbContext),
     ];
 
     [Theory]
@@ -139,6 +141,7 @@ public sealed class SchemaDriftTests(DatabaseFixture database)
             nameof(AttendanceDbContext) => new AttendanceDbContext(Options<AttendanceDbContext>(connectionString), tenant),
             nameof(CommunityDbContext) => new CommunityDbContext(Options<CommunityDbContext>(connectionString), tenant),
             nameof(LearningDbContext) => new LearningDbContext(Options<LearningDbContext>(connectionString), tenant),
+            nameof(WorkforceDbContext) => new WorkforceDbContext(Options<WorkforceDbContext>(connectionString), tenant),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "Unknown context."),
         };
     }

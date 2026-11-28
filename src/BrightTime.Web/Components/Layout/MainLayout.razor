@@ -13,6 +13,10 @@
     {
         <nav aria-label="@T["site.nav.console"]">
             <a href="/provider">@T["site.nav.organisations"]</a>
+            @if (user.HasPermission(Permissions.Mentors.ManageOwnProfile))
+            {
+                <a href="/mentor/profile">@T["site.nav.mentor_profile"]</a>
+            }
             @if (user.HasPermission(Permissions.Listings.Review))
             {
                 <a href="/organiser/review">@T["site.nav.review"]</a>

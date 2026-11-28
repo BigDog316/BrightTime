@@ -181,6 +181,14 @@ The owner alone reads or changes a family profile.
 | `POST /attendance/checkin` | Check in by scanning a kiosk's one-minute code |
 | `POST /attendance/devices/contact` | A device's check-in with the server, without signing in: says whether it's revoked and must wipe |
 
+## Mentors
+
+| Route | |
+|---|---|
+| `GET`, `PUT /me/mentor-profile` | A mentor's own profile (D129): `displayName`, `headline`, `bio`, `languages` (codes of the county's `language` terms), `skills` (term ids), `homeNeighbourhoodId`, `willingVirtual`, `weeklyHoursSought`, `maxTravelM`, `listed`. The answer adds `availability`, `status`, `isMentor`, `findable` and `organisations`. Only someone with a mentor's role (`mentors.not_mentor`) |
+| `PUT /me/mentor-profile/availability` | `{ slots: [{ dayOfWeek, from, to }] }`, 0 for Sunday, in the county's time, up to 14; replaces what was there |
+| `GET /org/{orgId}/mentors/search` | `?skill=&dayOfWeek=&neighbourhood=&virtual=`, for the organisation's staff with `mentors.search`: listed mentors with a mentor's role and every required clearance current |
+
 ## Messages and devices
 
 | Route | |

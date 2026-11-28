@@ -370,6 +370,28 @@ read them.
   answer), with a reason for your colleagues if you like; the young person is told only that it was
   taken down.
 
+## Mentors
+
+**Mentors** are volunteers who work with your young people. On the **Staff** page, invite someone
+as a **mentor**, or change a member's role to mentor. A mentor doesn't see your organisation's
+listings, applications or attendance.
+
+As a mentor, **Your mentor profile** (at the top of the console) is yours to write, once, for the
+whole county:
+- the name organisations find you by, what you can offer and a little about you;
+- your skills and the languages you speak;
+- where you live, if you like, and whether you'll meet online;
+- the hours a week you'd like, and when you're usually free.
+
+**List my profile** when you're ready. You're found only while every clearance the county requires
+(a background check and mandated reporter training at least) is current; the page says if one
+isn't. Ask the organisation you mentor with to record them.
+
+To find a mentor, programme staff and admins open **Mentors**. Search by a skill, a day they're
+free, and where they live, or for mentors who'll meet online. Each shows what they wrote, when
+they're free, who they mentor with, and their email address to get in touch. A mentor whose
+clearance lapses drops out of the search by itself.
+
 ## Reports
 
 **Reports** makes a file when you download it, as **PDF**, **Excel** or **CSV**. Nothing is kept on

@@ -152,9 +152,16 @@ public sealed class AccountProvisioning(NpgsqlDataSource authDataSource)
         return emails;
     }
 
-    /// <summary>The global role that goes with an organisation role: owners and admins administer, the rest work on listings.</summary>
-    public static string GlobalRoleFor(string organisationRole) =>
-        organisationRole is "owner" or "admin" ? Authorization.BrightTimeRoles.ProviderAdmin : Authorization.BrightTimeRoles.ProgramStaff;
+    /// <summary>
+    /// The global role that goes with an organisation role: owners and admins administer, mentors
+    /// mentor (D129), the rest work on listings.
+    /// </summary>
+    public static string GlobalRoleFor(string organisationRole) => organisationRole switch
+    {
+        "owner" or "admin" => Authorization.BrightTimeRoles.ProviderAdmin,
+        "mentor" => Authorization.BrightTimeRoles.Mentor,
+        _ => Authorization.BrightTimeRoles.ProgramStaff,
+    };
 
     private static async Task<(Guid Id, string Kind)> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction tx, string email, CancellationToken ct)
     {

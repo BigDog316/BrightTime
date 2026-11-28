@@ -59,6 +59,11 @@ public interface IDirectoryQueries
         OrganisationId organisationId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Every active membership with this role at an approved organisation, county-wide: the mentors, say (D129).</summary>
+    Task<IReadOnlyList<OrganisationMembership>> GetMembersWithRoleAsync(
+        string role,
+        CancellationToken cancellationToken = default);
+
     Task<string?> GetOrganisationRoleAsync(
         OrganisationId organisationId,
         UserId userId,

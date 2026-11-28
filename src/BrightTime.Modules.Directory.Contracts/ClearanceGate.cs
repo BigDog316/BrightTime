@@ -31,4 +31,11 @@ public sealed record ClearanceRefusal(IReadOnlyList<string> Missing, IReadOnlyLi
 public interface IClearanceGate
 {
     Task<ClearanceRefusal?> CheckAsync(UserId person, OrganisationId organisation, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The people who hold a current clearance of every kind the county requires (D129), for at
+    /// least one of the organisations given with them: as <see cref="CheckAsync"/> judges it, but
+    /// whether or not the county enforces the rules. A mentor is found in search only then.
+    /// </summary>
+    Task<IReadOnlySet<Guid>> ClearedAsync(IReadOnlyCollection<(Guid Person, Guid Organisation)> people, CancellationToken cancellationToken = default);
 }

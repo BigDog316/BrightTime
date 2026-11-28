@@ -78,7 +78,8 @@ migrations-history table name). Other modules see it only through its `.Contract
 | Notifications | `notify` | Push devices, preferences, the inbox, deliveries | Built |
 | Community | `community` | Conversations, messages, broadcasts, screening holds (M3); the moderation queue for held messages (D114) and reported messages (D115). Spaces and posts are M5 | Messaging, reports and moderation of messages built |
 | Learning | `learning` | Learner profiles, participation, issuers and keys, badge classes and assertions, playlists and progress, unlock rules (D65 to D67). Goals, skills, projects and exports to come | Partly built |
-| Workforce, Landscape, Analytics, Integrations | `workforce`, `landscape`, `analytics`, `integration` | Mentors and gigs; asset mapping and surveys; suppressed rollups; external systems | Schema only |
+| Workforce | `workforce` | Mentor profiles and availability (D129). Training, curriculum and the gig board to come | Mentors built |
+| Landscape, Analytics, Integrations | `landscape`, `analytics`, `integration` | Asset mapping and surveys; suppressed rollups; external systems | Schema only |
 
 **Dependencies.** A module may reference the contracts of the modules beneath it in this order,
 and never the other way:
@@ -93,7 +94,8 @@ and never the other way:
 | Enrollment | Platform, Identity, Directory, Opportunities |
 | Attendance | Platform, Identity, Directory, Opportunities, Enrollment |
 | Learning | Platform, Identity, Directory, Opportunities, Enrollment, Attendance |
-| Community | Platform, Identity, Directory, Opportunities, Learning |
+| Community | Platform, Identity, Directory, Opportunities, Enrollment, Learning |
+| Workforce | Platform, Identity, Directory |
 
 `ModuleBoundaryTests` in `BrightTime.Architecture.Tests` fails the build on any other reference,
 and on a module referencing another module's implementation rather than its contracts.

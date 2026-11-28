@@ -61,6 +61,11 @@ public static class RegistrationServices
         services.AddBrightTimeDbContext<CommunityDbContext>(connection, CommunityDbContext.SchemaName, CommunityDbContext.MigrationsHistoryTable);
         services.AddCommunity();
         BrightTime.Modules.Identity.Moderation.SuspensionModule.AddAccountSuspensions(services);
+
+        // Workforce (M6): mentors' profiles, and the search organisations' staff make (D129).
+        services.AddBrightTimeDbContext<BrightTime.Modules.Workforce.Persistence.WorkforceDbContext>(connection,
+            BrightTime.Modules.Workforce.Persistence.WorkforceDbContext.SchemaName, BrightTime.Modules.Workforce.Persistence.WorkforceDbContext.MigrationsHistoryTable);
+        BrightTime.Modules.Workforce.Mentors.WorkforceServices.AddWorkforce(services);
         return services;
     }
 }

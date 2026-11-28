@@ -183,8 +183,9 @@ moderation record; the young person is told only that it was taken down. A take-
 
 ## Taxonomy
 
-**Taxonomy** holds the words providers tag listings with and families filter by, in four
-vocabularies: **categories**, **interests**, **accommodations** and **skills**.
+**Taxonomy** holds the words providers tag listings with and families filter by, in five
+vocabularies: **categories**, **interests**, **accommodations**, **skills** and **languages**.
+Mentors choose their skills and languages from these lists, so add the ones your county needs.
 
 For each term:
 - a **code** of lowercase letters, digits and hyphens, like `after-school-meals`. It appears in

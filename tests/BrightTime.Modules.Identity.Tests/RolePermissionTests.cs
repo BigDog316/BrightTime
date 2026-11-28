@@ -117,6 +117,9 @@ public sealed class RolePermissionTests
             (Permissions.Submissions.GiveFeedback, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
             // The showcase (D124): staff for their organisation; the county's organisers and moderators take things down.
             (Permissions.Showcase.Approve, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin, BrightTimeRoles.NetworkOrganiser, BrightTimeRoles.Moderator]),
+            // Mentors (D129): a mentor keeps their own profile; staff and the county find them.
+            (Permissions.Mentors.ManageOwnProfile, [BrightTimeRoles.Mentor]),
+            (Permissions.Mentors.Search, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin, BrightTimeRoles.NetworkOrganiser]),
         ];
         foreach ((string permission, string[] roles) in expected)
         {

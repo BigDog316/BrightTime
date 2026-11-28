@@ -1,0 +1,165 @@
+@page "/provider/orgs/{OrgId:guid}/mentors"
+@using System.Globalization
+@using BrightTime.Modules.Directory.Contracts
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.Modules.Workforce.Contracts
+@using BrightTime.Modules.Workforce.Mentors
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    Finding mentors (D129), for an organisation's programme staff and admins with mentors.search: the
+    county's listed mentors, by skill, a day they're free, and where they live or whether they'll
+    meet online. Only mentors with a mentor's role at an approved organisation and every clearance
+    the county requires, current, are found; one whose clearance lapses drops out by itself.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.mentors.denied"]</h1>
+    <p>@T["provider.mentors.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_found is { } found)
+{
+    <PageTitle>@T.Format("provider.mentors.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <h1>@T.Format("provider.mentors.title", ("organisation", _name))</h1>
+    <OrgNav OrgId="@OrgId" Current="mentors" Role="@(RoleIn(Org) ?? "")" />
+    <p class="hint">@T["provider.mentors.intro"]</p>
+
+    <form method="get" class="filters" action="/provider/orgs/@OrgId/mentors">
+        <div class="field">
+            <label for="mentor-skill">@T["provider.mentors.skill"]</label>
+            <select id="mentor-skill" name="skill">
+                <option value="">@T["provider.mentors.any"]</option>
+                @foreach (VocabularyTerm s in _skills)
+                {
+                    <option value="@s.Id" selected="@(Skill == s.Id)">@s.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="mentor-day">@T["provider.mentors.day"]</label>
+            <select id="mentor-day" name="day">
+                <option value="">@T["provider.mentors.any"]</option>
+                @for (int d = 0; d < 7; d++)
+                {
+                    int day = d;
+                    <option value="@day" selected="@(Day == day)">@T["mentor.day." + day]</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="mentor-hood">@T["provider.mentors.neighbourhood"]</label>
+            <select id="mentor-hood" name="neighbourhood">
+                <option value="">@T["provider.mentors.anywhere"]</option>
+                @foreach (NeighbourhoodShape n in _hoods)
+                {
+                    <option value="@n.Id" selected="@(Neighbourhood == n.Id)">@n.Name</option>
+                }
+            </select>
+        </div>
+        <label class="check"><input type="checkbox" name="virtual" value="true" checked="@(Virtual == true)" /> @T["provider.mentors.virtual_only"]</label>
+        <button type="submit">@T["provider.mentors.find"]</button>
+    </form>
+
+    <section aria-labelledby="results">
+        <h2 id="results">@T["provider.mentors.results"] <span class="count">(@found.Count)</span></h2>
+        @if (found.Count == 0)
+        {
+            <p>@T["provider.mentors.none"]</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (MentorCard m in found)
+                {
+                    <li class="card">
+                        <h3 dir="auto">@m.DisplayName</h3>
+                        @if (m.Headline is { Length: > 0 } headline)
+                        {
+                            <p class="lead" dir="auto">@headline</p>
+                        }
+                        <p class="note">@T.Format("provider.mentors.with", ("orgs", string.Join(", ", m.Organisations)))</p>
+                        @if (m.Bio is { Length: > 0 } bio)
+                        {
+                            <p class="body" dir="auto">@bio</p>
+                        }
+                        <dl class="facts">
+                            @if (m.Skills.Count > 0)
+                            {
+                                <dt>@T["provider.mentors.skills"]</dt>
+                                <dd>@string.Join(", ", m.Skills.Select(s => s.Name))</dd>
+                            }
+                            @if (m.Languages.Count > 0)
+                            {
+                                <dt>@T["provider.mentors.languages"]</dt>
+                                <dd>@string.Join(", ", m.Languages.Select(l => l.Name))</dd>
+                            }
+                            <dt>@T["provider.mentors.where"]</dt>
+                            <dd>@(m.Neighbourhood ?? T["provider.mentors.no_neighbourhood"])@(m.WillingVirtual ? " · " + T["provider.mentors.online_too"] : "")</dd>
+                            @if (m.WeeklyHoursSought is { } hours)
+                            {
+                                <dt>@T["provider.mentors.hours"]</dt>
+                                <dd>@T.Number(hours)</dd>
+                            }
+                            @if (m.Availability.Count > 0)
+                            {
+                                <dt>@T["provider.mentors.free"]</dt>
+                                <dd>@string.Join("; ", m.Availability.Select(a => T["mentor.day." + a.DayOfWeek] + " " + a.From.ToString("HH:mm", CultureInfo.InvariantCulture) + "–" + a.To.ToString("HH:mm", CultureInfo.InvariantCulture)))</dd>
+                            }
+                            @if (m.Email is { Length: > 0 } email)
+                            {
+                                <dt>@T["provider.mentors.contact"]</dt>
+                                <dd><a href="mailto:@email">@email</a></dd>
+                            }
+                        </dl>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "skill")] public Guid? Skill { get; set; }
+
+    [SupplyParameterFromQuery(Name = "day")] public int? Day { get; set; }
+
+    [SupplyParameterFromQuery(Name = "neighbourhood")] public Guid? Neighbourhood { get; set; }
+
+    [SupplyParameterFromQuery(Name = "virtual")] public bool? Virtual { get; set; }
+
+    private IReadOnlyList<MentorCard>? _found;
+    private IReadOnlyList<VocabularyTerm> _skills = [];
+    private IReadOnlyList<NeighbourhoodShape> _hoods = [];
+    private string _name = "";
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Mentors.Search))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<IDirectoryQueries>().GetOrganisationNameAsync(Org) ?? "";
+        _skills = await Get<ITaxonomyQueries>().GetVocabularyAsync(MentorVocabularies.Skill, T.Locale.Code);
+        _hoods = await Get<IGeographyQueries>().GetNeighbourhoodsAsync(T.Locale.Code);
+        _found = await Get<Mentors>().SearchAsync(Org, new MentorQuery(Skill, Day is >= 0 and <= 6 ? Day : null, Neighbourhood, Virtual == true));
+    }
+}

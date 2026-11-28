@@ -28,6 +28,8 @@ public sealed class ModuleBoundaryTests
         // The showcase (D124) holds learning's approved projects: community's keys already point there (D70).
         ["Community"] = ["Platform", "Identity", "Directory", "Opportunities", "Enrollment", "Learning"],
         ["Learning"] = ["Platform", "Identity", "Directory", "Opportunities", "Enrollment", "Attendance"],
+        // M6 (D129): mentors are adults an organisation makes; their clearances are Directory's.
+        ["Workforce"] = ["Platform", "Identity", "Directory"],
     };
 
     private static IEnumerable<Assembly> ModuleAssemblies =>

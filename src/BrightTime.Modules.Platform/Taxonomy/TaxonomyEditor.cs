@@ -65,7 +65,7 @@ public sealed partial class TaxonomyEditor(PlatformDbContext db, ITenantContext 
     public const string Fallback = "en";
 
     /// <summary>The vocabularies the organiser manages here, in the order the page lists them.</summary>
-    public static readonly IReadOnlyList<string> Vocabularies = ["category", "interest", "accommodation", "skill"];
+    public static readonly IReadOnlyList<string> Vocabularies = ["category", "interest", "accommodation", "skill", "language"];
 
     public static bool IsManaged(string vocabulary) => Vocabularies.Contains(vocabulary, StringComparer.Ordinal);
 

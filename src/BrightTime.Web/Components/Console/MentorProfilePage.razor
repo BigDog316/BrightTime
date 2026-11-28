@@ -1,0 +1,204 @@
+@page "/mentor/profile"
+@using System.Globalization
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.Modules.Platform.Contracts
+@using BrightTime.Modules.Workforce.Contracts
+@using BrightTime.Modules.Workforce.Mentors
+@using BrightTime.SharedKernel.Primitives
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    A mentor's own profile (D129): written once, county-wide, by someone an organisation has made a
+    mentor. What they offer, the languages they speak, where they live, whether they'll meet online,
+    the hours a week they want, and when they're usually free. Listed, organisations' staff find it
+    while the mentor's clearances are current; the page says whether they can be found now, and why
+    not.
+*@
+<PageTitle>@T["mentor.profile.title"] · BrightTime</PageTitle>
+
+@if (Forbidden)
+{
+    <h1>@T["mentor.profile.title"]</h1>
+    <p>@T["mentor.profile.denied"]</p>
+}
+else if (_profile is { } p)
+{
+    <h1>@T["mentor.profile.title"]</h1>
+    <p class="hint">@T["mentor.profile.intro"]</p>
+
+    @if (Done is { Length: > 0 } && T.Has("mentor.profile.done." + Done))
+    {
+        <p class="notice success" role="status">@T["mentor.profile.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (!p.IsMentor)
+    {
+        <p class="notice">@T["mentor.profile.not_mentor"]</p>
+    }
+    else
+    {
+        <p class="notice">
+            @T.Format("mentor.profile.mentoring_with", ("orgs", string.Join(", ", p.Organisations)))
+            @(" ")@T[!p.Listed ? "mentor.profile.state.unlisted" : p.Findable ? "mentor.profile.state.findable" : "mentor.profile.state.not_cleared"]
+        </p>
+
+        <form method="post" @formname="profile" @onsubmit="SaveAsync" class="message-form">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="mentor-name">@T["mentor.profile.name"]</label>
+                <input id="mentor-name" name="name" maxlength="@Mentors.MaxName" dir="auto" value="@p.DisplayName" aria-describedby="mentor-name-hint" />
+                <p class="hint" id="mentor-name-hint">@T["mentor.profile.name_hint"]</p>
+            </div>
+            <div class="field">
+                <label for="mentor-headline">@T["mentor.profile.headline"]</label>
+                <input id="mentor-headline" name="headline" maxlength="@Mentors.MaxHeadline" dir="auto" value="@p.Headline" />
+            </div>
+            <div class="field">
+                <label for="mentor-bio">@T["mentor.profile.bio"]</label>
+                <textarea id="mentor-bio" name="bio" rows="5" maxlength="@Mentors.MaxBio" dir="auto">@p.Bio</textarea>
+            </div>
+            <div class="field">
+                <label for="mentor-skills">@T["mentor.profile.skills"]</label>
+                <select id="mentor-skills" name="skill" multiple size="8">
+                    @foreach (VocabularyTerm s in _skills)
+                    {
+                        <option value="@s.Id" selected="@p.Skills.Contains(s.Id)">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <fieldset>
+                <legend>@T["mentor.profile.languages"]</legend>
+                @foreach (VocabularyTerm l in _languages)
+                {
+                    <label class="check"><input type="checkbox" name="language" value="@l.Code" checked="@p.Languages.Contains(l.Code)" /> @l.Name</label>
+                }
+            </fieldset>
+            <div class="field">
+                <label for="mentor-hood">@T["mentor.profile.neighbourhood"]</label>
+                <select id="mentor-hood" name="neighbourhood">
+                    <option value="">@T["mentor.profile.no_neighbourhood"]</option>
+                    @foreach (NeighbourhoodShape n in _hoods)
+                    {
+                        <option value="@n.Id" selected="@(p.HomeNeighbourhoodId == n.Id)">@n.Name</option>
+                    }
+                </select>
+            </div>
+            <label class="check"><input type="checkbox" name="virtual" value="true" checked="@p.WillingVirtual" /> @T["mentor.profile.virtual"]</label>
+            <div class="field">
+                <label for="mentor-hours">@T["mentor.profile.hours"]</label>
+                <input id="mentor-hours" name="hours" type="number" min="1" max="60" inputmode="numeric" value="@p.WeeklyHoursSought" />
+            </div>
+            <label class="check"><input type="checkbox" name="listed" value="true" checked="@p.Listed" /> @T["mentor.profile.listed"]</label>
+            <p class="hint">@T["mentor.profile.listed_hint"]</p>
+            <button type="submit">@T["mentor.profile.save"]</button>
+        </form>
+
+        <section aria-labelledby="free">
+            <h2 id="free">@T["mentor.profile.availability"]</h2>
+            <p class="hint">@T["mentor.profile.availability_hint"]</p>
+            <form method="post" @formname="availability" @onsubmit="AvailabilityAsync" class="message-form">
+                <AntiforgeryToken />
+                @for (int day = 0; day < 7; day++)
+                {
+                    AvailabilitySlot? slot = p.Availability.FirstOrDefault(a => a.DayOfWeek == day);
+                    int d = day;
+                    <fieldset class="day">
+                        <legend>@T["mentor.day." + d]</legend>
+                        <label for="from-@d">@T["mentor.profile.from"]</label>
+                        <input id="from-@d" name="from-@d" type="time" value="@(slot?.From.ToString("HH:mm", CultureInfo.InvariantCulture))" />
+                        <label for="to-@d">@T["mentor.profile.to"]</label>
+                        <input id="to-@d" name="to-@d" type="time" value="@(slot?.To.ToString("HH:mm", CultureInfo.InvariantCulture))" />
+                    </fieldset>
+                }
+                <button type="submit">@T["mentor.profile.save_availability"]</button>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private MentorProfileView? _profile;
+    private IReadOnlyList<VocabularyTerm> _skills = [];
+    private IReadOnlyList<VocabularyTerm> _languages = [];
+    private IReadOnlyList<NeighbourhoodShape> _hoods = [];
+    private string? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!User.HasPermission(Permissions.Mentors.ManageOwnProfile))
+        {
+            Forbid();
+            return;
+        }
+
+        _profile = await Get<Mentors>().MineAsync(Actor);
+        ITaxonomyQueries taxonomy = Get<ITaxonomyQueries>();
+        _skills = await taxonomy.GetVocabularyAsync(MentorVocabularies.Skill, T.Locale.Code);
+        _languages = await taxonomy.GetVocabularyAsync(MentorVocabularies.Language, T.Locale.Code);
+        _hoods = await Get<IGeographyQueries>().GetNeighbourhoodsAsync(T.Locale.Code);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_profile is null)
+        {
+            return;
+        }
+
+        var form = HttpContext.Request.Form;
+        List<Guid> skills = [.. form["skill"].Select(s => Guid.TryParse(s, out Guid id) ? id : Guid.Empty).Where(id => id != Guid.Empty)];
+        List<string> languages = [.. form["language"].Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l!)];
+        Guid? hood = Guid.TryParse(FormValue("neighbourhood"), out Guid h) ? h : null;
+        int? hours = int.TryParse(FormValue("hours"), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : null;
+        MentorProfileInput input = new(FormValue("name"), FormValue("headline"), FormValue("bio"), languages, skills, hood,
+            FormValue("virtual") == "true", hours, _profile.MaxTravelM, FormValue("listed") == "true");
+        Result<MentorProfileView> saved = await Get<Mentors>().SaveAsync(Actor, input);
+        Finish(saved.IsSuccess ? Result.Success() : Result.Failure(saved.Error!), "saved");
+    }
+
+    private async Task AvailabilityAsync()
+    {
+        if (_profile is null)
+        {
+            return;
+        }
+
+        List<AvailabilitySlot> slots = [];
+        for (int day = 0; day < 7; day++)
+        {
+            if (TimeOnly.TryParse(FormValue("from-" + day), CultureInfo.InvariantCulture, out TimeOnly from)
+                && TimeOnly.TryParse(FormValue("to-" + day), CultureInfo.InvariantCulture, out TimeOnly to))
+            {
+                slots.Add(new AvailabilitySlot(day, from, to));
+            }
+        }
+
+        Result<MentorProfileView> set = await Get<Mentors>().SetAvailabilityAsync(Actor, slots);
+        Finish(set.IsSuccess ? Result.Success() : Result.Failure(set.Error!), "availability");
+    }
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/mentor/profile?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

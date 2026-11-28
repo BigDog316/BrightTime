@@ -147,6 +147,11 @@ public static class ApiComposition
         services.AddLearning();
         // A young person's project pictures are kept in the media store (D104).
         services.AddMediaLibrary();
+
+        // Workforce (M6): mentors' profiles, and the search organisations' staff make (D129).
+        services.AddBrightTimeDbContext<BrightTime.Modules.Workforce.Persistence.WorkforceDbContext>(app,
+            BrightTime.Modules.Workforce.Persistence.WorkforceDbContext.SchemaName, BrightTime.Modules.Workforce.Persistence.WorkforceDbContext.MigrationsHistoryTable);
+        BrightTime.Modules.Workforce.Mentors.WorkforceServices.AddWorkforce(services);
         services.AddScoped<Me.RecordLog>();
         services.AddScoped<Me.Schedule>();
 

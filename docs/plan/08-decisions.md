@@ -4481,6 +4481,73 @@ Rebuild the compose volume. Tests:
   handler run twice, staff reporting work, escalating and removing it, and the recent decisions;
 - `ShowcaseApiTests`: the public API and its rate limit.
 
+### D129 — Mentors: made by organisations, found when cleared (**proposed 2026-11-28**)
+
+M6's first slice. The `workforce` schema had mentor profiles and availability and no module. Sam
+chose on 2026-11-28: start M6 with mentor profiles; organisations add their mentors.
+- **A new module, Workforce** (`BrightTime.Modules.Workforce`, with its contracts), over the
+  `workforce` schema. It may use Platform's, Identity's and Directory's contracts; the module order
+  and `ModuleBoundaryTests` say so. Its context is `WorkforceDbContext`, which the schema drift test
+  checks.
+- **Organisations make mentors:**
+  - An admin gives someone the **mentor** role on the organisation's staff page, by inviting them
+    or by changing a member's role. The role was in `ck_org_membership_role` all along, and is now
+    offered (`MemberRoles.Assignable`).
+  - An active mentor membership grants the platform's **Mentor** role (`GlobalRoleFor`), whose new
+    permission `mentor_profile.manage_own` is the right to keep a mentor's profile. docs/plan/04
+    gives it to more roles; for now only mentors have a use for it.
+  - A mentor ranks below staff in the organisation, so the provider's console opens nothing of the
+    organisation's to them.
+- **The profile** (`/mentor/profile` in the console, `GET`/`PUT /me/mentor-profile`):
+  - One per person, county-wide.
+  - What it holds:
+    - the name they're found by (`mentor_profile.display_name`, new);
+    - a headline and a bio;
+    - skills from the county's `skill` vocabulary, and languages from its `language` vocabulary,
+      which organisers now manage too;
+    - where they live (a neighbourhood, or not said), and whether they'll meet online;
+    - the hours a week they'd like;
+    - when they're usually free (`PUT /me/mentor-profile/availability`; on the console page, one
+      time a day).
+
+    Only someone with a mentor's role at an approved organisation writes one (`mentors.not_mentor`).
+  - **Listing it** makes it `active` and searchable. Unlisting makes it `paused`. A name is needed
+    to list (`ck_mentor_named`).
+  - The page says whether they can be found now, and why not.
+- **Search** (`/provider/orgs/{org}/mentors`, `GET /org/{org}/mentors/search?skill=&dayOfWeek=&neighbourhood=&virtual=`):
+  - Who: plan/04's `mentors.search`, for programme staff and admins of the organisation, and for
+    network organisers.
+  - What it finds: listed mentors county-wide, by a skill, a day they're free, and where they live
+    (or anyone who'll meet online), or online only.
+  - What each shows: what they wrote, when they're free, the organisations they mentor with, and
+    their email address to get in touch.
+  - Audited (`workforce.mentors.searched`).
+- **Gated on clearances:**
+  - A mentor is found only while they hold a mentor's role at an approved organisation, and a
+    current clearance of every kind the county requires. That is the platform's minimum plus the
+    county's additions, recorded by that organisation or county-wide.
+  - The gate applies whether or not the county enforces the rules for staff (D99). The gate's new
+    `ClearedAsync` judges it.
+  - So a clearance that lapses overnight takes the mentor out of search by morning, with nothing
+    for anyone to do.
+- **Not in this:**
+  - mentors' pictures;
+  - travel distance in search (the field is kept);
+  - mentors applying county-wide;
+  - the county reviewing profiles (`pending_review`), or suspending one;
+  - training, curriculum and the gig board;
+  - mentors' access to young people, and mentor feedback on challenges (M5's last piece);
+  - seeding skills and languages: the seed has none, and organisers add them.
+
+Schema: `mentor_profile.display_name`, `ck_mentor_named`, `ck_mentor_text`. Rebuild the compose
+volume. New permissions: `mentor_profile.manage_own` (Mentor) and `mentors.search` (programme staff,
+provider admins, network organisers). Tests:
+- `MentorsTests`: making a mentor on the staff page; the profile and free times; not found
+  uncleared, found cleared by skill and day and not by another; a lapsed clearance; someone not a
+  mentor refused; the pages each role can't open;
+- `MentorApiTests`: the API's side;
+- `RolePermissionTests`, `ModuleBoundaryTests` and `SchemaDriftTests`.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

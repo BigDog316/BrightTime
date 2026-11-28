@@ -125,6 +125,15 @@ public static class Permissions
         public const string GiveFeedback = "submissions.give_feedback";
     }
 
+    public static class Mentors
+    {
+        /// <summary>Writing one's own mentor profile and availability (docs/plan/04, D129): mentors, whom an organisation makes.</summary>
+        public const string ManageOwnProfile = "mentor_profile.manage_own";
+
+        /// <summary>Finding mentors for the organisation (docs/plan/04, D129): its programme staff and admins, and the county's organisers.</summary>
+        public const string Search = "mentors.search";
+    }
+
     public static class Showcase
     {
         /// <summary>
@@ -250,6 +259,7 @@ public static class Permissions
         Spaces.View, Spaces.Post, Spaces.ManageMembership,
         Submissions.GiveFeedback,
         Showcase.Approve,
+        Mentors.ManageOwnProfile, Mentors.Search,
         Moderation.Triage, Moderation.Remove, Moderation.SuspendUser,
         Payments.Waive,
         Reports.RunProvider,

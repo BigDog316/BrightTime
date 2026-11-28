@@ -9,6 +9,8 @@ set search_path = workforce, public;
 create table mentor_profile (
   user_id        uuid primary key references identity.app_user(id) on delete cascade,
   tenant_id      uuid not null references platform.tenant(id) on delete cascade,
+  -- The name organisations' staff find them by (D129).
+  display_name   text,
   headline       text,
   bio            text,
   avatar_media_id uuid references platform.media_object(id),
@@ -27,7 +29,10 @@ create table mentor_profile (
   constraint ck_mentor_hours check (weekly_hours_sought is null or weekly_hours_sought between 1 and 60),
   -- A mentor is only discoverable once active. Clearance currency is
   -- checked by the module against directory.staff_clearance before a match.
-  constraint ck_mentor_searchable check (not is_searchable or status = 'active')
+  constraint ck_mentor_searchable check (not is_searchable or status = 'active'),
+  constraint ck_mentor_named check (not is_searchable or display_name is not null),
+  constraint ck_mentor_text check ((display_name is null or length(btrim(display_name)) between 1 and 80)
+    and (headline is null or length(headline) <= 120) and (bio is null or length(bio) <= 2000))
 );
 create index ix_mentor_skills on mentor_profile using gin (skill_term_ids) where is_searchable;
 create index ix_mentor_hood on mentor_profile (tenant_id, home_neighbourhood_id) where is_searchable;

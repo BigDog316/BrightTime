@@ -66,6 +66,29 @@ public sealed class ClearanceRules(IFeatureFlags flags, DirectoryDbContext db, I
         return answer;
     }
 
+    public async Task<IReadOnlySet<Guid>> ClearedAsync(IReadOnlyCollection<(Guid Person, Guid Organisation)> people, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+        if (people.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        ClearanceRuleSet rules = await GetAsync(cancellationToken).ConfigureAwait(false);
+        Guid[] users = [.. people.Select(p => p.Person).Distinct()];
+        var held = await db.InTransactionAsync(ct => db.Clearances.AsNoTracking()
+            .Where(c => users.Contains(c.UserId))
+            .Select(c => new { c.UserId, c.OrgId, c.ClearanceKind, c.Status, c.ExpiresOn })
+            .ToListAsync(ct), cancellationToken).ConfigureAwait(false);
+        DateOnly today = clock.TodayIn(tenant.TimeZone);
+        return people
+            .Where(p => StaffClearances.Assess(
+                held.Where(c => c.UserId == p.Person && (c.OrgId == null || c.OrgId == p.Organisation)).Select(c => (c.ClearanceKind, c.Status, c.ExpiresOn)),
+                today, rules.Required).Ready)
+            .Select(p => p.Person)
+            .ToHashSet();
+    }
+
     /// <summary>
     /// How many people working at approved organisations would be refused under
     /// <paramref name="required"/>: what an organiser sees before turning the rules on.

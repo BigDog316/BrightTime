@@ -4134,7 +4134,7 @@ member of staff kept while young people are in it, a muted adult, leaving with t
 archiving; the database refusing one adult), `SpacesApiTests` (the app's side), `RolePermissionTests`,
 and `ConsoleRouteMatrixTests` (a space's page refuses another organisation's owner).
 
-### D121 — Reporting a post, and a post's history (**proposed 2026-11-28**)
+### D121 — Reporting a post, and a post's history (**accepted 2026-11-28**)
 
 D120 left posts out of plan/05's "report anything", and its moderators' decisions on held posts
 out of the history D116 reads back, so M5's "the moderation audit trail reconstructs every

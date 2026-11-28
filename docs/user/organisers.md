@@ -174,8 +174,8 @@ one of the person's messages.
 
 **Moderation** › **The showcase** lists what's on the public showcase now, and what was taken down.
 Organisations propose work and young people say yes to it; you don't propose anything. **Take it
-down** stops it being shown at once, with a reason the organisation's staff see; the young person
-is told only that it was taken down. A take-down is for good.
+down** stops it being shown at once. Say why: the organisation's staff see it, and it's kept in the
+moderation record; the young person is told only that it was taken down. A take-down is for good.
 
 ## Taxonomy
 

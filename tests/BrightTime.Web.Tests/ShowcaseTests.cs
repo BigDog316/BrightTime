@@ -165,6 +165,15 @@ public sealed class ShowcaseTests(ConsoleFixture db)
         await anyone.GetAsync("/showcase");
         Shown(anyone.Html).ShouldNotContain($"Bridge ({suffix})");
 
+        // A moderation decision, in the append-only record with its reason; the county always gives one.
+        (await db.ScalarAsync<string>("select action || '|' || reason from community.moderation_action where target_kind = 'showcase_item' and target_id = @i", ("i", workItem)))
+            .ShouldBe("remove|A classmate's face is in the photo it describes.");
+        await using (AsyncServiceScope scope = YouthEnrolment.As(db, owner))
+        {
+            (await scope.ServiceProvider.GetRequiredService<Showcase>().TakeDownAsync(new UserId(owner), null, projectItem, " ", Ct))
+                .Error!.Code.ShouldBe("showcase.reason_required");
+        }
+
         // She's told it was taken down, not why; staff see why.
         await using (AsyncServiceScope scope = YouthEnrolment.As(db, ama))
         {

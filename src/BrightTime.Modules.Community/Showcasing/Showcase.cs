@@ -118,6 +118,9 @@ public sealed class Showcase(
     /// <summary>The notice's words: the organisation's name, never the work's title or words, which a locked phone would show.</summary>
     public const string RequestTitle = "notify.showcase.proposed";
 
+    /// <summary>A showcase item's kind in <c>moderation_action.target_kind</c> and the audit log.</summary>
+    public const string ShowcaseItemKind = "showcase_item";
+
     public const int MaxCaption = 300;
     public const int MaxReason = 500;
     public const int PageSize = 24;
@@ -259,6 +262,12 @@ public sealed class Showcase(
                 return Result.Failure(Error.Validation("showcase.reason", $"A reason of up to {MaxReason} characters, or none."));
             }
 
+            // The county's take-down is a moderation decision, kept in the append-only record with its reason.
+            if (org is null && why is null)
+            {
+                return Result.Failure(Error.Validation("showcase.reason_required", "Say why it's being taken down."));
+            }
+
             ShowcaseItemRecord? item = await db.ShowcaseItems.FirstOrDefaultAsync(i => i.Id == itemId && (org == null || i.OrgId == org.Value.Value), ct).ConfigureAwait(false);
             if (item is null)
             {
@@ -270,11 +279,27 @@ public sealed class Showcase(
                 return Result.Failure(Error.Conflict("showcase.ended", "This has been taken down already."));
             }
 
-            item.UnpublishedAt = clock.StoredNow();
+            DateTimeOffset now = clock.StoredNow();
+            item.UnpublishedAt = now;
             item.UnpublishedBy = actor.Value;
             item.UnpublishReason = why;
+            if (org is null)
+            {
+                db.ModerationActions.Add(new ModerationActionRecord
+                {
+                    Id = UuidV7.NewId(),
+                    TenantId = item.TenantId,
+                    TargetKind = ShowcaseItemKind,
+                    TargetId = item.Id,
+                    Action = "remove",
+                    ActorUserId = actor.Value,
+                    Reason = why!,
+                    OccurredAt = now,
+                });
+            }
+
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await AuditAsync(TakenDown, "showcase_item", [item.Id], org, ct, ("by", org is null ? "county" : "organisation")).ConfigureAwait(false);
+            await AuditAsync(TakenDown, ShowcaseItemKind, [item.Id], org, ct, ("by", org is null ? "county" : "organisation")).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 

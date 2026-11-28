@@ -73,8 +73,8 @@ else if (_items is { } items)
                             <form method="post" class="reason-form" @formname="@("take-down-" + id)" @onsubmit="() => TakeDownAsync(item.Id)">
                                 <AntiforgeryToken />
                                 <div class="field">
-                                    <label for="reason-@id">@T["provider.showcase.reason"]</label>
-                                    <input id="reason-@id" name="reason" maxlength="@Showcase.MaxReason" dir="auto" />
+                                    <label for="reason-@id">@T["moderation.showcase.reason"]</label>
+                                    <input id="reason-@id" name="reason" maxlength="@Showcase.MaxReason" required dir="auto" />
                                 </div>
                                 <button type="submit" class="secondary-button">@T["provider.showcase.take_down"]</button>
                             </form>

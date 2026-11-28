@@ -4407,6 +4407,23 @@ Schema: `ck_notification_kind` gains `showcase_request`. Rebuild the compose vol
 `ShowcaseTests` (each author told once per piece, with the organisation's name and the link, and
 not the work).
 
+### D127 — The county's showcase take-downs in the moderation record (**proposed 2026-11-28**)
+
+Writing the M5 report found that when the county's organisers or moderators took a showcase item
+down (D124), the decision was in the audit log and on the item, but not in the append-only
+`moderation_action` that every other moderation decision is in, and the reason was optional. Sam
+asked on 2026-11-28 for the M5 report, and for small gaps a criterion exposes to be filled.
+- **A moderation decision:** a county take-down writes a `moderation_action` (`target_kind`
+  `showcase_item`, `remove`, the moderator and their reason), in the same transaction as the item.
+- **A reason, always:** the county's take-down needs one (`showcase.reason_required`). The
+  organisation's staff may still take their own down without one: that's the organisation's
+  choice, not a moderation decision.
+- **Not in this:** showcase items in D116's history page, which reads messages and posts; the
+  showcase's moderation page lists what was taken down, with the reason.
+
+No schema change (`moderation_action.target_kind` is free text). Tests: `ShowcaseTests` (the
+county's take-down in `moderation_action` with its reason; one without a reason refused).
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

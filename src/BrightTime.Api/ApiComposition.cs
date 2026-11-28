@@ -62,6 +62,10 @@ namespace BrightTime.Api;
 public static class ApiComposition
 {
     public const string SignInLimit = "sign-in";
+
+    /// <summary>Reports of public pages, by anyone (D128): a few an hour per address.</summary>
+    public const string PublicReportLimit = "public-reports";
+
     public const string AuthDataSourceKey = "auth";
 
     public static IServiceCollection AddBrightTimeApi(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
@@ -205,6 +209,7 @@ public static class ApiComposition
 
         int publicPerMinute = Math.Max(1, configuration.GetValue("Api:PublicRequestsPerMinute", 300));
         int perMinute = Math.Max(1, configuration.GetValue("Auth:SignInAttemptsPerMinute", 10));
+        int reportsPerHour = Math.Max(1, configuration.GetValue("Moderation:PublicReportsPerHour", 10));
         services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -219,6 +224,9 @@ public static class ApiComposition
             o.AddPolicy(SignInLimit, http => RateLimitPartition.GetFixedWindowLimiter(
                 ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = perMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            o.AddPolicy(PublicReportLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = reportsPerHour, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
         });
 
         return services;

@@ -150,6 +150,7 @@ public static class JobsComposition
         // A critical report (D115), emailed to each of the county's moderators who may decide it,
         // to be taken on within the hour; it names the reason and links to the queue, nothing more.
         services.AddJobHandler<CriticalReportMailHandler>();
+        services.AddJobHandler<CriticalPublicReportHandler>();
 
         return services;
     }

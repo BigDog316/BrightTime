@@ -76,3 +76,17 @@ public sealed record CriticalReportNotice(Guid RecipientUserId, Guid ReportId, s
     [System.Text.Json.Serialization.JsonIgnore]
     public string UniqueKey => $"{JobType}:{RecipientUserId:N}:{ReportId:N}";
 }
+
+/// <summary>
+/// A critical report from someone not signed in (D128). A visitor can't read who the moderators
+/// are (they sit behind the actor guard), so the report books this one job, and the worker emails
+/// each moderator who may decide it: not a member of <paramref name="OrgId"/> (empty for a
+/// portfolio, which is of none).
+/// </summary>
+public sealed record CriticalPublicReport(Guid ReportId, string Reason, Guid OrgId)
+{
+    public const string JobType = "community.critical_public_report";
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string UniqueKey => $"{JobType}:{ReportId:N}";
+}

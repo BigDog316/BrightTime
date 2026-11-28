@@ -1,0 +1,82 @@
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Moderation
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@inject NavigationManager Navigation
+
+@*
+    Reporting what anyone can see (D128): an item on the showcase, or a shown portfolio. Anyone
+    reports, signed in (as themselves) or not (with no reporter recorded); the host limits how often
+    an address does. It goes to the county's moderators, who never see who reported it when nobody
+    was signed in.
+*@
+<details class="report-form" open="@(_problem is not null)">
+    <summary>@Summary</summary>
+    <form method="post" class="reason-form" @formname="@FormName" @onsubmit="ReportAsync">
+        <AntiforgeryToken />
+        @if (_problem is not null)
+        {
+            <p class="notice error" role="alert">@_problem</p>
+        }
+        <div class="field">
+            <label for="@(FormName + "-reason")">@T["public.report.why"]</label>
+            <select id="@(FormName + "-reason")" name="reason" required>
+                @foreach (string reason in ReportReasons.ForMessages)
+                {
+                    <option value="@reason">@T["moderation.report_reason." + reason]</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="@(FormName + "-details")">@T["public.report.details"]</label>
+            <textarea id="@(FormName + "-details")" name="details" rows="2" maxlength="@Reports.MaxDetails" dir="auto"></textarea>
+        </div>
+        <p class="hint">@T["public.report.danger"]</p>
+        <button type="submit">@T["public.report.send"]</button>
+    </form>
+</details>
+
+@code {
+    /// <summary>The form's name, unique on the page.</summary>
+    [Parameter, EditorRequired] public string FormName { get; set; } = "";
+
+    /// <summary>What's reported: <c>showcase_item</c> (with <see cref="TargetId"/>) or <c>portfolio</c> (with <see cref="Slug"/>).</summary>
+    [Parameter, EditorRequired] public string Kind { get; set; } = "";
+
+    [Parameter] public Guid? TargetId { get; set; }
+
+    [Parameter] public string? Slug { get; set; }
+
+    /// <summary>The disclosure's summary, in the page's language.</summary>
+    [Parameter, EditorRequired] public string Summary { get; set; } = "";
+
+    /// <summary>Where to go once it's sent, with <c>?reported=</c> added.</summary>
+    [Parameter, EditorRequired] public string ReturnTo { get; set; } = "";
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string? _problem;
+
+    private async Task ReportAsync()
+    {
+        if (HttpContext?.RequestServices.GetService<Reports>() is not { } reports)
+        {
+            return;
+        }
+
+        UserId? reporter = HttpContext.User.GetUserId() is { } user ? new UserId(user) : null;
+        string reason = HttpContext.Request.Form["reason"].ToString();
+        string? details = HttpContext.Request.Form["details"].ToString() is { Length: > 0 } said ? said : null;
+        Result<ReportReceipt> made = Kind == "portfolio"
+            ? await reports.ReportPortfolioAsync(reporter, Slug, reason, details, HttpContext.RequestAborted)
+            : await reports.ReportShowcaseItemAsync(reporter, TargetId ?? Guid.Empty, reason, details, HttpContext.RequestAborted);
+        if (!made.IsSuccess)
+        {
+            _problem = T.Error(made.Error);
+            return;
+        }
+
+        Navigation.NavigateTo(ReturnTo + "?reported=" + (made.Value.Severity == ReportSeverities.Critical ? "critical" : "yes"));
+    }
+}

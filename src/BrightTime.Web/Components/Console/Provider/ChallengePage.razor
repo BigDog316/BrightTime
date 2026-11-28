@@ -1,6 +1,7 @@
 @page "/provider/orgs/{OrgId:guid}/spaces/{SpaceId:guid}/challenges/{ChallengeId:guid}"
 @using BrightTime.Modules.Community.Contracts
 @using BrightTime.Modules.Community.Groups
+@using BrightTime.Modules.Community.Moderation
 @using BrightTime.Modules.Identity.Authorization
 @using BrightTime.SharedKernel.Ids
 @using BrightTime.SharedKernel.Primitives
@@ -140,7 +141,33 @@ else if (_challenge is { } c)
                                 </ol>
                             }
 
-                            @if (_canReview)
+                            @if (w.State != SubmissionStates.Removed)
+                            {
+                                @* D128: a worry about what a young person wrote reaches the county's moderators. *@
+                                <details class="report-form">
+                                    <summary>@T["provider.challenges.report"]</summary>
+                                    <form method="post" class="reason-form" @formname="@("report-" + id)" @onsubmit="() => ReportAsync(w.Id)">
+                                        <AntiforgeryToken />
+                                        <div class="field">
+                                            <label for="report-reason-@id">@T["provider.spaces.report.why"]</label>
+                                            <select id="report-reason-@id" name="reason" required>
+                                                @foreach (string reason in ReportReasons.ForMessages)
+                                                {
+                                                    <option value="@reason">@T["moderation.report_reason." + reason]</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label for="report-details-@id">@T["provider.spaces.report.details"]</label>
+                                            <textarea id="report-details-@id" name="details" rows="2" maxlength="@Reports.MaxDetails" dir="auto"></textarea>
+                                        </div>
+                                        <p class="hint">@T["provider.spaces.report.danger"]</p>
+                                        <button type="submit">@T["provider.spaces.report.send"]</button>
+                                    </form>
+                                </details>
+                            }
+
+                            @if (_canReview && w.State != SubmissionStates.Removed)
                             {
                                 <form method="post" class="reason-form" @formname="@("feedback-" + id)" @onsubmit="() => FeedbackAsync(w.Id)">
                                     <AntiforgeryToken />
@@ -262,6 +289,13 @@ else if (_challenge is { } c)
 
         Result result = await Get<Challenges>().GiveFeedbackAsync(Actor, SpaceId, ChallengeId, submission, FormValue("comment"), outcome, scores);
         Finish(result, outcome switch { FeedbackOutcomes.Accepted => "accepted", FeedbackOutcomes.NeedsRework => "sent_back", _ => "commented" });
+    }
+
+    private async Task ReportAsync(Guid submission)
+    {
+        string details = FormValue("details");
+        Result<ReportReceipt> made = await Get<Reports>().ReportSubmissionAsync(Actor, Org, submission, FormValue("reason"), string.IsNullOrWhiteSpace(details) ? null : details);
+        Finish(made.IsSuccess ? Result.Success() : Result.Failure(made.Error!), made.IsSuccess && made.Value.Severity == ReportSeverities.Critical ? "reported_critical" : "reported");
     }
 
     private void Finish(Result result, string done)

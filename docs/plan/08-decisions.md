@@ -4424,6 +4424,63 @@ asked on 2026-11-28 for the M5 report, and for small gaps a criterion exposes to
 No schema change (`moderation_action.target_kind` is free text). Tests: `ShowcaseTests` (the
 county's take-down in `moderation_action` with its reason; one without a reason refused).
 
+### D128 — Reporting from anywhere (**proposed 2026-11-28**)
+
+plan/09's "report from anywhere" was built for messages (D115) and posts (D121) only. Sam chose on
+2026-11-28: the rest next; anyone may report a public page, signed in or not, a few times an hour.
+- **What's reported, by whom:**
+  - **an item on the showcase**, by anyone, from the public `/showcase` page or `POST
+    /public/reports`;
+  - **a shown portfolio** (its name, headline, bio and shown projects), by anyone, from its page
+    or `POST /public/reports` by its link name;
+  - **a young person's challenge work**, by the organisation's staff, from the challenge's page in
+    the console.
+
+  Signed in, a report is the reporter's own, once per person while it waits, and never of what
+  they wrote (`POST /reports` also takes `showcase_item`). The reasons and severities are a
+  message's (D115).
+- **Not signed in:** `community.report` sits behind the actor guard, so a visitor's report is filed
+  by a definer function, `community.file_public_report()`. It files the report only if the item or
+  portfolio is shown now, records no reporter, and says whose organisation it's about. The Web host
+  (`POST /showcase` and `/portfolios/*`) and the API (`public-reports`) allow ten an hour per
+  address (`Moderation:PublicReportsPerHour`).
+- **Critical ones:** a visitor can't read who the moderators are either. So a critical report from
+  one books a single job (`community.critical_public_report`), and the worker emails each
+  moderator who may decide it, as D115's emails are.
+- **The queue and the history:** each new kind shows in **Moderation** with what it is and where
+  it is:
+  - the showcase item, with its caption;
+  - the work, with the brief it answered;
+  - the portfolio, of no organisation.
+
+  The reporter is shown as *someone not signed in* or *someone signed in* for a public page. Each
+  item's story is at `/organiser/moderation/history?kind=…&id=…`, and the county's recent
+  decisions include them.
+- **Taking it down:**
+  - **Remove** (or escalate and remove) takes an item off the showcase.
+  - It marks work `removed` (`SubmissionStates.Removed`), which takes no more feedback and is on no
+    showcase.
+  - It has Learning make a portfolio private: Community publishes `PortfolioTakenDown`, a message
+    in Learning's contracts. On the worker, Learning makes the portfolio private, keeps its link
+    name, audits it and tells its owner, who can change it and show it again (screened again,
+    D118).
+
+  Each removal is a `moderation_action` and is audited (`reports.showcase_item_removed`,
+  `reports.submission_removed`, `reports.portfolio_removed`).
+- **Not in this:**
+  - reporting a project apart from its portfolio, or a person's profile;
+  - reporting from the app (its public pages open the website);
+  - the young person hearing that their work was removed, or a reporter hearing the outcome;
+  - CAPTCHA, for which the rate limit stands in.
+
+Schema: `ck_report_target` gains `showcase_item` and `portfolio`; `community.file_public_report()`.
+Rebuild the compose volume. Tests:
+- `ReportAnywhereTests`: an anonymous report from the showcase and from a portfolio, a critical one
+  booking the fan-out, a signed-in report once, the author and what isn't shown refused, the
+  history by role, removing the item, escalating and removing the portfolio with Learning's
+  handler run twice, staff reporting work, escalating and removing it, and the recent decisions;
+- `ShowcaseApiTests`: the public API and its rate limit.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

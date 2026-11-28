@@ -192,6 +192,46 @@ grant select on community.showcase_item, community.submission, identity.youth_ca
 revoke all on function community.public_showcase(uuid, timestamptz, int) from public;
 grant execute on function community.public_showcase(uuid, timestamptz, int) to brighttime_app;
 
+-- A report from someone who isn't signed in (D128), of what anyone can see: an item on the public
+-- showcase, or a shown portfolio. Reports sit behind the actor guard, so a visitor files one
+-- through this, which checks the target is shown in the tenant now and files the report open, with
+-- no reporter. The reason and severity are the application's to check; the constraints hold them
+-- too. Returns the organisation it's about (the nil uuid for a portfolio, which is of none), or null
+-- when nothing was filed. As the migrator (BYPASSRLS).
+create or replace function community.file_public_report(
+  p_tenant uuid, p_id uuid, p_kind text, p_target uuid, p_reason text, p_details text, p_severity text)
+returns uuid
+language plpgsql volatile security definer set search_path = pg_catalog, community as $fn$
+declare
+  v_org uuid;
+begin
+  if p_kind = 'showcase_item' then
+    select s.org_id into v_org from community.showcase_item s
+     where s.id = p_target and s.tenant_id = p_tenant
+       and s.published_at is not null and s.unpublished_at is null;
+  elsif p_kind = 'portfolio' then
+    if exists (select 1 from learning.learner_profile lp
+                where lp.user_id = p_target and lp.tenant_id = p_tenant
+                  and lp.visibility in ('link_only', 'public')) then
+      v_org := '00000000-0000-0000-0000-000000000000';
+    end if;
+  end if;
+
+  if v_org is null then
+    return null;
+  end if;
+
+  insert into community.report (id, tenant_id, target_kind, target_id, reporter_user_id, reporter_is_minor,
+                                reason_code, details, severity, state)
+  values (p_id, p_tenant, p_kind, p_target, null, false, p_reason, p_details, p_severity, 'open');
+  return v_org;
+end
+$fn$;
+alter function community.file_public_report(uuid, uuid, text, uuid, text, text, text) owner to brighttime_migrator;
+grant select, insert on community.report to brighttime_migrator;
+revoke all on function community.file_public_report(uuid, uuid, text, uuid, text, text, text) from public;
+grant execute on function community.file_public_report(uuid, uuid, text, uuid, text, text, text) to brighttime_app;
+
 -- platform.data_protection_key: the hosts' shared key ring, encrypted at rest,
 -- no tenant data. The hosts read and add keys; nothing updates or deletes one.
 alter table platform.data_protection_key enable row level security;

@@ -36,11 +36,18 @@ else if (!Availability.IsAvailable)
 else if (_history is { } h)
 {
     <section aria-labelledby="message-heading">
-        <h2 id="message-heading">@T[IsAPost ? "moderation.history.post" : "moderation.history.message"]</h2>
+        <h2 id="message-heading">@T[IsAPost ? "moderation.history.post" : h.Kind == "message" ? "moderation.history.message" : "moderation.reports.target." + h.Kind]</h2>
         <dl class="facts">
             <dt>@T["moderation.reports.organisation"]</dt>
-            <dd><bdi>@h.OrgName</bdi></dd>
-            @if (IsAPost)
+            <dd>@if (h.OrgName.Length > 0) { <bdi>@h.OrgName</bdi> } else { @T["moderation.reports.no_organisation"] }</dd>
+            @if (h.Kind is not ("post" or "message"))
+            {
+                <dt>@T["moderation.reports.where." + h.Kind]</dt>
+                <dd dir="auto">@h.Where</dd>
+                <dt>@T["moderation.posts.author"]</dt>
+                <dd>@Role(h.AuthorRole)</dd>
+            }
+            else if (IsAPost)
             {
                 <dt>@T["moderation.posts.space"]</dt>
                 <dd dir="auto">@h.Where</dd>
@@ -172,7 +179,7 @@ else
                         @foreach (RecentDecision d in _recent)
                         {
                             <tr>
-                                <td><a href="@($"/organiser/moderation/history?{(d.TargetKind == "post" ? "post" : "message")}={d.TargetId:D}")">@T.DateTime(d.At)</a></td>
+                                <td><a href="@HistoryOf(d.TargetKind, d.TargetId)">@T.DateTime(d.At)</a></td>
                                 <td>@Action(d.Action)</td>
                                 <td>@d.Moderator</td>
                                 <td><bdi>@d.OrgName</bdi></td>
@@ -190,6 +197,11 @@ else
     [SupplyParameterFromQuery(Name = "message")] public Guid? MessageId { get; set; }
 
     [SupplyParameterFromQuery(Name = "post")] public Guid? PostId { get; set; }
+
+    /// <summary>Anything else moderation reads (D128): <c>showcase_item</c>, <c>submission</c> or <c>portfolio</c>, with <see cref="ItemId"/>.</summary>
+    [SupplyParameterFromQuery(Name = "kind")] public string? Kind { get; set; }
+
+    [SupplyParameterFromQuery(Name = "id")] public Guid? ItemId { get; set; }
 
     [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
 
@@ -221,6 +233,10 @@ else
         {
             found = await history.ForMessageAsync(Actor, message);
         }
+        else if (Kind is { Length: > 0 } kind && ItemId is { } item)
+        {
+            found = await history.ForItemAsync(Actor, kind, item);
+        }
         else
         {
             _recent = await history.RecentAsync(Actor);
@@ -243,6 +259,13 @@ else
         HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
         _problem = T.Error(found.Error);
     }
+
+    private static string HistoryOf(string kind, Guid id) => kind switch
+    {
+        "post" => $"/organiser/moderation/history?post={id:D}",
+        "message" => $"/organiser/moderation/history?message={id:D}",
+        _ => $"/organiser/moderation/history?kind={Uri.EscapeDataString(kind)}&id={id:D}",
+    };
 
     private async Task RestrictAsync()
     {
@@ -302,7 +325,9 @@ else
     private string Action(string action) => T.Has("moderation.history.action." + action) ? T["moderation.history.action." + action] : action;
 
     /// <summary>A participant's role in a conversation, or a member's in a space (D121: youth or staff, the same words).</summary>
-    private string Role(string role) => T.Has("provider.messages.role." + role) ? T["provider.messages.role." + role] : role;
+    private string Role(string role) =>
+        T.Has("moderation.reports.role." + role) ? T["moderation.reports.role." + role]
+        : T.Has("provider.messages.role." + role) ? T["provider.messages.role." + role] : role;
 
     private string Reason(string reason) => T.Has("moderation.reason." + reason) ? T["moderation.reason." + reason] : reason;
 }

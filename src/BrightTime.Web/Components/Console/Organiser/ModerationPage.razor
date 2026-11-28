@@ -55,6 +55,7 @@ else
                     string id = r.Id.ToString("N");
                     bool invalid = _noteErrors.ContainsKey(r.Id);
                     bool post = r.TargetKind == "post";
+                    bool message = r.TargetKind == "message";
                     <li class="report report-@r.Severity">
                         <article aria-labelledby="report-@id">
                             <h3 id="report-@id">@T["moderation.report_reason." + r.Reason] <span class="severity">@T["moderation.severity." + r.Severity]</span></h3>
@@ -64,17 +65,25 @@ else
                             }
                             <dl class="facts">
                                 <dt>@T["moderation.reports.reported"]</dt>
-                                <dd>@T.Format("moderation.reports.reported_by", ("role", post ? SpaceRole(r.ReporterRole) : Role(r.ReporterRole)), ("date", T.DateTime(r.ReportedAt)))</dd>
+                                <dd>@T.Format("moderation.reports.reported_by", ("role", Reporter(r.TargetKind, r.ReporterRole)), ("date", T.DateTime(r.ReportedAt)))</dd>
                                 @if (r.Details is { Length: > 0 } said)
                                 {
                                     <dt>@T["moderation.reports.details"]</dt>
                                     <dd dir="auto">@said</dd>
                                 }
                                 <dt>@T["moderation.reports.organisation"]</dt>
-                                <dd><bdi>@r.OrgName</bdi></dd>
+                                <dd>@if (r.OrgName.Length > 0) { <bdi>@r.OrgName</bdi> } else { @T["moderation.reports.no_organisation"] }</dd>
                                 @if (post)
                                 {
                                     <dt>@T["moderation.posts.space"]</dt>
+                                    <dd dir="auto">@r.Where</dd>
+                                    <dt>@T["moderation.posts.author"]</dt>
+                                    <dd>@SpaceRole(r.AuthorRole) · @T.DateTime(r.WrittenAt)</dd>
+                                }
+                                else if (!message)
+                                {
+                                    @* D128: a showcase item, a piece of challenge work, or a portfolio. *@
+                                    <dt>@T["moderation.reports.where." + r.TargetKind]</dt>
                                     <dd dir="auto">@r.Where</dd>
                                     <dt>@T["moderation.posts.author"]</dt>
                                     <dd>@SpaceRole(r.AuthorRole) · @T.DateTime(r.WrittenAt)</dd>
@@ -97,16 +106,25 @@ else
                             {
                                 @Answering(r.Earlier.FirstOrDefault())
                             }
-                            else
+                            else if (message)
                             {
                                 @Earlier(r.Earlier)
                             }
+                            else if (r.Earlier.FirstOrDefault() is { } brief)
+                            {
+                                <h4>@T["moderation.reports.brief"]</h4>
+                                <blockquote class="held-body" dir="auto">@brief.Body</blockquote>
+                            }
 
-                            <h4>@T[post ? "moderation.reports.post" : "moderation.reports.message"]</h4>
+                            <h4>@T[post ? "moderation.reports.post" : message ? "moderation.reports.message" : "moderation.reports.target." + r.TargetKind]</h4>
                             <blockquote class="held-body" dir="auto">@r.Body</blockquote>
                             @if (r.TargetState is "removed" or "deleted_by_author")
                             {
-                                <p class="note">@T[post ? "moderation.reports.post_already_removed" : "moderation.reports.already_removed"]</p>
+                                <p class="note">@T[post ? "moderation.reports.post_already_removed" : message ? "moderation.reports.already_removed" : "moderation.reports.target_down"]</p>
+                            }
+                            else if (!post && !message && r.TargetState is "taken_down" or "private")
+                            {
+                                <p class="note">@T["moderation.reports.target_down"]</p>
                             }
                             <p><a href="@HistoryOf(r.TargetKind, r.TargetId)">@T["moderation.history.link"]</a></p>
 
@@ -135,11 +153,11 @@ else
                                         }
                                     </div>
                                     <p class="hint">@T["moderation.reports.escalate_hint"]</p>
-                                    <label class="check"><input type="checkbox" name="remove_too" value="true" /> @T[post ? "moderation.reports.remove_post_too" : "moderation.reports.remove_too"]</label>
+                                    <label class="check"><input type="checkbox" name="remove_too" value="true" /> @T[post ? "moderation.reports.remove_post_too" : message ? "moderation.reports.remove_too" : "moderation.reports.remove_too." + r.TargetKind]</label>
                                     <div class="actions">
                                         @if (CanRemove)
                                         {
-                                            <button type="submit" name="decision" value="remove">@T[post ? "moderation.reports.remove_post" : "moderation.reports.remove"]</button>
+                                            <button type="submit" name="decision" value="remove">@T[post ? "moderation.reports.remove_post" : message ? "moderation.reports.remove" : "moderation.reports.remove." + r.TargetKind]</button>
                                         }
                                         <button type="submit" name="decision" value="dismiss" class="secondary-button">@T["moderation.reports.dismiss"]</button>
                                         <button type="submit" name="decision" value="escalate" class="secondary-button">@T["moderation.reports.escalate"]</button>
@@ -487,7 +505,18 @@ else
         }
     }
 
-    private static string HistoryOf(string kind, Guid id) => $"/organiser/moderation/history?{(kind == "post" ? "post" : "message")}={id:D}";
+    private static string HistoryOf(string kind, Guid id) => kind switch
+    {
+        "post" => $"/organiser/moderation/history?post={id:D}",
+        "message" => $"/organiser/moderation/history?message={id:D}",
+        _ => $"/organiser/moderation/history?kind={Uri.EscapeDataString(kind)}&id={id:D}",
+    };
+
+    /// <summary>The reporter, by role: in a space or conversation, or, for a public page (D128), someone signed in or not.</summary>
+    private string Reporter(string kind, string role) =>
+        T.Has("moderation.reports.role." + role) ? T["moderation.reports.role." + role]
+        : kind is "post" or "submission" ? SpaceRole(role)
+        : Role(role);
 
     /// <summary>The post a reply answers, for context, by role.</summary>
     private RenderFragment Answering(EarlierMessage? answering) => __builder =>

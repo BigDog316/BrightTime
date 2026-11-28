@@ -417,7 +417,8 @@ create table report (
   escalation_note text,
   created_at    timestamptz not null default now(),
   constraint ck_report_target check (target_kind in
-    ('post','message','submission','project','user','space','listing','asset_photo')),
+    ('post','message','submission','project','user','space','listing','asset_photo',
+     'showcase_item','portfolio')),
   constraint ck_report_reason check (reason_code in
     ('harassment','sexual_content','grooming_concern','self_harm','violence','hate_speech',
      'personal_information','spam','off_topic','copyright','safety_other','inaccurate_listing')),

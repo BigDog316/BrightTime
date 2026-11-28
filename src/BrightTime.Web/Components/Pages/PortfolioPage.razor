@@ -109,11 +109,19 @@
         }
 
         <p class="note">@T["portfolio.page.note"]</p>
+
+        @if (Reported is "yes" or "critical")
+        {
+            <p class="notice success" role="status">@T[Reported == "critical" ? "public.report.done_critical" : "public.report.done"]</p>
+        }
+        <PublicReport FormName="report" Kind="portfolio" Slug="@Slug" Summary="@T["public.report.page"]" ReturnTo="@("/portfolios/" + Uri.EscapeDataString(Slug))" />
     </article>
 }
 
 @code {
     [Parameter] public string Slug { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "reported")] public string? Reported { get; set; }
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 

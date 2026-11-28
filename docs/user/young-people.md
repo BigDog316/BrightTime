@@ -189,6 +189,8 @@ and you'll find their requests in **Portfolio** › **Showcase**. Turn the notic
   to have agreed to the showcase.
 - **Take it down** whenever you like. Staff or the county can take it down too; you'll see that it
   was. If you change a project after it's shown, it leaves the showcase.
+- Anyone can report something on the showcase or a shown portfolio to the county's moderators. If
+  a moderator makes your portfolio private, you're told; you can change it and show it again.
 
 **Your goals** are your own aims, like *lead a river walk*. Nobody else sees them, and they're
 never on your portfolio page.

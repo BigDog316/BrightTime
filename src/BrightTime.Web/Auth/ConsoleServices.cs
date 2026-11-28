@@ -174,6 +174,10 @@ public static class ConsoleServices
         // per-account lockout, so guessing across many accounts is slowed too. The address is
         // the real client's behind a trusted proxy; see ClientNetwork.
         int perMinute = Math.Max(1, auth.SignInAttemptsPerMinute);
+
+        // D128: a report from a public page (the showcase, a shown portfolio) is open to anyone, so
+        // it's limited per address too, over an hour.
+        int reportsPerHour = Math.Max(1, configuration.GetValue("Moderation:PublicReportsPerHour", 10));
         services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -201,11 +205,16 @@ public static class ConsoleServices
                 }
             };
             o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
-                HttpMethods.IsPost(http.Request.Method) && IsAuthenticationPath(http.Request.Path)
+                !HttpMethods.IsPost(http.Request.Method) ? RateLimitPartition.GetNoLimiter("unlimited")
+                : IsAuthenticationPath(http.Request.Path)
                     ? RateLimitPartition.GetFixedWindowLimiter(
                         ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
                         _ => new FixedWindowRateLimiterOptions { PermitLimit = perMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })
-                    : RateLimitPartition.GetNoLimiter("unlimited"));
+                : IsPublicReportPath(http.Request.Path)
+                    ? RateLimitPartition.GetFixedWindowLimiter(
+                        "report:" + ClientNetwork.PartitionKey(http.Connection.RemoteIpAddress),
+                        _ => new FixedWindowRateLimiterOptions { PermitLimit = reportsPerHour, Window = TimeSpan.FromHours(1), QueueLimit = 0 })
+                : RateLimitPartition.GetNoLimiter("unlimited"));
         });
 
         if (hasDatabase)
@@ -306,6 +315,10 @@ public static class ConsoleServices
 
     private static bool IsAuthenticationPath(PathString path) =>
         AuthenticationPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The public pages whose only form is a report (D128).</summary>
+    private static bool IsPublicReportPath(PathString path) =>
+        path.Equals("/showcase", StringComparison.OrdinalIgnoreCase) || path.StartsWithSegments("/portfolios", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<bool> IsValidPostAsync(HttpContext http, IAntiforgery antiforgery)
     {

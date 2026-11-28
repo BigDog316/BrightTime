@@ -66,6 +66,9 @@ public static class SubmissionStates
     /// <summary>Staff have sent it back: its author changes it and sends it again.</summary>
     public const string NeedsRework = "needs_rework";
 
+    /// <summary>A moderator removed it, after a report (D128): it's on no showcase, and its author can't change it.</summary>
+    public const string Removed = "removed";
+
     /// <summary>The states its author may change it in.</summary>
     public static bool Editable(string state) => state is Draft or NeedsRework;
 }

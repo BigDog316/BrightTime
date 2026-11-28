@@ -297,6 +297,7 @@ public static class LearningModule
         services.AddScoped<Records.Skills>();
         services.AddScoped<Records.Projects>();
         services.AddScoped<IShowcaseWork, Records.ShowcaseWork>();
+        services.AddScoped<IPortfolioModeration, PortfolioModeration>();
         services.AddScoped<Infrastructure.Auditing.IAuditSubjects, LearningAuditSubjects>();
         services.AddAchievementQueries();
         return services;
@@ -328,6 +329,7 @@ public static class LearningModule
         services.AddMessageHandler<EnrolmentAccountChanged, EnrolmentAccountChangedHandler>();
         services.AddScoped<PortfolioNameCheck>();
         services.AddMessageHandler<FamilyNamesChanged, FamilyNamesChangedHandler>();
+        services.AddMessageHandler<PortfolioTakenDown, PortfolioTakenDownHandler>();
         return services;
     }
 }

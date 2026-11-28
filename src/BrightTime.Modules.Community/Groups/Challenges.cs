@@ -356,7 +356,8 @@ public sealed class Challenges(
                 return Result.Failure(refused);
             }
 
-            if (await db.Submissions.FirstOrDefaultAsync(s => s.Id == submissionId && s.ChallengeId == challengeId && s.State != SubmissionStates.Draft, ct).ConfigureAwait(false) is not { } work)
+            if (await db.Submissions.FirstOrDefaultAsync(s => s.Id == submissionId && s.ChallengeId == challengeId
+                    && s.State != SubmissionStates.Draft && s.State != SubmissionStates.Removed, ct).ConfigureAwait(false) is not { } work)
             {
                 return Result.Failure(Error.NotFound("challenges.submission_not_found", "There's no work like that sent for this challenge."));
             }

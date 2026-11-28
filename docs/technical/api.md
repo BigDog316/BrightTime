@@ -187,6 +187,8 @@ The owner alone reads or changes a family profile.
 |---|---|
 | `GET /conversations`, `GET /conversations/{id}` | The person's conversations, each with its organisation's name (`orgName`, D75); reading one marks it read |
 | `POST /conversations/{id}/messages` | Reply. A message from an adult to a minor may be held for a moderator |
+| `POST /reports` | `{ targetKind, targetId, reason, details }`: a `message` or a `post` the person can see and didn't write (D115, D121), or a `showcase_item` (D128) |
+| `POST /public/reports` | Anonymous, ten an hour per address: `{ targetKind: "showcase_item", targetId }` or `{ targetKind: "portfolio", slug }`, with a reason (D128). No reporter is kept when nobody's signed in |
 | `POST /devices`, `DELETE /devices/{id}` | Register a phone for push, and forget it |
 
 ## Learning: portfolio, badges and playlists

@@ -33,7 +33,7 @@ material), and work that waits for M6 (mentors). The sections below give the det
 | Screening: abuse classification | **Not built**: Q8's hosted classifier is open |
 | Hold, redact, block | Hold and refuse are built. **Redaction isn't**: a moderator releases or removes |
 | Screening results recorded | Built (D116, D117; D118 in the audit log) |
-| Report from anywhere | **Partly**: messages (D115) and posts (D121). Not yet projects, challenge work, showcase items or portfolios |
+| Report from anywhere | Built: messages (D115), posts (D121), and, since this report, showcase items and shown portfolios by anyone, signed in or not, and challenge work by staff (D128). Not a project apart from its portfolio, or a profile |
 | Severity queue with a critical lane, triage, actions | Built (D114, D115, D120) |
 | Append-only history | Built (D116, D121, D127) |
 | User suspension | Built for adults (D119), from a message's history |
@@ -170,7 +170,6 @@ with a new `target_kind`, which the table already allowed.
 M5 scope not built, from the table above:
 - abuse classification;
 - redaction;
-- reporting anything but messages and posts;
 - mentor feedback (M6);
 - CSAM detection.
 

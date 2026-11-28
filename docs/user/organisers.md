@@ -91,8 +91,10 @@ and admins, with your note or reason. Write it for them: it's quoted as you type
 
 ## Moderation: reports
 
-**Moderation** starts with what people reported in their conversations and in activities'
-spaces, the most urgent first.
+**Moderation** starts with what people reported, the most urgent first: messages in their
+conversations, posts in activities' spaces, a young person's work an organisation's staff are
+worried about, and, from anyone, signed in or not, an item on the showcase or a shown portfolio.
+A report from someone not signed in says so; who they are isn't known.
 A report of grooming or self-harm is critical, and every moderator is emailed when one comes in:
 take it on within the hour. One that has waited longer is marked so.
 
@@ -100,7 +102,9 @@ Each report shows its reason, who reported it (by role, such as young person) an
 the organisation, the message and the messages just before it, or the post, its space, and the
 post it answers if it's a reply. **Take this on** to make it yours. Then write a note and:
 
-- **Remove the message** (or **Remove the post**) to keep it from everyone but whoever wrote it.
+- **Remove the message** (or **Remove the post**, **Remove the work**, **Take it off the showcase**,
+  **Make the portfolio private**) to keep it from everyone but whoever wrote it. A portfolio made
+  private is its owner's to change and show again.
   Every other report of the same message or post is settled with it. A removed post's replies
   stay, under a line saying a moderator removed it; each can be reported on its own.
 - **Dismiss the report** when there's nothing to do. The message or post stays.

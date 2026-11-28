@@ -351,6 +351,9 @@ read them.
   for another go**, or **Just comment**; they see it from your organisation's staff. **Close the
   challenge** to stop new work; you can still give feedback. What you write where young people
   read is checked for ways to talk off BrightTime, and refused with why.
+- If something a young person sent worries you, **Report this work to the county's moderators**
+  under it. A report of self-harm or grooming reaches them at once; follow your organisation's
+  safeguarding procedure too. Work a moderator removes says so, and takes no more feedback.
 - **Rubrics:** owners and admins write them on the **Rubrics** page: a name, a top score (2 to 10),
   and up to 8 criteria, each with what a top score looks like and a weight if you like (a weight
   of 2 counts twice). Choose one when you **Set a challenge**; its young people see the criteria.

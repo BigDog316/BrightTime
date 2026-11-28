@@ -18,6 +18,11 @@
         <p class="lead">@T["showcase.page.intro"]</p>
     </header>
 
+    @if (Reported is "yes" or "critical")
+    {
+        <p class="notice success" role="status">@T[Reported == "critical" ? "public.report.done_critical" : "public.report.done"]</p>
+    }
+
     @if (_items is { Count: 0 })
     {
         <p>@T[Before is null ? "showcase.page.none" : "showcase.page.no_more"]</p>
@@ -37,6 +42,7 @@
                     {
                         <p class="note">@T.Format("showcase.page.caption", ("org", w.OrgName)) <span dir="auto">@caption</span></p>
                     }
+                    <PublicReport FormName="@("report-" + w.Id.ToString("N"))" Kind="showcase_item" TargetId="w.Id" Summary="@T["public.report.item"]" ReturnTo="/showcase" />
                 </li>
             }
         </ul>
@@ -51,6 +57,8 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "before")] public string? Before { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reported")] public string? Reported { get; set; }
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 

@@ -89,10 +89,14 @@ public sealed record RecentDecision(DateTimeOffset At, string Action, string Mod
 /// </remarks>
 public sealed class ModerationHistory(
     CommunityDbContext db,
+    Infrastructure.Tenancy.ITenantContext tenant,
     AuditTrail audit,
     IIdentityQueries identity,
-    IDirectoryQueries directory)
+    IDirectoryQueries directory,
+    Learning.Contracts.IPortfolioModeration? portfolios = null)
 {
+    private readonly ReportTargets _targets = new(db, tenant, portfolios);
+
     public const string Read = "moderation.history_read";
 
     public const int RecentCount = 50;
@@ -105,19 +109,31 @@ public sealed class ModerationHistory(
     public Task<Result<ItemHistory>> ForPostAsync(UserId moderator, Guid postId, CancellationToken cancellationToken = default) =>
         ForAsync(moderator, ReportTargets.Post, postId, cancellationToken);
 
+    /// <summary>
+    /// The story of anything moderation reads (D128): a showcase item, a piece of challenge work or
+    /// a portfolio, as well as a message or a post.
+    /// </summary>
+    public Task<Result<ItemHistory>> ForItemAsync(UserId moderator, string? kind, Guid id, CancellationToken cancellationToken = default) =>
+        kind is ReportTargets.Message or ReportTargets.Post or ReportTargets.ShowcaseItem or ReportTargets.Submission or ReportTargets.Portfolio
+            ? ForAsync(moderator, kind, id, cancellationToken)
+            : Task.FromResult(Result<ItemHistory>.Failure(Error.NotFound("moderation.no_item", "There's nothing like that.")));
+
     private Task<Result<ItemHistory>> ForAsync(UserId moderator, string kind, Guid id, CancellationToken cancellationToken) =>
         db.InTransactionAsync(async ct =>
         {
-            if (await ReportTargets.FindAsync(db, kind, id, ct).ConfigureAwait(false) is not { } item)
+            if (await _targets.FindAsync(kind, id, ct).ConfigureAwait(false) is not { } item)
             {
-                return Result<ItemHistory>.Failure(kind == ReportTargets.Post
-                    ? Error.NotFound("moderation.no_post", "There's no post like that.")
-                    : Error.NotFound("moderation.no_message", "There's no message like that."));
+                return Result<ItemHistory>.Failure(kind switch
+                {
+                    ReportTargets.Post => Error.NotFound("moderation.no_post", "There's no post like that."),
+                    ReportTargets.Message => Error.NotFound("moderation.no_message", "There's no message like that."),
+                    _ => Error.NotFound("moderation.no_item", "There's nothing like that."),
+                });
             }
 
             OrganisationId org = new(item.OrgId);
             if (item.AuthorUserId == moderator.Value
-                || (await directory.GetOrganisationMembersAsync(org, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator))
+                || (item.OrgId != Guid.Empty && (await directory.GetOrganisationMembersAsync(org, ct).ConfigureAwait(false)).Any(m => m.UserId == moderator)))
             {
                 return Result<ItemHistory>.Failure(Error.Forbidden("moderation.own_organisation",
                     "You're a member of the organisation that wrote this, so another moderator decides it."));
@@ -150,7 +166,7 @@ public sealed class ModerationHistory(
 
             foreach (ReportRecord r in reports)
             {
-                events.Add(new HistoryEvent(r.CreatedAt, HistoryKinds.Reported, item.RoleOf(r.ReporterUserId), r.Details, [r.ReasonCode, r.Severity], r.Id));
+                events.Add(new HistoryEvent(r.CreatedAt, HistoryKinds.Reported, item.ReporterRole(r.ReporterUserId), r.Details, [r.ReasonCode, r.Severity], r.Id));
                 bool decidedThen = actions.Any(a => a.ReportId == r.Id && a.OccurredAt == r.AcknowledgedAt && a.ActorUserId == r.AssignedTo);
                 if (r.AcknowledgedAt is { } taken && !decidedThen)
                 {
@@ -183,7 +199,7 @@ public sealed class ModerationHistory(
             return Result<ItemHistory>.Success(new ItemHistory(
                 kind,
                 item.Id,
-                await directory.GetOrganisationNameAsync(org, ct).ConfigureAwait(false) ?? "",
+                item.OrgId == Guid.Empty ? "" : await directory.GetOrganisationNameAsync(org, ct).ConfigureAwait(false) ?? "",
                 item.Where,
                 item.AuthorRole,
                 item.Body,
@@ -201,7 +217,8 @@ public sealed class ModerationHistory(
         db.InTransactionAsync<IReadOnlyList<RecentDecision>>(async ct =>
         {
             List<ModerationActionRecord> actions = await db.ModerationActions.AsNoTracking()
-                .Where(a => a.TargetKind == ReportTargets.Message || a.TargetKind == ReportTargets.Post)
+                .Where(a => a.TargetKind == ReportTargets.Message || a.TargetKind == ReportTargets.Post || a.TargetKind == ReportTargets.ShowcaseItem
+                            || a.TargetKind == ReportTargets.Submission || a.TargetKind == ReportTargets.Portfolio)
                 .OrderByDescending(a => a.OccurredAt).ThenByDescending(a => a.Id)
                 .Take(RecentCount * 2).ToListAsync(ct).ConfigureAwait(false);
             List<Guid> messageIds = [.. actions.Where(a => a.TargetKind == ReportTargets.Message).Select(a => a.TargetId).Distinct()];
@@ -223,6 +240,15 @@ public sealed class ModerationHistory(
                 whose[(ReportTargets.Post, p.Id)] = (p.OrgId, p.AuthorUserId);
             }
 
+            // The rest (D128), each read the one way.
+            foreach (var other in actions.Where(a => a.TargetKind is not (ReportTargets.Message or ReportTargets.Post)).Select(a => (a.TargetKind, a.TargetId)).Distinct())
+            {
+                if (await _targets.FindAsync(other.TargetKind, other.TargetId, ct).ConfigureAwait(false) is { } found)
+                {
+                    whose[other] = (found.OrgId, found.AuthorUserId);
+                }
+            }
+
             Dictionary<Guid, (string Name, bool Mine)> orgs = [];
             List<(ModerationActionRecord Action, string Org)> kept = [];
             foreach (ModerationActionRecord a in actions)
@@ -230,6 +256,11 @@ public sealed class ModerationHistory(
                 if (kept.Count == RecentCount || !whose.TryGetValue((a.TargetKind, a.TargetId), out (Guid Org, Guid Author) of))
                 {
                     continue;
+                }
+
+                if (of.Org == Guid.Empty)
+                {
+                    orgs[of.Org] = ("", false);
                 }
 
                 if (!orgs.TryGetValue(of.Org, out (string Name, bool Mine) org))
@@ -256,6 +287,11 @@ public sealed class ModerationHistory(
             if (posts.Count > 0)
             {
                 await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = ReportTargets.Post, SubjectIds = posts }, ct).ConfigureAwait(false);
+            }
+
+            foreach (IGrouping<string, RecentDecision> others in list.Where(d => d.TargetKind is not (ReportTargets.Message or ReportTargets.Post)).GroupBy(d => d.TargetKind))
+            {
+                await audit.RecordInTransactionAsync(db, new AuditAccess { Action = Read, SubjectKind = others.Key, SubjectIds = [.. others.Select(d => d.TargetId).Distinct()] }, ct).ConfigureAwait(false);
             }
 
             return list;

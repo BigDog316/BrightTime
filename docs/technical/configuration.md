@@ -100,6 +100,7 @@ Generate a symmetric key with `openssl rand -base64 32`, and an RSA key with
 |---|:-:|:-:|:-:|---|---|
 | `Media:Clamd:Host` | ● | ● | ● | | **Required outside Development** (D123): the clamd every upload is virus-scanned by before it's kept; the worker scans pictures kept before. Without it the host doesn't start. In Development without it, a test pattern stands in, finding only the EICAR test file |
 | `Media:Clamd:Port`, `:TimeoutSeconds` | ● | ● | ● | `3310`, `30` | A scan that takes longer, or can't connect, refuses the upload as unchecked |
+| `Moderation:PublicReportsPerHour` | ● | ● | | `10` | Reports of the showcase and shown portfolios from one address, signed in or not (D128) |
 
 ## The finder
 

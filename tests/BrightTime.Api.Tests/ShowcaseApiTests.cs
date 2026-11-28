@@ -152,4 +152,46 @@ public sealed class ShowcaseApiTests(ApiFixture api)
         await ProblemAsync(await mine.PostAsync(Relative($"api/v1/me/showcase/{item}/take-down"), null, Ct), HttpStatusCode.Conflict, "showcase.ended");
         (await api.ScalarAsync<long>("select count(*) from platform.audit_event where action = 'showcase.public_read' and @i = any(subject_ids)", ("i", item))).ShouldBeGreaterThan(0);
     }
+
+    [Fact]
+    public async Task Anyone_reports_a_showcase_item_or_a_shown_portfolio_a_few_times_an_hour()
+    {
+        RequireDatabase();
+        (string email, Guid teen) = await NewTeenAsync();
+        string title = $"A boat ({Guid.NewGuid():N})";
+        Guid item = await ProposedAsync(teen, title);
+        await api.ExecuteAsync("update community.showcase_item set display_name = 'Kit', published_at = now() where id = @i", ("i", item));
+        string slug = "kit-" + ApiFixture.Letters();
+        await api.ExecuteAsync(
+            "insert into learning.learner_profile (user_id, tenant_id, display_name, visibility, public_slug) values (@u, @t, 'Kit', 'public', @s)",
+            ("u", teen), ("t", api.Data.TenantId), ("s", slug));
+        using HttpClient anonymous = api.Client();
+
+        // Not signed in: no reporter kept.
+        JsonElement made = await JsonAsync(await anonymous.PostAsJsonAsync("api/v1/public/reports",
+            new { targetKind = "showcase_item", targetId = item, reason = "hate_speech", details = "A slur in the caption." }, Ct), HttpStatusCode.Created);
+        made.GetProperty("severity").GetString().ShouldBe("high");
+        (await api.ScalarAsync<bool>("select reporter_user_id is null from community.report where id = @r", ("r", made.GetProperty("id").GetGuid()))).ShouldBeTrue();
+        (await JsonAsync(await anonymous.PostAsJsonAsync("api/v1/public/reports", new { targetKind = "portfolio", slug, reason = "spam" }, Ct), HttpStatusCode.Created))
+            .GetProperty("reason").GetString().ShouldBe("spam");
+        await ProblemAsync(await anonymous.PostAsJsonAsync("api/v1/public/reports", new { targetKind = "portfolio", slug = "nobody-here", reason = "spam" }, Ct),
+            HttpStatusCode.NotFound, "portfolio.not_shown");
+        await ProblemAsync(await anonymous.PostAsJsonAsync("api/v1/public/reports", new { targetKind = "message", targetId = Guid.NewGuid(), reason = "spam" }, Ct),
+            HttpStatusCode.BadRequest, "reports.target");
+
+        // Signed in, through /reports as well, as themselves; never of their own.
+        using HttpClient author = await SignedInAsync(email);
+        await ProblemAsync(await author.PostAsJsonAsync("api/v1/reports", new { targetKind = "showcase_item", targetId = item, reason = "spam" }, Ct),
+            HttpStatusCode.NotFound, "showcase.not_shown");
+
+        // A few an hour from one address (ten by default), then refused.
+        HttpStatusCode last = HttpStatusCode.OK;
+        for (int i = 0; i < 12 && last != HttpStatusCode.TooManyRequests; i++)
+        {
+            using HttpResponseMessage response = await anonymous.PostAsJsonAsync("api/v1/public/reports", new { targetKind = "nothing", reason = "spam" }, Ct);
+            last = response.StatusCode;
+        }
+
+        last.ShouldBe(HttpStatusCode.TooManyRequests);
+    }
 }

@@ -16,8 +16,14 @@ public sealed record MessageRequest(string? Body);
 
 public sealed record BroadcastRequest(Guid ListingId, string? Subject, string? Body);
 
-/// <summary>A report (D115, D121): of a <c>message</c> or a <c>post</c>, with one of its reasons and what happened, if the reporter says.</summary>
+/// <summary>A report (D115, D121, D128): of a <c>message</c>, a <c>post</c> or a <c>showcase_item</c>, with one of its reasons and what happened, if the reporter says.</summary>
 public sealed record ReportRequest(string? TargetKind, Guid TargetId, string? Reason, string? Details);
+
+/// <summary>
+/// A report of a public page, by anyone (D128): a <c>showcase_item</c> by its id, or a
+/// <c>portfolio</c> by its link name (<see cref="Slug"/>).
+/// </summary>
+public sealed record PublicReportRequest(string? TargetKind, Guid? TargetId, string? Slug, string? Reason, string? Details);
 
 /// <summary>
 /// Messaging (M3b, D53): an organisation's staff open conversations with families; everyone in a
@@ -40,9 +46,13 @@ public static class MessagingEndpoints
         api.MapPost("/org/{orgId:guid}/broadcasts", BroadcastAsync).RequireAuthorization()
             .WithMetadata(new YouthRecordAttribute(Conversations.Sent)).Produces<BroadcastResult>(StatusCodes.Status201Created);
 
-        // plan/05's "report anything": a message someone else wrote in your conversation (D115), or a
-        // post someone else wrote in your space (D121), so far.
+        // plan/05's "report anything": a message someone else wrote in your conversation (D115), a
+        // post someone else wrote in your space (D121), an item on the showcase (D128).
         api.MapPost("/reports", ReportAsync).RequireAuthorization().Produces<ReportReceipt>(StatusCodes.Status201Created);
+
+        // What anyone sees, reported by anyone, signed in or not, a few times an hour (D128).
+        api.MapPost("/public/reports", PublicReportAsync).AllowAnonymous().RequireRateLimiting(ApiComposition.PublicReportLimit)
+            .Produces<ReportReceipt>(StatusCodes.Status201Created);
         return api;
     }
 
@@ -53,7 +63,8 @@ public static class MessagingEndpoints
         {
             "message" => await reports.ReportMessageAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct),
             "post" => await reports.ReportPostAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct),
-            _ => Result<ReportReceipt>.Failure(Error.Validation("reports.target", "Only a message or a post can be reported here, so far.")),
+            "showcase_item" => await reports.ReportShowcaseItemAsync(Actor(user), body.TargetId, body.Reason, body.Details, ct),
+            _ => Result<ReportReceipt>.Failure(Error.Validation("reports.target", "Only a message, a post or a showcase item can be reported here.")),
         };
         if (made.IsSuccess)
         {
@@ -66,6 +77,29 @@ public static class MessagingEndpoints
         }
 
         audit.Record(new AuditAccess { Action = BrightTime.Modules.Community.Moderation.Reports.Made, Outcome = AuditOutcome.Deny, SubjectKind = body.TargetKind, SubjectIds = [body.TargetId], Reason = made.Error.Code });
+        return ApiProblems.From(made.Error);
+    }
+
+    private static async Task<IResult> PublicReportAsync(PublicReportRequest body, ClaimsPrincipal user, BrightTime.Modules.Community.Moderation.Reports reports, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        UserId? reporter = user.GetUserId() is { } id ? new UserId(id) : null;
+        Result<ReportReceipt> made = body.TargetKind switch
+        {
+            "showcase_item" when body.TargetId is { } item => await reports.ReportShowcaseItemAsync(reporter, item, body.Reason, body.Details, ct),
+            "portfolio" => await reports.ReportPortfolioAsync(reporter, body.Slug, body.Reason, body.Details, ct),
+            _ => Result<ReportReceipt>.Failure(Error.Validation("reports.target", "Only a showcase item, by its id, or a portfolio, by its link name, can be reported here.")),
+        };
+        if (made.IsSuccess)
+        {
+            return Results.Created($"/api/v1/reports/{made.Value.Id}", made.Value);
+        }
+
+        if (made.Error.Code != "reports.target")
+        {
+            audit.Record(new AuditAccess { Action = BrightTime.Modules.Community.Moderation.Reports.Made, Outcome = AuditOutcome.Deny, SubjectKind = body.TargetKind, Reason = made.Error.Code });
+        }
+
         return ApiProblems.From(made.Error);
     }
 

@@ -5,6 +5,7 @@ using BrightTime.Modules.Community.Contracts;
 using BrightTime.Modules.Community.Persistence;
 using BrightTime.Modules.Directory.Contracts;
 using BrightTime.Modules.Identity.Contracts;
+using BrightTime.Modules.Learning.Contracts;
 using BrightTime.SharedKernel.Ids;
 using BrightTime.SharedKernel.Primitives;
 using BrightTime.SharedKernel.Privacy;
@@ -63,9 +64,10 @@ public sealed record EscalatedReport(
     bool OwnOrganisation);
 
 /// <summary>
-/// Reporting (D115, D121): someone in a conversation reports a message another person wrote in
-/// it, or a member of a space a post another member wrote there, with a reason, and it joins the
-/// county's moderation queue. A report of grooming or self-harm is critical whoever makes it, goes
+/// Reporting (D115, D121, D128): someone in a conversation reports a message another person wrote
+/// in it; a member of a space a post another member wrote there; a space's staff a young person's
+/// work for a challenge; and anyone, signed in or not, an item on the public showcase or a shown
+/// portfolio. Each comes with a reason, and joins the county's moderation queue. A report of grooming or self-harm is critical whoever makes it, goes
 /// to the top, is to be acknowledged within the hour, and books an email to every moderator who
 /// may decide it.
 /// </summary>
@@ -89,14 +91,20 @@ public sealed class Reports(
     AuditTrail audit,
     IClock clock,
     IIdentityQueries identity,
-    IDirectoryQueries directory)
+    IDirectoryQueries directory,
+    IPortfolioModeration? portfolios = null)
 {
+    private readonly ReportTargets _targets = new(db, tenant, portfolios);
+
     public const string Made = "reports.made";
     public const string Read = "reports.read";
     public const string Acknowledged = "reports.acknowledged";
     public const string Dismissed = "reports.dismissed";
     public const string Removed = "reports.message_removed";
     public const string PostRemoved = "reports.post_removed";
+    public const string ShowcaseItemRemoved = "reports.showcase_item_removed";
+    public const string SubmissionRemoved = "reports.submission_removed";
+    public const string PortfolioRemoved = "reports.portfolio_removed";
     public const string Escalated = "reports.escalated";
     public const string EscalationsRead = "reports.escalated_read";
     public const string EscalationClosed = "reports.escalation_closed";
@@ -121,7 +129,7 @@ public sealed class Reports(
             }
 
             // Only a message the reporter can see: sent, someone else's, in a conversation they're in.
-            ReportedItem? message = await ReportTargets.FindAsync(db, ReportTargets.Message, messageId, ct).ConfigureAwait(false);
+            ReportedItem? message = await _targets.FindAsync(ReportTargets.Message, messageId, ct).ConfigureAwait(false);
             if (message is null || !ReportTargets.IsUp(message) || message.AuthorUserId == reporter.Value
                 || !await db.Participants.AsNoTracking()
                     .AnyAsync(p => p.ConversationId == message.Container && p.UserId == reporter.Value && p.RemovedAt == null, ct).ConfigureAwait(false))
@@ -142,7 +150,7 @@ public sealed class Reports(
             }
 
             // Only a post the reporter can see: published, someone else's, in a space they're in.
-            ReportedItem? post = await ReportTargets.FindAsync(db, ReportTargets.Post, postId, ct).ConfigureAwait(false);
+            ReportedItem? post = await _targets.FindAsync(ReportTargets.Post, postId, ct).ConfigureAwait(false);
             if (post is null || !ReportTargets.IsUp(post) || post.AuthorUserId == reporter.Value
                 || !await db.SpaceMembers.AsNoTracking()
                     .AnyAsync(m => m.SpaceId == post.Container && m.UserId == reporter.Value && m.LeftAt == null, ct).ConfigureAwait(false))
@@ -151,6 +159,92 @@ public sealed class Reports(
             }
 
             return Result<ReportReceipt>.Success(await MakeAsync(reporter, post, reason!, details, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>
+    /// One of the organisation's staff reports a young person's work for a challenge in one of its
+    /// spaces (D128), as sent: a worry about what it says reaches the county. The caller has checked
+    /// that they may see the organisation's spaces.
+    /// </summary>
+    public Task<Result<ReportReceipt>> ReportSubmissionAsync(UserId reporter, OrganisationId org, Guid submissionId, string? reason, string? details, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (Invalid(reason, details, "work") is { } invalid)
+            {
+                return Result<ReportReceipt>.Failure(invalid);
+            }
+
+            ReportedItem? work = await _targets.FindAsync(ReportTargets.Submission, submissionId, ct).ConfigureAwait(false);
+            if (work is null || work.OrgId != org.Value || !ReportTargets.IsUp(work) || work.AuthorUserId == reporter.Value)
+            {
+                return Result<ReportReceipt>.Failure(Error.NotFound("reports.work_not_found", "There's no work like that sent in your organisation's spaces."));
+            }
+
+            return Result<ReportReceipt>.Success(await MakeAsync(reporter, work, reason!, details, ct).ConfigureAwait(false));
+        }, cancellationToken);
+
+    /// <summary>
+    /// Anyone reports an item on the public showcase (D128): signed in, as themselves; not signed
+    /// in (<paramref name="reporter"/> null), with no reporter recorded. The host limits how often.
+    /// </summary>
+    public Task<Result<ReportReceipt>> ReportShowcaseItemAsync(UserId? reporter, Guid itemId, string? reason, string? details, CancellationToken cancellationToken = default) =>
+        PublicAsync(reporter, ReportTargets.ShowcaseItem, itemId, reason, details, "showcase.not_shown", "There's nothing like that on the showcase.", cancellationToken);
+
+    /// <summary>Anyone reports a shown portfolio, by its link name (D128), as <see cref="ReportShowcaseItemAsync"/> does an item.</summary>
+    public async Task<Result<ReportReceipt>> ReportPortfolioAsync(UserId? reporter, string? slug, string? reason, string? details, CancellationToken cancellationToken = default)
+    {
+        ReportablePortfolio? page = portfolios is { } shown ? await shown.ShownAsync(slug ?? "", cancellationToken).ConfigureAwait(false) : null;
+        return page is null
+            ? Result<ReportReceipt>.Failure(Error.NotFound("portfolio.not_shown", "There's no portfolio shown at that link."))
+            : await PublicAsync(reporter, ReportTargets.Portfolio, page.UserId, reason, details, "portfolio.not_shown", "There's no portfolio shown at that link.", cancellationToken).ConfigureAwait(false);
+    }
+
+    private Task<Result<ReportReceipt>> PublicAsync(
+        UserId? reporter, string kind, Guid id, string? reason, string? details, string notFoundCode, string notFound, CancellationToken cancellationToken) =>
+        db.InTransactionAsync(async ct =>
+        {
+            if (Invalid(reason, details, kind == ReportTargets.Portfolio ? "page" : "item") is { } invalid)
+            {
+                return Result<ReportReceipt>.Failure(invalid);
+            }
+
+            // Signed in: as any report, once per person while it waits, and never of their own.
+            if (reporter is { } signedIn)
+            {
+                ReportedItem? item = await _targets.FindAsync(kind, id, ct).ConfigureAwait(false);
+                return item is null || !ReportTargets.IsUp(item) || item.AuthorUserId == signedIn.Value
+                    ? Result<ReportReceipt>.Failure(Error.NotFound(notFoundCode, notFound))
+                    : Result<ReportReceipt>.Success(await MakeAsync(signedIn, item, reason!, details, ct).ConfigureAwait(false));
+            }
+
+            // Not signed in: reports sit behind the actor guard, so it's filed by a definer function,
+            // which checks the item is shown now and says whose organisation it is.
+            Guid reportId = UuidV7.NewId();
+            string severity = ReportReasons.SeverityOf(reason!);
+            string? said = details?.Trim() is { Length: > 0 } d ? d : null;
+            Guid tenantId = tenant.TenantId.Value;
+            Guid? org = await db.Database
+                .SqlQuery<Guid?>($"select community.file_public_report({tenantId}, {reportId}, {kind}, {id}, {reason}, {said}, {severity}) as \"Value\"")
+                .FirstAsync(ct).ConfigureAwait(false);
+            if (org is not { } owner)
+            {
+                return Result<ReportReceipt>.Failure(Error.NotFound(notFoundCode, notFound));
+            }
+
+            if (severity == ReportSeverities.Critical)
+            {
+                CriticalPublicReport critical = new(reportId, reason!, owner);
+                await db.EnqueueJobAsync(new JobRequest
+                {
+                    JobType = CriticalPublicReport.JobType,
+                    TenantId = tenant.TenantId,
+                    Payload = critical,
+                    UniqueKey = critical.UniqueKey,
+                }, ct).ConfigureAwait(false);
+            }
+
+            await AuditAsync(Made, kind, [id], ct).ConfigureAwait(false);
+            return Result<ReportReceipt>.Success(new ReportReceipt(reportId, reason!, severity));
         }, cancellationToken);
 
     private static Error? Invalid(string? reason, string? details, string what)
@@ -192,29 +286,41 @@ public sealed class Reports(
         db.Reports.Add(report);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        if (report.Severity == ReportSeverities.Critical)
-        {
-            IReadOnlyList<OrganisationMembership> members = await directory.GetOrganisationMembersAsync(new OrganisationId(item.OrgId), ct).ConfigureAwait(false);
-            foreach (Guid moderator in await identity.GetUsersWithPermissionAsync(ModeratorPermission, ct).ConfigureAwait(false))
-            {
-                if (moderator == reporter.Value || moderator == item.AuthorUserId || members.Any(m => m.UserId.Value == moderator))
-                {
-                    continue;
-                }
-
-                CriticalReportNotice notice = new(moderator, report.Id, reason);
-                await db.EnqueueJobAsync(new JobRequest
-                {
-                    JobType = CriticalReportNotice.JobType,
-                    TenantId = tenant.TenantId,
-                    Payload = notice,
-                    UniqueKey = notice.UniqueKey,
-                }, ct).ConfigureAwait(false);
-            }
-        }
-
+        await NotifyIfCriticalAsync(report.Id, reason, report.Severity, item.OrgId, item.AuthorUserId, reporter.Value, ct).ConfigureAwait(false);
         await AuditAsync(Made, item.Kind, [item.Id], ct).ConfigureAwait(false);
         return new ReportReceipt(report.Id, report.ReasonCode, report.Severity);
+    }
+
+    /// <summary>
+    /// A critical report books an email to every moderator who may decide it: not the reporter, the
+    /// author, or a member of the organisation it's about (a portfolio is of none).
+    /// </summary>
+    private async Task NotifyIfCriticalAsync(Guid reportId, string reason, string severity, Guid orgId, Guid? author, Guid? reporter, CancellationToken ct)
+    {
+        if (severity != ReportSeverities.Critical)
+        {
+            return;
+        }
+
+        IReadOnlyList<OrganisationMembership> members = orgId == Guid.Empty
+            ? []
+            : await directory.GetOrganisationMembersAsync(new OrganisationId(orgId), ct).ConfigureAwait(false);
+        foreach (Guid moderator in await identity.GetUsersWithPermissionAsync(ModeratorPermission, ct).ConfigureAwait(false))
+        {
+            if (moderator == reporter || moderator == author || members.Any(m => m.UserId.Value == moderator))
+            {
+                continue;
+            }
+
+            CriticalReportNotice notice = new(moderator, reportId, reason);
+            await db.EnqueueJobAsync(new JobRequest
+            {
+                JobType = CriticalReportNotice.JobType,
+                TenantId = tenant.TenantId,
+                Payload = notice,
+                UniqueKey = notice.UniqueKey,
+            }, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>The reports waiting, critical first, then oldest; reading them is audited.</summary>
@@ -232,7 +338,7 @@ public sealed class Reports(
             List<QueuedReport> list = [];
             foreach (ReportRecord report in waiting)
             {
-                if (await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false) is not { } item)
+                if (await _targets.FindAsync(report.TargetKind, report.TargetId, ct).ConfigureAwait(false) is not { } item)
                 {
                     continue;
                 }
@@ -243,7 +349,7 @@ public sealed class Reports(
                     report.ReasonCode,
                     report.Severity,
                     report.State,
-                    item.RoleOf(report.ReporterUserId),
+                    item.ReporterRole(report.ReporterUserId),
                     report.Details,
                     report.CreatedAt,
                     report.AcknowledgedAt,
@@ -257,7 +363,7 @@ public sealed class Reports(
                     item.Body,
                     item.State,
                     item.At,
-                    await ReportTargets.EarlierAsync(db, item, ct).ConfigureAwait(false)));
+                    await _targets.EarlierAsync(item, ct).ConfigureAwait(false)));
             }
 
             await AuditAsync(Read, "report", [.. list.Select(r => r.Id)], ct).ConfigureAwait(false);
@@ -279,7 +385,7 @@ public sealed class Reports(
             List<EscalatedReport> list = [];
             foreach (ReportRecord report in escalated)
             {
-                if (await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false) is not { } item)
+                if (await _targets.FindAsync(report.TargetKind, report.TargetId, ct).ConfigureAwait(false) is not { } item)
                 {
                     continue;
                 }
@@ -307,7 +413,7 @@ public sealed class Reports(
             }
 
             ReportRecord? report = await db.Reports.AsNoTracking().FirstOrDefaultAsync(r => r.Id == reportId && r.State == ReportStates.Escalated, ct).ConfigureAwait(false);
-            ReportedItem? item = report is null ? null : await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false);
+            ReportedItem? item = report is null ? null : await _targets.FindAsync(report.TargetKind, report.TargetId, ct).ConfigureAwait(false);
             if (report is null || item is null)
             {
                 return Result.Failure(Error.NotFound("reports.not_escalated", "That report isn't waiting for its outcome any more."));
@@ -420,7 +526,7 @@ public sealed class Reports(
             Act(decided, decision switch { Escalated => "escalate_external", Removed => "remove", _ => "no_action" }, moderator, why, now);
             if (removeIt)
             {
-                await ReportTargets.TakeDownAsync(db, item!, moderator.Value, now, ct).ConfigureAwait(false);
+                await _targets.TakeDownAsync(item!, moderator.Value, decided.Id, now, ct).ConfigureAwait(false);
                 if (decision == Escalated)
                 {
                     Act(decided, "remove", moderator, why, now);
@@ -428,7 +534,7 @@ public sealed class Reports(
             }
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await AuditAsync(decision == Removed && item!.Kind == ReportTargets.Post ? PostRemoved : decision, "report", [reportId], ct).ConfigureAwait(false);
+            await AuditAsync(decision == Removed && item!.Kind != ReportTargets.Message ? RemovedOf(item.Kind) : decision, "report", [reportId], ct).ConfigureAwait(false);
             return Result.Success();
         }, cancellationToken);
 
@@ -437,7 +543,7 @@ public sealed class Reports(
     {
         ReportRecord? report = await db.Reports.AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == reportId && (r.State == ReportStates.Open || r.State == ReportStates.Triaged), ct).ConfigureAwait(false);
-        ReportedItem? item = report is null ? null : await ReportTargets.FindAsync(db, report.TargetKind, report.TargetId, ct).ConfigureAwait(false);
+        ReportedItem? item = report is null ? null : await _targets.FindAsync(report.TargetKind, report.TargetId, ct).ConfigureAwait(false);
         if (report is null || item is null)
         {
             return (null, null, NotWaiting());
@@ -452,10 +558,26 @@ public sealed class Reports(
     /// </summary>
     private async Task<bool> OwnAsync(UserId moderator, ReportRecord report, ReportedItem item, CancellationToken ct) =>
         report.ReporterUserId == moderator.Value || item.AuthorUserId == moderator.Value
-        || (await directory.GetOrganisationMembersAsync(new OrganisationId(item.OrgId), ct).ConfigureAwait(false)).Any(m => m.UserId == moderator);
+        || (item.OrgId != Guid.Empty
+            && (await directory.GetOrganisationMembersAsync(new OrganisationId(item.OrgId), ct).ConfigureAwait(false)).Any(m => m.UserId == moderator));
+
+    /// <summary>The audit action of removing what was reported, by its kind (a message's is <see cref="Removed"/>).</summary>
+    private static string RemovedOf(string kind) => kind switch
+    {
+        ReportTargets.Post => PostRemoved,
+        ReportTargets.ShowcaseItem => ShowcaseItemRemoved,
+        ReportTargets.Submission => SubmissionRemoved,
+        ReportTargets.Portfolio => PortfolioRemoved,
+        _ => Removed,
+    };
 
     private async Task<(string Name, bool Mine)> OrganisationAsync(Dictionary<Guid, (string Name, bool Mine)> seen, Guid orgId, UserId moderator, CancellationToken ct)
     {
+        if (orgId == Guid.Empty)
+        {
+            return ("", false);
+        }
+
         if (!seen.TryGetValue(orgId, out (string Name, bool Mine) org))
         {
             OrganisationId id = new(orgId);

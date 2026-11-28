@@ -4481,7 +4481,7 @@ Rebuild the compose volume. Tests:
   handler run twice, staff reporting work, escalating and removing it, and the recent decisions;
 - `ShowcaseApiTests`: the public API and its rate limit.
 
-### D129 — Mentors: made by organisations, found when cleared (**proposed 2026-11-28**)
+### D129 — Mentors: made by organisations, found when cleared (**accepted 2026-11-28**)
 
 M6's first slice. The `workforce` schema had mentor profiles and availability and no module. Sam
 chose on 2026-11-28: start M6 with mentor profiles; organisations add their mentors.

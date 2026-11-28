@@ -4548,7 +4548,7 @@ provider admins, network organisers). Tests:
 - `MentorApiTests`: the API's side;
 - `RolePermissionTests`, `ModuleBoundaryTests` and `SchemaDriftTests`.
 
-### D130 — Training: county courses, taken unit by unit (**proposed**)
+### D130 — Training: county courses, taken unit by unit (**accepted 2026-11-28**)
 
 M6's second slice. The `workforce` schema had courses, units, enrolments, unit progress and
 training requirements, and nothing used them. Sam chose on 2026-11-28: a training catalogue, taken

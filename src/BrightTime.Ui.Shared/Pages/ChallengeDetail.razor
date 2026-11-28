@@ -1,0 +1,173 @@
+@page "/spaces/{SpaceId:guid}/challenges/{Id:guid}"
+@* A challenge in a space (D122), for its young people: the brief, their own work, saved as often
+   as they like and sent when it's ready, and the staff's feedback. What they send is checked first;
+   work with their phone number, address or the like isn't sent, and they're told what to take out.
+   Only they and the space's staff (and the organisation) see it. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+
+@if (!Session.IsSignedIn)
+{
+    <h1>@T["app.challenges.title"]</h1>
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else if (_challenge is not { } c)
+{
+    <h1>@T["app.challenges.title"]</h1>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    @if (_problem is null)
+    {
+        <Busy />
+    }
+}
+else
+{
+    <p class="eyebrow"><a href="spaces/@c.SpaceId" dir="auto">@c.SpaceName</a></p>
+    <h1 dir="auto">@c.Title</h1>
+    <p class="hint">
+        @T.Format("app.challenges.set_by", ("org", Text.Name(c.OrgName)), ("date", T.DayTime(c.SetAt)))
+        @if (c.DueAt is { } due)
+        {
+            @(" · " + T.Format("app.challenges.due", ("date", T.DayTime(due))))
+        }
+        @if (!c.IsOpen)
+        {
+            @(" · " + T["app.challenges.closed"])
+        }
+    </p>
+    <div class="brief" dir="auto">@c.Brief</div>
+
+    <section aria-labelledby="mine">
+        <h2 id="mine">@T["app.challenges.your_work"]</h2>
+        <p class="notice">@T.Format("app.challenges.who_sees", ("org", Text.Name(c.OrgName)))</p>
+        @if (c.Mine is { } work)
+        {
+            <p class="hint">@T["app.challenges.state." + work.State]@(work.SubmittedAt is { } at ? " · " + T.DayTime(at) : "")</p>
+        }
+
+        @if (c.CanSubmit)
+        {
+            <div class="field">
+                <label for="work">@T["app.challenges.write"]</label>
+                <textarea id="work" rows="8" maxlength="@MaxBody" dir="auto" @bind="_draft" @bind:event="oninput"></textarea>
+            </div>
+            <p class="hint">@T["app.challenges.hint"]</p>
+            @if (RefusedFor(c.Mine) is { } why)
+            {
+                <p class="notice error" role="alert">@why</p>
+            }
+            <ProblemNotice Problem="_saveProblem" />
+            @if (_note is not null)
+            {
+                <p class="notice" role="status">@_note</p>
+            }
+            <div class="actions">
+                <button type="button" class="primary" @onclick="() => SaveAsync(send: true)" disabled="@(_busy || string.IsNullOrWhiteSpace(_draft))">@T["app.challenges.send"]</button>
+                <button type="button" @onclick="() => SaveAsync(send: false)" disabled="@(_busy || string.IsNullOrWhiteSpace(_draft))">@T["app.challenges.save"]</button>
+            </div>
+        }
+        else if (c.Mine is { } sent)
+        {
+            @if (_note is not null)
+            {
+                <p class="notice" role="status">@_note</p>
+            }
+            <div class="body" dir="auto">@sent.Body</div>
+        }
+        else if (!c.IsOpen)
+        {
+            <p>@T["app.challenges.closed_hint"]</p>
+        }
+
+        @if (c.Mine is { Feedback.Count: > 0 } reviewed)
+        {
+            <h3>@T["app.challenges.feedback"]</h3>
+            <ol class="messages">
+                @foreach (ChallengeFeedback f in reviewed.Feedback)
+                {
+                    <li @key="f.Id">
+                        <p class="hint">
+                            @T.Format("app.spaces.staff_of", ("org", Text.Name(c.OrgName))) · @T.DayTime(f.At)
+                            @if (f.Outcome is { } outcome)
+                            {
+                                <strong>@(" · " + T["app.challenges.outcome." + outcome])</strong>
+                            }
+                        </p>
+                        <p class="body" dir="auto">@f.Comment</p>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+
+    <div class="actions">
+        <button type="button" @onclick="LoadAsync" disabled="@_busy">@T["app.challenges.check"]</button>
+        <a class="button" href="spaces/@c.SpaceId">@T["app.challenges.back"]</a>
+    </div>
+}
+
+@code {
+    /// <summary>The server's limit (Challenges.MaxBody).</summary>
+    private const int MaxBody = 8000;
+
+    [Parameter] public Guid SpaceId { get; set; }
+
+    [Parameter] public Guid Id { get; set; }
+
+    private Challenge? _challenge;
+    private ApiProblem? _problem;
+    private ApiProblem? _saveProblem;
+    private string? _note;
+    private string _draft = string.Empty;
+    private bool _busy;
+
+    protected override Task OnParametersSetAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<Challenge> found = await Api.ChallengeAsync(SpaceId, Id);
+        _problem = found.Problem;
+        if (found.Value is { } c)
+        {
+            _challenge = c;
+            _draft = c.Mine?.Body ?? _draft;
+        }
+    }
+
+    private async Task SaveAsync(bool send)
+    {
+        if (_challenge is null || string.IsNullOrWhiteSpace(_draft))
+        {
+            return;
+        }
+
+        _busy = true;
+        _saveProblem = null;
+        _note = null;
+        try
+        {
+            ApiResult<ChallengeWork> saved = await Api.SaveWorkAsync(SpaceId, Id, _draft, send);
+            if (saved.Value is not { } work)
+            {
+                _saveProblem = saved.Problem;
+                return;
+            }
+
+            await LoadAsync();
+            _note = !send ? T["app.challenges.saved"]
+                : work.RefusedFor is { Count: > 0 } ? null
+                : T["app.challenges.sent"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>What screening kept back, in words, so they can take it out (D117).</summary>
+    private string? RefusedFor(ChallengeWork? work) =>
+        work?.RefusedFor is { Count: > 0 } reasons
+            ? T.Format("app.challenges.refused", ("what", string.Join(", ", reasons.Select(r => T.Has("app.messages.held_reason." + r) ? T["app.messages.held_reason." + r] : r))))
+            : null;
+}

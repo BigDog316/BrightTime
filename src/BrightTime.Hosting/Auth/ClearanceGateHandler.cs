@@ -38,6 +38,7 @@ public sealed class ClearanceGateHandler(IHttpContextAccessor http) : Authorizat
         Permissions.Attendance.Record, Permissions.Attendance.ViewRoster, Permissions.Attendance.OfflineSync,
         Permissions.Messages.SendToFamily,
         Permissions.Spaces.View, Permissions.Spaces.Post, Permissions.Spaces.ManageMembership,
+        Permissions.Submissions.GiveFeedback,
         Permissions.Payments.Waive,
         Permissions.Badges.Issue, Permissions.Badges.Revoke,
         Permissions.Projects.Review, Permissions.Skills.Endorse, Permissions.Playlists.ReviewSteps,

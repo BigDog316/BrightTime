@@ -160,9 +160,13 @@ create table challenge (
   badge_class_id uuid references learning.badge_class(id) on delete set null,
   status      text not null default 'draft',
   created_by  uuid references identity.app_user(id),
+  created_at  timestamptz not null default now(),
+  closed_at   timestamptz,
   constraint ck_challenge_status check (status in ('draft','open','closed','archived')),
-  constraint ck_challenge_window check (due_at is null or opens_at is null or due_at > opens_at)
+  constraint ck_challenge_window check (due_at is null or opens_at is null or due_at > opens_at),
+  constraint ck_challenge_closed check ((status in ('closed','archived')) = (closed_at is not null))
 );
+create index ix_challenge_space on challenge (space_id, created_at desc);
 
 create table rubric (
   id         uuid primary key,
@@ -200,6 +204,8 @@ create table submission (
   screen_result jsonb,
   screened_at  timestamptz,
   created_at   timestamptz not null default now(),
+  -- When its author last saved it (D122): a draft, or work sent back for another go.
+  updated_at   timestamptz not null default now(),
   constraint ux_submission_once unique (challenge_id, author_user_id),
   constraint ck_submission_state check (state in
     ('draft','screening','submitted','feedback_given','accepted','needs_rework','removed'))
@@ -213,9 +219,12 @@ create table feedback (
   mentor_user_id uuid not null references identity.app_user(id) on delete restrict,
   comment       text,
   is_org_visible boolean not null default true,
+  -- What the feedback decided (D122): the work accepted, or sent back for another go; null for a comment alone.
+  outcome       text,
   created_at    timestamptz not null default now(),
   -- Mentor feedback on a minor's work is always visible to org admins.
-  constraint ck_feedback_org_visible check (is_org_visible)
+  constraint ck_feedback_org_visible check (is_org_visible),
+  constraint ck_feedback_outcome check (outcome is null or outcome in ('accepted','needs_rework'))
 );
 create index ix_feedback_submission on feedback (submission_id);
 

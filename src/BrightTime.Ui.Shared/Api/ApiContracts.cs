@@ -484,6 +484,32 @@ public sealed record Space(
     public bool IsArchived => Status == "archived";
 }
 
+/// <summary>A challenge in a space (D122), with the person's own work's state if they've started it.</summary>
+public sealed record SpaceChallenge(Guid Id, string Title, string Status, DateTimeOffset? DueAt, DateTimeOffset SetAt, string? MyState, int Sent, int Waiting)
+{
+    public bool IsOpen => Status == "open";
+}
+
+/// <summary>Feedback from the space's staff, who are never named to a young person.</summary>
+public sealed record ChallengeFeedback(Guid Id, string? From, string Comment, string? Outcome, DateTimeOffset At);
+
+/// <summary>A young person's work for a challenge: saved, sent, and what screening kept back the last time they tried.</summary>
+public sealed record ChallengeWork(
+    Guid Id, string? AuthorName, bool Mine, string Body, string State, DateTimeOffset? SubmittedAt, DateTimeOffset UpdatedAt, IReadOnlyList<string>? RefusedFor, IReadOnlyList<ChallengeFeedback> Feedback)
+{
+    public bool IsDraft => State == "draft";
+
+    public bool IsSentBack => State == "needs_rework";
+}
+
+/// <summary>A challenge with the person's own work for it.</summary>
+public sealed record Challenge(
+    Guid Id, Guid SpaceId, string SpaceName, string OrgName, string Title, string Brief, string Status, DateTimeOffset? DueAt, DateTimeOffset SetAt,
+    bool CanSubmit, bool CanReview, ChallengeWork? Mine, IReadOnlyList<ChallengeWork> Submissions)
+{
+    public bool IsOpen => Status == "open";
+}
+
 /// <summary>A report taken (D115): a critical one is looked at within the hour.</summary>
 public sealed record ReportReceipt(Guid Id, string Reason, string Severity)
 {

@@ -342,6 +342,13 @@ read them.
   what's wrong (members of the space only). Follow your organisation's safeguarding procedure as
   well. Young people can report posts too, yours included. A post a moderator removes, or its
   author takes down, stays as a line saying so while it has replies.
+- **Challenges:** staff in a space who give feedback (owners, admins and staff) **Set a challenge**
+  on its page: a title, what to do, and a due date if you like. Its young people write their work in
+  the app and send it; each sees only their own. The challenge's page shows everything sent, by the
+  young person's roster name, with its feedback. Write feedback, and **Accept it**, **Send it back
+  for another go**, or **Just comment**; they see it from your organisation's staff. **Close the
+  challenge** to stop new work; you can still give feedback. What you write where young people
+  read is checked for ways to talk off BrightTime, and refused with why.
 - **Archive** a space to keep it as it is, to read, and stop new posts. The activity can then have
   a new one.
 

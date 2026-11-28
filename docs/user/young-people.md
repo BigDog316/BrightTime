@@ -87,6 +87,12 @@ activity and some of its staff, and always says who is in it and that the organi
   you like. A moderator from the county looks at it, within the hour if someone might be hurt or
   is asking you to keep secrets or talk somewhere else. If someone is in danger right now, call
   911; if you're thinking about hurting yourself, call or text 988.
+- **Challenges:** when the group's staff set one, it's under **Challenges** in the group. Write
+  your work, **Save for later** as often as you like, and **Send it** when it's ready. Only you,
+  the group's staff and the organisation see it; the other young people don't. Work with your phone
+  number, address, email or other apps isn't sent, and you're told what to take out. The staff's
+  feedback shows under your work: they may accept it, or send it back for you to change and send
+  again.
 - You leave the group when your place in the activity ends.
 
 ## Staying safe

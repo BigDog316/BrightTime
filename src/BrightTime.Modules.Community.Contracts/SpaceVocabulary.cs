@@ -37,3 +37,42 @@ public static class PostStates
     /// <summary>Taken down by its author; nobody sees it.</summary>
     public const string DeletedByAuthor = "deleted_by_author";
 }
+
+/// <summary>A challenge's states (<c>ck_challenge_status</c>), as D122 uses them: open, then closed.</summary>
+public static class ChallengeStatuses
+{
+    /// <summary>Taking work: its space's young people save and send theirs.</summary>
+    public const string Open = "open";
+
+    /// <summary>Closed by its staff: it reads as it was, takes no more work, and staff still give feedback.</summary>
+    public const string Closed = "closed";
+}
+
+/// <summary>A submission's states (<c>ck_submission_state</c>), as D122 uses them.</summary>
+public static class SubmissionStates
+{
+    /// <summary>Saved by its author and not yet sent; only they see it.</summary>
+    public const string Draft = "draft";
+
+    /// <summary>Sent, screened, and waiting for the space's staff.</summary>
+    public const string Submitted = "submitted";
+
+    /// <summary>Staff have commented without deciding.</summary>
+    public const string FeedbackGiven = "feedback_given";
+
+    /// <summary>Staff have accepted it.</summary>
+    public const string Accepted = "accepted";
+
+    /// <summary>Staff have sent it back: its author changes it and sends it again.</summary>
+    public const string NeedsRework = "needs_rework";
+
+    /// <summary>The states its author may change it in.</summary>
+    public static bool Editable(string state) => state is Draft or NeedsRework;
+}
+
+/// <summary>What feedback decides (<c>ck_feedback_outcome</c>); none for a comment alone.</summary>
+public static class FeedbackOutcomes
+{
+    public const string Accepted = "accepted";
+    public const string NeedsRework = "needs_rework";
+}

@@ -30,6 +30,28 @@ else
         <p dir="auto">@about</p>
     }
 
+    @if (_challenges.Count > 0)
+    {
+        <section aria-labelledby="challenges">
+            <h2 id="challenges">@T["app.challenges.heading"]</h2>
+            <ul class="cards">
+                @foreach (SpaceChallenge c in _challenges)
+                {
+                    <li @key="c.Id">
+                        <a href="spaces/@s.Id/challenges/@c.Id" dir="auto">@c.Title</a>
+                        <p class="hint">
+                            @(c.IsOpen ? (c.DueAt is { } due ? T.Format("app.challenges.due", ("date", T.DayTime(due))) : T["app.challenges.open"]) : T["app.challenges.closed"])
+                            @if (c.MyState is { } state)
+                            {
+                                @(" · " + T["app.challenges.state." + state])
+                            }
+                        </p>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
     <section aria-labelledby="who">
         <h2 id="who">@T["app.spaces.who"]</h2>
         <ul>
@@ -129,6 +151,7 @@ else
     [Parameter] public Guid Id { get; set; }
 
     private Space? _space;
+    private IReadOnlyList<SpaceChallenge> _challenges = [];
     private ApiProblem? _problem;
     private ApiProblem? _sendProblem;
     private string? _sendNote;
@@ -156,6 +179,10 @@ else
         ApiResult<Space> found = await Api.SpaceAsync(Id);
         _problem = found.Problem;
         _space = found.Value ?? _space;
+        if (found.Value is not null && (await Api.ChallengesAsync(Id)).Value is { } challenges)
+        {
+            _challenges = challenges;
+        }
     }
 
     private void StartReply(Guid post)

@@ -114,6 +114,7 @@ public sealed class RolePermissionTests
             (Permissions.Spaces.View, [BrightTimeRoles.Youth, BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
             (Permissions.Spaces.Post, [BrightTimeRoles.Youth, BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
             (Permissions.Spaces.ManageMembership, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
+            (Permissions.Submissions.GiveFeedback, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
         ];
         foreach ((string permission, string[] roles) in expected)
         {

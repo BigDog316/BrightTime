@@ -20,7 +20,8 @@
     archive it. Its young people aren't chosen: those enrolled in the activity whose consent allows
     it join once two staff are in it. A post held for a moderator shows only to its author.
     Members report someone else's post to the county's moderators (D121); a post taken down that
-    has replies stays as a line saying so, with its replies under it.
+    has replies stays as a line saying so, with its replies under it. Its challenges (D122), and,
+    for its staff who give feedback, setting one.
 *@
 @if (Forbidden)
 {
@@ -116,6 +117,55 @@ else if (_space is { } s)
         }
     </section>
 
+    <section aria-labelledby="challenges">
+        <h2 id="challenges">@T["provider.challenges.heading"]</h2>
+        @if (_challenges.Count == 0)
+        {
+            <p>@T["provider.challenges.none"]</p>
+        }
+        else
+        {
+            <ul class="card-list">
+                @foreach (ChallengeSummary c in _challenges)
+                {
+                    <li>
+                        <a href="/provider/orgs/@OrgId/spaces/@SpaceId/challenges/@c.Id" dir="auto">@c.Title</a>
+                        <span class="note">
+                            @(" · " + T["provider.challenges.status." + c.Status])
+                            @if (c.DueAt is { } due)
+                            {
+                                @(" · " + T.Format("provider.challenges.due", ("date", T.DateTime(due))))
+                            }
+                            @(" · " + T.Format("provider.challenges.counts", ("sent", c.Sent), ("waiting", c.Waiting)))
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_canSetChallenges)
+        {
+            <form method="post" @formname="challenge" @onsubmit="SetChallengeAsync" class="message-form">
+                <AntiforgeryToken />
+                <h3>@T["provider.challenges.set"]</h3>
+                <div class="field">
+                    <label for="challenge-title">@T["provider.challenges.title_label"]</label>
+                    <input id="challenge-title" name="title" maxlength="@Challenges.MaxTitle" required dir="auto" />
+                </div>
+                <div class="field">
+                    <label for="challenge-brief">@T["provider.challenges.brief_label"]</label>
+                    <textarea id="challenge-brief" name="brief" rows="5" maxlength="@Challenges.MaxBrief" required dir="auto"></textarea>
+                </div>
+                <div class="field">
+                    <label for="challenge-due">@T["provider.challenges.due_label"]</label>
+                    <input id="challenge-due" name="due" type="date" aria-describedby="challenge-due-hint" />
+                    <p class="hint" id="challenge-due-hint">@T["provider.challenges.due_hint"]</p>
+                </div>
+                <button type="submit">@T["provider.challenges.set_button"]</button>
+            </form>
+        }
+    </section>
+
     <section aria-labelledby="posts">
         <h2 id="posts">@T["provider.spaces.posts"]</h2>
         @if (s.CanPost)
@@ -192,6 +242,8 @@ else if (_space is { } s)
     private SpaceView? _space;
     private string? _problem;
     private bool _canManage;
+    private IReadOnlyList<ChallengeSummary> _challenges = [];
+    private bool _canSetChallenges;
 
     /// <summary>Adult members of the organisation's staff not yet in the space, by email.</summary>
     private IReadOnlyList<(Guid Id, string Email)> _candidates = [];
@@ -221,6 +273,10 @@ else if (_space is { } s)
 
         _space = found.Value;
         _canManage = await CanActForAsync(Org, Permissions.Spaces.ManageMembership);
+        _challenges = await Get<Challenges>().ListForOrganisationAsync(Org, Actor, SpaceId) is { IsSuccess: true } listed ? listed.Value : [];
+        _canSetChallenges = _space.IsMember && _space.Status == SpaceStatuses.Active
+            && _space.Members.Any(m => m.IsMe && m.Role != SpaceRoles.Youth)
+            && await CanActForAsync(Org, Permissions.Submissions.GiveFeedback);
         if (_canManage)
         {
             HashSet<Guid> inIt = [.. _space.Members.Select(m => m.UserId)];
@@ -284,6 +340,32 @@ else if (_space is { } s)
             </details>
         }
     };
+
+    private async Task SetChallengeAsync()
+    {
+        if (!_canSetChallenges)
+        {
+            Forbid();
+            return;
+        }
+
+        DateTimeOffset? due = null;
+        if (DateOnly.TryParse(FormValue("due"), System.Globalization.CultureInfo.InvariantCulture, out DateOnly day))
+        {
+            // The end of the day it names, in the county's time.
+            DateTime midnight = day.AddDays(1).ToDateTime(TimeOnly.MinValue);
+            due = new DateTimeOffset(midnight, Tenant.TimeZone.GetUtcOffset(midnight)).ToUniversalTime();
+        }
+
+        Result<Guid> set = await Get<Challenges>().SetAsync(Actor, SpaceId, FormValue("title"), FormValue("brief"), due);
+        if (!set.IsSuccess)
+        {
+            _problem = T.Error(set.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/provider/orgs/{OrgId}/spaces/{SpaceId}/challenges/{set.Value}?done=set");
+    }
 
     private async Task ReportAsync(Guid post)
     {

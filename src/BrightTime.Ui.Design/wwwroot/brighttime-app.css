@@ -497,6 +497,13 @@ dl.facts dd {
     overflow-wrap: anywhere;
 }
 
+/* D122: a challenge's brief and a young person's own sent work keep their line breaks. */
+.brief,
+.body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 /* D120: a space's posts, newest first, each with its replies set in beneath it. A post of your
    own isn't pushed aside as a message is: it's still in the one feed. */
 .posts li.mine {

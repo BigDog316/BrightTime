@@ -1,0 +1,209 @@
+@page "/provider/orgs/{OrgId:guid}/spaces/{SpaceId:guid}/challenges/{ChallengeId:guid}"
+@using BrightTime.Modules.Community.Contracts
+@using BrightTime.Modules.Community.Groups
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Challenges.Read)]
+@inherits ConsoleComponent
+
+@*
+    A challenge in one of the organisation's spaces (D122), for its staff: the brief, and every piece
+    of work its young people have sent, with the feedback on each. The space's staff who give
+    feedback comment, accept the work, or send it back for another go, and close the challenge.
+    Drafts are their authors' alone.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.spaces.denied"]</h1>
+    <p>@T["provider.spaces.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_challenge is { } c)
+{
+    <PageTitle>@c.Title · BrightTime</PageTitle>
+
+    <p class="eyebrow"><a href="/provider/orgs/@OrgId/spaces/@SpaceId" dir="auto">@c.SpaceName</a></p>
+    <h1 dir="auto">@c.Title</h1>
+    <OrgNav OrgId="@OrgId" Current="spaces" Role="@(RoleIn(Org) ?? "")" />
+
+    @if (Done is { Length: > 0 } && T.Has("provider.challenges.done." + Done))
+    {
+        <p class="notice success" role="status">@T["provider.challenges.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <dl class="facts">
+        <dt>@T["provider.challenges.status_label"]</dt>
+        <dd>@T["provider.challenges.status." + c.Status]</dd>
+        <dt>@T["provider.challenges.set_on"]</dt>
+        <dd>@T.DateTime(c.SetAt)</dd>
+        @if (c.DueAt is { } due)
+        {
+            <dt>@T["provider.challenges.due_label"]</dt>
+            <dd>@T.DateTime(due)</dd>
+        }
+    </dl>
+    <div class="brief" dir="auto">@c.Brief</div>
+    <p class="notice">@T["provider.challenges.who_sees"]</p>
+
+    @if (_canReview && c.Status == ChallengeStatuses.Open)
+    {
+        <form method="post" @formname="close" @onsubmit="CloseAsync">
+            <AntiforgeryToken />
+            <p class="hint">@T["provider.challenges.close_hint"]</p>
+            <button type="submit" class="secondary-button">@T["provider.challenges.close"]</button>
+        </form>
+    }
+
+    <section aria-labelledby="work">
+        <h2 id="work">@T["provider.challenges.work"] <span class="count">(@c.Submissions.Count)</span></h2>
+        @if (c.Submissions.Count == 0)
+        {
+            <p>@T["provider.challenges.no_work"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (SubmissionView w in c.Submissions)
+                {
+                    string id = w.Id.ToString("N");
+                    <li>
+                        <article aria-labelledby="work-@id">
+                            <h3 id="work-@id"><bdi>@(w.AuthorName ?? T["provider.spaces.unnamed"])</bdi> <span class="note">· @T["provider.challenges.state." + w.State]</span></h3>
+                            @if (w.SubmittedAt is { } at)
+                            {
+                                <p class="note">@T.Format("provider.challenges.sent_on", ("date", T.DateTime(at)))</p>
+                            }
+                            <blockquote class="held-body" dir="auto">@w.Body</blockquote>
+
+                            @if (w.Feedback.Count > 0)
+                            {
+                                <h4>@T["provider.challenges.feedback"]</h4>
+                                <ol class="messages">
+                                    @foreach (FeedbackView f in w.Feedback)
+                                    {
+                                        <li>
+                                            <p class="note">
+                                                <bdi>@(f.From ?? T["provider.spaces.staff_member"])</bdi> · @T.DateTime(f.At)
+                                                @if (f.Outcome is { } outcome)
+                                                {
+                                                    <strong>@(" · " + T["provider.challenges.outcome." + outcome])</strong>
+                                                }
+                                            </p>
+                                            <p class="body" dir="auto">@f.Comment</p>
+                                        </li>
+                                    }
+                                </ol>
+                            }
+
+                            @if (_canReview)
+                            {
+                                <form method="post" class="reason-form" @formname="@("feedback-" + id)" @onsubmit="() => FeedbackAsync(w.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="comment-@id">@T["provider.challenges.comment"]</label>
+                                        <textarea id="comment-@id" name="comment" rows="3" maxlength="@Challenges.MaxComment" required dir="auto"></textarea>
+                                    </div>
+                                    @if (w.State != SubmissionStates.NeedsRework)
+                                    {
+                                        <fieldset>
+                                            <legend>@T["provider.challenges.decide"]</legend>
+                                            <label class="check"><input type="radio" name="outcome" value="" checked /> @T["provider.challenges.just_comment"]</label>
+                                            <label class="check"><input type="radio" name="outcome" value="@FeedbackOutcomes.Accepted" /> @T["provider.challenges.decide.accepted"]</label>
+                                            <label class="check"><input type="radio" name="outcome" value="@FeedbackOutcomes.NeedsRework" /> @T["provider.challenges.decide.needs_rework"]</label>
+                                        </fieldset>
+                                    }
+                                    <button type="submit">@T["provider.challenges.give"]</button>
+                                </form>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [Parameter] public Guid SpaceId { get; set; }
+
+    [Parameter] public Guid ChallengeId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private ChallengeView? _challenge;
+    private string? _problem;
+    private bool _canReview;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Spaces.View))
+        {
+            Forbid();
+            return;
+        }
+
+        Result<ChallengeView> found = await Get<Challenges>().GetForOrganisationAsync(Org, Actor, SpaceId, ChallengeId);
+        if (!found.IsSuccess)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _challenge = found.Value;
+        _canReview = found.Value.CanReview && await CanActForAsync(Org, Permissions.Submissions.GiveFeedback);
+    }
+
+    private async Task CloseAsync()
+    {
+        if (!_canReview)
+        {
+            Forbid();
+            return;
+        }
+
+        Finish(await Get<Challenges>().CloseAsync(Actor, SpaceId, ChallengeId), "closed");
+    }
+
+    private async Task FeedbackAsync(Guid submission)
+    {
+        if (!_canReview)
+        {
+            Forbid();
+            return;
+        }
+
+        string outcome = FormValue("outcome");
+        Result result = await Get<Challenges>().GiveFeedbackAsync(Actor, SpaceId, ChallengeId, submission, FormValue("comment"), outcome);
+        Finish(result, outcome switch { FeedbackOutcomes.Accepted => "accepted", FeedbackOutcomes.NeedsRework => "sent_back", _ => "commented" });
+    }
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/spaces/{SpaceId}/challenges/{ChallengeId}?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

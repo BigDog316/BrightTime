@@ -159,6 +159,24 @@ public sealed class SpacesApiTests(ApiFixture api)
         await ProblemAsync(await teen.PostAsJsonAsync("api/v1/reports", new { targetKind = "space", targetId = space, reason = "spam" }, Ct), HttpStatusCode.BadRequest, "reports.target");
         (await api.ScalarAsync<string>("select target_kind || '/' || state from community.report where id = @r", ("r", report.GetProperty("id").GetGuid()))).ShouldBe("post/open");
 
+        // A challenge (D122): she reads it; work with her number is kept back, with why; clean, it's
+        // sent, and then waits; nobody outside the space reads it.
+        Guid challenge = Guid.CreateVersion7();
+        await api.ExecuteAsync(
+            "insert into community.challenge (id, tenant_id, space_id, title, brief_md, status, created_by) values (@c, @t, @s, 'Draw a map', 'Of your street.', 'open', @staff)",
+            ("c", challenge), ("t", api.Data.TenantId), ("s", space), ("staff", staffId));
+        JsonElement listed = (await JsonAsync(await teen.GetAsync(Relative($"api/v1/spaces/{space}/challenges"), Ct))).EnumerateArray().Single();
+        (listed.GetProperty("id").GetGuid(), listed.GetProperty("myState").ValueKind).ShouldBe((challenge, JsonValueKind.Null));
+        string work = $"api/v1/spaces/{space}/challenges/{challenge}/submission";
+        JsonElement kept = await JsonAsync(await teen.PutAsJsonAsync(work, new { body = "My street. Call 914-555-0188.", send = true }, Ct));
+        kept.GetProperty("state").GetString().ShouldBe("draft");
+        kept.GetProperty("refusedFor").GetArrayLength().ShouldBeGreaterThan(0);
+        JsonElement sent = await JsonAsync(await teen.PutAsJsonAsync(work, new { body = $"My street, with the park ({suffix}).", send = true }, Ct));
+        (sent.GetProperty("state").GetString(), sent.GetProperty("refusedFor").ValueKind).ShouldBe(("submitted", JsonValueKind.Null));
+        await ProblemAsync(await teen.PutAsJsonAsync(work, new { body = "Again.", send = false }, Ct), HttpStatusCode.Conflict, "challenges.sent");
+        await ProblemAsync(await stranger.GetAsync(Relative($"api/v1/spaces/{space}/challenges/{challenge}"), Ct), HttpStatusCode.NotFound, "challenges.not_found");
+        await ProblemAsync(await stranger.PutAsJsonAsync(work, new { body = "Mine.", send = true }, Ct), HttpStatusCode.NotFound, "challenges.not_found");
+
         // Nobody else reads it or writes in it.
         await ProblemAsync(await stranger.GetAsync(Relative($"api/v1/spaces/{space}"), Ct), HttpStatusCode.NotFound, "spaces.not_found");
         await ProblemAsync(await stranger.PostAsJsonAsync($"api/v1/spaces/{space}/posts", new { body = "Hi all." }, Ct), HttpStatusCode.NotFound, "spaces.not_found");
@@ -184,5 +202,8 @@ public sealed class SpacesApiTests(ApiFixture api)
         feed.Members.Count(m => !m.IsYouth).ShouldBe(2);
         (await client.PostInSpaceAsync(space, $"Thanks ({suffix})!", helloId, Ct)).Value!.IsPublished.ShouldBeTrue();
         (await client.ReportPostAsync(welcome, "spam", null, Ct)).Value!.Id.ShouldBe(report.GetProperty("id").GetGuid());
+        (await client.ChallengesAsync(space, Ct)).Value!.Single().ShouldSatisfyAllConditions(c => c.IsOpen.ShouldBeTrue(), c => c.MyState.ShouldBe("submitted"));
+        AppApi.Challenge ownWork = (await client.ChallengeAsync(space, challenge, Ct)).Value!;
+        (ownWork.CanSubmit, ownWork.Mine!.Body, ownWork.Submissions.Count).ShouldBe((false, $"My street, with the park ({suffix}).", 0));
     }
 }

@@ -278,6 +278,18 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult> DeletePostAsync(Guid space, Guid post, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"spaces/{space:D}/posts/{post:D}", null, signedIn: true, ct);
 
+    /// <summary>A space's challenges, newest first (D122).</summary>
+    public Task<ApiResult<IReadOnlyList<SpaceChallenge>>> ChallengesAsync(Guid space, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<SpaceChallenge>>($"spaces/{space:D}/challenges", signedIn: true, ct);
+
+    /// <summary>A challenge, with the person's own work for it.</summary>
+    public Task<ApiResult<Challenge>> ChallengeAsync(Guid space, Guid challenge, CancellationToken ct = default) =>
+        GetAsync<Challenge>($"spaces/{space:D}/challenges/{challenge:D}", signedIn: true, ct);
+
+    /// <summary>Saves the person's work for a challenge, and sends it when <paramref name="send"/>; it comes back kept, with why, if screening stops it.</summary>
+    public Task<ApiResult<ChallengeWork>> SaveWorkAsync(Guid space, Guid challenge, string body, bool send, CancellationToken ct = default) =>
+        SendAsync<ChallengeWork>(HttpMethod.Put, $"spaces/{space:D}/challenges/{challenge:D}/submission", new { body, send }, signedIn: true, ct);
+
     /// <summary>Reports a post someone else wrote in one of the person's spaces (D121).</summary>
     public Task<ApiResult<ReportReceipt>> ReportPostAsync(Guid postId, string reason, string? details, CancellationToken ct = default) =>
         SendAsync<ReportReceipt>(HttpMethod.Post, "reports", new { targetKind = "post", targetId = postId, reason, details }, signedIn: true, ct);

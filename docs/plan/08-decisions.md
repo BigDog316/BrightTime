@@ -4181,6 +4181,57 @@ a dismissal, a post its author took down keeping its reply, and the organisation
 kept from the history), and `SpacesApiTests` (reporting from the app: the receipt, the duplicate,
 her own post, an outsider, an unknown kind).
 
+### D122 — Challenges and submissions (**proposed 2026-11-28**)
+
+M5's challenges, submissions and feedback had tables and no code. Sam chose on 2026-11-28:
+challenges and submissions next; a young person's work is seen by its author and the space's
+staff only; written work only for now.
+- **A challenge** belongs to a space. Its staff set one in the console (a title, a brief, and a
+  due date if they like: the end of that day in the county's time), and close it. It opens when
+  it's set (`open`), and a closed one (`closed`, with `closed_at`) takes no more work while staff
+  still give feedback. The app shows a space's challenges under **Challenges** in the group.
+- **Who:** setting challenges and giving feedback is docs/plan/04's `submissions.give_feedback`
+  (programme staff and provider admins, for their organisation; mentors' share waits for M6),
+  behind the clearance gate, and only for someone on the space's staff. Sending work is for its
+  young people, as members. The organisation's other staff read a space's challenges and the work
+  sent, as they read everything in its spaces (T1), but don't give feedback.
+- **Work:** one per young person and challenge (`ux_submission_once`), up to 8,000 characters,
+  saved as often as they like while it's a draft or sent back, and sent when it's ready; once
+  sent it waits for feedback (`challenges.sent`). Two first saves at once give way to each other
+  (`on conflict do nothing`). Drafts are their author's alone; other young people never see
+  anyone's work, and staff see what's been sent, named as the roster names its author (D44).
+- **Screening:** what a young person sends is screened for personal information (D117), and
+  work that doesn't pass isn't sent: it stays theirs to change, they're told what to take out,
+  and the reasons stand until they change it again, as a project's are (D118). Each send is a
+  `screening_result` on the submission. A brief or feedback, where a young person reads it, is
+  screened for an attempt to take them off the platform (D53) and refused, with why, if it
+  doesn't pass (`challenges.screened`); a muted adult (D119) writes neither (`challenges.muted`).
+- **Feedback** is a comment, and, if staff like, a decision: accept the work, or send it back for
+  another go (`feedback.outcome`). A comment alone marks sent work `feedback_given`; work sent back
+  takes no decision until its author sends it again. Young people see feedback from the
+  organisation's staff, never by name; staff see each other's by email. Every feedback row is
+  kept, so the work's history is its feedback in order.
+- **Audit:** `challenges.read`, `challenges.set`, `challenges.closed`, `challenges.saved`,
+  `challenges.submitted` and `challenges.feedback_given`.
+- **Where:** the console's space page lists its challenges and sets one; a challenge's page
+  (`/provider/orgs/{org}/spaces/{space}/challenges/{challenge}`) shows the brief, closes it, and
+  shows each piece of work sent with its feedback and a feedback form. The app: a group's
+  **Challenges**, and a challenge's page with the person's own work. `GET /spaces/{id}/challenges`,
+  `GET /spaces/{id}/challenges/{challenge}` and `PUT /spaces/{id}/challenges/{challenge}/submission`
+  (`{ body, send }`).
+- **Not in this:** rubrics and scores (`rubric`, `rubric_criterion`, `feedback_score`), a badge for
+  accepted work (`challenge.badge_class_id`), a project or pictures as work (`submission.project_id`),
+  drafts set before opening and an opening time (`draft`, `opens_at`), notifications of a new
+  challenge or of feedback, reporting a submission, mentors (M6) and the showcase.
+
+Schema: `challenge.created_at`, `challenge.closed_at` (with `ck_challenge_closed`) and
+`ix_challenge_space`; `submission.updated_at`; `feedback.outcome` (with `ck_feedback_outcome`).
+Rebuild the compose volume. New permission `submissions.give_feedback`. Tests: `ChallengesTests`
+(setting one from the console; a screened brief; a young person setting none; a draft, work kept
+back with why and its `screening_result`, sent; another young person and the console never seeing
+a draft; sent back, changed, sent again, accepted, with the feedback rows and audit; closing),
+`SpacesApiTests` (the app's side), `RolePermissionTests`, and `ConsoleRouteMatrixTests`.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

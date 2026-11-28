@@ -308,9 +308,91 @@ public sealed class PostRecord
     public DateTimeOffset? EditedAt { get; init; }
 }
 
+/// <summary>A challenge set in a space (D122, <c>community.challenge</c>).</summary>
+public sealed class ChallengeRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid SpaceId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string BriefMd { get; init; }
+
+    /// <summary>The schema's, unused so far: rubrics come later.</summary>
+    public Guid? RubricId { get; init; }
+
+    /// <summary>The schema's, unused so far: a challenge opens when it's set.</summary>
+    public DateTimeOffset? OpensAt { get; init; }
+
+    public DateTimeOffset? DueAt { get; init; }
+
+    /// <summary>The schema's, unused so far: no badge is awarded for a challenge yet.</summary>
+    public Guid? BadgeClassId { get; init; }
+
+    public required string Status { get; set; }
+
+    public Guid? CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset? ClosedAt { get; set; }
+}
+
+/// <summary>A young person's work for a challenge (<c>community.submission</c>): one each, saved, sent and sent again.</summary>
+public sealed class SubmissionRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid ChallengeId { get; init; }
+
+    public Guid AuthorUserId { get; init; }
+
+    /// <summary>The schema's, unused so far: submissions are written (D122).</summary>
+    public Guid? ProjectId { get; init; }
+
+    public string? Body { get; set; }
+
+    public required string State { get; set; }
+
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    public string? ScreenResult { get; set; }
+
+    public DateTimeOffset? ScreenedAt { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>Staff's feedback on a submission (<c>community.feedback</c>), with what it decided.</summary>
+public sealed class FeedbackRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid SubmissionId { get; init; }
+
+    public Guid MentorUserId { get; init; }
+
+    public string? Comment { get; init; }
+
+    public bool IsOrgVisible { get; init; } = true;
+
+    public string? Outcome { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
 /// <summary>
 /// The Community module's context (M3b): messaging, the moderation of what screening holds (D114),
-/// reports (D115), and spaces with their posts (D120).
+/// reports (D115), spaces with their posts (D120), and challenges with their submissions (D122).
 /// </summary>
 public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
@@ -339,6 +421,12 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
     public DbSet<SpaceMemberRecord> SpaceMembers => Set<SpaceMemberRecord>();
 
     public DbSet<PostRecord> Posts => Set<PostRecord>();
+
+    public DbSet<ChallengeRecord> Challenges => Set<ChallengeRecord>();
+
+    public DbSet<SubmissionRecord> Submissions => Set<SubmissionRecord>();
+
+    public DbSet<FeedbackRecord> Feedback => Set<FeedbackRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -426,6 +514,32 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.HasIndex(x => new { x.SpaceId, x.PublishedAt }).IsDescending(false, true).HasFilter("state = 'published'");
             b.HasIndex(x => new { x.TenantId, x.CreatedAt }).HasFilter("state in ('screening','held')");
             b.HasIndex(x => x.AuthorUserId);
+        });
+
+        modelBuilder.Entity<ChallengeRecord>(b =>
+        {
+            b.ToTable("challenge");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.SpaceId, x.CreatedAt }).IsDescending(false, true);
+        });
+
+        modelBuilder.Entity<SubmissionRecord>(b =>
+        {
+            b.ToTable("submission");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.ScreenResult).HasColumnType("jsonb");
+            b.HasIndex(x => new { x.ChallengeId, x.AuthorUserId }).IsUnique();
+            b.HasIndex(x => new { x.ChallengeId, x.State });
+        });
+
+        modelBuilder.Entity<FeedbackRecord>(b =>
+        {
+            b.ToTable("feedback");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.SubmissionId);
         });
 
         modelBuilder.Entity<ReportRecord>(b =>

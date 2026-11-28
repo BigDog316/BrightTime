@@ -484,6 +484,12 @@ a.secondary {
     white-space: pre-wrap;
 }
 
+/* D122: a challenge's brief keeps its line breaks. */
+.brief {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .register {
     background: var(--bt-tint);
     border-radius: 0.5rem;

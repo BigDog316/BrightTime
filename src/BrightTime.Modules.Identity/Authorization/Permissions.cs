@@ -116,6 +116,15 @@ public static class Permissions
         public const string ManageMembership = "spaces.manage_membership";
     }
 
+    public static class Submissions
+    {
+        /// <summary>
+        /// Setting challenges in a space one is on the staff of, and giving feedback on the work sent
+        /// for them (docs/plan/04, D122). Mentors' share (◐ member) comes with M6.
+        /// </summary>
+        public const string GiveFeedback = "submissions.give_feedback";
+    }
+
     public static class Badges
     {
         /// <summary>Writing and publishing the organisation's badges (D66).</summary>
@@ -228,6 +237,7 @@ public static class Permissions
         Attendance.Record, Attendance.ViewRoster, Attendance.OfflineSync,
         Messages.SendToFamily,
         Spaces.View, Spaces.Post, Spaces.ManageMembership,
+        Submissions.GiveFeedback,
         Moderation.Triage, Moderation.Remove, Moderation.SuspendUser,
         Payments.Waive,
         Reports.RunProvider,

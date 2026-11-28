@@ -11,11 +11,15 @@ namespace BrightTime.Api.Groups;
 /// <summary>A post, or a reply to one published in the same space.</summary>
 public sealed record PostRequest(string? Body, Guid? ReplyTo);
 
+/// <summary>A young person's work for a challenge (D122), saved, and sent when <see cref="Send"/>.</summary>
+public sealed record SubmissionRequest(string? Body, bool Send);
+
 /// <summary>
 /// Spaces (M5, D120), as their members use them from the app: the spaces they're in, one with its
 /// posts, a post or a reply, and taking down their own. Opening a space and choosing its staff are
 /// the console's. Membership is the scope: nobody reads or writes a space they aren't in, and the
-/// not-found answer doesn't say whether it exists.
+/// not-found answer doesn't say whether it exists. A space's challenges (D122): reading them, and
+/// a young person's own work for one, saved and sent; setting them and feedback are the console's.
 /// </summary>
 public static class SpaceEndpoints
 {
@@ -28,7 +32,29 @@ public static class SpaceEndpoints
         spaces.MapGet("/{id:guid}", GetAsync).WithMetadata(new YouthRecordAttribute(Spaces.Read)).Produces<SpaceView>();
         spaces.MapPost("/{id:guid}/posts", PostAsync).WithMetadata(new YouthRecordAttribute(Spaces.Posted)).Produces<PostView>(StatusCodes.Status201Created);
         spaces.MapDelete("/{id:guid}/posts/{postId:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent);
+        spaces.MapGet("/{id:guid}/challenges", ChallengesAsync).WithMetadata(new YouthRecordAttribute(Challenges.Read)).Produces<IReadOnlyList<ChallengeSummary>>();
+        spaces.MapGet("/{id:guid}/challenges/{challengeId:guid}", ChallengeAsync).WithMetadata(new YouthRecordAttribute(Challenges.Read)).Produces<ChallengeView>();
+        spaces.MapPut("/{id:guid}/challenges/{challengeId:guid}/submission", SaveAsync).WithMetadata(new YouthRecordAttribute(Challenges.Saved)).Produces<SubmissionView>();
         return api;
+    }
+
+    private static async Task<IResult> ChallengesAsync(Guid id, ClaimsPrincipal user, Challenges challenges, AuditTrail audit, CancellationToken ct)
+    {
+        Result<IReadOnlyList<ChallengeSummary>> found = await challenges.ListAsync(Actor(user), id, ct);
+        return found.IsSuccess ? Results.Ok(found.Value) : Refused(audit, Challenges.Read, id, found.Error);
+    }
+
+    private static async Task<IResult> ChallengeAsync(Guid id, Guid challengeId, ClaimsPrincipal user, Challenges challenges, AuditTrail audit, CancellationToken ct)
+    {
+        Result<ChallengeView> found = await challenges.GetAsync(Actor(user), id, challengeId, ct);
+        return found.IsSuccess ? Results.Ok(found.Value) : Refused(audit, Challenges.Read, id, found.Error);
+    }
+
+    private static async Task<IResult> SaveAsync(Guid id, Guid challengeId, SubmissionRequest body, ClaimsPrincipal user, Challenges challenges, AuditTrail audit, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        Result<SubmissionView> saved = await challenges.SaveAsync(Actor(user), id, challengeId, body.Body, body.Send, ct);
+        return saved.IsSuccess ? Results.Ok(saved.Value) : Refused(audit, Challenges.Saved, id, saved.Error);
     }
 
     private static async Task<IResult> ListAsync(ClaimsPrincipal user, Spaces spaces, CancellationToken ct) =>

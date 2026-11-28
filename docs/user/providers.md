@@ -353,6 +353,13 @@ read them.
   read is checked for ways to talk off BrightTime, and refused with why.
 - **Archive** a space to keep it as it is, to read, and stop new posts. The activity can then have
   a new one.
+- **Showcase:** the **Showcase** page lists work you could put on the county's public showcase:
+  challenge work you accepted and projects you approved. **Ask to show it**, with a caption if you
+  like (no names or contact details: a caption with them is refused). It's shown only if the young
+  person says yes, under the name their portfolio shows, and only while they may show work in
+  public. Each piece is asked about once. **Take it down** (or **Withdraw the request** before they
+  answer), with a reason for your colleagues if you like; the young person is told only that it was
+  taken down.
 
 ## Reports
 

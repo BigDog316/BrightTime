@@ -523,6 +523,7 @@ public static class CommunityModule
         services.AddScoped<Moderation.HeldPosts>();
         services.AddScoped<Groups.Spaces>();
         services.AddScoped<Groups.Challenges>();
+        services.AddScoped<Showcasing.Showcase>();
         return services;
     }
 }

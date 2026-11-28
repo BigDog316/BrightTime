@@ -1,0 +1,124 @@
+@page "/organiser/moderation/showcase"
+@using BrightTime.Modules.Community.Showcasing
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.ModerationPolicy)]
+@attribute [YouthRecord(Showcase.Read)]
+@inherits ConsoleComponent
+
+@*
+    The public showcase, for the county's organisers and moderators (D124): what's on it now, and what
+    was taken down, newest first. They take anything down, with a reason for the organisation; its
+    author is told it was taken down, not why. They don't propose anything: that's the organisation's.
+*@
+<PageTitle>@T["moderation.showcase.title"] · BrightTime</PageTitle>
+
+<p class="eyebrow"><a href="/organiser/moderation">@T["site.nav.moderation"]</a></p>
+<h1>@T["moderation.showcase.title"]</h1>
+<p class="hint">@T["moderation.showcase.intro"]</p>
+
+@if (Done is { Length: > 0 } && T.Has("moderation.showcase.done." + Done))
+{
+    <p class="notice success" role="status">@T["moderation.showcase.done." + Done]</p>
+}
+@if (_problem is not null)
+{
+    <p class="notice error" role="alert">@_problem</p>
+}
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["moderation.no_database"]</p>
+}
+else if (!_allowed)
+{
+    <p>@T["moderation.showcase.denied"]</p>
+}
+else if (_items is { } items)
+{
+    @if (items.Count == 0)
+    {
+        <p>@T["moderation.showcase.none"]</p>
+    }
+    else
+    {
+        <ol class="held-messages">
+            @foreach (ShowcaseEntry item in items)
+            {
+                string id = item.Id.ToString("N");
+                <li>
+                    <article aria-labelledby="item-@id">
+                        <h2 id="item-@id"><span dir="auto">@item.Title</span> <span class="note">· @T["provider.showcase.state." + item.State]</span></h2>
+                        <p class="note">
+                            <bdi>@(item.DisplayName ?? "")</bdi> · <bdi>@item.OrgName</bdi> · @T["provider.showcase.kind." + item.Kind]
+                            @if (item.ShownAt is { } shown)
+                            {
+                                @(" · " + T.Format("moderation.showcase.shown_on", ("date", T.DateTime(shown))))
+                            }
+                        </p>
+                        @if (item.Caption is { Length: > 0 } caption)
+                        {
+                            <p>@T["provider.showcase.caption_label"] <span dir="auto">@caption</span></p>
+                        }
+                        @if (item.Reason is { Length: > 0 } reason)
+                        {
+                            <p>@T["provider.showcase.reason_label"] <span dir="auto">@reason</span></p>
+                        }
+                        <blockquote class="held-body" dir="auto">@item.Body</blockquote>
+                        @if (item.State == ShowcaseStates.Shown)
+                        {
+                            <form method="post" class="reason-form" @formname="@("take-down-" + id)" @onsubmit="() => TakeDownAsync(item.Id)">
+                                <AntiforgeryToken />
+                                <div class="field">
+                                    <label for="reason-@id">@T["provider.showcase.reason"]</label>
+                                    <input id="reason-@id" name="reason" maxlength="@Showcase.MaxReason" dir="auto" />
+                                </div>
+                                <button type="submit" class="secondary-button">@T["provider.showcase.take_down"]</button>
+                            </form>
+                        }
+                    </article>
+                </li>
+            }
+        </ol>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private IReadOnlyList<ShowcaseEntry>? _items;
+    private string? _problem;
+    private bool _allowed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allowed = User.HasPermission(Permissions.Showcase.Approve);
+        if (!Availability.IsAvailable || !_allowed)
+        {
+            return;
+        }
+
+        _items = await Get<Showcase>().ForCountyAsync();
+    }
+
+    private async Task TakeDownAsync(Guid item)
+    {
+        if (!_allowed)
+        {
+            Forbid();
+            return;
+        }
+
+        Result result = await Get<Showcase>().TakeDownAsync(Actor, null, item, FormValue("reason"));
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo("/organiser/moderation/showcase?done=taken_down");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

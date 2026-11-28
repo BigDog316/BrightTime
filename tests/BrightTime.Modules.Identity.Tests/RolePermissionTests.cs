@@ -115,6 +115,8 @@ public sealed class RolePermissionTests
             (Permissions.Spaces.Post, [BrightTimeRoles.Youth, BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
             (Permissions.Spaces.ManageMembership, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
             (Permissions.Submissions.GiveFeedback, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin]),
+            // The showcase (D124): staff for their organisation; the county's organisers and moderators take things down.
+            (Permissions.Showcase.Approve, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin, BrightTimeRoles.NetworkOrganiser, BrightTimeRoles.Moderator]),
         ];
         foreach ((string permission, string[] roles) in expected)
         {

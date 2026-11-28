@@ -71,6 +71,7 @@
         ("playlists", "/playlists", HttpContext.User.HasPermission(Permissions.Playlists.Author)),
         ("badges", "/badges", HttpContext.User.HasPermission(Permissions.Badges.Define) || HttpContext.User.HasPermission(Permissions.Badges.Issue) || HttpContext.User.HasPermission(Permissions.Badges.Revoke)),
         ("work", "/work", HttpContext.User.HasPermission(Permissions.Projects.Review) || HttpContext.User.HasPermission(Permissions.Playlists.ReviewSteps)),
+        ("showcase", "/showcase", HttpContext.User.HasPermission(Permissions.Showcase.Approve)),
         ("reports", "/reports", HttpContext.User.HasPermission(Permissions.Reports.RunProvider)),
     ];
 }

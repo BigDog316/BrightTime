@@ -296,6 +296,7 @@ public static class LearningModule
         services.AddScoped<Records.Goals>();
         services.AddScoped<Records.Skills>();
         services.AddScoped<Records.Projects>();
+        services.AddScoped<IShowcaseWork, Records.ShowcaseWork>();
         services.AddScoped<Infrastructure.Auditing.IAuditSubjects, LearningAuditSubjects>();
         services.AddAchievementQueries();
         return services;

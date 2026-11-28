@@ -391,8 +391,54 @@ public sealed class FeedbackRecord
 }
 
 /// <summary>
+/// An item on, or proposed for, the public showcase (<c>community.showcase_item</c>, D124): the work
+/// as it was approved, and when its author said yes or it was taken down.
+/// </summary>
+public sealed class ShowcaseItemRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid OrgId { get; init; }
+
+    public Guid AuthorUserId { get; init; }
+
+    public Guid? ProjectId { get; init; }
+
+    public Guid? SubmissionId { get; init; }
+
+    public required string Title { get; init; }
+
+    public required string Body { get; init; }
+
+    public required string OrgName { get; init; }
+
+    public string? DisplayName { get; set; }
+
+    public string? Caption { get; init; }
+
+    public Guid ApprovedBy { get; init; }
+
+    public DateTimeOffset ApprovedAt { get; init; }
+
+    public Guid? GuardianConsentId { get; set; }
+
+    public bool GuardianManaged { get; set; }
+
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    public DateTimeOffset? UnpublishedAt { get; set; }
+
+    public Guid? UnpublishedBy { get; set; }
+
+    public string? UnpublishReason { get; set; }
+}
+
+/// <summary>
 /// The Community module's context (M3b): messaging, the moderation of what screening holds (D114),
-/// reports (D115), spaces with their posts (D120), and challenges with their submissions (D122).
+/// reports (D115), spaces with their posts (D120), challenges with their submissions (D122), and the
+/// showcase (D124).
 /// </summary>
 public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
@@ -427,6 +473,8 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
     public DbSet<SubmissionRecord> Submissions => Set<SubmissionRecord>();
 
     public DbSet<FeedbackRecord> Feedback => Set<FeedbackRecord>();
+
+    public DbSet<ShowcaseItemRecord> ShowcaseItems => Set<ShowcaseItemRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -540,6 +588,17 @@ public sealed class CommunityDbContext(DbContextOptions<CommunityDbContext> opti
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => x.SubmissionId);
+        });
+
+        modelBuilder.Entity<ShowcaseItemRecord>(b =>
+        {
+            b.ToTable("showcase_item");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.ProjectId).IsUnique().HasFilter("project_id is not null");
+            b.HasIndex(x => x.SubmissionId).IsUnique().HasFilter("submission_id is not null");
+            b.HasIndex(x => new { x.OrgId, x.ApprovedAt }).IsDescending(false, true);
+            b.HasIndex(x => x.AuthorUserId);
         });
 
         modelBuilder.Entity<ReportRecord>(b =>

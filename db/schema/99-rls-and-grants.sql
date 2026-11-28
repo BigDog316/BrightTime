@@ -161,6 +161,37 @@ grant select on learning.learner_skill to brighttime_migrator;
 revoke all on function learning.public_skills(uuid, text) from public;
 grant execute on function learning.public_skills(uuid, text) to brighttime_app;
 
+-- The public showcase (D124), read by people who aren't signed in; its items sit behind the actor
+-- guard until they're shown. This returns only what's shown: items their author said yes to and
+-- nobody has taken down, while the author may still publish to the showcase (a guardian's consent
+-- withdrawn, or an account suspended, takes them all off at once) and the work hasn't been removed.
+-- What it returns is what the item holds: no account, no enrolment, no legal name. It runs as the
+-- migrator (BYPASSRLS), and checks the tenant itself.
+create or replace function community.public_showcase(p_tenant uuid, p_before timestamptz, p_limit int)
+returns table (id uuid, display_name text, title text, body text, caption text, org_name text, kind text, published_at timestamptz)
+language sql stable security definer set search_path = pg_catalog, community as $fn$
+  select s.id, s.display_name, s.title, s.body, s.caption, s.org_name,
+         case when s.project_id is not null then 'project' else 'submission' end, s.published_at
+    from community.showcase_item s
+    join identity.youth_capability c on c.user_id = s.author_user_id and c.tenant_id = s.tenant_id
+   where s.tenant_id = p_tenant
+     and s.published_at is not null
+     and s.unpublished_at is null
+     and (p_before is null or s.published_at < p_before)
+     and c.can_publish_showcase
+     and not c.is_under_13
+     and (s.project_id is null or exists (
+           select 1 from learning.project p where p.id = s.project_id and p.status in ('approved', 'published')))
+     and (s.submission_id is null or exists (
+           select 1 from community.submission w where w.id = s.submission_id and w.state = 'accepted'))
+   order by s.published_at desc, s.id desc
+   limit least(greatest(coalesce(p_limit, 24), 1), 100);
+$fn$;
+alter function community.public_showcase(uuid, timestamptz, int) owner to brighttime_migrator;
+grant select on community.showcase_item, community.submission, identity.youth_capability, learning.project to brighttime_migrator;
+revoke all on function community.public_showcase(uuid, timestamptz, int) from public;
+grant execute on function community.public_showcase(uuid, timestamptz, int) to brighttime_app;
+
 -- platform.data_protection_key: the hosts' shared key ring, encrypted at rest,
 -- no tenant data. The hosts read and add keys; nothing updates or deletes one.
 alter table platform.data_protection_key enable row level security;
@@ -300,6 +331,7 @@ begin
       ('community', 'report'),
       ('community', 'screening_result'),
       ('community', 'person_restriction'),
+      ('community', 'showcase_item'),
       ('landscape', 'survey_response'),
       ('landscape', 'field_observation'),
       ('landscape', 'field_assignment'),

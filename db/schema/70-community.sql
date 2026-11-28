@@ -468,24 +468,49 @@ create table person_restriction (
 create index ix_person_restriction_user on person_restriction (user_id, kind, ends_at) where lifted_at is null;
 create index ix_person_restriction_message on person_restriction (source_message_id) where source_message_id is not null;
 
+-- Work on the site's public showcase (D124). Staff of the organisation propose it (approved_by,
+-- approved_at), with what it says as it was approved (title, body) and a caption; it's public only
+-- once its author says yes (published_at), with the name they chose for their portfolio. Declined
+-- before it was shown, or taken down after, is unpublished_at, by its author, the organisation's
+-- staff or the county. One item per piece of work, ever: what's declined isn't asked again.
 create table showcase_item (
   id            uuid primary key,
   tenant_id     uuid not null references platform.tenant(id) on delete cascade,
+  org_id        uuid not null references directory.organisation(id) on delete cascade,
+  author_user_id uuid not null references identity.app_user(id) on delete cascade,
   project_id    uuid references learning.project(id) on delete cascade,
   submission_id uuid references submission(id) on delete cascade,
-  display_name  text not null,
+  title         text not null,
+  body          text not null,
+  org_name      text not null,
+  display_name  text,
   caption       text,
   approved_by   uuid not null references identity.app_user(id) on delete restrict,
   approved_at   timestamptz not null default now(),
   guardian_consent_id uuid references identity.parental_consent(id),
-  author_is_minor boolean not null,
+  -- Whether a guardian's consent decides for this author (a child account, or a teenager a
+  -- verified guardian manages), as the capability calculator decides it; a teenager without a
+  -- guardian link consents for themselves.
+  guardian_managed boolean not null default false,
   published_at  timestamptz,
   unpublished_at timestamptz,
+  unpublished_by uuid references identity.app_user(id) on delete set null,
+  unpublish_reason text,
   constraint ck_showcase_source check (
     (project_id is not null)::int + (submission_id is not null)::int = 1),
-  -- A minor's work may not be published without a recorded showcase consent.
+  constraint ck_showcase_text check (length(btrim(title)) between 1 and 200 and length(body) <= 10000
+    and (caption is null or length(btrim(caption)) between 1 and 300)),
+  -- Shown with a name, the author's own choice.
+  constraint ck_showcase_named check (published_at is null or display_name is not null),
+  -- A guardian-managed author's work may not be published without a recorded showcase consent.
   constraint ck_showcase_minor_consent
-    check (not author_is_minor or guardian_consent_id is not null)
+    check (published_at is null or not guardian_managed or guardian_consent_id is not null),
+  constraint ck_showcase_unpublished check (unpublished_at is null or unpublished_at >= approved_at),
+  constraint ck_showcase_reason check (unpublish_reason is null or length(unpublish_reason) <= 500)
 );
+create unique index ux_showcase_project on showcase_item (project_id) where project_id is not null;
+create unique index ux_showcase_submission on showcase_item (submission_id) where submission_id is not null;
 create index ix_showcase_published on showcase_item (tenant_id, published_at desc)
   where published_at is not null and unpublished_at is null;
+create index ix_showcase_org on showcase_item (org_id, approved_at desc);
+create index ix_showcase_author on showcase_item (author_user_id);

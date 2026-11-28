@@ -1,0 +1,76 @@
+@page "/showcase"
+@* The county's showcase of young people's work (D124): work an organisation's staff accepted or
+   approved, which its author chose to show, under the name they chose for their portfolio. It is
+   read only through Showcase.ShownAsync, which returns what each item holds and never an account,
+   a legal name or an enrolment; an item leaves as soon as its author, the organisation or the
+   county takes it down, or a guardian's consent is withdrawn. Newest first, a page at a time. *@
+@attribute [YouthRecord(Showcase.PublicRead)]
+@using System.Globalization
+@using BrightTime.Modules.Community.Showcasing
+@using BrightTime.SharedKernel.Privacy
+@inject NavigationManager Navigation
+
+<PageTitle>@T["showcase.page.title"] · BrightTime</PageTitle>
+
+<article class="showcase" aria-labelledby="showcase-title">
+    <header>
+        <h1 id="showcase-title">@T["showcase.page.title"]</h1>
+        <p class="lead">@T["showcase.page.intro"]</p>
+    </header>
+
+    @if (_items is { Count: 0 })
+    {
+        <p>@T[Before is null ? "showcase.page.none" : "showcase.page.no_more"]</p>
+    }
+    else if (_items is { } items)
+    {
+        <ul class="records">
+            @foreach (ShownWork w in items)
+            {
+                <li @key="w.Id">
+                    <h2 dir="auto">@w.Title</h2>
+                    <p class="note">
+                        @T.Format("showcase.page.by", ("name", w.DisplayName)) · <bdi>@w.OrgName</bdi> · @T.DateShort(w.ShownAt)
+                    </p>
+                    <p class="bio" dir="auto">@w.Body</p>
+                    @if (w.Caption is { Length: > 0 } caption)
+                    {
+                        <p class="note">@T.Format("showcase.page.caption", ("org", w.OrgName)) <span dir="auto">@caption</span></p>
+                    }
+                </li>
+            }
+        </ul>
+        @if (items.Count == Showcase.PageSize)
+        {
+            <p><a href="/showcase?before=@Uri.EscapeDataString(items[^1].ShownAt.ToString("O", CultureInfo.InvariantCulture))">@T["showcase.page.older"]</a></p>
+        }
+    }
+
+    <p class="note">@T["showcase.page.note"]</p>
+</article>
+
+@code {
+    [SupplyParameterFromQuery(Name = "before")] public string? Before { get; set; }
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private IReadOnlyList<ShownWork>? _items;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Sample data has no showcase.
+        if (HttpContext?.RequestServices.GetService<Showcase>() is not { } showcase)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        DateTimeOffset? before = DateTimeOffset.TryParse(Before, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset at) ? at : null;
+        _items = await showcase.ShownAsync(before, Showcase.PageSize, HttpContext.RequestAborted);
+        if (HttpContext is { Response: { HasStarted: false } response })
+        {
+            // What it shows is its authors' to take back at any moment: nothing keeps a copy.
+            response.Headers.CacheControl = "no-store";
+        }
+    }
+}

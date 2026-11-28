@@ -1,0 +1,136 @@
+@page "/portfolio/showcase"
+@* The person's work on BrightTime's public showcase (D124). Staff of their organisations ask to
+   show a piece: accepted challenge work or an approved project. Nothing is shown unless they say
+   yes, under the name their portfolio shows; no is for good, and they take anything down at any
+   time. The server decides whether showing is open to them (13 and over, and a guardian's consent
+   where a guardian decides), and says why when it isn't. *@
+@inject BrightTimeApi Api
+@inject AppSession Session
+@inject AppEndpoints Endpoints
+@inject IExternalLauncher Launcher
+
+<p class="eyebrow"><a href="portfolio">@T["app.portfolio.title"]</a></p>
+<h1>@T["app.showcase.title"]</h1>
+
+@if (!Session.IsSignedIn)
+{
+    <a class="button primary" href="sign-in">@T["account.sign_in.title"]</a>
+}
+else
+{
+    <p class="hint">@T["app.showcase.intro"]</p>
+    <p class="visually-hidden" role="status">@_said</p>
+    <ProblemNotice Problem="_problem" Retry="LoadAsync" />
+    <ProblemNotice Problem="_actProblem" />
+    @if (_items is null && _problem is null)
+    {
+        <Busy />
+    }
+    else if (_items is { Count: 0 })
+    {
+        <p>@T["app.showcase.none"]</p>
+    }
+    else if (_items is { } items)
+    {
+        <ul class="cards">
+            @foreach (ShowcaseEntry item in items)
+            {
+                <li class="card" @key="item.Id">
+                    <h2 dir="auto">@item.Title</h2>
+                    <p class="hint">@T.Format("app.showcase.asked_by", ("org", Text.Name(item.OrgName)), ("date", T.DateShort(item.ProposedAt)))</p>
+                    @if (item.Caption is { Length: > 0 } caption)
+                    {
+                        <p>@T["app.showcase.caption"] <span dir="auto">@caption</span></p>
+                    }
+                    <div class="body" dir="auto">@item.Body</div>
+                    <p><strong>@StateText(item)</strong></p>
+                    @if (item.IsWaiting)
+                    {
+                        <p class="notice">@T["app.showcase.ask"]</p>
+                        <div class="actions">
+                            <button type="button" class="primary" disabled="@(_busy == item.Id)" @onclick="() => AnswerAsync(item, show: true)">@T["app.showcase.yes"]</button>
+                            <button type="button" disabled="@(_busy == item.Id)" @onclick="() => AnswerAsync(item, show: false)">@T["app.showcase.no"]</button>
+                        </div>
+                    }
+                    else if (item.IsShown)
+                    {
+                        <div class="actions">
+                            <button type="button" @onclick="() => Launcher.OpenAsync(Endpoints.Showcase)">@T["app.showcase.open"]</button>
+                            <button type="button" disabled="@(_busy == item.Id)" @onclick="() => TakeDownAsync(item)">@T["app.showcase.take_down"]</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<ShowcaseEntry>? _items;
+    private ApiProblem? _problem;
+    private ApiProblem? _actProblem;
+    private Guid? _busy;
+    private string? _said;
+
+    protected override Task OnInitializedAsync() => Session.IsSignedIn ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        _problem = null;
+        ApiResult<IReadOnlyList<ShowcaseEntry>> found = await Api.ShowcaseAsync();
+        _problem = found.Problem;
+        _items = found.Value ?? _items;
+    }
+
+    private async Task AnswerAsync(ShowcaseEntry item, bool show)
+    {
+        _busy = item.Id;
+        _actProblem = null;
+        try
+        {
+            ApiResult<ShowcaseEntry> answered = await Api.AnswerShowcaseAsync(item.Id, show);
+            if (answered.Value is null)
+            {
+                _actProblem = answered.Problem;
+                return;
+            }
+
+            await LoadAsync();
+            _said = show ? T["app.showcase.state.shown"] : T["app.showcase.state.declined"];
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private async Task TakeDownAsync(ShowcaseEntry item)
+    {
+        _busy = item.Id;
+        _actProblem = null;
+        try
+        {
+            ApiResult taken = await Api.TakeDownShowcaseAsync(item.Id);
+            if (taken.Problem is { } problem)
+            {
+                _actProblem = problem;
+                return;
+            }
+
+            await LoadAsync();
+            _said = T["app.showcase.state.taken_down_by_you"];
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private string StateText(ShowcaseEntry item) => item.State switch
+    {
+        "shown" => T.Format("app.showcase.state.shown_since", ("date", T.DateShort(item.ShownAt ?? item.ProposedAt)), ("name", item.DisplayName ?? "")),
+        "declined" => T["app.showcase.state.declined"],
+        "taken_down" => item.EndedByAuthor ? T["app.showcase.state.taken_down_by_you"] : T["app.showcase.state.taken_down"],
+        _ => T["app.showcase.state.waiting"],
+    };
+}

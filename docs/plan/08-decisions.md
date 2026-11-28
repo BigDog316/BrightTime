@@ -4282,6 +4282,73 @@ file kept; the 4,096 limit; an infected upload refused and audited; a scanner th
 worker's scan of pictures kept before), and `SqlModeCompositionTests` (Production needs clamd).
 The picture tests that compared bytes with the upload now compare pixels.
 
+### D124 — The showcase, with the young person's say-so (**proposed 2026-11-28**)
+
+M5's showcase had a table (`showcase_item`) and no code. Sam chose on 2026-11-28: the showcase next;
+challenge work staff accepted (D122) and projects staff approved (D69); staff propose and the young
+person opts in.
+- **Proposed by staff:** on the organisation's new **Showcase** page in the console
+  (`/provider/orgs/{org}/showcase`), its staff with docs/plan/04's `showcase.approve` (programme
+  staff and provider admins, for their organisation, behind the clearance gate) see the work they
+  could propose (accepted challenge work in their spaces, and projects about their activities they
+  approved) and propose a piece, with a caption of up to 300 characters if they like. The caption
+  is shown in public, so it's screened for personal information (D117) and refused, with why, if
+  it has any (`showcase.screened`). What's proposed is kept on the item as it was approved: its
+  title, its words and the organisation's name.
+- **Shown only when its author says yes:** the young person sees it in the app (**Portfolio** ›
+  **Showcase**), and says **Yes, show it** or **No thanks**. Yes needs:
+  - the showcase capability (`showcase.not_open`): nobody under 13, and a guardian's showcase
+    consent where a guardian decides (a child account, or a teenager a verified guardian manages);
+    a teenager without a guardian link consents for themselves, as everywhere (D4);
+  - a portfolio display name (`showcase.display_name`), without their family name
+    (`showcase.display_name_legal`, D80); the item is shown under it, kept as it was;
+  - the work still approved or accepted (`showcase.changed`).
+  The item then records `guardian_managed` and, when a guardian decides, the live consent's id
+  (`guardian_consent_id`), and `ck_showcase_minor_consent` refuses a published, guardian-managed
+  item without one. No is for good: each piece is asked about once (`ux_showcase_project`,
+  `ux_showcase_submission`; `showcase.already`).
+- **Taken down:** by its author, at any time (shown or still waiting); by the organisation's
+  staff (shown, or withdrawn before an answer); or by the county's network organisers and
+  moderators, from the new `/organiser/moderation/showcase` (linked from **Moderation**), which
+  lists what's shown and what was taken down. Staff and the county may give a reason, which staff
+  see; the author is told only that it was taken down. A take-down is for good.
+- **Off by itself:** the public page shows an item only while its author may still publish to the
+  showcase (a consent withdrawn or an account suspended takes everything of theirs off at once),
+  and while its project is still approved or shown and its challenge work still accepted. A
+  project changed after approval goes back to a draft (D69), and so leaves the showcase.
+- **The public page:** `/showcase` on the website, linked from every page's footer, and `GET
+  /api/v1/public/showcase` (anonymous, rate-limited, `?before=` for the next page): newest first,
+  24 at a time, each with the name its author chose, the title, the words, the caption and the
+  organisation, and nothing else: no account, legal name or enrolment. Every answer is `no-store`.
+  The items sit behind the actor guard, so the page reads them through a definer function,
+  `community.public_showcase(tenant, before, limit)`, which applies every rule above; each read is
+  audited (`showcase.public_read`).
+- **The app:** `GET /me/showcase`, `POST /me/showcase/{id}/answer` (`{ show }`) and `POST
+  /me/showcase/{id}/take-down`.
+- **Modules:** the showcase is Community's; it reads projects through a new Learning contract,
+  `IShowcaseWork`, so Community may now use Learning's contracts (the module DAG gains that edge,
+  which follows the schema's keys, D70). Identity answers `GetConsentBasisAsync` (whose consent
+  decides a scope, and the live consent's id).
+- **Audit:** `showcase.read`, `showcase.proposed`, `showcase.published`, `showcase.declined`,
+  `showcase.taken_down` (with who: the author, the organisation or the county) and
+  `showcase.public_read`.
+- **Not in this:** pictures on the showcase (a project's pictures are private, D104); a notice to
+  the young person when work is proposed, or to staff when they answer; asking a guardian from the
+  showcase; reporting a showcase item; featuring or ordering items; and the showcase in the app.
+
+Schema: `showcase_item` reshaped: `org_id`, `author_user_id`, `title`, `body`, `org_name`,
+`guardian_managed`, `unpublished_by` and `unpublish_reason` added; `display_name` null until it's
+shown (`ck_showcase_named`); `author_is_minor` replaced by `guardian_managed`, so
+`ck_showcase_minor_consent` follows the capability calculator; `ck_showcase_text`,
+`ck_showcase_unpublished`, `ck_showcase_reason`; `ux_showcase_project`, `ux_showcase_submission`,
+`ix_showcase_org`, `ix_showcase_author`; the table joins the actor guard; and
+`community.public_showcase()`. Rebuild the compose volume. New permission `showcase.approve`.
+Tests: `ShowcaseTests` (proposing from the console, a screened caption, once per piece, the family
+name refused and a new name accepted, someone who can't publish, no for good, the public page, a
+project back to a draft and a withdrawn capability taking work off, the county's take-down and
+what the author and staff are told, the audit; the schema's consent check), `ShowcaseApiTests` (the
+app's side and the public API), `RolePermissionTests` and `ModuleBoundaryTests`.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

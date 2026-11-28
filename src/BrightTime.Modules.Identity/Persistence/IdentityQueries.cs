@@ -40,6 +40,25 @@ public sealed class IdentityQueries(IdentityDbContext db, IClock clock) : IIdent
     public Task<bool> IsMinorAsync(UserId userId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync(ct => IsMinorCoreAsync(userId, ct), cancellationToken);
 
+    public Task<ConsentBasis> GetConsentBasisAsync(UserId youthUserId, ConsentScope scope, CancellationToken cancellationToken = default) =>
+        db.InTransactionAsync(async ct =>
+        {
+            DateTimeOffset now = clock.UtcNow;
+            string? kind = await db.Users.AsNoTracking().Where(u => u.Id == youthUserId.Value).Select(u => u.AccountKind).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            bool verifiedGuardian = await db.GuardianLinks.AsNoTracking()
+                .AnyAsync(l => l.ChildUserId == youthUserId.Value && l.Status == GuardianLinkStatus.Verified && l.RevokedAt == null, ct).ConfigureAwait(false);
+
+            // As the calculator's RequiresConsent: an unknown account is a guardian's to decide.
+            bool guardianManaged = kind is null or AccountKind.Child || (kind != AccountKind.Adult && verifiedGuardian);
+            string value = scope.ToDbValue();
+            Guid? consent = await db.ParentalConsents.AsNoTracking()
+                .Where(c => c.ChildUserId == youthUserId.Value && c.Scope == value && c.RevokedAt == null && (c.ExpiresAt == null || c.ExpiresAt > now))
+                .OrderByDescending(c => c.GrantedAt)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            return new ConsentBasis(guardianManaged, consent);
+        }, cancellationToken);
+
     public Task<IReadOnlyList<string>> GetRoleNamesAsync(UserId userId, CancellationToken cancellationToken = default) =>
         db.InTransactionAsync<IReadOnlyList<string>>(async ct => await db.Database.SqlQuery<string>(
                 $"select r.name::text as \"Value\" from identity.app_user_role ur join identity.app_role r on r.id = ur.role_id where ur.user_id = {userId.Value} order by 1")

@@ -125,6 +125,17 @@ public static class Permissions
         public const string GiveFeedback = "submissions.give_feedback";
     }
 
+    public static class Showcase
+    {
+        /// <summary>
+        /// Proposing the organisation's young people's work for the public showcase, and taking it
+        /// down (docs/plan/04, D124): programme staff and provider admins for their organisation; the
+        /// county's organisers and moderators take anything down. Nothing is shown until its author
+        /// says yes.
+        /// </summary>
+        public const string Approve = "showcase.approve";
+    }
+
     public static class Badges
     {
         /// <summary>Writing and publishing the organisation's badges (D66).</summary>
@@ -238,6 +249,7 @@ public static class Permissions
         Messages.SendToFamily,
         Spaces.View, Spaces.Post, Spaces.ManageMembership,
         Submissions.GiveFeedback,
+        Showcase.Approve,
         Moderation.Triage, Moderation.Remove, Moderation.SuspendUser,
         Payments.Waive,
         Reports.RunProvider,

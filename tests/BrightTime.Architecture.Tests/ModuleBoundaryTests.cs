@@ -25,7 +25,8 @@ public sealed class ModuleBoundaryTests
         ["Notifications"] = ["Platform", "Identity"],
         ["Enrollment"] = ["Platform", "Identity", "Directory", "Opportunities"],
         ["Attendance"] = ["Platform", "Identity", "Directory", "Opportunities", "Enrollment"],
-        ["Community"] = ["Platform", "Identity", "Directory", "Opportunities", "Enrollment"],
+        // The showcase (D124) holds learning's approved projects: community's keys already point there (D70).
+        ["Community"] = ["Platform", "Identity", "Directory", "Opportunities", "Enrollment", "Learning"],
         ["Learning"] = ["Platform", "Identity", "Directory", "Opportunities", "Enrollment", "Attendance"],
     };
 

@@ -290,6 +290,18 @@ public sealed class BrightTimeApi(HttpClient http, AppSession session, ITextCont
     public Task<ApiResult<ChallengeWork>> SaveWorkAsync(Guid space, Guid challenge, string body, bool send, CancellationToken ct = default) =>
         SendAsync<ChallengeWork>(HttpMethod.Put, $"spaces/{space:D}/challenges/{challenge:D}/submission", new { body, send }, signedIn: true, ct);
 
+    /// <summary>The person's own work on, or proposed for, the showcase (D124).</summary>
+    public Task<ApiResult<IReadOnlyList<ShowcaseEntry>>> ShowcaseAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ShowcaseEntry>>("me/showcase", signedIn: true, ct);
+
+    /// <summary>Says yes (shown under the portfolio's name) or no (for good) to work proposed for the showcase.</summary>
+    public Task<ApiResult<ShowcaseEntry>> AnswerShowcaseAsync(Guid id, bool show, CancellationToken ct = default) =>
+        SendAsync<ShowcaseEntry>(HttpMethod.Post, $"me/showcase/{id:D}/answer", new { show }, signedIn: true, ct);
+
+    /// <summary>Takes the person's own work off the showcase, or withdraws it before answering: for good.</summary>
+    public Task<ApiResult> TakeDownShowcaseAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"me/showcase/{id:D}/take-down", null, signedIn: true, ct);
+
     /// <summary>Reports a post someone else wrote in one of the person's spaces (D121).</summary>
     public Task<ApiResult<ReportReceipt>> ReportPostAsync(Guid postId, string reason, string? details, CancellationToken ct = default) =>
         SendAsync<ReportReceipt>(HttpMethod.Post, "reports", new { targetKind = "post", targetId = postId, reason, details }, signedIn: true, ct);

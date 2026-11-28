@@ -170,6 +170,13 @@ Either ends by itself; **Lift it now**, with a reason, ends it sooner. Young peo
 aren't muted or suspended here, and a post's history doesn't offer it yet: mute or suspend from
 one of the person's messages.
 
+## The showcase
+
+**Moderation** › **The showcase** lists what's on the public showcase now, and what was taken down.
+Organisations propose work and young people say yes to it; you don't propose anything. **Take it
+down** stops it being shown at once, with a reason the organisation's staff see; the young person
+is told only that it was taken down. A take-down is for good.
+
 ## Taxonomy
 
 **Taxonomy** holds the words providers tag listings with and families filter by, in four

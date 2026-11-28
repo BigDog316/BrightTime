@@ -1,0 +1,199 @@
+@page "/provider/orgs/{OrgId:guid}/showcase"
+@using BrightTime.Modules.Community.Showcasing
+@using BrightTime.Modules.Identity.Authorization
+@using BrightTime.SharedKernel.Ids
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.SharedKernel.Privacy
+@using BrightTime.Web.Components.Console.Forms
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@attribute [YouthRecord(Showcase.Read)]
+@inherits ConsoleComponent
+
+@*
+    The organisation's part of the public showcase (D124), for its staff with showcase.approve: work
+    they could propose (challenge work they accepted, projects they approved), each with a caption
+    form; and what they've proposed, waiting for its author's answer, shown, declined or taken down,
+    each that hasn't ended with a take-down form. Nothing is shown until its author says yes.
+*@
+@if (Forbidden)
+{
+    <PageTitle>@T["site.denied.title"] · BrightTime</PageTitle>
+    <h1>@T["provider.showcase.denied"]</h1>
+    <p>@T["provider.showcase.denied_hint"] <a href="/provider">@T["provider.go_to_organisations"]</a></p>
+}
+else if (_items is { } items && _candidates is { } candidates)
+{
+    <PageTitle>@T.Format("provider.showcase.title", ("organisation", _name)) · BrightTime</PageTitle>
+
+    <h1>@T.Format("provider.showcase.title", ("organisation", _name))</h1>
+    <OrgNav OrgId="@OrgId" Current="showcase" Role="@(RoleIn(Org) ?? "")" />
+    <p class="hint">@T["provider.showcase.intro"]</p>
+
+    @if (Done is { Length: > 0 } && T.Has("provider.showcase.done." + Done))
+    {
+        <p class="notice success" role="status">@T["provider.showcase.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <section aria-labelledby="proposed">
+        <h2 id="proposed">@T["provider.showcase.proposed"] <span class="count">(@items.Count)</span></h2>
+        @if (items.Count == 0)
+        {
+            <p>@T["provider.showcase.none_proposed"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (ShowcaseEntry item in items)
+                {
+                    string id = item.Id.ToString("N");
+                    <li>
+                        <article aria-labelledby="item-@id">
+                            <h3 id="item-@id"><span dir="auto">@item.Title</span> <span class="note">· @T["provider.showcase.state." + item.State]</span></h3>
+                            <p class="note">
+                                <bdi>@(item.AuthorName ?? T["provider.showcase.no_name"])</bdi> · @T["provider.showcase.kind." + item.Kind]
+                                · @T.Format("provider.showcase.proposed_on", ("date", T.DateTime(item.ProposedAt)))
+                                @if (item.ShownAt is { } shown)
+                                {
+                                    @(" · " + T.Format("provider.showcase.shown_on", ("date", T.DateTime(shown)), ("name", item.DisplayName ?? "")))
+                                }
+                                @if (item.EndedAt is { } ended)
+                                {
+                                    @(" · " + T.Format(item.EndedByAuthor ? "provider.showcase.ended_by_author" : "provider.showcase.ended_by_staff", ("date", T.DateTime(ended))))
+                                }
+                            </p>
+                            @if (item.Caption is { Length: > 0 } caption)
+                            {
+                                <p>@T["provider.showcase.caption_label"] <span dir="auto">@caption</span></p>
+                            }
+                            @if (item.Reason is { Length: > 0 } reason)
+                            {
+                                <p>@T["provider.showcase.reason_label"] <span dir="auto">@reason</span></p>
+                            }
+                            <blockquote class="held-body" dir="auto">@item.Body</blockquote>
+                            @if (item.State is ShowcaseStates.Waiting or ShowcaseStates.Shown)
+                            {
+                                <form method="post" class="reason-form" @formname="@("take-down-" + id)" @onsubmit="() => TakeDownAsync(item.Id)">
+                                    <AntiforgeryToken />
+                                    <div class="field">
+                                        <label for="reason-@id">@T["provider.showcase.reason"]</label>
+                                        <input id="reason-@id" name="reason" maxlength="@Showcase.MaxReason" dir="auto" />
+                                    </div>
+                                    <button type="submit" class="secondary-button">@T[item.State == ShowcaseStates.Shown ? "provider.showcase.take_down" : "provider.showcase.withdraw"]</button>
+                                </form>
+                            }
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+
+    <section aria-labelledby="candidates">
+        <h2 id="candidates">@T["provider.showcase.candidates"] <span class="count">(@candidates.Count)</span></h2>
+        <p class="hint">@T["provider.showcase.candidates_hint"]</p>
+        @if (candidates.Count == 0)
+        {
+            <p>@T["provider.showcase.none_candidates"]</p>
+        }
+        else
+        {
+            <ol class="held-messages">
+                @foreach (ShowcaseCandidate c in candidates)
+                {
+                    string id = c.Id.ToString("N");
+                    <li>
+                        <article aria-labelledby="candidate-@id">
+                            <h3 id="candidate-@id" dir="auto">@c.Title</h3>
+                            <p class="note">
+                                <bdi>@(c.AuthorName ?? T["provider.showcase.no_name"])</bdi> · @T["provider.showcase.kind." + c.Kind]
+                                @if (c.Where is { Length: > 0 } where)
+                                {
+                                    @(" · ")<bdi>@where</bdi>
+                                }
+                                · @T.DateTime(c.At)
+                            </p>
+                            <blockquote class="held-body" dir="auto">@c.Body</blockquote>
+                            <form method="post" class="reason-form" @formname="@("propose-" + id)" @onsubmit="() => ProposeAsync(c.Kind, c.Id)">
+                                <AntiforgeryToken />
+                                <div class="field">
+                                    <label for="caption-@id">@T["provider.showcase.caption"]</label>
+                                    <input id="caption-@id" name="caption" maxlength="@Showcase.MaxCaption" dir="auto" />
+                                </div>
+                                <button type="submit">@T["provider.showcase.propose"]</button>
+                            </form>
+                        </article>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private IReadOnlyList<ShowcaseEntry>? _items;
+    private IReadOnlyList<ShowcaseCandidate>? _candidates;
+    private string _name = "";
+    private string? _problem;
+
+    private OrganisationId Org => new(OrgId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (!await CanActForAsync(Org, Permissions.Showcase.Approve))
+        {
+            Forbid();
+            return;
+        }
+
+        _name = await Get<BrightTime.Modules.Directory.Contracts.IDirectoryQueries>().GetOrganisationNameAsync(Org) ?? "";
+        _items = await Get<Showcase>().ForOrganisationAsync(Org);
+        _candidates = await Get<Showcase>().CandidatesAsync(Org);
+    }
+
+    private async Task ProposeAsync(string kind, Guid id)
+    {
+        if (_items is null)
+        {
+            return;
+        }
+
+        Result<Guid> proposed = await Get<Showcase>().ProposeAsync(Actor, Org, kind, id, FormValue("caption"));
+        Finish(proposed.IsSuccess ? Result.Success() : Result.Failure(proposed.Error!), "proposed");
+    }
+
+    private async Task TakeDownAsync(Guid item)
+    {
+        if (_items is null)
+        {
+            return;
+        }
+
+        Finish(await Get<Showcase>().TakeDownAsync(Actor, Org, item, FormValue("reason")), "taken_down");
+    }
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/provider/orgs/{OrgId}/showcase?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

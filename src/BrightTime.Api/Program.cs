@@ -75,6 +75,7 @@ v1.MapAttendanceEndpoints();
 v1.MapDeviceEndpoints();
 v1.MapMessagingEndpoints();
 v1.MapSpaceEndpoints();
+v1.MapShowcaseEndpoints();
 v1.MapPaymentEndpoints();
 v1.MapReportEndpoints();
 v1.MapPortfolioEndpoints();

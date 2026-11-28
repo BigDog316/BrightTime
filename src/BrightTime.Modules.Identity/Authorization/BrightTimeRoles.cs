@@ -72,6 +72,7 @@ public static class BrightTimeRoles
                 Permissions.Spaces.Post,
                 Permissions.Spaces.ManageMembership,
                 Permissions.Submissions.GiveFeedback,
+                Permissions.Showcase.Approve,
                 Permissions.Reports.RunProvider,
                 Permissions.Badges.Issue,
                 Permissions.Playlists.Author,
@@ -105,6 +106,7 @@ public static class BrightTimeRoles
                 Permissions.Spaces.Post,
                 Permissions.Spaces.ManageMembership,
                 Permissions.Submissions.GiveFeedback,
+                Permissions.Showcase.Approve,
                 Permissions.Reports.RunProvider,
                 Permissions.Badges.Define,
                 Permissions.Badges.Issue,
@@ -151,9 +153,10 @@ public static class BrightTimeRoles
                 Permissions.Moderation.Triage,
                 Permissions.Moderation.Remove,
                 Permissions.Moderation.SuspendUser,
+                Permissions.Showcase.Approve,
             ],
 
-            [Moderator] = [.. PublicBrowse, Permissions.Audit.Read, Permissions.Moderation.Triage, Permissions.Moderation.Remove, Permissions.Moderation.SuspendUser],
+            [Moderator] = [.. PublicBrowse, Permissions.Audit.Read, Permissions.Moderation.Triage, Permissions.Moderation.Remove, Permissions.Moderation.SuspendUser, Permissions.Showcase.Approve],
 
             [CivicViewer] = [.. PublicBrowse],
 

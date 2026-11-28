@@ -484,6 +484,19 @@ public sealed record Space(
     public bool IsArchived => Status == "archived";
 }
 
+/// <summary>
+/// The person's own work on, or proposed for, the public showcase (D124): <c>waiting</c> for their
+/// answer, <c>shown</c>, <c>declined</c>, or <c>taken_down</c> (by them when <see cref="EndedByAuthor"/>).
+/// </summary>
+public sealed record ShowcaseEntry(
+    Guid Id, string Kind, string Title, string Body, string? Caption, string OrgName, string State, string? DisplayName, string? AuthorName,
+    DateTimeOffset ProposedAt, DateTimeOffset? ShownAt, DateTimeOffset? EndedAt, bool EndedByAuthor, string? Reason)
+{
+    public bool IsWaiting => State == "waiting";
+
+    public bool IsShown => State == "shown";
+}
+
 /// <summary>A challenge in a space (D122), with the person's own work's state if they've started it.</summary>
 public sealed record SpaceChallenge(Guid Id, string Title, string Status, DateTimeOffset? DueAt, DateTimeOffset SetAt, string? MyState, int Sent, int Waiting)
 {

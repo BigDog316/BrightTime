@@ -176,6 +176,17 @@ in.
 - Adding a picture to an approved project makes it a draft again, like any change. **Remove this
   picture** takes one away at once, and the project stays approved.
 
+**The showcase** is BrightTime's public page of young people's work. Staff at your activities may
+ask to show a project they approved, or challenge work they accepted. You'll find their requests in
+**Portfolio** › **Showcase**.
+- Nothing is shown unless you say **Yes, show it**. It's shown under the name your portfolio shows,
+  so choose one in **Who sees your portfolio** first, without your family name. **No thanks** is for
+  good: you won't be asked about that piece again.
+- It isn't open to anyone under 13, and if a parent or guardian looks after your account, they need
+  to have agreed to the showcase.
+- **Take it down** whenever you like. Staff or the county can take it down too; you'll see that it
+  was. If you change a project after it's shown, it leaves the showcase.
+
 **Your goals** are your own aims, like *lead a river walk*. Nobody else sees them, and they're
 never on your portfolio page.
 - Give a goal a skill or interest it's about, and a date to aim for, if you like.

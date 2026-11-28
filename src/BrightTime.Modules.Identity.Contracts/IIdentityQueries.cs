@@ -25,6 +25,13 @@ public sealed record YouthAccessGrantSummary(
     IReadOnlyList<string> Fields);
 
 /// <summary>
+/// Whose consent decides a scope for a young person (D124): a guardian's, for a child account or a
+/// teenager a verified guardian manages, and then the live consent's id, if there is one; or their
+/// own, for a teenager without a guardian link. As the capability calculator decides it.
+/// </summary>
+public sealed record ConsentBasis(bool GuardianManaged, Guid? ConsentId);
+
+/// <summary>
 /// What other modules may ask Identity. Deliberately narrow: this is the whole
 /// surface, and every method on it is a question the authorisation layer needs
 /// answered rather than a way to read user rows.
@@ -54,6 +61,9 @@ public interface IIdentityQueries
     Task<bool> IsContactRestrictedAsync(UserId first, UserId second, CancellationToken cancellationToken = default);
 
     Task<bool> IsMinorAsync(UserId userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Whose consent decides <paramref name="scope"/> for this young person, and the guardian's live consent, if any (D124).</summary>
+    Task<ConsentBasis> GetConsentBasisAsync(UserId youthUserId, ConsentScope scope, CancellationToken cancellationToken = default);
 
     /// <summary>The account's roles (<c>youth</c>, <c>network_organiser</c> and so on), to say what someone was acting as.</summary>
     Task<IReadOnlyList<string>> GetRoleNamesAsync(UserId userId, CancellationToken cancellationToken = default);

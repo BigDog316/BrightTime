@@ -67,9 +67,15 @@ create table course (
   badge_class_id uuid references learning.badge_class(id) on delete set null,
   status        text not null default 'draft',
   created_at    timestamptz not null default now(),
+  -- When it was last changed, and first published (D130): a published course's units are fixed.
+  updated_at    timestamptz not null default now(),
+  published_at  timestamptz,
   constraint ux_course_slug unique (tenant_id, slug),
   constraint ck_course_delivery check (delivery in ('self_paced','live_virtual','in_person','blended')),
-  constraint ck_course_status check (status in ('draft','published','retired'))
+  constraint ck_course_status check (status in ('draft','published','retired')),
+  constraint ck_course_text check (length(btrim(title)) between 1 and 120 and (summary is null or length(summary) <= 1000)),
+  constraint ck_course_numbers check ((hours is null or hours between 0 and 999) and (validity_months is null or validity_months between 1 and 120)),
+  constraint ck_course_published check (status = 'draft' or published_at is not null)
 );
 
 create table course_unit (
@@ -81,7 +87,10 @@ create table course_unit (
   media_id   uuid references platform.media_object(id),
   external_url text,
   minutes    smallint,
-  constraint ux_course_unit_order unique (course_id, sort_order)
+  constraint ux_course_unit_order unique (course_id, sort_order),
+  constraint ck_course_unit_text check (length(btrim(title)) between 1 and 120 and (body_md is null or length(body_md) <= 8000)),
+  constraint ck_course_unit_link check (external_url is null or external_url ~ '^https://'),
+  constraint ck_course_unit_minutes check (minutes is null or minutes between 1 and 600)
 );
 
 create table course_enrollment (
@@ -96,7 +105,8 @@ create table course_enrollment (
   badge_assertion_id uuid references learning.badge_assertion(id) on delete set null,
   expires_on  date,
   constraint ux_course_enrollment unique (course_id, user_id),
-  constraint ck_course_score check (score is null or score between 0 and 100)
+  constraint ck_course_score check (score is null or score between 0 and 100),
+  constraint ck_course_expiry check (expires_on is null or completed_at is not null)
 );
 create index ix_course_enrollment_user on course_enrollment (user_id);
 create index ix_course_enrollment_expiry on course_enrollment (tenant_id, expires_on)
@@ -116,6 +126,7 @@ create table training_requirement (
   course_id  uuid not null references course(id) on delete restrict,
   is_blocking boolean not null default true,
   grace_days smallint not null default 0,
+  constraint ck_training_grace check (grace_days between 0 and 365),
   constraint pk_training_requirement primary key (tenant_id, applies_to, course_id),
   constraint ck_training_applies check (applies_to in ('mentor','staff','org_admin','field_collector','kiosk_operator'))
 );

@@ -61,7 +61,8 @@ public sealed record MentorQuery(Guid? Skill, int? DayOfWeek, Guid? Neighbourhoo
 /// <summary>
 /// A mentor as an organisation's staff find them (D129): the name and words they wrote, what they
 /// offer, when they're free, which organisations they mentor with, and their address to get in
-/// touch. Adults' details, not a young person's.
+/// touch. Adults' details, not a young person's. <see cref="TrainingCurrent"/> when their training
+/// counts for every blocking course the county requires of mentors (D130).
 /// </summary>
 public sealed record MentorCard(
     Guid UserId,
@@ -75,7 +76,8 @@ public sealed record MentorCard(
     int? WeeklyHoursSought,
     IReadOnlyList<AvailabilitySlot> Availability,
     IReadOnlyList<string> Organisations,
-    string? Email);
+    string? Email,
+    bool TrainingCurrent);
 
 /// <summary>
 /// Mentors (M6, D129). An organisation's admins make someone a mentor, as they make someone staff;
@@ -105,7 +107,8 @@ public sealed class Mentors(
     IIdentityQueries identity,
     ITaxonomyQueries taxonomy,
     IGeographyQueries geography,
-    IClearanceGate clearances)
+    IClearanceGate clearances,
+    Training.Training training)
 {
     public const string Read = "workforce.mentor_profile.read";
     public const string Saved = "workforce.mentor_profile.saved";
@@ -347,6 +350,7 @@ public sealed class Mentors(
         IReadOnlyDictionary<Guid, string> hoods = await geography.GetNeighbourhoodNamesAsync(
             [.. profiles.Where(p => p.HomeNeighbourhoodId is not null).Select(p => p.HomeNeighbourhoodId!.Value).Distinct()], tenant.Locale.Code, ct).ConfigureAwait(false);
         IReadOnlyDictionary<Guid, string> emails = await identity.GetAdultEmailsAsync(users, ct).ConfigureAwait(false);
+        IReadOnlySet<Guid> trained = await training.TrainedMentorsAsync([.. mentoring.Where(m => users.Contains(m.UserId.Value))], ct).ConfigureAwait(false);
         Dictionary<Guid, string> orgNames = [];
         foreach (OrganisationId org in mentoring.Where(m => users.Contains(m.UserId.Value)).Select(m => m.OrganisationId).Distinct())
         {
@@ -365,7 +369,8 @@ public sealed class Mentors(
             p.WeeklyHoursSought,
             slots.GetValueOrDefault(p.UserId, []),
             [.. mentoring.Where(m => m.UserId.Value == p.UserId).Select(m => orgNames.GetValueOrDefault(m.OrganisationId.Value, "")).Distinct()],
-            emails.GetValueOrDefault(p.UserId)))];
+            emails.GetValueOrDefault(p.UserId),
+            trained.Contains(p.UserId)))];
     }
 
     private Task AuditAsync(string action, UserId user, CancellationToken ct, params (string Key, string Value)[] detail) =>
@@ -384,10 +389,11 @@ public sealed class Mentors(
 
 public static class WorkforceServices
 {
-    /// <summary>The Workforce module's services (M6): mentors (D129). Needs the Workforce context, Directory's queries and its clearance gate.</summary>
+    /// <summary>The Workforce module's services (M6): mentors (D129) and training (D130). Needs the Workforce context, Directory's queries and its clearance gate.</summary>
     public static IServiceCollection AddWorkforce(this IServiceCollection services)
     {
         services.AddScoped<Mentors>();
+        services.AddScoped<Training.Training>();
         return services;
     }
 }

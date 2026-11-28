@@ -187,7 +187,11 @@ The owner alone reads or changes a family profile.
 |---|---|
 | `GET`, `PUT /me/mentor-profile` | A mentor's own profile (D129): `displayName`, `headline`, `bio`, `languages` (codes of the county's `language` terms), `skills` (term ids), `homeNeighbourhoodId`, `willingVirtual`, `weeklyHoursSought`, `maxTravelM`, `listed`. The answer adds `availability`, `status`, `isMentor`, `findable` and `organisations`. Only someone with a mentor's role (`mentors.not_mentor`) |
 | `PUT /me/mentor-profile/availability` | `{ slots: [{ dayOfWeek, from, to }] }`, 0 for Sunday, in the county's time, up to 14; replaces what was there |
-| `GET /org/{orgId}/mentors/search` | `?skill=&dayOfWeek=&neighbourhood=&virtual=`, for the organisation's staff with `mentors.search`: listed mentors with a mentor's role and every required clearance current |
+| `GET /org/{orgId}/mentors/search` | `?skill=&dayOfWeek=&neighbourhood=&virtual=`, for the organisation's staff with `mentors.search`: listed mentors with a mentor's role and every required clearance current; each says `trainingCurrent` (D130) |
+| `GET /courses` | The county's published courses (D130), for adults with a role at an organisation: each with `units`, `done`, `state` (`not_started`, `in_progress`, `completed`, `expired`), `expiresOn` and `required`. A young person is refused (`training.adults_only`), as is someone with no role (`training.no_role`) |
+| `GET /courses/{slug}` | A published course with its units (`title`, `body` in plain Markdown, `link`, `minutes`), the units the caller has `done`, `state`, `completedAt` and `expiresOn` |
+| `PUT /courses/{courseId}/units/{unitId}/complete` | Marks a unit done, starting the course if need be; the last one completes it until today plus its validity. A unit of a run-out completion starts it again. Answers as `GET /courses/{slug}` |
+| `GET /me/training` | `{ required: [...], current }`: each course the caller's roles require, with `appliesTo`, `isBlocking`, `state`, `expiresOn`, `dueBy` and `current`; `current` when every blocking course counts |
 
 ## Messages and devices
 

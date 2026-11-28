@@ -4,6 +4,7 @@
 @using BrightTime.Modules.Platform.Contracts
 @using BrightTime.Modules.Workforce.Contracts
 @using BrightTime.Modules.Workforce.Mentors
+@using BrightTime.Modules.Workforce.Training
 @using BrightTime.SharedKernel.Primitives
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
@@ -47,6 +48,14 @@ else if (_profile is { } p)
             @T.Format("mentor.profile.mentoring_with", ("orgs", string.Join(", ", p.Organisations)))
             @(" ")@T[!p.Listed ? "mentor.profile.state.unlisted" : p.Findable ? "mentor.profile.state.findable" : "mentor.profile.state.not_cleared"]
         </p>
+
+        @if (_training is { Required.Count: > 0 } training)
+        {
+            <p class="notice @(training.Current ? "success" : "")">
+                @T[training.Current ? "mentor.profile.training_current" : "mentor.profile.training_missing"]
+                <a href="/training">@T["mentor.profile.training_link"]</a>
+            </p>
+        }
 
         <form method="post" @formname="profile" @onsubmit="SaveAsync" class="message-form">
             <AntiforgeryToken />
@@ -126,6 +135,7 @@ else if (_profile is { } p)
     [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
 
     private MentorProfileView? _profile;
+    private TrainingStatus? _training;
     private IReadOnlyList<VocabularyTerm> _skills = [];
     private IReadOnlyList<VocabularyTerm> _languages = [];
     private IReadOnlyList<NeighbourhoodShape> _hoods = [];
@@ -146,6 +156,7 @@ else if (_profile is { } p)
         }
 
         _profile = await Get<Mentors>().MineAsync(Actor);
+        _training = await Get<Training>().StatusAsync(Actor);
         ITaxonomyQueries taxonomy = Get<ITaxonomyQueries>();
         _skills = await taxonomy.GetVocabularyAsync(MentorVocabularies.Skill, T.Locale.Code);
         _languages = await taxonomy.GetVocabularyAsync(MentorVocabularies.Language, T.Locale.Code);

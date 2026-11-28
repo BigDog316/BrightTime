@@ -44,6 +44,9 @@ public static class ConsoleServices
     /// <summary>The county's moderation queue (D114): held messages, for network organisers and moderators.</summary>
     public const string ModerationPolicy = "console.moderation";
 
+    /// <summary>The county's training courses and what it requires of whom (D130), for network organisers.</summary>
+    public const string TrainingPolicy = "console.training";
+
     private const string AuthDataSourceKey = "auth";
 
     /// <summary>How long a cookie's claims are trusted before they are rebuilt from the database.</summary>
@@ -94,6 +97,7 @@ public static class ConsoleServices
             .AddPolicy(WordingPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
             .AddPolicy(ClearanceRulesPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Tenant.Settings)))
             .AddPolicy(ModerationPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Moderation.Triage)))
+            .AddPolicy(TrainingPolicy, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(Permissions.Courses.Author)))
             .AddPolicy(AuditPolicy, p => p.RequireAuthenticatedUser()
                 .RequireRole(BrightTimeRoles.TenantWideAudit)
                 .AddRequirements(new PermissionRequirement(Permissions.Audit.Read)))

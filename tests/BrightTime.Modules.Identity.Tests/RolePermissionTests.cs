@@ -120,6 +120,8 @@ public sealed class RolePermissionTests
             // Mentors (D129): a mentor keeps their own profile; staff and the county find them.
             (Permissions.Mentors.ManageOwnProfile, [BrightTimeRoles.Mentor]),
             (Permissions.Mentors.Search, [BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin, BrightTimeRoles.NetworkOrganiser]),
+            // Training (D130): the county writes its courses.
+            (Permissions.Courses.Author, [BrightTimeRoles.NetworkOrganiser]),
         ];
         foreach ((string permission, string[] roles) in expected)
         {

@@ -134,6 +134,12 @@ public static class Permissions
         public const string Search = "mentors.search";
     }
 
+    public static class Courses
+    {
+        /// <summary>Writing the county's training courses, and requiring them of roles (docs/plan/04, D130): the county's network organisers.</summary>
+        public const string Author = "courses.author";
+    }
+
     public static class Showcase
     {
         /// <summary>
@@ -260,6 +266,7 @@ public static class Permissions
         Submissions.GiveFeedback,
         Showcase.Approve,
         Mentors.ManageOwnProfile, Mentors.Search,
+        Courses.Author,
         Moderation.Triage, Moderation.Remove, Moderation.SuspendUser,
         Payments.Waive,
         Reports.RunProvider,

@@ -63,8 +63,8 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
         problems.ShouldBeEmpty();
     }
 
-    /// <summary>Route parameters for records the seed has none of: families and staff make them.</summary>
-    private static readonly string[] Unseeded = ["ApplicationId", "FormId", "WaiverId", "ConversationId", "BadgeId", "PlaylistId", "MediaId", "SpaceId", "ChallengeId"];
+    /// <summary>Route parameters for records the seed has none of: families, staff and organisers make them.</summary>
+    private static readonly string[] Unseeded = ["ApplicationId", "FormId", "WaiverId", "ConversationId", "BadgeId", "PlaylistId", "MediaId", "SpaceId", "ChallengeId", "CourseId"];
 
     [Fact]
     public async Task The_organisers_pages_refuse_providers_and_open_for_organisers()
@@ -90,8 +90,10 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
                 problems.Add($"{route}: a provider got {(int)refused.StatusCode}");
             }
 
+            // A route naming a record the seed doesn't hold (a course) can only be not found for the organiser.
             HttpStatusCode opened = (await organiser.GetAsync(path)).StatusCode;
-            if (opened != HttpStatusCode.OK)
+            bool unseeded = Unseeded.Any(p => route.Contains("{" + p, StringComparison.Ordinal));
+            if (opened != HttpStatusCode.OK && !(unseeded && opened == HttpStatusCode.NotFound))
             {
                 problems.Add($"{route}: the organiser got {(int)opened}");
             }
@@ -121,7 +123,7 @@ public sealed partial class ConsoleRouteMatrixTests(ConsoleFixture db)
             "OrgId" => Victim.Id.ToString(),
             "ListingId" => listing.ToString(),
             "SiteId" => site.ToString(),
-            "ApplicationId" or "FormId" or "WaiverId" or "ConversationId" or "BadgeId" or "PlaylistId" or "MediaId" or "SpaceId" or "ChallengeId" => Guid.Empty.ToString(),
+            "ApplicationId" or "FormId" or "WaiverId" or "ConversationId" or "BadgeId" or "PlaylistId" or "MediaId" or "SpaceId" or "ChallengeId" or "CourseId" => Guid.Empty.ToString(),
             "Vocabulary" => "category",
             "TermId" => KettleTaxonomy.TermId("category", "stem").ToString(),
             "CollectionId" => db.Data.Collections![0].Id.ToString(),

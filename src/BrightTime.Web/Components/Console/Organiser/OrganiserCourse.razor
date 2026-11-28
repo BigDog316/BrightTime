@@ -1,0 +1,237 @@
+@page "/organiser/training/{CourseId:guid}"
+@using System.Globalization
+@using BrightTime.Modules.Workforce.Contracts
+@using BrightTime.Modules.Workforce.Training
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.TrainingPolicy)]
+@inherits ConsoleComponent
+
+@*
+    One course (D130). A draft's details, address and units are written here, up to ten units, each
+    text to read (plain Markdown), a link to follow, or both; publishing puts it in the catalogue and
+    fixes its address and units, since people's progress is kept against them. A published course's
+    details can still change, and it can be retired once nothing requires it.
+*@
+<PageTitle>@(_course?.Title ?? T["courses.title"]) · BrightTime</PageTitle>
+
+<p class="eyebrow"><a href="/organiser/training">@T["courses.title"]</a></p>
+
+@if (_course is not { } c)
+{
+    <h1>@T["courses.title"]</h1>
+    <p>@T["courses.not_found"]</p>
+}
+else
+{
+    bool draft = c.Status == CourseStatuses.Draft;
+    <h1 dir="auto">@c.Title</h1>
+    <p>@T["courses.status." + c.Status]@(c.PublishedAt is { } at ? " · " + T.Format("courses.published_on", ("date", T.DateShort(at))) : "")</p>
+
+    @if (Done is { Length: > 0 } && T.Has("courses.done." + Done))
+    {
+        <p class="notice success" role="status">@T["courses.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (c.Status != CourseStatuses.Retired)
+    {
+        <form method="post" @formname="course" @onsubmit="SaveAsync" class="editor">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="course-title">@T["courses.field.title"]</label>
+                <input id="course-title" name="title" type="text" maxlength="@Training.MaxTitle" required value="@c.Title" dir="auto" />
+            </div>
+            @if (draft)
+            {
+                <div class="field">
+                    <label for="course-slug">@T["courses.field.slug"]</label>
+                    <p class="hint" id="course-slug-hint">@T["courses.field.slug_hint"]</p>
+                    <input id="course-slug" name="slug" type="text" maxlength="60" required value="@c.Slug" dir="ltr" aria-describedby="course-slug-hint" />
+                </div>
+            }
+            else
+            {
+                <p>@T["courses.field.slug"]: <code dir="ltr">/training/@c.Slug</code></p>
+            }
+            <div class="field">
+                <label for="course-summary">@T["courses.field.summary"]</label>
+                <textarea id="course-summary" name="summary" rows="3" maxlength="@Training.MaxSummary" dir="auto">@c.Summary</textarea>
+            </div>
+            <div class="field">
+                <label for="course-provider">@T["courses.field.provider"]</label>
+                <input id="course-provider" name="provider" type="text" maxlength="@Training.MaxProvider" value="@c.ProviderName" dir="auto" />
+            </div>
+            <div class="field">
+                <label for="course-delivery">@T["courses.field.delivery"]</label>
+                <select id="course-delivery" name="delivery">
+                    @foreach (string d in CourseDeliveries.All)
+                    {
+                        <option value="@d" selected="@(c.Delivery == d)">@T["courses.delivery." + d]</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="course-hours">@T["courses.field.hours"]</label>
+                <input id="course-hours" name="hours" type="number" min="0" max="999" step="0.25" inputmode="decimal" value="@c.Hours?.ToString(CultureInfo.InvariantCulture)" />
+            </div>
+            <div class="field">
+                <label for="course-validity">@T["courses.field.validity"]</label>
+                <p class="hint" id="course-validity-hint">@T["courses.field.validity_hint"]</p>
+                <input id="course-validity" name="validity" type="number" min="1" max="120" inputmode="numeric" value="@c.ValidityMonths" aria-describedby="course-validity-hint" />
+            </div>
+
+            @if (draft)
+            {
+                <h2>@T["courses.units"]</h2>
+                <p class="hint">@T["courses.units_hint"]</p>
+                @for (int i = 0; i < UnitRows(c); i++)
+                {
+                    CourseUnitView? u = i < c.Units.Count ? c.Units[i] : null;
+                    int n = i;
+                    <fieldset class="unit">
+                        <legend>@T.Format("courses.unit_n", ("n", T.Number(n + 1)))</legend>
+                        <div class="field">
+                            <label for="unit-title-@n">@T["courses.field.unit_title"]</label>
+                            <input id="unit-title-@n" name="unit-title-@n" type="text" maxlength="@Training.MaxTitle" value="@u?.Title" dir="auto" />
+                        </div>
+                        <div class="field">
+                            <label for="unit-body-@n">@T["courses.field.unit_body"]</label>
+                            <textarea id="unit-body-@n" name="unit-body-@n" rows="6" maxlength="@Training.MaxBody" dir="auto">@u?.Body</textarea>
+                        </div>
+                        <div class="field">
+                            <label for="unit-link-@n">@T["courses.field.unit_link"]</label>
+                            <input id="unit-link-@n" name="unit-link-@n" type="url" value="@u?.Link" dir="ltr" />
+                        </div>
+                        <div class="field">
+                            <label for="unit-minutes-@n">@T["courses.field.unit_minutes"]</label>
+                            <input id="unit-minutes-@n" name="unit-minutes-@n" type="number" min="1" max="600" inputmode="numeric" value="@u?.Minutes" />
+                        </div>
+                    </fieldset>
+                }
+            }
+
+            <div class="actions">
+                <button type="submit">@T["courses.save"]</button>
+            </div>
+        </form>
+    }
+
+    @if (!draft)
+    {
+        <section aria-labelledby="units-heading">
+            <h2 id="units-heading">@T["courses.units"]</h2>
+            <ol class="units">
+                @foreach (CourseUnitView u in c.Units)
+                {
+                    <li>
+                        <h3 dir="auto">@u.Title</h3>
+                        @if (u.Body is { Length: > 0 } body)
+                        {
+                            <MarkdownView Source="@body" />
+                        }
+                        @if (u.Link is { Length: > 0 } link)
+                        {
+                            <p><a href="@link" rel="noopener noreferrer" dir="ltr">@link</a></p>
+                        }
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+
+    @if (draft)
+    {
+        <form method="post" @formname="publish" @onsubmit="PublishAsync" class="editor">
+            <AntiforgeryToken />
+            <p class="hint">@T["courses.publish_hint"]</p>
+            <button type="submit">@T["courses.publish"]</button>
+        </form>
+    }
+    else if (c.Status == CourseStatuses.Published)
+    {
+        <form method="post" @formname="retire" @onsubmit="RetireAsync" class="editor">
+            <AntiforgeryToken />
+            <p class="hint">@T["courses.retire_hint"]</p>
+            <button type="submit" class="secondary-button">@T["courses.retire"]</button>
+        </form>
+    }
+}
+
+@code {
+    [Parameter] public Guid CourseId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private CourseView? _course;
+    private string? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _course = await Get<Training>().GetAsync(CourseId);
+        if (_course is null)
+        {
+            Navigation.NotFound();
+        }
+    }
+
+    /// <summary>The units written, and three empty rows for more, up to the most a course has.</summary>
+    private static int UnitRows(CourseView c) => Math.Min(Training.MaxUnits, c.Units.Count + 3);
+
+    private async Task SaveAsync()
+    {
+        if (_course is not { } c)
+        {
+            return;
+        }
+
+        bool draft = c.Status == CourseStatuses.Draft;
+        List<CourseUnitInput>? units = null;
+        if (draft)
+        {
+            units = [];
+            for (int i = 0; i < Training.MaxUnits; i++)
+            {
+                if (!HttpContext.Request.Form.ContainsKey("unit-title-" + i))
+                {
+                    continue;
+                }
+
+                units.Add(new CourseUnitInput(FormValue("unit-title-" + i), FormValue("unit-body-" + i), FormValue("unit-link-" + i), Whole("unit-minutes-" + i)));
+            }
+        }
+
+        decimal? hours = decimal.TryParse(FormValue("hours"), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal h) ? h : null;
+        CourseInput input = new(draft ? FormValue("slug") : null, FormValue("title"), FormValue("summary"), FormValue("provider"), FormValue("delivery"),
+            hours, Whole("validity"), units);
+        Result<Guid> saved = await Get<Training>().SaveAsync(CourseId, input);
+        Finish(saved.IsSuccess ? Result.Success() : Result.Failure(saved.Error!), "saved");
+    }
+
+    private async Task PublishAsync() => Finish(await Get<Training>().PublishAsync(CourseId), "published");
+
+    private async Task RetireAsync() => Finish(await Get<Training>().RetireAsync(CourseId), "retired");
+
+    private int? Whole(string name) => int.TryParse(FormValue(name), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : null;
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/training/{CourseId}?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

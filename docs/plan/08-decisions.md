@@ -4548,6 +4548,68 @@ provider admins, network organisers). Tests:
 - `MentorApiTests`: the API's side;
 - `RolePermissionTests`, `ModuleBoundaryTests` and `SchemaDriftTests`.
 
+### D130 — Training: county courses, taken unit by unit (**proposed**)
+
+M6's second slice. The `workforce` schema had courses, units, enrolments, unit progress and
+training requirements, and nothing used them. Sam chose on 2026-11-28: a training catalogue, taken
+in BrightTime unit by unit.
+- **The county writes courses** (`/organiser/training`, plan/04's `courses.author`, network
+  organisers only):
+  - A course has an address (`/training/{slug}`), a title, a summary, who provides it, how it's
+    delivered, its hours, and how many months a completion counts for (or for good).
+  - It's written as a **draft**, with up to ten units in order. Each unit has text (the plain
+    Markdown of D95) or an `https` link, or both, and the minutes it takes.
+  - **Publishing** puts it in the catalogue. It needs a unit, and it fixes the address and the units
+    (`training.fixed`), since people's progress is kept against them. The details can still change.
+  - **Retiring** takes it out of the catalogue, keeping completions. A course the county requires
+    can't be retired (`training.required`).
+- **Requirements:**
+  - The county requires a published course of **mentors**, **staff**, or **organisations' admins**
+    (owners and admins, who count as staff too), each with a grace in days.
+  - A requirement **blocks** (must hold) or **advises**.
+  - The grace runs from when someone took the role, or from when their completion ran out.
+- **Adults take courses** (`/training` and `/training/{slug}` in the console; `GET /courses`,
+  `GET /courses/{slug}`, `PUT /courses/{id}/units/{unitId}/complete`):
+  - For anyone with an active role at an organisation. A young person is refused
+    (`training.adults_only`).
+  - They read each unit and mark it done. The last one completes the course, until today plus its
+    validity.
+  - Marking a unit of a course whose completion has run out starts it again from that unit.
+  - Upserts make a second click or a second device harmless.
+- **Training status** (`/training`, `GET /me/training`): each course the person's roles require,
+  where they stand, when it counts until or is due by, and whether every blocking course counts.
+- **Mentors:**
+  - Mentor search shows whether a mentor's training is up to date with every blocking course the
+    county requires of mentors (`MentorCard.trainingCurrent`).
+  - The mentor's profile page says so too, with a link to their training.
+  - Nothing refuses an untrained mentor yet: the gig board will.
+- **Audited:**
+  - `workforce.course.saved`, `.published` and `.retired`;
+  - `workforce.training.requirement_set` and `.requirement_removed`;
+  - `workforce.training.unit_done` and `.completed`.
+
+  None of it is a young person's record.
+- **Not in this:**
+  - a badge or certificate for finishing (Workforce can't use Learning);
+  - reminders before a completion runs out;
+  - courses written by organisations (`course.org_id` is kept);
+  - quizzes and scores;
+  - requirements of field collectors and kiosk operators;
+  - training on the app's screens (the API has it).
+
+Schema: `course.updated_at`, `course.published_at`, `ck_course_text`, `ck_course_numbers`,
+`ck_course_published`, `ck_course_unit_text`, `ck_course_unit_link`, `ck_course_unit_minutes`,
+`ck_course_expiry`, `ck_training_grace`. Rebuild the compose volume. New permission
+`courses.author` (network organisers). Tests:
+- `TrainingTests`: writing, refusing a link that isn't https, publishing and the fixed units;
+  requiring a course of mentors; a mentor taking it unit by unit to completion for twelve months;
+  trained in search only then; running out and starting again; retiring refused while required;
+  staff refused the organiser's page; a young person refused;
+- `TrainingApiTests`: the catalogue, drafts left out, units marked done, the staff requirement
+  counted;
+- `RolePermissionTests` and `SchemaDriftTests`; `ConsoleRouteMatrixTests` fills a course's page
+  with an unseeded id, so the organiser gets not found there.
+
 ## Open questions
 
 **Q1 — Which New York county?** You chose "a New York county" without naming

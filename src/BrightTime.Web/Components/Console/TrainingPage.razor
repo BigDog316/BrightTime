@@ -1,0 +1,122 @@
+@page "/training"
+@using BrightTime.Modules.Workforce.Contracts
+@using BrightTime.Modules.Workforce.Training
+@using BrightTime.SharedKernel.Primitives
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    The county's training as one adult sees it (D130): what the county requires of the roles they
+    hold now, whether each counts, and by when, then every published course with where they stand.
+    For anyone who holds a role at an organisation; a young person is refused.
+*@
+<PageTitle>@T["training.title"] · BrightTime</PageTitle>
+
+<h1>@T["training.title"]</h1>
+
+@if (_refused is not null)
+{
+    <p>@_refused</p>
+}
+else
+{
+    <p class="hint">@T["training.intro"]</p>
+
+    <section aria-labelledby="required-heading">
+        <h2 id="required-heading">@T["training.required"]</h2>
+        @if (_status is not { Required.Count: > 0 } s)
+        {
+            <p>@T["training.required_none"]</p>
+        }
+        else
+        {
+            <p class="notice @(s.Current ? "success" : "")">@T[s.Current ? "training.current" : "training.not_current"]</p>
+            <ul class="plain-list">
+                @foreach (RequiredCourse r in s.Required)
+                {
+                    <li>
+                        <a href="/training/@r.Slug" dir="auto">@r.Title</a>
+                        · @string.Join(", ", r.AppliesTo.Select(a => T["courses.role." + a]))
+                        · @T["training.state." + r.State]
+                        @if (r.State == TrainingStates.Completed && r.ExpiresOn is { } until)
+                        {
+                            @(" · ")@T.Format("training.counts_until", ("date", T.DateShort(until)))
+                        }
+                        @if (r.State != TrainingStates.Completed && r.DueBy is { } due)
+                        {
+                            @(" · ")@T.Format(r.Current ? "training.due_by" : "training.was_due", ("date", T.DateShort(due)))
+                        }
+                        @if (!r.IsBlocking)
+                        {
+                            @(" · ")@T["training.advised"]
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="catalogue-heading">
+        <h2 id="catalogue-heading">@T["training.catalogue"]</h2>
+        @if (_courses.Count == 0)
+        {
+            <p>@T["training.catalogue_none"]</p>
+        }
+        else
+        {
+            <ul class="plain-list">
+                @foreach (CatalogueEntry c in _courses)
+                {
+                    <li>
+                        <h3><a href="/training/@c.Slug" dir="auto">@c.Title</a></h3>
+                        @if (c.Summary is { Length: > 0 } summary)
+                        {
+                            <p dir="auto">@summary</p>
+                        }
+                        <p class="hint">
+                            @T["courses.delivery." + c.Delivery]
+                            @if (c.Hours is { } hours)
+                            {
+                                @(" · ")@T.Format("training.hours", ("hours", T.Number(hours)))
+                            }
+                            @(" · ")@T.Format("training.units_done", ("done", T.Number(c.Done)), ("total", T.Number(c.Units)))
+                            @(" · ")@T["training.state." + c.State]
+                            @if (c.Required)
+                            {
+                                @(" · ")@T["training.required_badge"]
+                            }
+                        </p>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    private IReadOnlyList<CatalogueEntry> _courses = [];
+    private TrainingStatus? _status;
+    private string? _refused;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        Training training = Get<Training>();
+        Result<IReadOnlyList<CatalogueEntry>> catalogue = await training.CatalogueAsync(Actor);
+        if (!catalogue.IsSuccess)
+        {
+            _refused = T.Error(catalogue.Error);
+            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
+        _courses = catalogue.Value;
+        _status = await training.StatusAsync(Actor);
+    }
+}

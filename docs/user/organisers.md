@@ -279,6 +279,23 @@ clearances: for an organisation's only owner, record theirs from the organisatio
 While clearances are required, you can't approve or reinstate an organisation until every owner
 has current ones. The vetting checklist says how many owners aren't cleared yet.
 
+## Training courses
+
+**Training courses** is the county's training for the adults who work with young people.
+
+- **A new course** begins as a draft, with its title and address. On its page, write who provides
+  it, how it's delivered, its hours, and how many months a completion counts for (empty for good),
+  then its units: up to ten, in order, each with text to read, a link to follow (`https://`), or
+  both. Leave a unit empty to drop it.
+- **Publish the course** puts it in the catalogue. Its address and units are fixed from then on,
+  because people's progress is kept against them; its details can still change.
+- **What the county requires**: require a published course of mentors, staff or organisations'
+  admins. **They must hold it** or it's only advised. **Days of grace** is how long someone has
+  after taking the role, or after their completion runs out. Mentor search shows whether a mentor
+  holds every course they must.
+- **Retire the course** takes it out of the catalogue and keeps everyone's completions. Stop
+  requiring it first.
+
 ## Wording
 
 **Wording** lets you change any sentence on the site, in any of its languages, for your county

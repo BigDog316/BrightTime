@@ -1,0 +1,227 @@
+@page "/organiser/training"
+@using System.Globalization
+@using BrightTime.Modules.Workforce.Contracts
+@using BrightTime.Modules.Workforce.Training
+@using BrightTime.SharedKernel.Primitives
+@using BrightTime.Web.Auth
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Policy = ConsoleServices.TrainingPolicy)]
+@inherits ConsoleComponent
+
+@*
+    The county's training (D130): every course, drafts and retired ones too, a new one begun as a
+    draft, and what the county requires of mentors, staff and organisations' admins, each with a
+    grace in days. Courses say nothing about anyone, so nothing here is a youth record.
+*@
+<PageTitle>@T["courses.title"] · BrightTime</PageTitle>
+
+<h1>@T["courses.title"]</h1>
+<p class="hint">@T["courses.intro"]</p>
+
+@if (!Availability.IsAvailable)
+{
+    <p>@T["organiser.no_database"]</p>
+}
+else
+{
+    @if (Done is { Length: > 0 } && T.Has("courses.done." + Done))
+    {
+        <p class="notice success" role="status">@T["courses.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    @if (_rows.Count == 0)
+    {
+        <p>@T["courses.none"]</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="queue">
+                <thead>
+                    <tr>
+                        <th scope="col">@T["courses.col.title"]</th>
+                        <th scope="col">@T["courses.col.state"]</th>
+                        <th scope="col">@T["courses.col.units"]</th>
+                        <th scope="col">@T["courses.col.completions"]</th>
+                        <th scope="col">@T["courses.col.required_of"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (CourseRow c in _rows)
+                    {
+                        <tr class="@(c.Status == CourseStatuses.Retired ? "retired" : "")">
+                            <td><a href="/organiser/training/@c.Id" dir="auto">@c.Title</a></td>
+                            <td>@T["courses.status." + c.Status]</td>
+                            <td>@T.Number(c.Units)</td>
+                            <td>@T.Number(c.Completions)</td>
+                            <td>@(c.RequiredOf.Count == 0 ? T["courses.required_of_none"] : string.Join(", ", c.RequiredOf.Select(r => T["courses.role." + r])))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <section aria-labelledby="new-heading">
+        <h2 id="new-heading">@T["courses.new"]</h2>
+        <form method="post" @formname="create" @onsubmit="CreateAsync" class="editor">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="course-title">@T["courses.field.title"]</label>
+                <input id="course-title" name="title" type="text" maxlength="@Training.MaxTitle" required value="@_title" dir="auto" />
+            </div>
+            <div class="field">
+                <label for="course-slug">@T["courses.field.slug"]</label>
+                <p class="hint" id="course-slug-hint">@T["courses.field.slug_hint"]</p>
+                <input id="course-slug" name="slug" type="text" maxlength="60" required value="@_slug" dir="ltr" aria-describedby="course-slug-hint" />
+            </div>
+            <div class="actions">
+                <button type="submit">@T["courses.create"]</button>
+            </div>
+        </form>
+    </section>
+
+    <section aria-labelledby="required-heading">
+        <h2 id="required-heading">@T["courses.requirements"]</h2>
+        <p class="hint">@T["courses.requirements_hint"]</p>
+        @if (_requirements.Count == 0)
+        {
+            <p>@T["courses.requirements_none"]</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="queue">
+                    <thead>
+                        <tr>
+                            <th scope="col">@T["courses.col.role"]</th>
+                            <th scope="col">@T["courses.col.course"]</th>
+                            <th scope="col">@T["courses.col.blocking"]</th>
+                            <th scope="col">@T["courses.col.grace"]</th>
+                            <th scope="col"><span class="visually-hidden">@T["courses.col.actions"]</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (TrainingRequirementView r in _requirements)
+                        {
+                            TrainingRequirementView req = r;
+                            <tr>
+                                <td>@T["courses.role." + r.AppliesTo]</td>
+                                <td dir="auto">@r.CourseTitle</td>
+                                <td>@T[r.IsBlocking ? "courses.blocking_yes" : "courses.blocking_no"]</td>
+                                <td>@T.Format("courses.grace_days", ("days", T.Number(r.GraceDays)))</td>
+                                <td>
+                                    <form method="post" @formname="@("remove-" + r.AppliesTo + "-" + r.CourseId)" @onsubmit="() => RemoveAsync(req)" class="inline-form">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary-button"
+                                                aria-label="@T.Format("courses.remove_for", ("course", r.CourseTitle), ("role", T["courses.role." + r.AppliesTo]))">@T["courses.remove"]</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_rows.Any(c => c.Status == CourseStatuses.Published))
+        {
+            <form method="post" @formname="require" @onsubmit="RequireAsync" class="editor" aria-labelledby="require-heading">
+                <AntiforgeryToken />
+                <h3 id="require-heading">@T["courses.require"]</h3>
+                <div class="field">
+                    <label for="require-role">@T["courses.field.role"]</label>
+                    <select id="require-role" name="role">
+                        @foreach (string role in TrainingRoles.All)
+                        {
+                            <option value="@role">@T["courses.role." + role]</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="require-course">@T["courses.field.course"]</label>
+                    <select id="require-course" name="course">
+                        @foreach (CourseRow c in _rows.Where(c => c.Status == CourseStatuses.Published))
+                        {
+                            <option value="@c.Id">@c.Title</option>
+                        }
+                    </select>
+                </div>
+                <label class="check"><input type="checkbox" name="blocking" value="true" checked /> @T["courses.field.blocking"]</label>
+                <p class="hint">@T["courses.field.blocking_hint"]</p>
+                <div class="field">
+                    <label for="require-grace">@T["courses.field.grace"]</label>
+                    <p class="hint" id="require-grace-hint">@T["courses.field.grace_hint"]</p>
+                    <input id="require-grace" name="grace" type="number" min="0" max="@Training.MaxGraceDays" inputmode="numeric" value="0" aria-describedby="require-grace-hint" />
+                </div>
+                <div class="actions">
+                    <button type="submit">@T["courses.require_save"]</button>
+                </div>
+            </form>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private IReadOnlyList<CourseRow> _rows = [];
+    private IReadOnlyList<TrainingRequirementView> _requirements = [];
+    private string? _problem;
+    private string? _title;
+    private string? _slug;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Availability.IsAvailable)
+        {
+            Training training = Get<Training>();
+            _rows = await training.ListAsync();
+            _requirements = await training.RequirementsAsync();
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _title = FormValue("title");
+        _slug = FormValue("slug");
+        Result<Guid> made = await Get<Training>().SaveAsync(null, new CourseInput(_slug, _title, null, null, null, null, null, null));
+        if (!made.IsSuccess)
+        {
+            _problem = T.Error(made.Error);
+            return;
+        }
+
+        Navigation.NavigateTo($"/organiser/training/{made.Value}?done=created");
+    }
+
+    private async Task RequireAsync()
+    {
+        int grace = int.TryParse(FormValue("grace"), NumberStyles.None, CultureInfo.InvariantCulture, out int g) ? g : 0;
+        if (!Guid.TryParse(FormValue("course"), out Guid course))
+        {
+            _problem = T["courses.choose_course"];
+            return;
+        }
+
+        Finish(await Get<Training>().SetRequirementAsync(FormValue("role"), course, FormValue("blocking") == "true", grace), "required");
+    }
+
+    private async Task RemoveAsync(TrainingRequirementView requirement) =>
+        Finish(await Get<Training>().RemoveRequirementAsync(requirement.AppliesTo, requirement.CourseId), "removed");
+
+    private void Finish(Result result, string done)
+    {
+        if (result.IsSuccess)
+        {
+            Navigation.NavigateTo($"/organiser/training?done={done}");
+            return;
+        }
+
+        _problem = T.Error(result.Error!);
+    }
+}

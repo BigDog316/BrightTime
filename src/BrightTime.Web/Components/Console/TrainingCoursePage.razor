@@ -1,0 +1,156 @@
+@page "/training/{Slug}"
+@using BrightTime.Modules.Workforce.Contracts
+@using BrightTime.Modules.Workforce.Training
+@using BrightTime.SharedKernel.Primitives
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inherits ConsoleComponent
+
+@*
+    A course, taken unit by unit (D130): each unit's text and link, and a button to mark it done.
+    The last one completes the course, which then counts until the date shown, or for good; a unit
+    of a course whose completion has run out starts it again.
+*@
+<PageTitle>@(_view?.Course.Title ?? T["training.title"]) · BrightTime</PageTitle>
+
+<p class="eyebrow"><a href="/training">@T["training.title"]</a></p>
+
+@if (_refused is not null)
+{
+    <h1>@T["training.title"]</h1>
+    <p>@_refused</p>
+}
+else if (_view is { } v)
+{
+    CourseView c = v.Course;
+    <h1 dir="auto">@c.Title</h1>
+    @if (c.Summary is { Length: > 0 } summary)
+    {
+        <p dir="auto">@summary</p>
+    }
+    <p class="hint">
+        @T["courses.delivery." + c.Delivery]
+        @if (c.ProviderName is { Length: > 0 } provider)
+        {
+            @(" · ")@T.Format("training.provided_by", ("provider", provider))
+        }
+        @if (c.Hours is { } hours)
+        {
+            @(" · ")@T.Format("training.hours", ("hours", T.Number(hours)))
+        }
+        @(" · ")@(c.ValidityMonths is { } months ? T.Format("training.validity_months", ("months", T.Number(months))) : T["training.counts_for_good"])
+    </p>
+
+    @if (Done is { Length: > 0 } && T.Has("training.done." + Done))
+    {
+        <p class="notice success" role="status">@T["training.done." + Done]</p>
+    }
+    @if (_problem is not null)
+    {
+        <p class="notice error" role="alert">@_problem</p>
+    }
+
+    <p class="notice">
+        @T["training.state." + v.State]
+        @if (v.State == TrainingStates.Completed)
+        {
+            @(" · ")@(v.ExpiresOn is { } until ? T.Format("training.counts_until", ("date", T.DateShort(until))) : T["training.counts_for_good"])
+        }
+        @if (v.State == TrainingStates.Expired)
+        {
+            @(" · ")@T["training.expired_hint"]
+        }
+        @if (v.Required)
+        {
+            @(" · ")@T["training.required_badge"]
+        }
+    </p>
+
+    <ol class="units">
+        @foreach (CourseUnitView u in c.Units)
+        {
+            CourseUnitView unit = u;
+            bool done = v.State != TrainingStates.Expired && v.Done.Contains(u.Id);
+            <li>
+                <section aria-labelledby="unit-@u.Id">
+                    <h2 id="unit-@u.Id" dir="auto">@u.Title</h2>
+                    @if (u.Minutes is { } minutes)
+                    {
+                        <p class="hint">@T.Format("training.minutes", ("minutes", T.Number(minutes)))</p>
+                    }
+                    @if (u.Body is { Length: > 0 } body)
+                    {
+                        <MarkdownView Source="@body" />
+                    }
+                    @if (u.Link is { Length: > 0 } link)
+                    {
+                        <p><a href="@link" rel="noopener noreferrer" dir="ltr">@T["training.open_link"]</a></p>
+                    }
+                    @if (done)
+                    {
+                        <p class="notice success">@T["training.unit_done"]</p>
+                    }
+                    else if (v.State != TrainingStates.Completed)
+                    {
+                        <form method="post" @formname="@("unit-" + u.Id)" @onsubmit="() => MarkAsync(unit)" class="inline-form">
+                            <AntiforgeryToken />
+                            <button type="submit" aria-label="@T.Format("training.mark_done_for", ("unit", u.Title))">@T["training.mark_done"]</button>
+                        </form>
+                    }
+                </section>
+            </li>
+        }
+    </ol>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "done")] public string? Done { get; set; }
+
+    private TrainingCourseView? _view;
+    private string? _refused;
+    private string? _problem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Availability.IsAvailable)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        Result<TrainingCourseView> view = await Get<Training>().CourseAsync(Actor, Slug);
+        if (view.IsSuccess)
+        {
+            _view = view.Value;
+        }
+        else if (view.Error.Kind == ErrorKind.NotFound)
+        {
+            Navigation.NotFound();
+        }
+        else
+        {
+            _refused = T.Error(view.Error);
+            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+        }
+    }
+
+    private async Task MarkAsync(CourseUnitView unit)
+    {
+        if (_view is not { } v)
+        {
+            return;
+        }
+
+        Result<TrainingCourseView> marked = await Get<Training>().CompleteUnitAsync(Actor, v.Course.Id, unit.Id);
+        if (!marked.IsSuccess)
+        {
+            _problem = T.Error(marked.Error);
+            return;
+        }
+
+        string done = marked.Value.State == TrainingStates.Completed && v.State != TrainingStates.Completed ? "completed" : "unit";
+        Navigation.NavigateTo($"/training/{Uri.EscapeDataString(Slug)}?done={done}");
+    }
+}

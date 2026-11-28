@@ -390,7 +390,18 @@ isn't. Ask the organisation you mentor with to record them.
 To find a mentor, programme staff and admins open **Mentors**. Search by a skill, a day they're
 free, and where they live, or for mentors who'll meet online. Each shows what they wrote, when
 they're free, who they mentor with, and their email address to get in touch. A mentor whose
-clearance lapses drops out of the search by itself.
+clearance lapses drops out of the search by itself. Each also says whether their training is up to
+date with what the county requires of mentors.
+
+## Training
+
+**Training** (at the top of the console) is the county's courses for the adults who work with young
+people: mentors, staff and admins. It starts with what the county requires of your roles, whether
+each counts and until when, or by when it's due; then every course, with how far you've got.
+
+Open a course and read each unit, following its link if it has one, then **Mark done**. The last
+unit completes the course. A completion counts for the months the course says, or for good; when it
+runs out, mark a unit done to take the course again.
 
 ## Reports
 

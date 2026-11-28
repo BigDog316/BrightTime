@@ -158,6 +158,7 @@ public static class BrightTimeRoles
                 Permissions.Moderation.SuspendUser,
                 Permissions.Showcase.Approve,
                 Permissions.Mentors.Search,
+                Permissions.Courses.Author,
             ],
 
             [Moderator] = [.. PublicBrowse, Permissions.Audit.Read, Permissions.Moderation.Triage, Permissions.Moderation.Remove, Permissions.Moderation.SuspendUser, Permissions.Showcase.Approve],

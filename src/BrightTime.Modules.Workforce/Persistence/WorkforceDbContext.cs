@@ -67,7 +67,114 @@ public sealed class MentorAvailabilityRecord
     public DateOnly? EffectiveTo { get; init; }
 }
 
-/// <summary>The Workforce module's context (M6): mentors first (D129).</summary>
+/// <summary>A course in the county's training catalogue (<c>workforce.course</c>, D130).</summary>
+public sealed class CourseRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    /// <summary>The schema's, unused so far: the county writes courses, not organisations.</summary>
+    public Guid? OrgId { get; init; }
+
+    public required string Slug { get; set; }
+
+    public required string Title { get; set; }
+
+    public string? Summary { get; set; }
+
+    public string? ProviderName { get; set; }
+
+    public required string Delivery { get; set; }
+
+    public decimal? Hours { get; set; }
+
+    /// <summary>How long a completion counts; null for good.</summary>
+    public short? ValidityMonths { get; set; }
+
+    /// <summary>The schema's, unused so far: a badge for finishing waits on Learning.</summary>
+    public Guid? BadgeClassId { get; init; }
+
+    public required string Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public DateTimeOffset? PublishedAt { get; set; }
+}
+
+/// <summary>One unit of a course (<c>workforce.course_unit</c>), in order.</summary>
+public sealed class CourseUnitRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid CourseId { get; init; }
+
+    public short SortOrder { get; init; }
+
+    public required string Title { get; init; }
+
+    public string? BodyMd { get; init; }
+
+    /// <summary>The schema's, unused so far: a unit's file.</summary>
+    public Guid? MediaId { get; init; }
+
+    public string? ExternalUrl { get; init; }
+
+    public short? Minutes { get; init; }
+}
+
+/// <summary>Someone taking a course (<c>workforce.course_enrollment</c>): when they started, finished, and until when it counts.</summary>
+public sealed class CourseEnrollmentRecord
+{
+    public Guid Id { get; init; }
+
+    public Guid TenantId { get; init; }
+
+    public Guid CourseId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public DateTimeOffset StartedAt { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>The schema's, unused so far: courses have no quiz.</summary>
+    public decimal? Score { get; init; }
+
+    public Guid? CertificateMediaId { get; init; }
+
+    public Guid? BadgeAssertionId { get; init; }
+
+    public DateOnly? ExpiresOn { get; set; }
+}
+
+/// <summary>A unit someone has done (<c>workforce.course_unit_progress</c>).</summary>
+public sealed class CourseUnitProgressRecord
+{
+    public Guid CourseEnrollmentId { get; init; }
+
+    public Guid UnitId { get; init; }
+
+    public DateTimeOffset? CompletedAt { get; init; }
+}
+
+/// <summary>A course the county requires of a role (<c>workforce.training_requirement</c>).</summary>
+public sealed class TrainingRequirementRecord
+{
+    public Guid TenantId { get; init; }
+
+    public required string AppliesTo { get; init; }
+
+    public Guid CourseId { get; init; }
+
+    public bool IsBlocking { get; set; } = true;
+
+    public short GraceDays { get; set; }
+}
+
+/// <summary>The Workforce module's context (M6): mentors (D129) and training (D130).</summary>
 public sealed class WorkforceDbContext(DbContextOptions<WorkforceDbContext> options, ITenantContext tenantContext)
     : BrightTimeDbContext(options, tenantContext)
 {
@@ -79,6 +186,16 @@ public sealed class WorkforceDbContext(DbContextOptions<WorkforceDbContext> opti
     public DbSet<MentorProfileRecord> MentorProfiles => Set<MentorProfileRecord>();
 
     public DbSet<MentorAvailabilityRecord> MentorAvailability => Set<MentorAvailabilityRecord>();
+
+    public DbSet<CourseRecord> Courses => Set<CourseRecord>();
+
+    public DbSet<CourseUnitRecord> CourseUnits => Set<CourseUnitRecord>();
+
+    public DbSet<CourseEnrollmentRecord> CourseEnrollments => Set<CourseEnrollmentRecord>();
+
+    public DbSet<CourseUnitProgressRecord> UnitProgress => Set<CourseUnitProgressRecord>();
+
+    public DbSet<TrainingRequirementRecord> TrainingRequirements => Set<TrainingRequirementRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -99,6 +216,45 @@ public sealed class WorkforceDbContext(DbContextOptions<WorkforceDbContext> opti
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.HasIndex(x => new { x.MentorUserId, x.DayOfWeek });
+        });
+
+        modelBuilder.Entity<CourseRecord>(b =>
+        {
+            b.ToTable("course");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Slug).HasColumnType("citext");
+            b.Property(x => x.Hours).HasPrecision(5, 2);
+            b.HasIndex(x => new { x.TenantId, x.Slug }).IsUnique();
+        });
+
+        modelBuilder.Entity<CourseUnitRecord>(b =>
+        {
+            b.ToTable("course_unit");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => new { x.CourseId, x.SortOrder }).IsUnique();
+        });
+
+        modelBuilder.Entity<CourseEnrollmentRecord>(b =>
+        {
+            b.ToTable("course_enrollment");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Score).HasPrecision(5, 2);
+            b.HasIndex(x => new { x.CourseId, x.UserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<CourseUnitProgressRecord>(b =>
+        {
+            b.ToTable("course_unit_progress");
+            b.HasKey(x => new { x.CourseEnrollmentId, x.UnitId });
+        });
+
+        modelBuilder.Entity<TrainingRequirementRecord>(b =>
+        {
+            b.ToTable("training_requirement");
+            b.HasKey(x => new { x.TenantId, x.AppliesTo, x.CourseId });
         });
 
         modelBuilder.ApplySnakeCaseNames();

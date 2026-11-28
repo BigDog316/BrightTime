@@ -112,6 +112,8 @@ else if (_found is { } found)
                                 <dt>@T["provider.mentors.free"]</dt>
                                 <dd>@string.Join("; ", m.Availability.Select(a => T["mentor.day." + a.DayOfWeek] + " " + a.From.ToString("HH:mm", CultureInfo.InvariantCulture) + "–" + a.To.ToString("HH:mm", CultureInfo.InvariantCulture)))</dd>
                             }
+                            <dt>@T["provider.mentors.training"]</dt>
+                            <dd>@T[m.TrainingCurrent ? "provider.mentors.training_current" : "provider.mentors.training_missing"]</dd>
                             @if (m.Email is { Length: > 0 } email)
                             {
                                 <dt>@T["provider.mentors.contact"]</dt>

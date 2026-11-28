@@ -17,6 +17,10 @@
             {
                 <a href="/mentor/profile">@T["site.nav.mentor_profile"]</a>
             }
+            @if (TrainingRoles.Any(user.IsInRole))
+            {
+                <a href="/training">@T["site.nav.training"]</a>
+            }
             @if (user.HasPermission(Permissions.Listings.Review))
             {
                 <a href="/organiser/review">@T["site.nav.review"]</a>
@@ -40,6 +44,10 @@
             @if (user.HasPermission(Permissions.NeighbourhoodPages.Manage))
             {
                 <a href="/organiser/neighbourhoods">@T["site.nav.neighbourhood_pages"]</a>
+            }
+            @if (user.HasPermission(Permissions.Courses.Author))
+            {
+                <a href="/organiser/training">@T["site.nav.courses"]</a>
             }
             @if (user.HasPermission(Permissions.Tenant.Settings))
             {
@@ -88,6 +96,9 @@
 </div>
 
 @code {
+    /// <summary>The platform roles an organisation's membership gives: who takes the county's training (D130).</summary>
+    private static readonly string[] TrainingRoles = [BrightTimeRoles.Mentor, BrightTimeRoles.ProgramStaff, BrightTimeRoles.ProviderAdmin];
+
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 
     private IReadOnlyList<Locale> Languages => Site.Site?.EnabledLocales ?? Locale.Supported;

@@ -78,6 +78,7 @@ v1.MapMessagingEndpoints();
 v1.MapSpaceEndpoints();
 v1.MapShowcaseEndpoints();
 v1.MapMentorEndpoints();
+v1.MapTrainingEndpoints();
 v1.MapPaymentEndpoints();
 v1.MapReportEndpoints();
 v1.MapPortfolioEndpoints();

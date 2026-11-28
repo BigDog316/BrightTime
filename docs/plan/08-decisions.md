@@ -4282,7 +4282,7 @@ file kept; the 4,096 limit; an infected upload refused and audited; a scanner th
 worker's scan of pictures kept before), and `SqlModeCompositionTests` (Production needs clamd).
 The picture tests that compared bytes with the upload now compare pixels.
 
-### D124 — The showcase, with the young person's say-so (**proposed 2026-11-28**)
+### D124 — The showcase, with the young person's say-so (**accepted 2026-11-28**)
 
 M5's showcase had a table (`showcase_item`) and no code. Sam chose on 2026-11-28: the showcase next;
 challenge work staff accepted (D122) and projects staff approved (D69); staff propose and the young

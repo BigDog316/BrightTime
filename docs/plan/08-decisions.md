@@ -4407,7 +4407,7 @@ Schema: `ck_notification_kind` gains `showcase_request`. Rebuild the compose vol
 `ShowcaseTests` (each author told once per piece, with the organisation's name and the link, and
 not the work).
 
-### D127 — The county's showcase take-downs in the moderation record (**proposed 2026-11-28**)
+### D127 — The county's showcase take-downs in the moderation record (**accepted 2026-11-28**)
 
 Writing the M5 report found that when the county's organisers or moderators took a showcase item
 down (D124), the decision was in the audit log and on the item, but not in the append-only

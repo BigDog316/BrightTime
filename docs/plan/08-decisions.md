@@ -4424,7 +4424,7 @@ asked on 2026-11-28 for the M5 report, and for small gaps a criterion exposes to
 No schema change (`moderation_action.target_kind` is free text). Tests: `ShowcaseTests` (the
 county's take-down in `moderation_action` with its reason; one without a reason refused).
 
-### D128 — Reporting from anywhere (**proposed 2026-11-28**)
+### D128 — Reporting from anywhere (**accepted 2026-11-28**)
 
 plan/09's "report from anywhere" was built for messages (D115) and posts (D121) only. Sam chose on
 2026-11-28: the rest next; anyone may report a public page, signed in or not, a few times an hour.
